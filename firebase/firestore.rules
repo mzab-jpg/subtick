@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Users: only the owning user can read/write their own profile ---
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false; // Never allow deletion
+    }
+
+    // --- Articles: any authenticated user can read; only server (admin) can write ---
+    match /articles/{articleId} {
+      allow read: if request.auth != null;
+      allow create: if false; // Only via Cloud Functions
+      allow update: if false; // Only via Cloud Functions
+      allow delete: if false;
+    }
+
+    // --- Behavior Events: any authenticated user can create; only owner can read ---
+    match /behavior_events/{eventId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // --- Feed Requests: any authenticated user can create/read their own ---
+    match /feed_requests/{requestId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // --- Default deny ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

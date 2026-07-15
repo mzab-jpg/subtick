@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "articles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPaywalled", "order": "ASCENDING" },
+        { "fieldPath": "publishDate", "order": "DESCENDING" }
+      ]
+    }
+  ]
+}
