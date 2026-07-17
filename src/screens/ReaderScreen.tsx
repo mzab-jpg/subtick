@@ -3,6 +3,11 @@
 // WebView article shell + PanResponder edge zones + HUD.
 // Uses useBehaviorTracker to queue swipes/likes/scrolls for
 // syncBehaviorEvents → weightUpdater pipeline.
+//
+// Features: Real-Time Calibrating Infinite Preloader.
+// When 10 articles are left in the queue, automatically flushes
+// swipes, calibrates weights, fetches the next 20 fresh articles,
+// and appends them cleanly in the background.
 // ============================================================
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -24,7 +29,7 @@ import { db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { MAX_FEED_ARTICLES } from '../utils/constants';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
-import { markArticleSeen } from '../services/feedService';
+import { markArticleSeen, getRankedFeed } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -46,7 +51,12 @@ export default function ReaderScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [queueExhausted, setQueueExhausted] = useState(false);
 
-  // PanResponder gesture translation ref
+  // Dynamic preloaded queue (initially populated from Dashboard)
+  const [activeQueueIds, setQueueIds] = useState<string[]>(queueArticleIds || []);
+  const [preloading, setPreloading] = useState(false);
+  
+  // Guard references
+  const preloadingRef = useRef(false);
   const panX = useRef(new Animated.Value(0)).current;
 
   // --- Behavior tracker hook (replaces inline console.log) ---
@@ -78,8 +88,47 @@ export default function ReaderScreen() {
   }, [articleId]);
 
   // --- Queue navigation helpers ---
-  const hasNext = currentIndex < queueArticleIds.length - 1;
+  const hasNext = currentIndex < activeQueueIds.length - 1;
   const hasPrev = currentIndex > 0;
+
+  /**
+   * Real-Time Calibrating Background Preloader:
+   * When 10 articles are left in the queue, we flush current swipes,
+   * trigger weightUpdater, pull a fresh tailored batch of 20, and append it.
+   */
+  const preloadNextArticles = useCallback(async () => {
+    if (preloadingRef.current) return;
+    preloadingRef.current = true;
+    setPreloading(true);
+    console.log('[Preloader] Trigger zone reached. Synchronizing swipes & preloading next 20 articles...');
+
+    try {
+      // 1. Instantly trigger a background behavior events flush
+      // This forces the weights to update in the database in real-time
+      await flushBehaviorQueue();
+      console.log('[Preloader] Local behavior events successfully flushed to cloud.');
+
+      // 2. Query the next 20 articles from the Cloud.
+      // We pass the activeQueueIds so our client-side filter knows to avoid duplicates
+      const result = await getRankedFeed(activeQueueIds);
+
+      if (result.articles && result.articles.length > 0) {
+        // Grab the top 20 new recommendations (highly tailored to their fresh swipes!)
+        const newIds = result.articles.map(a => a.id);
+        
+        // 3. Append them cleanly to our active queue
+        setQueueIds(prev => [...prev, ...newIds]);
+        console.log(`[Preloader] Preloaded and appended ${newIds.length} fresh, highly-tailored articles to the queue.`);
+      } else {
+        console.log('[Preloader] No new recommendations available from cloud.');
+      }
+    } catch (error) {
+      console.warn('[Preloader] Background preloading failed:', error);
+    } finally {
+      preloadingRef.current = false;
+      setPreloading(false);
+    }
+  }, [activeQueueIds]);
 
   const goToNext = useCallback(() => {
     if (!hasNext) {
@@ -88,11 +137,18 @@ export default function ReaderScreen() {
     }
     const nextIdx = currentIndex + 1;
     setCurrentIndex(nextIdx);
+    
     // Reset reader state
     setIsLiked(false);
     setIsSaved(false);
-    loadArticle(queueArticleIds[nextIdx]);
-  }, [hasNext, currentIndex, queueArticleIds, loadArticle]);
+    loadArticle(activeQueueIds[nextIdx]);
+
+    // TRIGGER ZONE CHECK: If 10 articles or less are left in the active queue,
+    // preload the next 20 fresh articles in the background.
+    if (activeQueueIds.length - nextIdx <= 10 && !preloadingRef.current) {
+      preloadNextArticles();
+    }
+  }, [hasNext, currentIndex, activeQueueIds, loadArticle, preloadNextArticles]);
 
   const goToPrev = useCallback(() => {
     if (!hasPrev) return;
@@ -100,8 +156,8 @@ export default function ReaderScreen() {
     setCurrentIndex(prevIdx);
     setIsLiked(false);
     setIsSaved(false);
-    loadArticle(queueArticleIds[prevIdx]);
-  }, [hasPrev, currentIndex, queueArticleIds, loadArticle]);
+    loadArticle(activeQueueIds[prevIdx]);
+  }, [hasPrev, currentIndex, activeQueueIds, loadArticle]);
 
   // --- WebView scroll message handler ---
   const handleWebViewMessage = useCallback(
@@ -155,7 +211,7 @@ export default function ReaderScreen() {
           }
         },
       }),
-    [goToNext, behaviorTracker, panX]
+    [goToNext, behaviorTracker, panX, article]
   );
 
   // --- Pre-compiled HTML for WebView (NO post-load style injection — prevents flashing) ---
@@ -315,7 +371,7 @@ export default function ReaderScreen() {
       {!loading && !queueExhausted && (
         <View style={styles.queueIndicator}>
           <Text style={[styles.queueText, { color: colors.textMuted }]}>
-            {currentIndex + 1} / {queueArticleIds.length}
+            {currentIndex + 1} / {activeQueueIds.length}
           </Text>
         </View>
       )}
