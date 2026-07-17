@@ -2,7 +2,7 @@
 // SubTick — getRankedFeed (HTTPS Callable)
 // 5-component scoring formula, cached, time-stratified,
 // with inverted diversity scoring & 10% exploration.
-// Returns top 100 for client-side seen filtering.
+// Returns top 100 with dynamic real-time publisher quality scores.
 // ============================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -23,6 +23,9 @@ const CACHE_LIFETIME_MS = 10 * 60 * 1000; // 10 minutes memory cache
 let candidateCache: Article[] = [];
 let cacheTimestamp = 0;
 
+let publisherQualityCache: Record<string, number> = {};
+let publisherCacheTimestamp = 0;
+
 /**
  * 5-Component Scoring Formula:
  * Score = (0.30 × C) + (0.20 × T) + (0.25 × R) + (0.15 × Q) + (0.10 × U)
@@ -30,20 +33,21 @@ let cacheTimestamp = 0;
  * 1. Category Boost (C): max(0.1, userCategoryWeight / 1.0)
  * 2. Trending Boost (T): max(0.1, 1.0 + articleTrendingScore / 2.5)
  * 3. Recency Boost (R): 2.0 / (1.0 + daysOld / 7)
- * 4. Quality Boost (Q): articleQualityScore
+ * 4. Quality Boost (Q): dynamicPublisherQualityScore
  * 5. Cross-User Collaboration (U): 1.0 - (min(1.0, (articlesInSamePub - 1) / 15) * 0.6)
  */
 function calculateCompositeScore(
   article: Article,
   userCategoryWeight: number,
-  articlesInSamePub: number
+  articlesInSamePub: number,
+  publisherQuality: number
 ): number {
   const daysOld = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
 
   const C = Math.max(0.1, userCategoryWeight / 1.0);
   const T = Math.max(0.1, 1.0 + (article.trendingScore || 0) / 2.5);
   const R = 2.0 / (1.0 + daysOld / 7);
-  const Q = article.qualityScore || 0.5;
+  const Q = publisherQuality;
 
   // FIXED (Inverted Diversity score): If there are many articles from this same publication,
   // we reduce its score to encourage publisher variety.
@@ -121,6 +125,36 @@ async function getOrUpdateCandidatePool(): Promise<Article[]> {
 }
 
 /**
+ * Stage 1.5: Fetch & Cache Dynamic Publisher Quality Scores (Crowd-Sourced)
+ */
+async function getOrUpdatePublisherQualities(): Promise<Record<string, number>> {
+  const now = Date.now();
+  if (Object.keys(publisherQualityCache).length > 0 && (now - publisherCacheTimestamp) < CACHE_LIFETIME_MS) {
+    return publisherQualityCache;
+  }
+
+  console.log('[Cache] Publisher quality cache expired or empty. Querying Firestore publishers...');
+  try {
+    const snapshot = await db.collection('publishers').get();
+    const tempQualities: Record<string, number> = {};
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data && typeof data.qualityScore === 'number') {
+        // Clamp live publisher score organically between [0.20, 1.00] so terrible feeds are muted but not deleted
+        tempQualities[doc.id] = Math.max(0.2, Math.min(1.0, data.qualityScore));
+      }
+    });
+    publisherQualityCache = tempQualities;
+    publisherCacheTimestamp = now;
+    console.log(`[Cache] Loaded live dynamic quality scores for ${Object.keys(publisherQualityCache).length} publishers`);
+    return publisherQualityCache;
+  } catch (err: any) {
+    console.error('[Cache] Failed to load publisher quality scores, falling back to old cache:', err.message);
+    return publisherQualityCache; // fallback to expired or empty
+  }
+}
+
+/**
  * Stage 2: Personalization & Exploration
  * Filters seen article IDs, scores candidates against user weights,
  * sorts them, and applies the 10% Exploration Rule to inject non-preferred categories.
@@ -128,6 +162,7 @@ async function getOrUpdateCandidatePool(): Promise<Article[]> {
 function assembleFeedWithExploration(
   scoredList: { article: Article; score: number }[],
   categoryWeights: Record<string, number>,
+  publisherQualities: Record<string, number>,
   totalSize = RETURN_FEED_SIZE,
   explorationCount = EXPLORATION_COUNT
 ): Article[] {
@@ -166,7 +201,7 @@ function assembleFeedWithExploration(
       const C = 1.0; // treat category weight as neutral
       const T = Math.max(0.1, 1.0 + (article.trendingScore || 0) / 2.5);
       const R = 2.0 / (1.0 + daysOld / 7);
-      const Q = article.qualityScore || 0.5;
+      const Q = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
       const score =
         SCORE_WEIGHTS.categoryBoost * C +
         SCORE_WEIGHTS.trendingBoost * T +
@@ -215,6 +250,9 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
       return { articles: [], generatedAt: Date.now(), remainingCount: 0 };
     }
 
+    // STAGE 1.5: Fetch dynamic crowd-sourced publisher quality scores
+    const publisherQualities = await getOrUpdatePublisherQualities();
+
     // STAGE 2: Personalization & Filtering
     // Filter out the 200 newest seen IDs passed from the client
     const seenSet = new Set(seenArticleIds || []);
@@ -228,14 +266,18 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
     const scored = unseenArticles.map((article) => {
       const userWeight = categoryWeights[article.category] || 1.0;
       const pubCount = pubCounts[article.publicationName] || 1;
-      const score = calculateCompositeScore(article, userWeight, pubCount);
+      
+      // Use dynamic, crowd-sourced publisher quality score. Falls back to static seed if no feedback gathered yet
+      const dynamicQuality = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
+      
+      const score = calculateCompositeScore(article, userWeight, pubCount, dynamicQuality);
       return { article, score };
     });
 
     scored.sort((a, b) => b.score - a.score);
 
     // Assemble the top 100 with the 10% Exploration Rule
-    const finalFeed = assembleFeedWithExploration(scored, categoryWeights, RETURN_FEED_SIZE, EXPLORATION_COUNT);
+    const finalFeed = assembleFeedWithExploration(scored, categoryWeights, publisherQualities, RETURN_FEED_SIZE, EXPLORATION_COUNT);
 
     // --- Log top 5 articles with per-component scores for debugging ---
     console.log(`[getRankedFeed] User weights: ${JSON.stringify(categoryWeights)}`);
@@ -247,11 +289,13 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
       const C = Math.max(0.1, userWeight / 1.0);
       const T = Math.max(0.1, 1.0 + (s.article.trendingScore || 0) / 2.5);
       const R = 2.0 / (1.0 + daysOld / 7);
-      const Q = s.article.qualityScore || 0.5;
+      
+      const dynamicQuality = publisherQualities[s.article.publicationName] ?? s.article.qualityScore ?? 0.8;
       const U = 1.0 - (Math.min(1.0, (pubCount - 1) / 15) * 0.6);
+      
       console.log(
         `  #${i + 1} [${s.article.category}] "${s.article.title.substring(0, 60)}..." ` +
-        `score=${s.score.toFixed(3)} C=${C.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${Q.toFixed(2)} U=${U.toFixed(2)}`
+        `score=${s.score.toFixed(3)} C=${C.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${dynamicQuality.toFixed(2)} U=${U.toFixed(2)}`
       );
     });
 

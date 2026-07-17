@@ -14,6 +14,5 @@ export { htmlSanitizer } from './htmlSanitizer.js';
 export { paywallFilter } from './paywallFilter.js';
 export { getRankedFeed } from './getRankedFeed.js';
 export { syncBehaviorEvents } from './syncBehaviorEvents.js';
-export { trendingCalculator } from './trendingCalculator.js';
 // weightUpdater is an internal helper, not exported as a Cloud Function directly,
 // but is called by syncBehaviorEvents.

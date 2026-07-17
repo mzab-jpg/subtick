@@ -1,7 +1,7 @@
 // ============================================================
 // SubTick — syncBehaviorEvents (HTTPS Callable)
-// Saves batched behavior events to user-nested subcollections
-// and triggers weight updates.
+// Saves behavior events, increments article trendingScore and
+// publisher qualityScore dynamically in real-time.
 // ============================================================
 
 import { onCall } from 'firebase-functions/v2/https';
@@ -11,6 +11,32 @@ import { updateWeights } from './weightUpdater.js';
 
 const db = admin.firestore();
 
+// --- Configuration ---
+const DEFAULT_PUBLISHER_QUALITY = 0.8;
+
+function getTrendingIncrement(eventType: string): number {
+  switch (eventType) {
+    case 'like': return 2.0;
+    case 'save': return 3.0;
+    case 'scroll_80': return 1.5;
+    case 'scroll_40': return 0.5;
+    case 'scroll_20': return 0.1;
+    case 'swipe_next': return 1.0;
+    default: return 0.0;
+  }
+}
+
+function getPublisherQualityIncrement(eventType: string): number {
+  switch (eventType) {
+    case 'like': return 0.005;
+    case 'save': return 0.008;
+    case 'scroll_80': return 0.003;
+    case 'swipe_not_interested': return -0.010;
+    case 'quick_exit': return -0.008;
+    default: return 0.0;
+  }
+}
+
 export const syncBehaviorEvents = onCall(async (request) => {
   const data = request.data as { events: BehaviorEvent[] };
   const events = data.events || [];
@@ -19,22 +45,43 @@ export const syncBehaviorEvents = onCall(async (request) => {
     return { synced: 0, errors: 0 };
   }
 
-  console.log(`[syncBehaviorEvents] Processing ${events.length} events into subcollections`);
+  console.log(`[syncBehaviorEvents] Processing ${events.length} events into subcollections...`);
+
+  const userIds = new Set<string>();
+  const articleIds = new Set<string>(events.map(e => e.articleId).filter(Boolean));
+
+  // 1. Fetch publication names for all affected articles in parallel (extremely fast)
+  const articleToPublisher: Record<string, string> = {};
+  try {
+    if (articleIds.size > 0) {
+      const articleRefs = Array.from(articleIds).map(id => db.collection('articles').doc(id));
+      const articleDocs = await db.getAll(...articleRefs);
+      articleDocs.forEach(doc => {
+        if (doc.exists) {
+          const artData = doc.data();
+          if (artData && artData.publicationName) {
+            articleToPublisher[doc.id] = artData.publicationName;
+          }
+        }
+      });
+    }
+  } catch (err: any) {
+    console.warn('[syncBehaviorEvents] Failed to fetch article publisher info:', err.message);
+  }
 
   let synced = 0;
   let errors = 0;
-  const userIds = new Set<string>();
   const batch = db.batch();
 
+  // 2. Process events and queue real-time atomic updates
   for (const event of events) {
     try {
       if (!event.userId) {
-        console.warn('[syncBehaviorEvents] Missing userId for event');
         errors++;
         continue;
       }
 
-      // Path: users/{userId}/behavior_events/{eventId}
+      // Stage raw event log in subcollection: users/{userId}/behavior_events/{eventId}
       const eventDocRef = db
         .collection('users')
         .doc(event.userId)
@@ -50,6 +97,33 @@ export const syncBehaviorEvents = onCall(async (request) => {
         sessionDuration: event.sessionDuration,
         scrollDepth: event.scrollDepth,
       });
+
+      // Increment Article Trending Score atomically in real-time
+      if (event.articleId) {
+        const trendingDelta = getTrendingIncrement(event.eventType);
+        if (trendingDelta > 0) {
+          const articleRef = db.collection('articles').doc(event.articleId);
+          batch.update(articleRef, {
+            trendingScore: admin.firestore.FieldValue.increment(trendingDelta)
+          });
+        }
+
+        // Increment Publisher Quality Score atomically in real-time
+        const pubName = articleToPublisher[event.articleId];
+        if (pubName) {
+          const qualityDelta = getPublisherQualityIncrement(event.eventType);
+          if (qualityDelta !== 0) {
+            // Document ID matches clean publication name
+            const publisherRef = db.collection('publishers').doc(pubName);
+            batch.set(publisherRef, {
+              name: pubName,
+              qualityScore: admin.firestore.FieldValue.increment(qualityDelta),
+              lastUpdated: Date.now()
+            }, { merge: true });
+          }
+        }
+      }
+
       userIds.add(event.userId);
       synced++;
     } catch (error: any) {
@@ -60,12 +134,12 @@ export const syncBehaviorEvents = onCall(async (request) => {
 
   try {
     await batch.commit();
-    console.log(`[syncBehaviorEvents] Synced ${synced} events successfully`);
+    console.log(`[syncBehaviorEvents] Synced ${synced} events, updated trending and publisher quality scores in real-time`);
   } catch (error: any) {
     console.error('[syncBehaviorEvents] Batch commit failed:', error.message);
   }
 
-  // Trigger weight updates for affected users
+  // 3. Trigger weight updates for affected users
   for (const userId of userIds) {
     try {
       await updateWeights(userId);
