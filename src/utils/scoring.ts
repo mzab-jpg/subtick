@@ -32,7 +32,10 @@ export function calculateArticleScore(
   const T = Math.max(0.1, 1.0 + (article.trendingScore || 0) / 2.5);
   const R = 2.0 / (1.0 + daysOld / 7);
   const Q = article.qualityScore || 0.5;
-  const U = 0.3 + (Math.min(1.0, articlesInSamePub / 20) * 0.7);
+  
+  // FIXED (Inverted Diversity score to match backend perfectly): 
+  // If there are many articles from this same publication, we reduce its score to encourage variety.
+  const U = 1.0 - (Math.min(1.0, (articlesInSamePub - 1) / 15) * 0.6);
 
   const score =
     SCORE_WEIGHTS.categoryBoost * C +

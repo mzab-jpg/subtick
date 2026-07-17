@@ -24,6 +24,8 @@ import { db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { MAX_FEED_ARTICLES } from '../utils/constants';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
+import { markArticleSeen } from '../services/feedService';
+import { flushBehaviorQueue } from '../services/behaviorSync';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 30; // px — touch-intercepting margin zones
@@ -141,10 +143,14 @@ export default function ReaderScreen() {
           if (dx < -SWIPE_THRESHOLD) {
             // Swipe left (right edge) → Swipe Next
             behaviorTracker.trackEvent('swipe_next');
+            // Mark article as seen so it won't reappear on refresh
+            if (article?.id) markArticleSeen(article.id);
             goToNext();
           } else if (dx > SWIPE_THRESHOLD) {
             // Swipe right (left edge) → Swipe Not Interested
             behaviorTracker.trackEvent('swipe_not_interested');
+            // Mark article as seen so it won't reappear on refresh
+            if (article?.id) markArticleSeen(article.id);
             goToNext(); // Also advances (dismisses) article
           }
         },
@@ -194,6 +200,15 @@ export default function ReaderScreen() {
       </html>
     `;
   }, [article, colors, webViewCSS]);
+
+  // --- Flush pending behavior events when leaving the Reader ---
+  useEffect(() => {
+    return () => {
+      flushBehaviorQueue().catch(() => {
+        // Silently fail — events stay queued for next flush
+      });
+    };
+  }, []);
 
   // --- Render ---
   return (
