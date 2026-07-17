@@ -2,6 +2,7 @@
 // SubTick — weightUpdater (Internal helper, called by syncBehaviorEvents)
 // Computes weight adjustments using feedback delta multipliers,
 // learning rate, clamping, and daily decay.
+// Reads events from nested subcollections: users/{userId}/behavior_events
 // ============================================================
 
 import * as admin from 'firebase-admin';
@@ -20,8 +21,8 @@ const db = admin.firestore();
  * Update category weights for a user based on their recent behavior events.
  * Applies: Δ × L formula, clamps to [0.1, 5.0], and applies 0.5% daily decay.
  *
- * NOTE: All queries use userId-only filters (auto-indexed) to avoid composite
- * index requirements. Timestamp/eventType filtering is done in memory.
+ * NOTE: Reads directly from users/{userId}/behavior_events subcollection
+ * which is inherently partitioned by user. Filters by timestamp in memory.
  */
 export async function updateWeights(userId: string): Promise<void> {
   // 1. Fetch user profile
@@ -35,11 +36,11 @@ export async function updateWeights(userId: string): Promise<void> {
   const profile = userDoc.data() as UserProfile;
   const currentWeights = { ...profile.categoryWeights };
 
-  // 2. Fetch ALL recent behavior events for this user (userId is auto-indexed)
-  //    Then filter by timestamp in memory to avoid composite index
+  // 2. Fetch behavior events from user-nested subcollection (inherently private to user)
   const eventsSnapshot = await db
+    .collection('users')
+    .doc(userId)
     .collection('behavior_events')
-    .where('userId', '==', userId)
     .limit(100)
     .get();
 
@@ -63,7 +64,7 @@ export async function updateWeights(userId: string): Promise<void> {
     return;
   }
 
-  console.log(`[weightUpdater] Processing ${events.length} recent events for ${userId}`);
+  console.log(`[weightUpdater] Processing ${events.length} recent events from subcollection for ${userId}`);
 
   // 4. Apply feedback deltas
   const updatedWeights = { ...currentWeights };
@@ -130,7 +131,6 @@ function applyDecay(weights: Record<string, number>): Record<string, number> {
 
 /**
  * Update reading stats: weekly count, streak, and last read date.
- * Also uses userId-only query to avoid composite index.
  */
 async function updateReadStats(
   userId: string,
@@ -139,10 +139,11 @@ async function updateReadStats(
   const now = Date.now();
   const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-  // Fetch all events for this user, filter in memory
+  // Fetch all events for this user from subcollection, filter in memory
   const weeklySnap = await db
+    .collection('users')
+    .doc(userId)
     .collection('behavior_events')
-    .where('userId', '==', userId)
     .get();
 
   // Count "reads" this week

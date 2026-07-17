@@ -24,8 +24,9 @@ export const trendingCalculator = onSchedule('every 24 hours', async () => {
       return;
     }
 
+    // Use collectionGroup query to query across all users' nested behavior_events subcollections
     const eventsSnapshot = await db
-      .collection('behavior_events')
+      .collectionGroup('behavior_events')
       .where('timestamp', '>=', sevenDaysAgo)
       .get();
 
