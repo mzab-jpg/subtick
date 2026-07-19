@@ -33,7 +33,9 @@ export interface Article {
   feedUrl: string;
   category: string; // Matches category ids
   lengthStyle: string; // "short", "medium", "long"
-  bodyHtml: string; // Cleaned, sanitized HTML
+  guid?: string;
+  isTruncatedFeed?: boolean;
+  bodyHtml?: string; // Optional for legacy fallback; no longer populated
   description?: string;
   publishDate: number; // ms timestamp
   cacheTimestamp: number; // ms timestamp when fetched

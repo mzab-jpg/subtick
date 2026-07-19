@@ -31,7 +31,9 @@ export interface Article {
   feedUrl: string;
   category: string;
   lengthStyle: string;
-  bodyHtml: string;
+  guid?: string;
+  isTruncatedFeed?: boolean;
+  bodyHtml?: string; // Optional for legacy fallback; no longer populated
   description?: string;
   publishDate: number;
   cacheTimestamp: number;

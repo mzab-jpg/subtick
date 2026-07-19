@@ -10,8 +10,6 @@ admin.initializeApp();
 
 // --- Export all Cloud Functions ---
 export { rssCollector } from './rssCollector.js';
-export { htmlSanitizer } from './htmlSanitizer.js';
-export { paywallFilter } from './paywallFilter.js';
 export { getRankedFeed } from './getRankedFeed.js';
 export { syncBehaviorEvents } from './syncBehaviorEvents.js';
 // weightUpdater is an internal helper, not exported as a Cloud Function directly,

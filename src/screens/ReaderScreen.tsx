@@ -29,8 +29,9 @@ import { db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { MAX_FEED_ARTICLES } from '../utils/constants';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
-import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds } from '../services/feedService';
+import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds, fetchAndExtractArticle, getSavedArticleHtml } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
+import { Linking } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 30; // px — touch-intercepting margin zones
@@ -49,6 +50,8 @@ export default function ReaderScreen() {
 
   // --- State ---
   const [article, setArticle] = useState<Article | null>(null);
+  const [resolvedHtml, setResolvedHtml] = useState<string>('');
+  const [fetchError, setFetchError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(startIndex ?? 0);
   const [isLiked, setIsLiked] = useState(false);
@@ -78,45 +81,67 @@ export default function ReaderScreen() {
   // --- Load article ---
   const loadArticle = useCallback(async (id: string) => {
     try {
-      if (cacheRef.current[id]) {
-        setArticle(cacheRef.current[id]);
-        setLoading(false);
-        return;
-      }
       setLoading(true);
-      const snap = await getDoc(doc(db, 'articles', id));
-      if (snap.exists()) {
-        const data = snap.data() as Article;
-        cacheRef.current[id] = data;
-        setArticleCache(prev => ({ ...prev, [id]: data }));
+      setFetchError(false);
+      let data = cacheRef.current[id];
+      
+      if (!data) {
+        const snap = await getDoc(doc(db, 'articles', id));
+        if (snap.exists()) {
+          data = snap.data() as Article;
+          cacheRef.current[id] = data;
+          setArticleCache(prev => ({ ...prev, [id]: data }));
+        }
+      }
+      
+      if (data) {
+        let contentHtml = '';
+        if (isSavedMode) {
+          const savedHtml = await getSavedArticleHtml(id);
+          contentHtml = savedHtml || data.bodyHtml || '';
+        } else if (data.guid && data.feedUrl) {
+          contentHtml = await fetchAndExtractArticle(data.feedUrl, data.guid);
+        } else {
+          contentHtml = data.bodyHtml || '';
+        }
+        
+        setResolvedHtml(contentHtml);
         setArticle(data);
       } else {
         setArticle(null);
+        setFetchError(true);
       }
     } catch (error) {
       console.error('[Reader] loadArticle error:', error);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSavedMode]);
 
   // --- Background Sliding Prefetcher ---
   const prefetchArticles = useCallback(async (idsToFetch: string[]) => {
     for (const id of idsToFetch) {
-      if (!cacheRef.current[id]) {
-        try {
+      try {
+        let data = cacheRef.current[id];
+        if (!data) {
           const snap = await getDoc(doc(db, 'articles', id));
           if (snap.exists()) {
-            const data = snap.data() as Article;
+            data = snap.data() as Article;
             cacheRef.current[id] = data;
             setArticleCache(prev => ({ ...prev, [id]: data }));
           }
-        } catch (e) {
-          // silently fail prefetch
         }
+        
+        // Also eagerly fetch the XML into the session cache
+        if (data && data.guid && data.feedUrl && !isSavedMode) {
+          await fetchAndExtractArticle(data.feedUrl, data.guid);
+        }
+      } catch (e) {
+        // silently fail prefetch
       }
     }
-  }, []);
+  }, [isSavedMode]);
 
   useEffect(() => {
     loadArticle(articleId);
@@ -301,7 +326,7 @@ export default function ReaderScreen() {
         ${titleBlock}
         ${authorBlock}
         ${metaBlock}
-        ${article.bodyHtml}
+        ${resolvedHtml}
         <script>
           (function() {
             var maxDepth = 0;
@@ -334,6 +359,16 @@ export default function ReaderScreen() {
     };
   }, []);
 
+  // --- Auto-Recover from Fast-Swipe Trap ---
+  useEffect(() => {
+    if (queueExhausted && currentIndex < activeQueueIds.length - 1) {
+      console.log('[Reader] Queue replenished! Auto-recovering from exhaustion screen.');
+      setQueueExhausted(false);
+      // Automatically advance to the newly arrived article
+      goToNext();
+    }
+  }, [queueExhausted, currentIndex, activeQueueIds.length, goToNext]);
+
   // --- Render ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
@@ -361,7 +396,7 @@ export default function ReaderScreen() {
                 setIsSaved(newVal);
                 if (article) {
                   if (newVal) {
-                    markArticleSaved(article.id);
+                    markArticleSaved(article.id, resolvedHtml);
                     if (!isRestrictedMode) behaviorTracker.trackEvent('save');
                   } else {
                     unmarkArticleSaved(article.id);
@@ -419,6 +454,22 @@ export default function ReaderScreen() {
           >
             <Text style={styles.catchUpButtonText}>Back to Dashboard</Text>
           </TouchableOpacity>
+        </View>
+      ) : fetchError ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.catchUpEmoji}>⚠️</Text>
+          <Text style={[styles.catchUpTitle, { color: colors.text }]}>Article failed to load</Text>
+          <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
+            This article may have been removed or is temporarily unavailable.
+          </Text>
+          {article?.publicationUrl && (
+            <TouchableOpacity
+              style={[styles.catchUpButton, { backgroundColor: colors.primary, marginTop: 16 }]}
+              onPress={() => Linking.openURL(article.publicationUrl)}
+            >
+              <Text style={styles.catchUpButtonText}>Open in Browser</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : article ? (
         <WebView

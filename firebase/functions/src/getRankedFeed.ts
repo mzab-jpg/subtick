@@ -23,6 +23,14 @@ const CACHE_LIFETIME_MS = 10 * 60 * 1000; // 10 minutes memory cache
 let candidateCache: Article[] = [];
 let cacheTimestamp = 0;
 
+// Helper to shuffle an array in place (Fisher-Yates)
+function shuffleArray<T>(array: T[]): void {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
 let publisherQualityCache: Record<string, number> = {};
 let publisherCacheTimestamp = 0;
 
@@ -66,8 +74,9 @@ function calculateCompositeScore(
 
 /**
  * Stage 1: Fast Filtering with Cache (Low-Compute)
- * Pulls 150 newest articles & 150 highest-quality older articles of all time,
- * deduplicates them, and caches the 300 candidates in memory for 10 minutes.
+ * Pulls up to 2000 recent articles and 2000 archive articles, shuffles them randomly,
+ * and caches exactly 1000 candidates (500 fresh, 500 archive) in memory for 10 minutes.
+ * This completely prevents users from exhausting the queue.
  */
 async function getOrUpdateCandidatePool(): Promise<Article[]> {
   const now = Date.now();
@@ -76,44 +85,59 @@ async function getOrUpdateCandidatePool(): Promise<Article[]> {
     return candidateCache;
   }
 
-  console.log('[Cache] Cache expired or empty. Querying stratified buckets from Firestore...');
+  console.log('[Cache] Cache expired or empty. Querying stratified buckets from Firestore for randomized 1000-article pool...');
 
   try {
-    // Bucket A: Fresh (150 newest articles)
+    const fourWeeksAgo = now - (4 * 7 * 24 * 60 * 60 * 1000);
+
+    // Bucket A: Fresh (up to 2000 newest articles)
     const freshSnapshot = await db
       .collection('articles')
+      .where('publishDate', '>=', fourWeeksAgo)
       .orderBy('publishDate', 'desc')
-      .limit(150)
+      .limit(2000)
       .get();
 
-    // Bucket B: Archive/Quality (150 highest-quality articles)
-    // Auto-indexed by single field qualityScore
+    // Bucket B: Archive/Quality (up to 2000 older, high-quality articles)
     const qualitySnapshot = await db
       .collection('articles')
-      .orderBy('qualityScore', 'desc')
-      .limit(150)
+      .where('publishDate', '<', fourWeeksAgo)
+      .orderBy('publishDate', 'desc')
+      .limit(2000)
       .get();
 
-    const articlesMap = new Map<string, Article>();
-
+    const freshArticles: Article[] = [];
     freshSnapshot.forEach((doc) => {
       const data = doc.data() as Article;
-      // "Anti-Stub" Filter: Drop extremely short articles or paywalled ones
       if (!data.isPaywalled && (data.wordCount === undefined || data.wordCount >= 150)) {
-        articlesMap.set(doc.id, { ...data, id: doc.id });
+        freshArticles.push({ ...data, id: doc.id });
       }
     });
 
+    const archiveArticles: Article[] = [];
     qualitySnapshot.forEach((doc) => {
       const data = doc.data() as Article;
       if (!data.isPaywalled && (data.wordCount === undefined || data.wordCount >= 150)) {
-        articlesMap.set(doc.id, { ...data, id: doc.id });
+        archiveArticles.push({ ...data, id: doc.id });
       }
+    });
+
+    // Shuffle both buckets randomly in memory
+    shuffleArray(freshArticles);
+    shuffleArray(archiveArticles);
+
+    // Pick 500 from each bucket
+    const selectedFresh = freshArticles.slice(0, 500);
+    const selectedArchive = archiveArticles.slice(0, 500);
+
+    const articlesMap = new Map<string, Article>();
+    [...selectedFresh, ...selectedArchive].forEach(a => {
+      articlesMap.set(a.id, a);
     });
 
     candidateCache = Array.from(articlesMap.values());
     cacheTimestamp = now;
-    console.log(`[Cache] Rebuilt candidate pool cache. Total articles: ${candidateCache.length} (deduplicated)`);
+    console.log(`[Cache] Rebuilt candidate pool cache. Total articles: ${candidateCache.length} (randomized out of ${freshArticles.length + archiveArticles.length} scanned)`);
     return candidateCache;
   } catch (error) {
     console.error('[Cache] Error building candidate pool:', error);

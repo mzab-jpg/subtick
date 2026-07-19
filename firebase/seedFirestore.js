@@ -158,7 +158,6 @@ async function seed() {
             feedUrl: feed.url,
             category: feed.category,
             lengthStyle,
-            bodyHtml,
             description,
             publishDate,
             cacheTimestamp: Date.now(),

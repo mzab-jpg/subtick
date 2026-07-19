@@ -10,6 +10,93 @@ import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc 
 import { Article, RankedFeedResult } from '../types';
 import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES } from '../utils/constants';
 import { auth } from './firebase';
+import { XMLParser } from 'fast-xml-parser';
+import xss from 'xss';
+
+// --- Client-Side Feed Cache ---
+// Cleared automatically on app restart.
+const feedSessionCache = new Map<string, any[]>();
+
+// --- Shared Guid Extractor ---
+export function extractGuid(item: any): string {
+  if (!item) return '';
+  if (typeof item.guid === 'object' && item.guid !== null) {
+    return item.guid['#text'] || item.guid['_'] || item.guid.value || '';
+  }
+  return item.guid || item.link || '';
+}
+
+// --- HTML Sanitizer (replicates server-side htmlSanitizer) ---
+export function sanitizeClientHtml(rawHtml: string): string {
+  if (!rawHtml) return '';
+  const defaultWhiteList = (xss as any).getDefaultWhiteList ? (xss as any).getDefaultWhiteList() : {};
+  let cleaned = xss(rawHtml, {
+    whiteList: {
+      ...defaultWhiteList,
+      img: ['src', 'alt', 'width', 'height'],
+      a: ['href', 'title'],
+      h1: [], h2: [], h3: [], h4: [], p: [],
+      ul: [], ol: [], li: [], strong: [], em: [], blockquote: [], code: [], pre: [], br: [], hr: []
+    },
+    stripIgnoreTag: true,
+    stripIgnoreTagBody: ['script', 'style', 'iframe'],
+  });
+
+  // Strip empty/tracking pixels
+  cleaned = cleaned.replace(/<img[^>]*src=["'][^"']*(?:analytics|pixel|track)[^"']*["'][^>]*>/gi, '');
+  cleaned = cleaned.replace(/<img[^>]*(?:width\s*=\s*["']?\s*[01]\s*["']?|height\s*=\s*["']?\s*[01]\s*["']?)[^>]*>/gi, '');
+
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*subscribe[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*paywall[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/<div[^>]*class="[^"]*overlay[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '');
+  cleaned = cleaned.replace(/\s*style="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+
+  return cleaned;
+}
+
+/**
+ * Fetch and extract the sanitized HTML for a specific article directly from its RSS feed.
+ */
+export async function fetchAndExtractArticle(feedUrl: string, guid: string): Promise<string> {
+  try {
+    let items = feedSessionCache.get(feedUrl);
+
+    if (!items) {
+      console.log(`[feedService] Cache miss, fetching live feed: ${feedUrl}`);
+      const response = await fetch(feedUrl);
+      const xmlText = await response.text();
+      
+      const parser = new XMLParser({
+        ignoreAttributes: false,
+        attributeNamePrefix: '@_',
+        cdataPropName: '__cdata',
+      });
+      const parsed = parser.parse(xmlText);
+      const channel = parsed?.rss?.channel || parsed?.feed;
+      items = channel?.item || channel?.entry || [];
+      if (!Array.isArray(items)) items = [items];
+      
+      feedSessionCache.set(feedUrl, items);
+    } else {
+      console.log(`[feedService] Cache hit for feed: ${feedUrl}`);
+    }
+
+    // Find the specific item
+    const item = items.find((i: any) => extractGuid(i) === guid);
+    if (!item) {
+      throw new Error('Article not found in recent feed items.');
+    }
+
+    const rawContent = item['content:encoded'] || item.content || item.description || '';
+    const cdataContent = typeof rawContent === 'object' ? rawContent.__cdata || rawContent['#text'] : rawContent;
+    
+    return sanitizeClientHtml(cdataContent);
+  } catch (error) {
+    console.error('[feedService] fetchAndExtractArticle error:', error);
+    throw error;
+  }
+}
 
 /**
  * Call the getRankedFeed Cloud Function (HTTPS Callable).
@@ -22,13 +109,11 @@ export async function getRankedFeed(seenArticleIds: string[]): Promise<RankedFee
       'getRankedFeed'
     );
     
-    // Capped Network Payload: Send only the last 200 seen IDs to the server
-    // This keeps request payload tiny (under 4KB) at any scale
-    const limitedSeenIds = seenArticleIds.slice(-200);
-
+    // Send full seen history to server to ensure it correctly filters candidates.
+    // capped at 1000 by AsyncStorage, which is only ~20KB.
     const result = await getRankedFeedFn({
       userId: auth.currentUser?.uid || 'anonymous',
-      seenArticleIds: limitedSeenIds,
+      seenArticleIds: seenArticleIds,
     });
 
     const returnedFeed = result.data;
@@ -145,9 +230,9 @@ export async function getSavedArticleIds(): Promise<string[]> {
 }
 
 /**
- * Mark an article as saved.
+ * Mark an article as saved and store its full sanitized HTML for offline access.
  */
-export async function markArticleSaved(articleId: string): Promise<void> {
+export async function markArticleSaved(articleId: string, extractedHtml: string): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
     const saved: string[] = raw ? JSON.parse(raw) : [];
@@ -155,6 +240,8 @@ export async function markArticleSaved(articleId: string): Promise<void> {
     if (!saved.includes(articleId)) {
       saved.push(articleId);
       await AsyncStorage.setItem(SAVED_ARTICLES_KEY, JSON.stringify(saved));
+      // Save the personal copy of the HTML locally so it never hits the network or backend again
+      await AsyncStorage.setItem(`@subtick_saved_html_${articleId}`, extractedHtml);
     }
   } catch (error) {
     console.error('[FeedService] markArticleSaved error:', error);
@@ -162,7 +249,7 @@ export async function markArticleSaved(articleId: string): Promise<void> {
 }
 
 /**
- * Unmark an article as saved.
+ * Unmark an article as saved and delete its local HTML.
  */
 export async function unmarkArticleSaved(articleId: string): Promise<void> {
   try {
@@ -173,9 +260,21 @@ export async function unmarkArticleSaved(articleId: string): Promise<void> {
     if (index !== -1) {
       saved.splice(index, 1);
       await AsyncStorage.setItem(SAVED_ARTICLES_KEY, JSON.stringify(saved));
+      await AsyncStorage.removeItem(`@subtick_saved_html_${articleId}`);
     }
   } catch (error) {
     console.error('[FeedService] unmarkArticleSaved error:', error);
+  }
+}
+
+/**
+ * Get locally stored saved HTML for an article.
+ */
+export async function getSavedArticleHtml(articleId: string): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(`@subtick_saved_html_${articleId}`);
+  } catch {
+    return null;
   }
 }
 

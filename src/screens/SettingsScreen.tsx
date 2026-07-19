@@ -385,6 +385,36 @@ export default function SettingsScreen() {
         </Text>
       </TouchableOpacity>
 
+      {/* Developer Reset */}
+      <TouchableOpacity
+        style={[styles.linkButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, marginTop: 12 }]}
+        onPress={async () => {
+          Alert.alert(
+            'Reset Local Data',
+            'This will permanently wipe your reading history, saved articles, and behavior queue from this device. Are you sure?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Wipe Data', 
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                    await AsyncStorage.clear();
+                    Alert.alert('Cleared', 'Local storage has been completely wiped.');
+                  } catch (e) {
+                    Alert.alert('Error', 'Failed to clear local storage.');
+                  }
+                }
+              }
+            ]
+          );
+        }}
+      >
+        <Text style={[styles.linkButtonText, { color: colors.error }]}>🗑️ Clear Local Data</Text>
+        <Text style={[styles.linkStatus, { color: colors.textMuted }]}>Wipes History & Saves</Text>
+      </TouchableOpacity>
+
       {/* Feed Request */}
       <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Request a Feed</Text>
       <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>

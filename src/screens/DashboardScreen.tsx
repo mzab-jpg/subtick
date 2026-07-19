@@ -28,10 +28,18 @@ export default function DashboardScreen() {
   const [feedArticles, setFeedArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- Load user profile & feed on mount ---
+  // --- Load user profile & feed on mount and focus ---
   useEffect(() => {
-    loadData();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Re-fetch silently when returning to this screen
+      loadData(true);
+    });
+    
+    // Initial loud fetch
+    loadData(false);
+    
+    return unsubscribe;
+  }, [navigation]);
 
   // --- Process onboarding selections if coming from Onboarding ---
   useEffect(() => {
@@ -40,17 +48,17 @@ export default function DashboardScreen() {
       const userId = auth.currentUser?.uid;
       if (userId) {
         completeOnboarding(userId, selectedCategoryIds, notInterestedCategoryIds)
-          .then(() => loadData());
+          .then(() => loadData(false));
       }
     }
   }, [route.params?.onboardingSelections]);
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const user = auth.currentUser;
       if (!user) {
-        setLoading(false);
+        if (!silent) setLoading(false);
         return;
       }
 
@@ -67,7 +75,7 @@ export default function DashboardScreen() {
     } catch (error) {
       console.error('[Dashboard] loadData error:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

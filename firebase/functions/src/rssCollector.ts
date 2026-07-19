@@ -7,7 +7,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 import Parser from 'rss-parser';
 import { createHash } from 'crypto';
-import { SUBSTACK_FEEDS } from './constants.js';
+import { SUBSTACK_FEEDS, PAYWALL_KEYWORDS } from './constants.js';
 import { Article } from './types.js';
 
 const parser = new Parser({
@@ -41,6 +41,31 @@ function extractFirstImage(html: string): string | undefined {
   return match ? match[1] : undefined;
 }
 
+export function extractGuid(item: any): string {
+  if (!item) return '';
+  if (typeof item.guid === 'object' && item.guid !== null) {
+    return item.guid['#text'] || item.guid['_'] || item.guid.value || '';
+  }
+  return item.guid || item.link || '';
+}
+
+function checkIsPaywalled(title: string, description: string, bodyHtml: string): boolean {
+  const contentToCheck = `${title} ${description} ${bodyHtml}`.toLowerCase();
+  
+  const isPaywalled = PAYWALL_KEYWORDS.some((keyword) =>
+    contentToCheck.includes(keyword.toLowerCase())
+  );
+
+  const hasPaywallClass =
+    /class="[^"]*paywall[^"]*"/i.test(bodyHtml) ||
+    /class="[^"]*subscriber-only[^"]*"/i.test(bodyHtml) ||
+    /class="[^"]*locked-content[^"]*"/i.test(bodyHtml);
+
+  const hasPaywallScript = /paywall/i.test(bodyHtml) && /<script/i.test(bodyHtml);
+
+  return isPaywalled || hasPaywallClass || hasPaywallScript;
+}
+
 export const rssCollector = onSchedule('every 4 hours', async () => {
   console.log('[rssCollector] Starting RSS collection for 35 feeds...');
   let totalNew = 0;
@@ -70,11 +95,17 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
           const publishDate = item.pubDate ? new Date(item.pubDate).getTime() : Date.now();
           const author = item.creator || item['dc:creator'] || 'Unknown';
           const headerImageUrl = extractFirstImage(bodyHtml);
+          const guid = extractGuid(item);
 
           const wordCount = calculateWordCount(bodyHtml);
           let lengthStyle = 'medium';
           if (wordCount < 800) lengthStyle = 'short';
           else if (wordCount > 2000) lengthStyle = 'long';
+
+          const isPaywalled = checkIsPaywalled(title, description, bodyHtml);
+          
+          // Self-check for truncated feed (if description is suspiciously close to full body)
+          const isTruncatedFeed = bodyHtml.length > 0 && description.length / bodyHtml.length > 0.9;
 
           const article: Record<string, any> = {
             id: articleId,
@@ -85,17 +116,19 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
             feedUrl: feed.url,
             category: feed.category,
             lengthStyle,
-            bodyHtml,
+            guid,
+            isTruncatedFeed,
             description,
             publishDate,
             cacheTimestamp: Date.now(),
-            isPaywalled: false,
+            isPaywalled,
             wordCount,
             estimatedReadMinutes: estimateReadMinutes(wordCount),
             trendingScore: 0,
             qualityScore: feed.qualityScore,
             isSeed: false,
           };
+          
           // Only add headerImageUrl if it's a string (Firestore rejects undefined)
           if (typeof headerImageUrl === 'string') {
             article.headerImageUrl = headerImageUrl;
