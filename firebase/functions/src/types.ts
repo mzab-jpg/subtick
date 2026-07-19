@@ -19,6 +19,7 @@ export interface UserProfile {
   lastReadDate: number;
   averageWpm: number;
   dashboardMetricIds: string[];
+  includeArchivedArticles?: boolean;
   lastUpdated: number;
 }
 
@@ -44,6 +45,7 @@ export interface Article {
   trendingScore: number;
   qualityScore: number;
   isSeed: boolean;
+  rssStatus?: 'current' | 'archived';
 }
 
 export type BehaviorEventType =

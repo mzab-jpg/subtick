@@ -94,11 +94,16 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
             return;
           }
 
+          const activeGuids = new Set<string>();
+
           for (const item of feedData.items) {
             try {
               const title = item.title || 'Untitled';
               const link = item.link || '';
               const articleId = generateArticleId(link, title);
+              const guid = extractGuid(item);
+              
+              if (guid) activeGuids.add(guid);
 
               const existing = await db.collection('articles').doc(articleId).get();
               if (existing.exists) continue;
@@ -108,7 +113,6 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
               const publishDate = item.pubDate ? new Date(item.pubDate).getTime() : Date.now();
               const author = item.creator || item['dc:creator'] || 'Unknown';
               const headerImageUrl = extractFirstImage(bodyHtml);
-              const guid = extractGuid(item);
 
               const wordCount = calculateWordCount(bodyHtml);
               let lengthStyle = 'medium';
@@ -141,6 +145,7 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
                 trendingScore: 0,
                 qualityScore: feed.qualityScore,
                 isSeed: false,
+                rssStatus: 'current',
               };
               
               // Only add headerImageUrl if it's a string (Firestore rejects undefined)
@@ -156,6 +161,33 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
               totalErrors++;
             }
           }
+
+          // Post-processing: Tag older articles that fell off the RSS feed as 'archived', and fix legacy articles
+          try {
+            const allArticlesSnap = await db.collection('articles').where('feedUrl', '==', feed.url).get();
+            const batch = db.batch();
+            let archivedCount = 0;
+            let currentUpdateCount = 0;
+
+            allArticlesSnap.forEach((doc) => {
+              const data = doc.data() as Article;
+              if (data.guid && !activeGuids.has(data.guid) && data.rssStatus !== 'archived') {
+                batch.update(doc.ref, { rssStatus: 'archived' });
+                archivedCount++;
+              } else if (data.guid && activeGuids.has(data.guid) && data.rssStatus !== 'current') {
+                batch.update(doc.ref, { rssStatus: 'current' });
+                currentUpdateCount++;
+              }
+            });
+
+            if (archivedCount > 0 || currentUpdateCount > 0) {
+              await batch.commit();
+              console.log(`[rssCollector] Status sync for ${feed.publicationName}: ${archivedCount} archived, ${currentUpdateCount} updated to current.`);
+            }
+          } catch (archiveErr: any) {
+            console.error(`[rssCollector] Archive sync error for ${feed.publicationName}:`, archiveErr.message);
+          }
+
         } catch (feedError: any) {
           console.error(`[rssCollector] Feed error for ${feed.publicationName}:`, feedError.message);
           totalErrors++;

@@ -21,8 +21,10 @@ const EXPLORATION_COUNT = 10; // 10% of returned feed is random/wildcard explora
 const CACHE_LIFETIME_MS = 10 * 60 * 1000; // 10 minutes memory cache
 
 // Global Cache Variables (persistent across function container instances)
-let candidateCache: Article[] = [];
-let cacheTimestamp = 0;
+let candidateCacheCurrent: Article[] = [];
+let cacheTimestampCurrent = 0;
+let candidateCacheMixed: Article[] = [];
+let cacheTimestampMixed = 0;
 
 // Helper to shuffle an array in place (Fisher-Yates)
 function shuffleArray<T>(array: T[]): void {
@@ -86,18 +88,19 @@ function calculateCompositeScore(
  * reducing our read bills by 99.9%.
  */
 export const cronUpdateCandidatePool = onSchedule('every 10 minutes', async () => {
-  console.log('[Cron] Starting candidate pool generation (Universal Box)...');
+  console.log('[Cron] Starting dual candidate pool generation (Current vs Mixed)...');
   try {
     const now = Date.now();
     
-    // We scan ALL articles in the database to build a perfect pool
+    // We scan ALL articles in the database
     const snapshot = await db.collection('articles').get();
-    const allArticles: Article[] = [];
+    const currentArticles: Article[] = [];
+    const archivedArticles: Article[] = [];
     
     snapshot.forEach((doc) => {
       const data = doc.data() as Article;
       if (!data.isPaywalled && (data.wordCount === undefined || data.wordCount >= 150)) {
-        allArticles.push({
+        const article = {
           id: doc.id,
           title: data.title,
           author: data.author,
@@ -117,56 +120,82 @@ export const cronUpdateCandidatePool = onSchedule('every 10 minutes', async () =
           qualityScore: data.qualityScore || 0.8,
           cacheTimestamp: data.cacheTimestamp || now,
           isSeed: data.isSeed ?? false,
-        });
+          rssStatus: data.rssStatus || 'current', // Default to current if not set
+        };
+
+        if (article.rssStatus === 'archived') {
+          archivedArticles.push(article);
+        } else {
+          currentArticles.push(article);
+        }
       }
     });
 
     const fourWeeksAgo = now - (4 * 7 * 24 * 60 * 60 * 1000);
-    const freshArticles = allArticles.filter(a => a.publishDate >= fourWeeksAgo);
-    const archiveArticles = allArticles.filter(a => a.publishDate < fourWeeksAgo);
+    
+    // Build Box 1: Current Only
+    const currentFresh = currentArticles.filter(a => a.publishDate >= fourWeeksAgo);
+    const currentOld = currentArticles.filter(a => a.publishDate < fourWeeksAgo);
+    shuffleArray(currentFresh);
+    shuffleArray(currentOld);
+    const boxCurrent = [...currentFresh.slice(0, 500), ...currentOld.slice(0, 500)];
+    
+    // Build Box 2: Mixed (Half Current, Half Archived)
+    shuffleArray(currentArticles);
+    shuffleArray(archivedArticles);
+    const boxMixed = [...currentArticles.slice(0, 500), ...archivedArticles.slice(0, 500)];
 
-    shuffleArray(freshArticles);
-    shuffleArray(archiveArticles);
-
-    const selectedFresh = freshArticles.slice(0, 500);
-    const selectedArchive = archiveArticles.slice(0, 500);
-
-    const pool = [...selectedFresh, ...selectedArchive];
-
-    await db.collection('system').doc('candidatePool').set({
-      articles: pool,
+    // Save both boxes
+    await db.collection('system').doc('candidatePool_current').set({
+      articles: boxCurrent,
+      generatedAt: now,
+    });
+    
+    await db.collection('system').doc('candidatePool_mixed').set({
+      articles: boxMixed,
       generatedAt: now,
     });
 
-    console.log(`[Cron] Universal Box successfully written. Articles: ${pool.length} (out of ${allArticles.length} scanned)`);
+    console.log(`[Cron] Dual Universal Boxes written. Current Box: ${boxCurrent.length}, Mixed Box: ${boxMixed.length}`);
   } catch (error) {
-    console.error('[Cron] Error generating candidate pool:', error);
+    console.error('[Cron] Error generating candidate pools:', error);
   }
 });
 
-async function getOrUpdateCandidatePool(): Promise<Article[]> {
+async function getOrUpdateCandidatePool(includeArchived: boolean): Promise<Article[]> {
   const now = Date.now();
-  if (candidateCache.length > 0 && (now - cacheTimestamp) < CACHE_LIFETIME_MS) {
-    console.log(`[Cache] Serving ${candidateCache.length} articles from memory (freshness: ${Math.round((now - cacheTimestamp) / 1000)}s)`);
-    return candidateCache;
+  const memoryCache = includeArchived ? candidateCacheMixed : candidateCacheCurrent;
+  const memCacheTimestamp = includeArchived ? cacheTimestampMixed : cacheTimestampCurrent;
+
+  if (memoryCache.length > 0 && (now - memCacheTimestamp) < CACHE_LIFETIME_MS) {
+    console.log(`[Cache] Serving ${memoryCache.length} articles from memory (includeArchived: ${includeArchived})`);
+    return memoryCache;
   }
 
-  console.log('[Cache] Cold cache. Fetching pre-compiled universal candidate pool from Firestore...');
+  const docName = includeArchived ? 'candidatePool_mixed' : 'candidatePool_current';
+  console.log(`[Cache] Cold cache. Fetching ${docName} from Firestore...`);
 
   try {
-    const docRef = db.collection('system').doc('candidatePool');
+    const docRef = db.collection('system').doc(docName);
     const snap = await docRef.get();
     if (snap.exists) {
       const data = snap.data();
       if (data && Array.isArray(data.articles) && data.articles.length > 0) {
-        candidateCache = data.articles as Article[];
-        cacheTimestamp = data.generatedAt || now;
-        console.log(`[Cache] Successfully loaded pre-compiled pool with ${candidateCache.length} articles.`);
-        return candidateCache;
+        if (includeArchived) {
+          candidateCacheMixed = data.articles as Article[];
+          cacheTimestampMixed = data.generatedAt || now;
+          console.log(`[Cache] Loaded mixed pool: ${candidateCacheMixed.length}`);
+          return candidateCacheMixed;
+        } else {
+          candidateCacheCurrent = data.articles as Article[];
+          cacheTimestampCurrent = data.generatedAt || now;
+          console.log(`[Cache] Loaded current pool: ${candidateCacheCurrent.length}`);
+          return candidateCacheCurrent;
+        }
       }
     }
   } catch (err) {
-    console.error('[Cache] Failed to fetch pre-compiled universal pool, falling back to on-the-fly generation:', err);
+    console.error(`[Cache] Failed to fetch ${docName}, falling back to on-the-fly generation:`, err);
   }
 
   console.log('[Cache] Fallback triggered. Querying stratified buckets on-the-fly...');
@@ -218,15 +247,16 @@ async function getOrUpdateCandidatePool(): Promise<Article[]> {
       articlesMap.set(a.id, a);
     });
 
-    candidateCache = Array.from(articlesMap.values());
-    cacheTimestamp = now;
-    console.log(`[Cache] Fallback rebuilt candidate pool cache. Total articles: ${candidateCache.length}`);
-    return candidateCache;
+    // We only fallback to building the current cache to be safe
+    candidateCacheCurrent = Array.from(articlesMap.values());
+    cacheTimestampCurrent = now;
+    console.log(`[Cache] Fallback rebuilt candidate pool cache. Total articles: ${candidateCacheCurrent.length}`);
+    return candidateCacheCurrent;
   } catch (error) {
     console.error('[Cache] Fallback error building candidate pool:', error);
-    if (candidateCache.length > 0) {
+    if (candidateCacheCurrent.length > 0) {
       console.warn('[Cache] Falling back to expired in-memory pool');
-      return candidateCache;
+      return candidateCacheCurrent;
     }
     throw error;
   }
@@ -344,20 +374,22 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
 
   let categoryWeights: Record<string, number> = {};
   let categoryLengthWeights: Record<string, number> = {};
+  let includeArchivedArticles = false;
   try {
     const userDoc = await db.collection('users').doc(userId).get();
     if (userDoc.exists) {
       const data = userDoc.data() as UserProfile;
       categoryWeights = data.categoryWeights || {};
       categoryLengthWeights = data.categoryLengthWeights || {};
+      includeArchivedArticles = data.includeArchivedArticles || false;
     }
   } catch (err) {
     console.warn('[getRankedFeed] Could not fetch user profile');
   }
 
   try {
-    // STAGE 1: Fetch candidate pool (from memory cache or time-stratified query)
-    const pool = await getOrUpdateCandidatePool();
+    // STAGE 1: Fetch candidate pool based on user preference
+    const pool = await getOrUpdateCandidatePool(includeArchivedArticles);
 
     if (pool.length === 0) {
       return { articles: [], generatedAt: Date.now(), remainingCount: 0 };

@@ -20,6 +20,7 @@ export interface UserProfile {
   lastReadDate: number; // ms timestamp
   averageWpm: number;
   dashboardMetricIds: string[]; // up to 3 metric card IDs selected by user
+  includeArchivedArticles?: boolean; // Whether user opts-in to reading raw Substack URIs for old articles
   lastUpdated: number;
 }
 
@@ -46,6 +47,7 @@ export interface Article {
   trendingScore: number; // Daily calculated score
   qualityScore: number; // Baseline publisher score (0.0 to 1.0)
   isSeed: boolean; // Set to false for real fetched RSS items
+  rssStatus?: 'current' | 'archived'; // Indicates if article is available in live RSS
 }
 
 // --- Behavior Event (Firestore: behavior_events/{id}) ---

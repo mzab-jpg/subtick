@@ -100,6 +100,9 @@ export default function ReaderScreen() {
         if (isSavedMode) {
           const savedHtml = await getSavedArticleHtml(id);
           contentHtml = savedHtml || data.bodyHtml || '';
+        } else if (data.rssStatus === 'archived') {
+          // Archived articles do not exist in live RSS. We will load the publicationUrl directly.
+          contentHtml = '';
         } else if (data.guid && data.feedUrl) {
           contentHtml = await fetchAndExtractArticle(data.feedUrl, data.guid);
         } else {
@@ -145,9 +148,12 @@ export default function ReaderScreen() {
 
       if (isSavedMode) return; // Saved mode uses offline database HTML, no live RSS fetches needed
 
+      // We only fetch RSS feeds for 'current' articles.
+      const currentArticles = activeArticles.filter(a => !a.rssStatus || a.rssStatus === 'current');
+
       // 2. Extract unique feedUrls for the upcoming window
       const uniqueFeedUrls = Array.from(
-        new Set(activeArticles.map(a => a.feedUrl).filter((url): url is string => !!url))
+        new Set(currentArticles.map(a => a.feedUrl).filter((url): url is string => !!url))
       );
 
       // 3. Prune our local in-memory feed cache to only keep feeds that show up in the look-ahead window.
@@ -156,7 +162,7 @@ export default function ReaderScreen() {
 
       // 4. Concurrently fetch the unique RSS feeds (completely safe from duplication because feedService caches the active Promise)
       await Promise.all(
-        activeArticles.map(async (art) => {
+        currentArticles.map(async (art) => {
           if (art.feedUrl && art.guid) {
             try {
               await fetchAndExtractArticle(art.feedUrl, art.guid);
@@ -376,7 +382,29 @@ export default function ReaderScreen() {
       </body>
       </html>
     `;
-  }, [article, colors, webViewCSS]);
+  }, [article, resolvedHtml, colors, webViewCSS]);
+
+  const rawWebpageInjectedScript = `
+    (function() {
+      var maxDepth = 0;
+      function reportScroll() {
+        var scrollTop = window.scrollY || document.documentElement.scrollTop;
+        var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight <= 0) return;
+        var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
+        if (depth > maxDepth) {
+          maxDepth = depth;
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: depth }));
+        }
+      }
+      window.addEventListener('scroll', reportScroll, { passive: true });
+      setTimeout(reportScroll, 100);
+    })();
+    true;
+  `;
+
+  // Determine if we should load the raw URL instead of sanitized HTML
+  const useDirectUri = article && (article.rssStatus === 'archived' || (isSavedMode && !resolvedHtml));
 
   // --- Flush pending behavior events when leaving the Reader ---
   useEffect(() => {
@@ -502,18 +530,40 @@ export default function ReaderScreen() {
           )}
         </View>
       ) : article ? (
-        <WebView
-          style={[styles.webview, { backgroundColor: 'transparent' }]}
-          originWhitelist={['*']}
-          source={{ html: articleHTML }}
-          onMessage={handleWebViewMessage}
-          javaScriptEnabled
-          domStorageEnabled
-          scrollEnabled
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          overScrollMode="never"
-        />
+        useDirectUri ? (
+          <View style={{ flex: 1, paddingTop: 3 }}>
+            {/* Double Header native view for Archived Articles */}
+            <View style={[styles.archivedHeader, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.archivedTitle, { color: colors.text }]}>{article.title}</Text>
+              <Text style={[styles.archivedAuthor, { color: colors.textMuted }]}>
+                {article.publicationName} — {Math.max(1, Math.ceil((article.wordCount || 0) / currentWpm))} min read
+              </Text>
+            </View>
+            <WebView
+              style={[styles.webview, { backgroundColor: colors.background }]}
+              source={{ uri: article.publicationUrl }}
+              onMessage={handleWebViewMessage}
+              injectedJavaScript={rawWebpageInjectedScript}
+              javaScriptEnabled
+              domStorageEnabled
+              scrollEnabled
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        ) : (
+          <WebView
+            style={[styles.webview, { backgroundColor: 'transparent' }]}
+            originWhitelist={['*']}
+            source={{ html: articleHTML }}
+            onMessage={handleWebViewMessage}
+            javaScriptEnabled
+            domStorageEnabled
+            scrollEnabled
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never"
+          />
+        )
       ) : (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.textSecondary }]}>Article could not be loaded.</Text>
@@ -592,4 +642,19 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 8,
   },
   edgeHintText: { fontSize: 11, opacity: 0.4 },
+  archivedHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  archivedTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  archivedAuthor: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });

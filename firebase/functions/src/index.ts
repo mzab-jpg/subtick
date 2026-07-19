@@ -1,5 +1,5 @@
 // ============================================================
-// SubTick — Cloud Functions Entry Point
+// SubTick - Cloud Functions Entry Point
 // Initializes Firebase Admin SDK and exports all 7 functions.
 // ============================================================
 

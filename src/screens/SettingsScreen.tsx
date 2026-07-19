@@ -344,6 +344,29 @@ export default function SettingsScreen() {
         <Text style={[styles.linkStatus, { color: colors.textMuted }]}>View saved articles</Text>
       </TouchableOpacity>
 
+      {/* Article Sources */}
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Article Sources</Text>
+      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+        Archived articles are older stories that are no longer available in standard RSS feeds. They will load the full Substack webpage directly inside the app.
+      </Text>
+      <View style={[styles.metricRow, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
+        <Text style={[styles.metricLabel, { color: colors.text, flex: 1, paddingRight: 16 }]}>
+          Include Archived Articles
+        </Text>
+        <Switch
+          value={profile?.includeArchivedArticles || false}
+          onValueChange={async (value) => {
+            if (!profile || !auth.currentUser) return;
+            const updatedProfile = { ...profile, includeArchivedArticles: value };
+            setProfile(updatedProfile);
+            const userRef = doc(db, 'users', auth.currentUser.uid);
+            await setDoc(userRef, { includeArchivedArticles: value, lastUpdated: Date.now() }, { merge: true });
+          }}
+          trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
+          thumbColor={profile?.includeArchivedArticles ? colors.primary : colors.textMuted}
+        />
+      </View>
+
       {/* Theme Selection */}
       <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Theme</Text>
       <View style={styles.themeRow}>
