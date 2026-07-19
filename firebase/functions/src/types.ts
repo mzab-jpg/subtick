@@ -8,6 +8,7 @@ export interface UserProfile {
   selectedCategoryIds: string[];
   notInterestedCategoryIds: string[];
   categoryWeights: Record<string, number>;
+  categoryLengthWeights?: Record<string, number>;
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   totalArticlesRead: number;
@@ -29,12 +30,14 @@ export interface Article {
   publicationUrl: string;
   feedUrl: string;
   category: string;
+  lengthStyle: string;
   bodyHtml: string;
   description?: string;
   publishDate: number;
   cacheTimestamp: number;
   isPaywalled: boolean;
   headerImageUrl?: string;
+  wordCount?: number;
   estimatedReadMinutes: number;
   trendingScore: number;
   qualityScore: number;
@@ -44,13 +47,12 @@ export interface Article {
 export type BehaviorEventType =
   | 'swipe_next'
   | 'swipe_not_interested'
-  | 'scroll_80'
   | 'like'
   | 'save'
-  | 'dwell_5min'
-  | 'quick_exit'
-  | 'scroll_20'
-  | 'scroll_40';
+  | 'read_thorough'
+  | 'read_skim'
+  | 'read_shallow'
+  | 'quick_exit';
 
 export interface BehaviorEvent {
   articleId: string;
@@ -58,6 +60,7 @@ export interface BehaviorEvent {
   eventType: BehaviorEventType;
   timestamp: number;
   articleCategory: string;
+  lengthStyle: string;
   sessionDuration: number;
   scrollDepth: number;
 }

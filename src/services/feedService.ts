@@ -8,7 +8,7 @@ import { functions, db } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Article, RankedFeedResult } from '../types';
-import { SEEN_ARTICLES_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES } from '../utils/constants';
+import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES } from '../utils/constants';
 import { auth } from './firebase';
 
 /**
@@ -129,6 +129,53 @@ export async function markArticleSeen(articleId: string): Promise<void> {
     }
   } catch (error) {
     console.error('[FeedService] markArticleSeen error:', error);
+  }
+}
+
+/**
+ * Get locally stored saved article IDs from AsyncStorage.
+ */
+export async function getSavedArticleIds(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Mark an article as saved.
+ */
+export async function markArticleSaved(articleId: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
+    const saved: string[] = raw ? JSON.parse(raw) : [];
+
+    if (!saved.includes(articleId)) {
+      saved.push(articleId);
+      await AsyncStorage.setItem(SAVED_ARTICLES_KEY, JSON.stringify(saved));
+    }
+  } catch (error) {
+    console.error('[FeedService] markArticleSaved error:', error);
+  }
+}
+
+/**
+ * Unmark an article as saved.
+ */
+export async function unmarkArticleSaved(articleId: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
+    const saved: string[] = raw ? JSON.parse(raw) : [];
+
+    const index = saved.indexOf(articleId);
+    if (index !== -1) {
+      saved.splice(index, 1);
+      await AsyncStorage.setItem(SAVED_ARTICLES_KEY, JSON.stringify(saved));
+    }
+  } catch (error) {
+    console.error('[FeedService] unmarkArticleSaved error:', error);
   }
 }
 

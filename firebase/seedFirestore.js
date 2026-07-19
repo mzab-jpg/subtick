@@ -70,10 +70,18 @@ function generateArticleId(url, title) {
   return `article_${hash.substring(0, 16)}`;
 }
 
-function estimateReadMinutes(htmlContent) {
-  const textLength = htmlContent.replace(/<[^>]*>/g, '').length;
-  const estimatedWords = textLength / 5;
-  return Math.max(1, Math.ceil(estimatedWords / 238));
+function calculateWordCount(htmlContent) {
+  if (!htmlContent) return 0;
+  let text = htmlContent.replace(/<[^>]*>/g, ' ');
+  text = text.replace(/&nbsp;/gi, ' ');
+  text = text.replace(/&[a-z]+;/gi, '');
+  text = text.replace(/\s+/g, ' ').trim();
+  if (text.length === 0) return 0;
+  return text.split(' ').length;
+}
+
+function estimateReadMinutes(wordCount) {
+  return Math.max(1, Math.ceil(wordCount / 250));
 }
 
 function extractFirstImage(html) {
@@ -136,6 +144,11 @@ async function seed() {
           const author = item.creator || item['dc:creator'] || feed.publicationName;
           const headerImageUrl = extractFirstImage(rawHtml);
 
+          const wordCount = calculateWordCount(bodyHtml);
+          let lengthStyle = 'medium';
+          if (wordCount < 800) lengthStyle = 'short';
+          else if (wordCount > 2000) lengthStyle = 'long';
+
           const article = {
             id: articleId,
             title,
@@ -144,13 +157,15 @@ async function seed() {
             publicationUrl: feedData.link || feed.url,
             feedUrl: feed.url,
             category: feed.category,
+            lengthStyle,
             bodyHtml,
             description,
             publishDate,
             cacheTimestamp: Date.now(),
             isPaywalled: false,
             headerImageUrl,
-            estimatedReadMinutes: estimateReadMinutes(bodyHtml),
+            wordCount,
+            estimatedReadMinutes: estimateReadMinutes(wordCount),
             trendingScore: 0,
             qualityScore: feed.qualityScore,
             isSeed: true,

@@ -28,6 +28,20 @@ const PAYWALL_KEYWORDS = [
   "You've reached the free preview",
   'Subscribe now to read the full post',
   'Continue reading with a paid subscription',
+  'free preview',
+  'start your 7-day free trial',
+  'unlock this post',
+  'read the rest of this',
+  'upgrade your subscription',
+  'exclusive to paid',
+  'to read the rest',
+  'keep reading with a 7-day',
+  'keep reading with a free trial',
+  'this is a free preview',
+  'subscribe to read',
+  'upgrade to read',
+  'paid subscribers only',
+  'this post is for paid',
 ];
 
 // --- HTML sanitization (mirrors htmlSanitizer.ts, simplified for Node) ---
@@ -114,14 +128,16 @@ async function retroClean() {
       }
     }
 
-    // Check paywall (only if not already marked)
+    // Check paywall and stubs
     if (!article.isPaywalled) {
       const isPaywalled = detectPaywall(
         article.title || '',
         article.description || '',
         article.bodyHtml || ''
       );
-      if (isPaywalled) {
+      const isStub = article.wordCount !== undefined && article.wordCount < 150;
+      
+      if (isPaywalled || isStub) {
         updates.isPaywalled = true;
         paywalled++;
       }

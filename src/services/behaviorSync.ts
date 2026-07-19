@@ -25,6 +25,7 @@ export async function queueBehaviorEvent(
   articleId: string,
   eventType: BehaviorEventType,
   articleCategory: string,
+  lengthStyle: string,
   sessionDuration: number,
   scrollDepth: number,
 ): Promise<void> {
@@ -39,6 +40,7 @@ export async function queueBehaviorEvent(
       eventType,
       timestamp: Date.now(),
       articleCategory,
+      lengthStyle,
       sessionDuration,
       scrollDepth,
       synced: false,

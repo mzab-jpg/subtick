@@ -29,7 +29,7 @@ import { db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { MAX_FEED_ARTICLES } from '../utils/constants';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
-import { markArticleSeen, getRankedFeed } from '../services/feedService';
+import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -41,7 +41,11 @@ export default function ReaderScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
 
-  const { articleId, queueArticleIds, startIndex } = route.params;
+  const { articleId, queueArticleIds, startIndex, userWpm, mode } = route.params;
+  const currentWpm = userWpm || 250;
+  const isHistoryMode = mode === 'history';
+  const isSavedMode = mode === 'saved';
+  const isRestrictedMode = isHistoryMode || isSavedMode;
 
   // --- State ---
   const [article, setArticle] = useState<Article | null>(null);
@@ -51,28 +55,41 @@ export default function ReaderScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [queueExhausted, setQueueExhausted] = useState(false);
 
+  // Sliding cache for instant swiping
+  const [articleCache, setArticleCache] = useState<Record<string, Article>>({});
+
   // Dynamic preloaded queue (initially populated from Dashboard)
   const [activeQueueIds, setQueueIds] = useState<string[]>(queueArticleIds || []);
   const [preloading, setPreloading] = useState(false);
   
   // Guard references
   const preloadingRef = useRef(false);
+  const cacheRef = useRef<Record<string, Article>>({});
   const panX = useRef(new Animated.Value(0)).current;
 
   // --- Behavior tracker hook (replaces inline console.log) ---
   const behaviorTracker = useBehaviorTracker({
     articleId: article?.id || articleId,
     articleCategory: article?.category || 'misc',
-    enabled: !!article && !loading,
+    lengthStyle: article?.lengthStyle || 'medium',
+    enabled: !!article && !loading && !isRestrictedMode,
   });
 
   // --- Load article ---
   const loadArticle = useCallback(async (id: string) => {
     try {
+      if (cacheRef.current[id]) {
+        setArticle(cacheRef.current[id]);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const snap = await getDoc(doc(db, 'articles', id));
       if (snap.exists()) {
-        setArticle(snap.data() as Article);
+        const data = snap.data() as Article;
+        cacheRef.current[id] = data;
+        setArticleCache(prev => ({ ...prev, [id]: data }));
+        setArticle(data);
       } else {
         setArticle(null);
       }
@@ -83,8 +100,43 @@ export default function ReaderScreen() {
     }
   }, []);
 
+  // --- Background Sliding Prefetcher ---
+  const prefetchArticles = useCallback(async (idsToFetch: string[]) => {
+    for (const id of idsToFetch) {
+      if (!cacheRef.current[id]) {
+        try {
+          const snap = await getDoc(doc(db, 'articles', id));
+          if (snap.exists()) {
+            const data = snap.data() as Article;
+            cacheRef.current[id] = data;
+            setArticleCache(prev => ({ ...prev, [id]: data }));
+          }
+        } catch (e) {
+          // silently fail prefetch
+        }
+      }
+    }
+  }, []);
+
   useEffect(() => {
     loadArticle(articleId);
+  }, [articleId]);
+
+  useEffect(() => {
+    // Sliding window: Prefetch the next 2 articles automatically
+    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 3);
+    if (upcomingIds.length > 0) {
+      prefetchArticles(upcomingIds);
+    }
+  }, [currentIndex, activeQueueIds, prefetchArticles]);
+
+  useEffect(() => {
+    // Check initial saved state
+    if (articleId) {
+      getSavedArticleIds().then(saved => {
+        setIsSaved(saved.includes(articleId));
+      });
+    }
   }, [articleId]);
 
   // --- Queue navigation helpers ---
@@ -109,8 +161,11 @@ export default function ReaderScreen() {
       console.log('[Preloader] Local behavior events successfully flushed to cloud.');
 
       // 2. Query the next 20 articles from the Cloud.
-      // We pass the activeQueueIds so our client-side filter knows to avoid duplicates
-      const result = await getRankedFeed(activeQueueIds);
+      // We pass combined historical seen IDs + currently active queue IDs 
+      // so the filter avoids both previously read articles and ones currently in the queue.
+      const historicalSeen = await getSeenArticleIds();
+      const combinedSeenIds = Array.from(new Set([...historicalSeen, ...activeQueueIds]));
+      const result = await getRankedFeed(combinedSeenIds);
 
       if (result.articles && result.articles.length > 0) {
         // Grab the top 20 new recommendations (highly tailored to their fresh swipes!)
@@ -145,17 +200,22 @@ export default function ReaderScreen() {
 
     // TRIGGER ZONE CHECK: If 10 articles or less are left in the active queue,
     // preload the next 20 fresh articles in the background.
-    if (activeQueueIds.length - nextIdx <= 10 && !preloadingRef.current) {
+    if (!isRestrictedMode && activeQueueIds.length - nextIdx <= 10 && !preloadingRef.current) {
       preloadNextArticles();
     }
-  }, [hasNext, currentIndex, activeQueueIds, loadArticle, preloadNextArticles]);
+    
+    // Refresh saved state for next article
+    getSavedArticleIds().then(saved => setIsSaved(saved.includes(activeQueueIds[nextIdx])));
+  }, [hasNext, currentIndex, activeQueueIds, loadArticle, preloadNextArticles, isRestrictedMode]);
 
   const goToPrev = useCallback(() => {
     if (!hasPrev) return;
     const prevIdx = currentIndex - 1;
     setCurrentIndex(prevIdx);
     setIsLiked(false);
-    setIsSaved(false);
+    
+    // Refresh saved state for prev article
+    getSavedArticleIds().then(saved => setIsSaved(saved.includes(activeQueueIds[prevIdx])));
     loadArticle(activeQueueIds[prevIdx]);
   }, [hasPrev, currentIndex, activeQueueIds, loadArticle]);
 
@@ -180,6 +240,7 @@ export default function ReaderScreen() {
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: (evt) => {
+          if (isHistoryMode) return false; // disable swiping in history mode
           const x = evt.nativeEvent.locationX;
           // Only intercept touches in edge zones (left 30px or right 30px)
           return x <= EDGE_ZONE_WIDTH || x >= SCREEN_WIDTH - EDGE_ZONE_WIDTH;
@@ -198,28 +259,35 @@ export default function ReaderScreen() {
 
           if (dx < -SWIPE_THRESHOLD) {
             // Swipe left (right edge) → Swipe Next
-            behaviorTracker.trackEvent('swipe_next');
-            // Mark article as seen so it won't reappear on refresh
-            if (article?.id) markArticleSeen(article.id);
+            if (!isRestrictedMode) {
+              const expectedReadTimeMs = article?.wordCount ? (article.wordCount / currentWpm) * 60000 : 60000;
+              behaviorTracker.concludeSession(expectedReadTimeMs);
+              if (article?.id) markArticleSeen(article.id);
+            }
             goToNext();
           } else if (dx > SWIPE_THRESHOLD) {
-            // Swipe right (left edge) → Swipe Not Interested
-            behaviorTracker.trackEvent('swipe_not_interested');
-            // Mark article as seen so it won't reappear on refresh
-            if (article?.id) markArticleSeen(article.id);
-            goToNext(); // Also advances (dismisses) article
+            // Swipe right (left edge) → Swipe Prev if saved mode, or Not Interested if feed mode
+            if (isSavedMode) {
+              goToPrev();
+            } else if (!isRestrictedMode) {
+              behaviorTracker.trackEvent('swipe_not_interested');
+              if (article?.id) markArticleSeen(article.id);
+              goToNext(); // advances (dismisses) article
+            }
           }
         },
       }),
-    [goToNext, behaviorTracker, panX, article]
+    [goToNext, goToPrev, behaviorTracker, panX, article, isRestrictedMode, isSavedMode, isHistoryMode]
   );
 
   // --- Pre-compiled HTML for WebView (NO post-load style injection — prevents flashing) ---
   const articleHTML = useMemo(() => {
     if (!article) return '';
+    const readMinutes = Math.max(1, Math.ceil((article.wordCount || 0) / currentWpm));
+    
     const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${article.title}</h1>`;
     const authorBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:8px;">${article.publicationName} — ${article.author}</p>`;
-    const metaBlock = `<p style="color:${colors.textMuted}; font-size:13px; margin-bottom:24px;">${article.estimatedReadMinutes} min read · ${new Date(article.publishDate).toLocaleDateString()}</p>`;
+    const metaBlock = `<p style="color:${colors.textMuted}; font-size:13px; margin-bottom:24px;">${readMinutes} min read · ${new Date(article.publishDate).toLocaleDateString()}</p>`;
 
     return `
       <!DOCTYPE html>
@@ -269,19 +337,12 @@ export default function ReaderScreen() {
   // --- Render ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      {/* HUD Overlay */}
-      <View style={[styles.hud, { backgroundColor: colors.hudBackground, borderBottomColor: colors.border }]}>
-        {/* Top Row */}
+      {/* HUD Overlay (Floating Actions + Progress) */}
+      <View style={styles.hud}>
+        {/* Top Row: Floating Actions only */}
         <View style={styles.hudTopRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.hudButton}>
-            <Text style={[styles.hudButtonText, { color: colors.primary }]}>← Back</Text>
-          </TouchableOpacity>
-
-          {article && (
-            <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1}>
-              {article.publicationName}
-            </Text>
-          )}
+          {/* Spacer to push actions to the right */}
+          <View style={{ flex: 1 }} />
 
           <View style={styles.hudActions}>
             <TouchableOpacity
@@ -298,7 +359,14 @@ export default function ReaderScreen() {
               onPress={() => {
                 const newVal = !isSaved;
                 setIsSaved(newVal);
-                if (newVal) behaviorTracker.trackEvent('save');
+                if (article) {
+                  if (newVal) {
+                    markArticleSaved(article.id);
+                    if (!isRestrictedMode) behaviorTracker.trackEvent('save');
+                  } else {
+                    unmarkArticleSaved(article.id);
+                  }
+                }
               }}
               style={styles.hudIconButton}
             >
@@ -308,7 +376,7 @@ export default function ReaderScreen() {
         </View>
 
         {/* Progress Bar */}
-        <View style={[styles.progressBg, { backgroundColor: colors.progressBarBackground }]}>
+        <View style={[styles.progressBg, { backgroundColor: 'transparent' }]}>
           <View
             style={[
               styles.progressFill,
@@ -322,12 +390,16 @@ export default function ReaderScreen() {
       </View>
 
       {/* Swipe Zone Indicators (edge hints) */}
-      <View style={[styles.edgeHintLeft, { backgroundColor: colors.surfaceSecondary + '20' }]}>
-        <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>◂</Text>
-      </View>
-      <View style={[styles.edgeHintRight, { backgroundColor: colors.surfaceSecondary + '20' }]}>
-        <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>▸</Text>
-      </View>
+      {!isHistoryMode && (
+        <>
+          <View style={[styles.edgeHintLeft, { backgroundColor: colors.surfaceSecondary + '20' }]}>
+            <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>◂</Text>
+          </View>
+          <View style={[styles.edgeHintRight, { backgroundColor: colors.surfaceSecondary + '20' }]}>
+            <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>▸</Text>
+          </View>
+        </>
+      )}
 
       {/* Content */}
       {loading ? (
@@ -350,7 +422,7 @@ export default function ReaderScreen() {
         </View>
       ) : article ? (
         <WebView
-          style={styles.webview}
+          style={[styles.webview, { backgroundColor: 'transparent' }]}
           originWhitelist={['*']}
           source={{ html: articleHTML }}
           onMessage={handleWebViewMessage}
@@ -367,14 +439,6 @@ export default function ReaderScreen() {
         </View>
       )}
 
-      {/* Queue Navigation Indicator */}
-      {!loading && !queueExhausted && (
-        <View style={styles.queueIndicator}>
-          <Text style={[styles.queueText, { color: colors.textMuted }]}>
-            {currentIndex + 1} / {activeQueueIds.length}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -390,7 +454,6 @@ const styles = StyleSheet.create({
     paddingTop: 48, // Safe area
     paddingHorizontal: 16,
     paddingBottom: 8,
-    borderBottomWidth: 1,
   },
   hudTopRow: {
     flexDirection: 'row',
@@ -398,12 +461,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  hudButton: { paddingVertical: 4, paddingRight: 12 },
-  hudButtonText: { fontSize: 15, fontWeight: '600' },
-  hudTitle: { flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '600' },
   hudActions: { flexDirection: 'row', gap: 8 },
-  hudIconButton: { padding: 4 },
-  hudIcon: { fontSize: 20 },
+  hudIconButton: { padding: 4, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 20 },
+  hudIcon: { fontSize: 22 },
   progressBg: { height: 3, borderRadius: 1.5, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 1.5 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
@@ -426,16 +486,6 @@ const styles = StyleSheet.create({
   catchUpButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
   errorText: { fontSize: 16 },
-  queueIndicator: {
-    position: 'absolute',
-    bottom: 36,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  queueText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
   edgeHintLeft: {
     position: 'absolute',
     left: 0,

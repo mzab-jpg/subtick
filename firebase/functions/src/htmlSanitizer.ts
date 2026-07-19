@@ -40,9 +40,13 @@ function sanitizeAndClean(html: string): string {
     exclusiveFilter: (frame) => {
       if (frame.tag === 'img') {
         const src = frame.attribs.src || '';
-        const width = parseInt(frame.attribs.width || '0');
-        const height = parseInt(frame.attribs.height || '0');
-        if (width <= 1 && height <= 1) return true;
+        const hasWidth = frame.attribs.width !== undefined;
+        const hasHeight = frame.attribs.height !== undefined;
+        if (hasWidth && hasHeight) {
+          const width = parseInt(frame.attribs.width);
+          const height = parseInt(frame.attribs.height);
+          if (width <= 1 && height <= 1) return true;
+        }
         if (src.includes('analytics') || src.includes('pixel') || src.includes('track')) return true;
       }
       return false;

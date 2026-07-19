@@ -22,10 +22,18 @@ function generateArticleId(url: string, title: string): string {
   return `article_${hash.substring(0, 16)}`;
 }
 
-function estimateReadMinutes(htmlContent: string): number {
-  const textLength = htmlContent.replace(/<[^>]*>/g, '').length;
-  const estimatedWords = textLength / 5;
-  return Math.max(1, Math.ceil(estimatedWords / 238));
+function calculateWordCount(htmlContent: string): number {
+  if (!htmlContent) return 0;
+  let text = htmlContent.replace(/<[^>]*>/g, ' ');
+  text = text.replace(/&nbsp;/gi, ' ');
+  text = text.replace(/&[a-z]+;/gi, '');
+  text = text.replace(/\s+/g, ' ').trim();
+  if (text.length === 0) return 0;
+  return text.split(' ').length;
+}
+
+function estimateReadMinutes(wordCount: number): number {
+  return Math.max(1, Math.ceil(wordCount / 250));
 }
 
 function extractFirstImage(html: string): string | undefined {
@@ -63,6 +71,11 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
           const author = item.creator || item['dc:creator'] || 'Unknown';
           const headerImageUrl = extractFirstImage(bodyHtml);
 
+          const wordCount = calculateWordCount(bodyHtml);
+          let lengthStyle = 'medium';
+          if (wordCount < 800) lengthStyle = 'short';
+          else if (wordCount > 2000) lengthStyle = 'long';
+
           const article: Record<string, any> = {
             id: articleId,
             title,
@@ -71,12 +84,14 @@ export const rssCollector = onSchedule('every 4 hours', async () => {
             publicationUrl: feedData.link || feed.url,
             feedUrl: feed.url,
             category: feed.category,
+            lengthStyle,
             bodyHtml,
             description,
             publishDate,
             cacheTimestamp: Date.now(),
             isPaywalled: false,
-            estimatedReadMinutes: estimateReadMinutes(bodyHtml),
+            wordCount,
+            estimatedReadMinutes: estimateReadMinutes(wordCount),
             trendingScore: 0,
             qualityScore: feed.qualityScore,
             isSeed: false,

@@ -28,9 +28,9 @@ let publisherCacheTimestamp = 0;
 
 /**
  * 5-Component Scoring Formula:
- * Score = (0.30 × C) + (0.20 × T) + (0.25 × R) + (0.15 × Q) + (0.10 × U)
+ * Score = (0.30 × P) + (0.20 × T) + (0.25 × R) + (0.15 × Q) + (0.10 × U)
  *
- * 1. Category Boost (C): max(0.1, userCategoryWeight / 1.0)
+ * 1. Personalization Boost (P): max(0.1, userCategoryLengthWeight / 1.0)
  * 2. Trending Boost (T): max(0.1, 1.0 + articleTrendingScore / 2.5)
  * 3. Recency Boost (R): 2.0 / (1.0 + daysOld / 7)
  * 4. Quality Boost (Q): dynamicPublisherQualityScore
@@ -38,13 +38,13 @@ let publisherCacheTimestamp = 0;
  */
 function calculateCompositeScore(
   article: Article,
-  userCategoryWeight: number,
+  personalizationWeight: number,
   articlesInSamePub: number,
   publisherQuality: number
 ): number {
   const daysOld = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
 
-  const C = Math.max(0.1, userCategoryWeight / 1.0);
+  const P = Math.max(0.1, personalizationWeight / 1.0);
   const T = Math.max(0.1, 1.0 + (article.trendingScore || 0) / 2.5);
   const R = 2.0 / (1.0 + daysOld / 7);
   const Q = publisherQuality;
@@ -56,7 +56,7 @@ function calculateCompositeScore(
   const U = 1.0 - (Math.min(1.0, (articlesInSamePub - 1) / 15) * 0.6);
 
   return (
-    SCORE_WEIGHTS.categoryBoost * C +
+    SCORE_WEIGHTS.categoryBoost * P +
     SCORE_WEIGHTS.trendingBoost * T +
     SCORE_WEIGHTS.recencyBoost * R +
     SCORE_WEIGHTS.qualityBoost * Q +
@@ -98,14 +98,15 @@ async function getOrUpdateCandidatePool(): Promise<Article[]> {
 
     freshSnapshot.forEach((doc) => {
       const data = doc.data() as Article;
-      if (!data.isPaywalled) {
+      // "Anti-Stub" Filter: Drop extremely short articles or paywalled ones
+      if (!data.isPaywalled && (data.wordCount === undefined || data.wordCount >= 150)) {
         articlesMap.set(doc.id, { ...data, id: doc.id });
       }
     });
 
     qualitySnapshot.forEach((doc) => {
       const data = doc.data() as Article;
-      if (!data.isPaywalled) {
+      if (!data.isPaywalled && (data.wordCount === undefined || data.wordCount >= 150)) {
         articlesMap.set(doc.id, { ...data, id: doc.id });
       }
     });
@@ -140,8 +141,10 @@ async function getOrUpdatePublisherQualities(): Promise<Record<string, number>> 
     snapshot.forEach(doc => {
       const data = doc.data();
       if (data && typeof data.qualityScore === 'number') {
+        // Match by the original publication name field if present, falling back to doc.id
+        const pubKey = (data.name && typeof data.name === 'string') ? data.name : doc.id;
         // Clamp live publisher score organically between [0.20, 1.00] so terrible feeds are muted but not deleted
-        tempQualities[doc.id] = Math.max(0.2, Math.min(1.0, data.qualityScore));
+        tempQualities[pubKey] = Math.max(0.2, Math.min(1.0, data.qualityScore));
       }
     });
     publisherQualityCache = tempQualities;
@@ -233,10 +236,13 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
   console.log(`[getRankedFeed] userId: ${userId}, seen limit: ${(seenArticleIds || []).length}`);
 
   let categoryWeights: Record<string, number> = {};
+  let categoryLengthWeights: Record<string, number> = {};
   try {
     const userDoc = await db.collection('users').doc(userId).get();
     if (userDoc.exists) {
-      categoryWeights = (userDoc.data() as UserProfile).categoryWeights || {};
+      const data = userDoc.data() as UserProfile;
+      categoryWeights = data.categoryWeights || {};
+      categoryLengthWeights = data.categoryLengthWeights || {};
     }
   } catch (err) {
     console.warn('[getRankedFeed] Could not fetch user profile');
@@ -264,13 +270,15 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
     });
 
     const scored = unseenArticles.map((article) => {
-      const userWeight = categoryWeights[article.category] || 1.0;
+      const compKey = `${article.category}::${article.lengthStyle}`;
+      const personalizationWeight = categoryLengthWeights[compKey] ?? categoryWeights[article.category] ?? 1.0;
+      
       const pubCount = pubCounts[article.publicationName] || 1;
       
       // Use dynamic, crowd-sourced publisher quality score. Falls back to static seed if no feedback gathered yet
       const dynamicQuality = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
       
-      const score = calculateCompositeScore(article, userWeight, pubCount, dynamicQuality);
+      const score = calculateCompositeScore(article, personalizationWeight, pubCount, dynamicQuality);
       return { article, score };
     });
 
@@ -280,13 +288,14 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
     const finalFeed = assembleFeedWithExploration(scored, categoryWeights, publisherQualities, RETURN_FEED_SIZE, EXPLORATION_COUNT);
 
     // --- Log top 5 articles with per-component scores for debugging ---
-    console.log(`[getRankedFeed] User weights: ${JSON.stringify(categoryWeights)}`);
+    console.log(`[getRankedFeed] User weights: ${JSON.stringify(categoryWeights)}, Style weights: ${JSON.stringify(categoryLengthWeights)}`);
     console.log(`[getRankedFeed] --- Top 5 Scored Articles ---`);
     scored.slice(0, 5).forEach((s, i) => {
       const daysOld = Math.max(0, (Date.now() - s.article.publishDate) / (1000 * 60 * 60 * 24));
-      const userWeight = categoryWeights[s.article.category] || 1.0;
+      const compKey = `${s.article.category}::${s.article.lengthStyle}`;
+      const personalizationWeight = categoryLengthWeights[compKey] ?? categoryWeights[s.article.category] ?? 1.0;
       const pubCount = pubCounts[s.article.publicationName] || 1;
-      const C = Math.max(0.1, userWeight / 1.0);
+      const P = Math.max(0.1, personalizationWeight / 1.0);
       const T = Math.max(0.1, 1.0 + (s.article.trendingScore || 0) / 2.5);
       const R = 2.0 / (1.0 + daysOld / 7);
       
@@ -294,8 +303,8 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
       const U = 1.0 - (Math.min(1.0, (pubCount - 1) / 15) * 0.6);
       
       console.log(
-        `  #${i + 1} [${s.article.category}] "${s.article.title.substring(0, 60)}..." ` +
-        `score=${s.score.toFixed(3)} C=${C.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${dynamicQuality.toFixed(2)} U=${U.toFixed(2)}`
+        `  #${i + 1} [${s.article.category}::${s.article.lengthStyle}] "${s.article.title.substring(0, 60)}..." ` +
+        `score=${s.score.toFixed(3)} P=${P.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${dynamicQuality.toFixed(2)} U=${U.toFixed(2)}`
       );
     });
 

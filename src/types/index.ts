@@ -8,7 +8,8 @@ export interface UserProfile {
   isOnboarded: boolean;
   selectedCategoryIds: string[];
   notInterestedCategoryIds: string[];
-  categoryWeights: Record<string, number>; // e.g. { "tech": 1.5, "finance": 0.2 }
+  categoryWeights: Record<string, number>;
+  categoryLengthWeights?: Record<string, number>;
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   totalArticlesRead: number;
@@ -31,12 +32,14 @@ export interface Article {
   publicationUrl: string;
   feedUrl: string;
   category: string; // Matches category ids
+  lengthStyle: string; // "short", "medium", "long"
   bodyHtml: string; // Cleaned, sanitized HTML
   description?: string;
   publishDate: number; // ms timestamp
   cacheTimestamp: number; // ms timestamp when fetched
   isPaywalled: boolean;
   headerImageUrl?: string;
+  wordCount?: number;
   estimatedReadMinutes: number;
   trendingScore: number; // Daily calculated score
   qualityScore: number; // Baseline publisher score (0.0 to 1.0)
@@ -50,6 +53,7 @@ export interface BehaviorEvent {
   eventType: BehaviorEventType;
   timestamp: number;
   articleCategory: string;
+  lengthStyle: string;
   sessionDuration: number; // ms spent in active session
   scrollDepth: number; // Max scroll percentage (0.0 - 1.0)
 }
@@ -57,13 +61,12 @@ export interface BehaviorEvent {
 export type BehaviorEventType =
   | 'swipe_next'
   | 'swipe_not_interested'
-  | 'scroll_80'
   | 'like'
   | 'save'
-  | 'dwell_5min'
-  | 'quick_exit'
-  | 'scroll_20'
-  | 'scroll_40';
+  | 'read_thorough'
+  | 'read_skim'
+  | 'read_shallow'
+  | 'quick_exit';
 
 // --- Feed Request (Firestore: feed_requests/{id}) ---
 export interface FeedRequest {
@@ -90,6 +93,7 @@ export interface PendingBehaviorEvent {
   eventType: BehaviorEventType;
   timestamp: number;
   articleCategory: string;
+  lengthStyle: string;
   sessionDuration: number;
   scrollDepth: number;
   synced: boolean;
@@ -143,8 +147,10 @@ export interface ThemeColors {
 
 // --- Navigation Param Lists ---
 export type RootStackParamList = {
+  Dashboard: { onboardingSelections?: any };
   Onboarding: undefined;
-  Dashboard: undefined;
-  Reader: { articleId: string; queueArticleIds: string[]; startIndex: number };
+  Reader: { articleId: string; queueArticleIds?: string[]; startIndex?: number; userWpm?: number; mode?: 'feed' | 'history' | 'saved' };
   Settings: undefined;
+  History: undefined;
+  SavedReads: undefined;
 };

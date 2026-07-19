@@ -86,6 +86,18 @@ export async function updateWeights(userId: string): Promise<void> {
     // Apply: NewWeight = CurrentWeight + (Δ × L)
     updatedWeights[category] += delta * LEARNING_RATE;
     deltasByCategory[category] = (deltasByCategory[category] || 0) + delta * LEARNING_RATE;
+
+    // --- 2D Matrix Style Learning ---
+    // If the event has a lengthStyle, update the categoryLengthWeights (e.g. "Technology & Innovation::long")
+    const lengthStyle = event.lengthStyle;
+    if (lengthStyle) {
+      const compKey = `${category}::${lengthStyle}`;
+      if (!profile.categoryLengthWeights) profile.categoryLengthWeights = {};
+      if (!updatedWeights[compKey]) {
+        updatedWeights[compKey] = profile.categoryLengthWeights[compKey] || 1.0;
+      }
+      updatedWeights[compKey] += delta * LEARNING_RATE;
+    }
   }
 
   // 5. Clamp all weights to [MIN, MAX]
@@ -99,9 +111,51 @@ export async function updateWeights(userId: string): Promise<void> {
   // 6. Apply daily decay
   const decayedWeights = applyDecay(updatedWeights);
 
-  // 7. Update Firestore
+  // 7. Extract the 2D weights back out of decayedWeights
+  const newCategoryWeights: Record<string, number> = {};
+  const newCategoryLengthWeights: Record<string, number> = {};
+
+  for (const [key, val] of Object.entries(decayedWeights)) {
+    if (key.includes('::')) {
+      newCategoryLengthWeights[key] = val;
+    } else {
+      newCategoryWeights[key] = val;
+    }
+  }
+
+  // 8. Calculate Rolling Average WPM
+  // We look for events where the user finished reading an article
+  let newAverageWpm = profile.averageWpm || 250;
+  let wpmUpdated = false;
+
+  for (const event of events) {
+    // If they scrolled deep, they likely finished it
+    if ((event.eventType === 'read_thorough' || event.eventType === 'read_skim') && event.scrollDepth >= 0.8 && event.sessionDuration > 10000) {
+      // Fetch article word count to calculate WPM
+      try {
+        const articleDoc = await db.collection('articles').doc(event.articleId).get();
+        if (articleDoc.exists) {
+          const wordCount = articleDoc.data()?.wordCount;
+          if (wordCount && wordCount > 0) {
+            const minutesSpent = event.sessionDuration / 60000;
+            const sessionWpm = Math.min(1000, Math.max(50, wordCount / minutesSpent)); // clamp between 50 and 1000
+            
+            // Rolling average: 80% old, 20% new
+            newAverageWpm = Math.round((newAverageWpm * 0.8) + (sessionWpm * 0.2));
+            wpmUpdated = true;
+          }
+        }
+      } catch (e) {
+        console.warn('[weightUpdater] Failed to fetch article for WPM calculation', e);
+      }
+    }
+  }
+
+  // 9. Update Firestore
   await userRef.update({
-    categoryWeights: decayedWeights,
+    categoryWeights: newCategoryWeights,
+    categoryLengthWeights: newCategoryLengthWeights,
+    ...(wpmUpdated && { averageWpm: newAverageWpm }),
     lastUpdated: Date.now(),
   });
 
@@ -152,7 +206,7 @@ async function updateReadStats(
     const event = doc.data() as BehaviorEvent;
     if (
       event.timestamp >= oneWeekAgo &&
-      (event.eventType === 'swipe_next' || event.eventType === 'scroll_80')
+      (event.eventType === 'read_thorough' || event.eventType === 'read_skim')
     ) {
       weeklyReadCount++;
     }

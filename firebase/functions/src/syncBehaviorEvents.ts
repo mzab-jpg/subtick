@@ -16,23 +16,23 @@ const DEFAULT_PUBLISHER_QUALITY = 0.8;
 
 function getTrendingIncrement(eventType: string): number {
   switch (eventType) {
-    case 'like': return 2.0;
     case 'save': return 3.0;
-    case 'scroll_80': return 1.5;
-    case 'scroll_40': return 0.5;
-    case 'scroll_20': return 0.1;
-    case 'swipe_next': return 1.0;
+    case 'like': return 2.0;
+    case 'read_thorough': return 1.5;
+    case 'read_skim': return 0.5;
+    case 'read_shallow': return 0.2;
     default: return 0.0;
   }
 }
 
 function getPublisherQualityIncrement(eventType: string): number {
   switch (eventType) {
+    case 'save': return 0.010;
     case 'like': return 0.005;
-    case 'save': return 0.008;
-    case 'scroll_80': return 0.003;
+    case 'read_thorough': return 0.005;
+    case 'read_skim': return 0.001;
     case 'swipe_not_interested': return -0.010;
-    case 'quick_exit': return -0.008;
+    case 'quick_exit': return -0.005;
     default: return 0.0;
   }
 }
@@ -94,6 +94,7 @@ export const syncBehaviorEvents = onCall(async (request) => {
         eventType: event.eventType,
         timestamp: event.timestamp || Date.now(),
         articleCategory: event.articleCategory,
+        lengthStyle: event.lengthStyle,
         sessionDuration: event.sessionDuration,
         scrollDepth: event.scrollDepth,
       });
@@ -113,8 +114,9 @@ export const syncBehaviorEvents = onCall(async (request) => {
         if (pubName) {
           const qualityDelta = getPublisherQualityIncrement(event.eventType);
           if (qualityDelta !== 0) {
-            // Document ID matches clean publication name
-            const publisherRef = db.collection('publishers').doc(pubName);
+            // Sanitize publication name to make it path-safe for Firestore Doc IDs (no slashes)
+            const sanitizedDocId = pubName.replace(/\//g, '-');
+            const publisherRef = db.collection('publishers').doc(sanitizedDocId);
             batch.set(publisherRef, {
               name: pubName,
               qualityScore: admin.firestore.FieldValue.increment(qualityDelta),

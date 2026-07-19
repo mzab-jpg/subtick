@@ -4,101 +4,82 @@
 
 import { CategoryDefinition } from '../types';
 
-// --- Curated Substack RSS Feed Endpoints (35 feeds across 7 categories) ---
+// --- Curated Substack RSS Feed Endpoints (35 feeds) ---
 export const SUBSTACK_FEEDS: { url: string; category: string; publicationName: string; qualityScore: number }[] = [
-  // TECH (6 feeds)
-  { url: 'https://www.platformer.news/feed', category: 'tech', publicationName: 'Platformer', qualityScore: 0.92 },
-  { url: 'https://stratechery.com/feed/', category: 'tech', publicationName: 'Stratechery', qualityScore: 0.95 },
-  { url: 'https://newsletter.pragmaticengineer.com/feed', category: 'tech', publicationName: 'The Pragmatic Engineer', qualityScore: 0.90 },
-  { url: 'https://www.lennysnewsletter.com/feed', category: 'tech', publicationName: "Lenny's Newsletter", qualityScore: 0.88 },
-  { url: 'https://thealgorithmicbridge.substack.com/feed', category: 'tech', publicationName: 'The Algorithmic Bridge', qualityScore: 0.78 },
-  { url: 'https://aisupremacy.substack.com/feed', category: 'tech', publicationName: 'AI Supremacy', qualityScore: 0.72 },
-
-  // POLITICS (6 feeds)
-  { url: 'https://www.noahpinion.blog/feed', category: 'politics', publicationName: 'Noahpinion', qualityScore: 0.85 },
-  { url: 'https://plus.thebulwark.com/feed', category: 'politics', publicationName: 'The Bulwark', qualityScore: 0.80 },
-  { url: 'https://www.slowboring.com/feed', category: 'politics', publicationName: 'Slow Boring', qualityScore: 0.90 },
-  { url: 'https://heathercoxrichardson.substack.com/feed', category: 'politics', publicationName: 'Heather Cox Richardson', qualityScore: 0.82 },
-  { url: 'https://www.readtangle.com/feed', category: 'politics', publicationName: 'Tangle', qualityScore: 0.88 },
-  { url: 'https://thedispatch.com/feed/', category: 'politics', publicationName: 'The Dispatch', qualityScore: 0.78 },
-
-  // FINANCE (5 feeds)
-  { url: 'https://kyla.substack.com/feed', category: 'finance', publicationName: "Kyla's Newsletter", qualityScore: 0.70 },
-  { url: 'https://www.netinterest.co/feed', category: 'finance', publicationName: 'Net Interest', qualityScore: 0.85 },
-  { url: 'https://newsletter.doomberg.com/feed', category: 'finance', publicationName: 'Doomberg', qualityScore: 0.80 },
-  { url: 'https://thebearcave.substack.com/feed', category: 'finance', publicationName: 'The Bear Cave', qualityScore: 0.82 },
-  { url: 'https://calculatedrisk.substack.com/feed', category: 'finance', publicationName: 'Calculated Risk', qualityScore: 0.75 },
-
-  // CULTURE (7 feeds)
-  { url: 'https://annehelen.substack.com/feed', category: 'culture', publicationName: 'Culture Study', qualityScore: 0.88 },
-  { url: 'https://www.honest-broker.com/feed', category: 'culture', publicationName: 'The Honest Broker', qualityScore: 0.90 },
-  { url: 'https://maybebaby.substack.com/feed', category: 'culture', publicationName: 'Maybe Baby', qualityScore: 0.72 },
-  { url: 'https://freddiedeboer.substack.com/feed', category: 'culture', publicationName: 'Freddie deBoer', qualityScore: 0.78 },
-  { url: 'https://www.blockedandreported.org/feed', category: 'culture', publicationName: 'Blocked and Reported', qualityScore: 0.75 },
-  { url: 'https://nightcrawler.substack.com/feed', category: 'culture', publicationName: 'The Nightcrawler', qualityScore: 0.65 },
-  { url: 'https://www.garbageday.email/feed', category: 'culture', publicationName: 'Garbage Day', qualityScore: 0.80 },
-
-  // SCIENCE (5 feeds)
-  { url: 'https://astralcodexten.substack.com/feed', category: 'science', publicationName: 'Astral Codex Ten', qualityScore: 0.95 },
-  { url: 'https://worksinprogress.co/feed', category: 'science', publicationName: 'Works in Progress', qualityScore: 0.88 },
-  { url: 'https://experimentalhistory.substack.com/feed', category: 'science', publicationName: 'Experimental History', qualityScore: 0.85 },
-  { url: 'https://dynomight.substack.com/feed', category: 'science', publicationName: 'Dynomight', qualityScore: 0.82 },
-  { url: 'https://mindthesciencegap.substack.com/feed', category: 'science', publicationName: 'Mind the Science Gap', qualityScore: 0.70 },
-
-  // HEALTH (3 feeds)
-  { url: 'https://yourlocalepidemiologist.substack.com/feed', category: 'health', publicationName: 'Your Local Epidemiologist', qualityScore: 0.88 },
-  { url: 'https://examined.substack.com/feed', category: 'health', publicationName: 'Examined', qualityScore: 0.78 },
-  { url: 'https://unsettledscience.substack.com/feed', category: 'health', publicationName: 'Unsettled Science', qualityScore: 0.65 },
-
-  // MISC (3 feeds)
-  { url: 'https://whyisthisinteresting.substack.com/feed', category: 'misc', publicationName: 'Why Is This Interesting?', qualityScore: 0.85 },
-  { url: 'https://numlock.substack.com/feed', category: 'misc', publicationName: 'Numlock News', qualityScore: 0.75 },
-  { url: 'https://www.thediff.co/feed', category: 'misc', publicationName: 'The Diff', qualityScore: 0.88 },
+  { url: "https://www.platformer.news/feed", category: "Technology & Innovation", publicationName: "Platformer", qualityScore: 0.92 },
+  { url: "https://stratechery.com/feed/", category: "Technology & Innovation", publicationName: "Stratechery", qualityScore: 0.95 },
+  { url: "https://newsletter.pragmaticengineer.com/feed", category: "Technology & Innovation", publicationName: "The Pragmatic Engineer", qualityScore: 0.90 },
+  { url: "https://www.lennysnewsletter.com/feed", category: "Technology & Innovation", publicationName: "Lenny's Newsletter", qualityScore: 0.88 },
+  { url: "https://thealgorithmicbridge.substack.com/feed", category: "Technology & Innovation", publicationName: "The Algorithmic Bridge", qualityScore: 0.78 },
+  { url: "https://aisupremacy.substack.com/feed", category: "Technology & Innovation", publicationName: "AI Supremacy", qualityScore: 0.72 },
+  { url: "https://www.noahpinion.blog/feed", category: "Business & Finance", publicationName: "Noahpinion", qualityScore: 0.85 },
+  { url: "https://plus.thebulwark.com/feed", category: "Politics & Global Affairs", publicationName: "The Bulwark", qualityScore: 0.80 },
+  { url: "https://www.slowboring.com/feed", category: "Politics & Global Affairs", publicationName: "Slow Boring", qualityScore: 0.90 },
+  { url: "https://heathercoxrichardson.substack.com/feed", category: "Politics & Global Affairs", publicationName: "Heather Cox Richardson", qualityScore: 0.82 },
+  { url: "https://www.readtangle.com/feed", category: "Politics & Global Affairs", publicationName: "Tangle", qualityScore: 0.88 },
+  { url: "https://thedispatch.com/feed/", category: "Politics & Global Affairs", publicationName: "The Dispatch", qualityScore: 0.78 },
+  { url: "https://kyla.substack.com/feed", category: "Business & Finance", publicationName: "Kyla's Newsletter", qualityScore: 0.70 },
+  { url: "https://www.netinterest.co/feed", category: "Business & Finance", publicationName: "Net Interest", qualityScore: 0.85 },
+  { url: "https://newsletter.doomberg.com/feed", category: "Business & Finance", publicationName: "Doomberg", qualityScore: 0.80 },
+  { url: "https://thebearcave.substack.com/feed", category: "Business & Finance", publicationName: "The Bear Cave", qualityScore: 0.82 },
+  { url: "https://calculatedrisk.substack.com/feed", category: "Business & Finance", publicationName: "Calculated Risk", qualityScore: 0.75 },
+  { url: "https://annehelen.substack.com/feed", category: "Arts & Culture", publicationName: "Culture Study", qualityScore: 0.88 },
+  { url: "https://www.honest-broker.com/feed", category: "Arts & Culture", publicationName: "The Honest Broker", qualityScore: 0.90 },
+  { url: "https://maybebaby.substack.com/feed", category: "Arts & Culture", publicationName: "Maybe Baby", qualityScore: 0.72 },
+  { url: "https://freddiedeboer.substack.com/feed", category: "Philosophy & Human Behavior", publicationName: "Freddie deBoer", qualityScore: 0.78 },
+  { url: "https://www.blockedandreported.org/feed", category: "Arts & Culture", publicationName: "Blocked and Reported", qualityScore: 0.75 },
+  { url: "https://nightcrawler.substack.com/feed", category: "Arts & Culture", publicationName: "The Nightcrawler", qualityScore: 0.65 },
+  { url: "https://www.garbageday.email/feed", category: "Arts & Culture", publicationName: "Garbage Day", qualityScore: 0.80 },
+  { url: "https://astralcodexten.substack.com/feed", category: "Philosophy & Human Behavior", publicationName: "Astral Codex Ten", qualityScore: 0.95 },
+  { url: "https://worksinprogress.co/feed", category: "Science & Health", publicationName: "Works in Progress", qualityScore: 0.88 },
+  { url: "https://experimentalhistory.substack.com/feed", category: "Philosophy & Human Behavior", publicationName: "Experimental History", qualityScore: 0.85 },
+  { url: "https://dynomight.substack.com/feed", category: "Science & Health", publicationName: "Dynomight", qualityScore: 0.82 },
+  { url: "https://mindthesciencegap.substack.com/feed", category: "Science & Health", publicationName: "Mind the Science Gap", qualityScore: 0.70 },
+  { url: "https://yourlocalepidemiologist.substack.com/feed", category: "Science & Health", publicationName: "Your Local Epidemiologist", qualityScore: 0.88 },
+  { url: "https://examined.substack.com/feed", category: "Science & Health", publicationName: "Examined", qualityScore: 0.78 },
+  { url: "https://unsettledscience.substack.com/feed", category: "Science & Health", publicationName: "Unsettled Science", qualityScore: 0.65 },
+  { url: "https://whyisthisinteresting.substack.com/feed", category: "Arts & Culture", publicationName: "Why Is This Interesting?", qualityScore: 0.85 },
+  { url: "https://numlock.substack.com/feed", category: "Business & Finance", publicationName: "Numlock News", qualityScore: 0.75 },
+  { url: "https://www.thediff.co/feed", category: "Business & Finance", publicationName: "The Diff", qualityScore: 0.88 }
 ];
 
 // --- Category Definitions ---
 export const CATEGORIES: CategoryDefinition[] = [
   {
-    id: 'tech',
-    name: 'Technology',
+    id: 'Technology & Innovation',
+    name: 'Tech & Innovation',
     emoji: '💻',
     description: 'Software, startups, AI, and the future of computing',
   },
   {
-    id: 'politics',
-    name: 'Politics',
-    emoji: '🏛️',
-    description: 'Policy, governance, and current affairs analysis',
-  },
-  {
-    id: 'finance',
-    name: 'Finance',
+    id: 'Business & Finance',
+    name: 'Business & Finance',
     emoji: '📈',
     description: 'Markets, investing, economics, and business strategy',
   },
   {
-    id: 'culture',
-    name: 'Culture',
+    id: 'Politics & Global Affairs',
+    name: 'Politics & Global Affairs',
+    emoji: '🏛️',
+    description: 'Policy, governance, and current affairs analysis',
+  },
+  {
+    id: 'Arts & Culture',
+    name: 'Arts & Culture',
     emoji: '🎭',
     description: 'Media, internet culture, arts, and social commentary',
   },
   {
-    id: 'science',
-    name: 'Science',
+    id: 'Science & Health',
+    name: 'Science & Health',
     emoji: '🔬',
-    description: 'Research, data, rationality, and scientific discovery',
+    description: 'Public health, rationality, and scientific discovery',
   },
   {
-    id: 'health',
-    name: 'Health',
-    emoji: '🫀',
-    description: 'Public health, epidemiology, wellness, and medicine',
-  },
-  {
-    id: 'misc',
-    name: 'Miscellaneous',
-    emoji: '📦',
-    description: 'Fascinating curiosities, trivia, and cross-disciplinary reads',
+    id: 'Philosophy & Human Behavior',
+    name: 'Philosophy & Human Behavior',
+    emoji: '🧠',
+    description: 'Deep thinking, psychology, and cognitive science',
   },
 ];
 
@@ -118,15 +99,14 @@ export const SCORE_WEIGHTS = {
 
 // --- Feedback Delta Multipliers (Δ) ---
 export const FEEDBACK_DELTAS: Record<string, number> = {
-  swipe_next: 0.15,
-  swipe_not_interested: -0.35,
-  scroll_20: -0.05,
-  scroll_40: 0.1,
-  scroll_80: 0.25,
-  like: 0.25,
-  save: 0.25,
-  dwell_5min: 0.1,
-  quick_exit: -0.1,
+  save: 0.40,
+  like: 0.30,
+  read_thorough: 0.20,
+  read_skim: 0.05,
+  read_shallow: 0.00,
+  swipe_next: 0.00,
+  quick_exit: -0.20,
+  swipe_not_interested: -0.40,
 };
 
 // --- Learning Rate ---
@@ -157,8 +137,6 @@ export const DASHBOARD_METRIC_DEFS = [
   { id: 'weeklyReads', label: 'Weekly Reads', emoji: '📊' },
   { id: 'topCategory', label: 'Top Category', emoji: '📈' },
   { id: 'totalRead', label: 'Total Read', emoji: '📚' },
-  { id: 'totalSaved', label: 'Saved', emoji: '🔖' },
-  { id: 'totalLiked', label: 'Liked', emoji: '❤️' },
   { id: 'avgWpm', label: 'Avg WPM', emoji: '⏱️' },
   { id: 'weeklyStreak', label: 'This Week', emoji: '📅' },
   { id: 'exploreScore', label: 'Explore Score', emoji: '🧭' },
@@ -179,6 +157,7 @@ export const FIREBASE_EMULATOR_CONFIG = {
 // --- Offline Sync Configuration ---
 export const BEHAVIOR_QUEUE_KEY = '@subtick_behavior_queue';
 export const SEEN_ARTICLES_KEY = '@subtick_seen_articles';
+export const SAVED_ARTICLES_KEY = '@subtick_saved_articles';
 export const SYNC_BATCH_SIZE = 20;
 export const MAX_QUEUE_SIZE = 500;
 
@@ -194,4 +173,18 @@ export const PAYWALL_KEYWORDS = [
   'You\'ve reached the free preview',
   'Subscribe now to read the full post',
   'Continue reading with a paid subscription',
+  'free preview',
+  'start your 7-day free trial',
+  'unlock this post',
+  'read the rest of this',
+  'upgrade your subscription',
+  'exclusive to paid',
+  'to read the rest',
+  'keep reading with a 7-day',
+  'keep reading with a free trial',
+  'this is a free preview',
+  'subscribe to read',
+  'upgrade to read',
+  'paid subscribers only',
+  'this post is for paid',
 ];

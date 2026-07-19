@@ -46,6 +46,9 @@ export default function SettingsScreen() {
   const [feedUrl, setFeedUrl] = useState('');
   const [feedDescription, setFeedDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  
+  const [showCategoryPrefs, setShowCategoryPrefs] = useState(false);
+  const [showStats, setShowStats] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -211,73 +214,135 @@ export default function SettingsScreen() {
         <View style={{ width: 60 }} />
       </View>
 
-      {/* Category Weights */}
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Category Weights</Text>
-      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-        Tap to cycle: Interested → Not Interested → Neutral
-      </Text>
-      <View style={styles.categoryGrid}>
-        {CATEGORIES.map((cat) => {
-          const state = getCategoryState(cat.id);
-          const weight = profile?.categoryWeights[cat.id] || 1.0;
-          const bgColor =
-            state === 'selected'
-              ? colors.chipSelectedBg
-              : state === 'not_interested'
-                ? colors.chipNotInterestedBg
-                : colors.chipNeutralBg;
-          const textColor =
-            state === 'selected'
-              ? colors.chipSelectedText
-              : state === 'not_interested'
-                ? colors.chipNotInterestedText
-                : colors.chipNeutralText;
+      {/* Category Preferences */}
+      <TouchableOpacity 
+        style={styles.collapsibleHeader} 
+        onPress={() => setShowCategoryPrefs(!showCategoryPrefs)}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Category Preferences</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{showCategoryPrefs ? '▼' : '▶'}</Text>
+      </TouchableOpacity>
+      
+      {showCategoryPrefs && (
+        <View style={styles.collapsibleContent}>
+          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+            Tap to cycle: Interested → Not Interested → Neutral
+          </Text>
+          <View style={styles.categoryGrid}>
+            {CATEGORIES.map((cat) => {
+              const state = getCategoryState(cat.id);
+              const bgColor =
+                state === 'selected'
+                  ? colors.chipSelectedBg
+                  : state === 'not_interested'
+                    ? colors.chipNotInterestedBg
+                    : colors.chipNeutralBg;
+              const textColor =
+                state === 'selected'
+                  ? colors.chipSelectedText
+                  : state === 'not_interested'
+                    ? colors.chipNotInterestedText
+                    : colors.chipNeutralText;
 
-          return (
-            <TouchableOpacity
-              key={cat.id}
-              style={[styles.categoryRow, { backgroundColor: bgColor, borderColor: colors.border }]}
-              onPress={() => handleCategoryCycle(cat.id)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.categoryName, { color: textColor }]}>{cat.name}</Text>
-                <Text style={[styles.categoryWeight, { color: textColor }]}>
-                  Weight: {weight.toFixed(2)} ({state === 'selected' ? 'Interested' : state === 'not_interested' ? 'Not Interested' : 'Neutral'})
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[styles.categoryRow, { backgroundColor: bgColor, borderColor: colors.border }]}
+                  onPress={() => handleCategoryCycle(cat.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.categoryName, { color: textColor }]}>{cat.name}</Text>
+                    <Text style={[styles.categoryWeight, { color: textColor }]}>
+                      {state === 'selected' ? 'Interested' : state === 'not_interested' ? 'Not Interested' : 'Neutral'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       {/* Dashboard Metrics */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Dashboard Metrics</Text>
-      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-        Choose up to 3 stats to display
-      </Text>
-      <View style={styles.metricsList}>
-        {DASHBOARD_METRIC_DEFS.map((metric) => {
-          const isSelected = (profile?.dashboardMetricIds || []).includes(metric.id);
-          return (
-            <View
-              key={metric.id}
-              style={[styles.metricRow, { borderBottomColor: colors.border }]}
-            >
-              <Text style={[styles.metricLabel, { color: colors.text }]}>
-                {metric.emoji}  {metric.label}
-              </Text>
-              <Switch
-                value={isSelected}
-                onValueChange={() => toggleMetric(metric.id)}
-                trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
-                thumbColor={isSelected ? colors.primary : colors.textMuted}
-              />
-            </View>
-          );
-        })}
-      </View>
+      <TouchableOpacity 
+        style={[styles.collapsibleHeader, { marginTop: 28 }]} 
+        onPress={() => setShowStats(!showStats)}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Stats</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{showStats ? '▼' : '▶'}</Text>
+      </TouchableOpacity>
+      
+      {showStats && (
+        <View style={styles.collapsibleContent}>
+          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+            Choose up to 3 stats to display on your dashboard
+          </Text>
+          <View style={styles.metricsList}>
+            {DASHBOARD_METRIC_DEFS.map((metric) => {
+              const isSelected = (profile?.dashboardMetricIds || []).includes(metric.id);
+              
+              // Helper to map metric id to profile value
+              let value: string | number = 0;
+              if (profile) {
+                switch(metric.id) {
+                  case 'streak': value = profile.currentStreakDays; break;
+                  case 'weeklyReads': value = profile.weeklyReadCount; break;
+                  case 'topCategory':
+                    let topCat = '—';
+                    let topWeight = 0;
+                    Object.entries(profile.categoryWeights).forEach(([cat, w]) => {
+                      if (w > topWeight) { topWeight = w; topCat = cat; }
+                    });
+                    value = topCat.charAt(0).toUpperCase() + topCat.slice(1);
+                    break;
+                  case 'totalRead': value = profile.totalArticlesRead; break;
+                  case 'avgWpm': value = profile.averageWpm; break;
+                  case 'weeklyStreak': value = `${profile.weeklyReadCount} this week`; break;
+                  case 'exploreScore': value = 'Active'; break;
+                }
+              }
+
+              return (
+                <View
+                  key={metric.id}
+                  style={[styles.metricRow, { borderBottomColor: colors.border }]}
+                >
+                  <Text style={[styles.metricLabel, { color: colors.text }]}>
+                    {metric.emoji}  {metric.label}: <Text style={{fontWeight: '800'}}>{value}</Text> {isSelected ? '(Dashboard)' : ''}
+                  </Text>
+                  <Switch
+                    value={isSelected}
+                    onValueChange={() => toggleMetric(metric.id)}
+                    trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
+                    thumbColor={isSelected ? colors.primary : colors.textMuted}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Lists */}
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28, marginBottom: 12 }]}>Your Lists</Text>
+      <TouchableOpacity
+        style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}
+        onPress={() => navigation.navigate('History')}
+      >
+        <Text style={[styles.linkButtonText, { color: colors.text }]}>📚 Reading History</Text>
+        <Text style={[styles.linkStatus, { color: colors.textMuted }]}>View past reads</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={() => navigation.navigate('SavedReads')}
+      >
+        <Text style={[styles.linkButtonText, { color: colors.text }]}>🔖 Saved Reads</Text>
+        <Text style={[styles.linkStatus, { color: colors.textMuted }]}>View saved articles</Text>
+      </TouchableOpacity>
 
       {/* Theme Selection */}
       <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Theme</Text>
@@ -384,6 +449,8 @@ const styles = StyleSheet.create({
   },
   closeText: { fontSize: 16, fontWeight: '600' },
   headerTitle: { fontSize: 20, fontWeight: '800' },
+  collapsibleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  collapsibleContent: { marginTop: 8 },
   sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
   sectionSubtitle: { fontSize: 13, marginBottom: 14, lineHeight: 18 },
   categoryGrid: { gap: 8 },

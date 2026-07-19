@@ -13,6 +13,8 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import ReaderScreen from '../screens/ReaderScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import HistoryScreen from '../screens/HistoryScreen';
+import SavedReadsScreen from '../screens/SavedReadsScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -81,6 +83,16 @@ export default function RootNavigator() {
             gestureEnabled: true,
             gestureDirection: 'horizontal',
           }}
+        />
+        <Stack.Screen
+          name="History"
+          component={HistoryScreen}
+          options={{ gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="SavedReads"
+          component={SavedReadsScreen}
+          options={{ gestureEnabled: true }}
         />
       </Stack.Navigator>
     </NavigationContainer>

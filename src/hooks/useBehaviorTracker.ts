@@ -1,22 +1,23 @@
 // ============================================================
 // SubTick — useBehaviorTracker Hook
-// Tracks scroll depth, dwell time, and dispatches behavior events.
+// Tracks scroll depth, session duration, and evaluates behavior.
 // ============================================================
 
 import { useRef, useCallback, useEffect } from 'react';
 import { BehaviorEventType } from '../types';
 import { queueBehaviorEvent } from '../services/behaviorSync';
-import { DWELL_THRESHOLD_MS, QUICK_EXIT_MAX_DURATION_MS, QUICK_EXIT_MAX_SCROLL } from '../utils/constants';
 
 interface UseBehaviorTrackerOptions {
   articleId: string;
   articleCategory: string;
+  lengthStyle: string;
   enabled: boolean;
 }
 
 interface UseBehaviorTrackerReturn {
   trackScrollDepth: (depth: number) => void;
   trackEvent: (eventType: BehaviorEventType, extraScrollDepth?: number) => void;
+  concludeSession: (expectedReadTimeMs: number) => void;
   sessionStartTime: number;
   getMaxScrollDepth: () => number;
   getSessionDuration: () => number;
@@ -25,88 +26,120 @@ interface UseBehaviorTrackerReturn {
 export function useBehaviorTracker({
   articleId,
   articleCategory,
+  lengthStyle,
   enabled,
 }: UseBehaviorTrackerOptions): UseBehaviorTrackerReturn {
-  const sessionStartTime = useRef(Date.now()).current;
-  const maxScrollDepth = useRef(0);
-  const dwellNotified = useRef(false);
-  const scrollMilestones = useRef(new Set<number>([0.2, 0.4, 0.8]));
+  // Keep tracking state in a ref that resets when articleId changes
+  const stateRef = useRef({
+    articleId,
+    startTime: Date.now(),
+    maxDepth: 0,
+    concluded: false,
+  });
 
-  // Dwell timer: fire dwell_5min after 5 minutes
+  // Synchronously reset state if articleId changes
+  if (stateRef.current.articleId !== articleId) {
+    stateRef.current = {
+      articleId,
+      startTime: Date.now(),
+      maxDepth: 0,
+      concluded: false,
+    };
+  }
+
+  // Fallback cleanup to ensure quick_exit is recorded if they unmount the reader quickly
   useEffect(() => {
     if (!enabled) return;
-    const timer = setTimeout(() => {
-      if (!dwellNotified.current) {
-        dwellNotified.current = true;
-        queueBehaviorEvent(
-          articleId,
-          'dwell_5min',
-          articleCategory,
-          Date.now() - sessionStartTime,
-          maxScrollDepth.current
-        );
-      }
-    }, DWELL_THRESHOLD_MS);
-    return () => clearTimeout(timer);
-  }, [enabled, articleId, articleCategory, sessionStartTime]);
 
-  // Quick exit detection on unmount
-  useEffect(() => {
+    const currentArticleId = articleId;
+    const currentCategory = articleCategory;
+    const currentStartTime = stateRef.current.startTime;
+
     return () => {
-      if (enabled) {
-        const duration = Date.now() - sessionStartTime;
-        if (duration < QUICK_EXIT_MAX_DURATION_MS && maxScrollDepth.current < QUICK_EXIT_MAX_SCROLL) {
-          queueBehaviorEvent(articleId, 'quick_exit', articleCategory, duration, maxScrollDepth.current);
+      // If unmounting and session wasn't explicitly concluded
+      if (!stateRef.current.concluded) {
+        const duration = Date.now() - currentStartTime;
+        if (duration < 15000 && stateRef.current.maxDepth < 0.2) {
+          queueBehaviorEvent(
+            currentArticleId,
+            'quick_exit',
+            currentCategory,
+            lengthStyle,
+            duration,
+            stateRef.current.maxDepth
+          );
         }
       }
     };
-  }, [enabled, articleId, articleCategory, sessionStartTime]);
+  }, [enabled, articleId, articleCategory]);
 
   const trackScrollDepth = useCallback(
     (depth: number) => {
       if (!enabled) return;
-      maxScrollDepth.current = Math.max(maxScrollDepth.current, depth);
-
-      // Fire scroll milestones
-      for (const milestone of [0.2, 0.4, 0.8]) {
-        if (depth >= milestone && scrollMilestones.current.has(milestone)) {
-          scrollMilestones.current.delete(milestone);
-          const eventType = milestone === 0.8 ? 'scroll_80' : milestone === 0.4 ? 'scroll_40' : 'scroll_20';
-          queueBehaviorEvent(
-            articleId,
-            eventType as BehaviorEventType,
-            articleCategory,
-            Date.now() - sessionStartTime,
-            depth
-          );
-        }
-      }
+      stateRef.current.maxDepth = Math.max(stateRef.current.maxDepth, depth);
     },
-    [enabled, articleId, articleCategory, sessionStartTime]
+    [enabled]
   );
 
   const trackEvent = useCallback(
     (eventType: BehaviorEventType, extraScrollDepth?: number) => {
       if (!enabled) return;
-      const depth = extraScrollDepth ?? maxScrollDepth.current;
+      const depth = extraScrollDepth ?? stateRef.current.maxDepth;
       queueBehaviorEvent(
         articleId,
         eventType,
         articleCategory,
-        Date.now() - sessionStartTime,
+        lengthStyle,
+        Date.now() - stateRef.current.startTime,
         depth
       );
     },
-    [enabled, articleId, articleCategory, sessionStartTime]
+    [enabled, articleId, articleCategory, lengthStyle]
   );
 
-  const getMaxScrollDepth = useCallback(() => maxScrollDepth.current, []);
-  const getSessionDuration = useCallback(() => Date.now() - sessionStartTime, [sessionStartTime]);
+  const concludeSession = useCallback(
+    (expectedReadTimeMs: number) => {
+      if (!enabled || stateRef.current.concluded) return;
+      
+      const duration = Date.now() - stateRef.current.startTime;
+      const depth = stateRef.current.maxDepth;
+      
+      let eventType: BehaviorEventType = 'swipe_next';
+
+      if (depth < 0.2 && duration < 15000) {
+        eventType = 'quick_exit';
+      } else if (depth >= 0.8) {
+        if (duration >= expectedReadTimeMs * 0.7) {
+          eventType = 'read_thorough';
+        } else {
+          eventType = 'read_skim';
+        }
+      } else if (depth >= 0.4) {
+        eventType = 'read_shallow';
+      }
+
+      queueBehaviorEvent(
+        articleId,
+        eventType,
+        articleCategory,
+        lengthStyle,
+        duration,
+        depth
+      );
+      
+      stateRef.current.concluded = true;
+    },
+    [enabled, articleId, articleCategory, lengthStyle]
+  );
+
+  const getMaxScrollDepth = useCallback(() => stateRef.current.maxDepth, []);
+  const getSessionDuration = useCallback(() => Date.now() - stateRef.current.startTime, []);
 
   return {
     trackScrollDepth,
     trackEvent,
-    sessionStartTime,
+    concludeSession,
+    sessionStartTime: stateRef.current.startTime,
     getMaxScrollDepth,
     getSessionDuration,
   };
