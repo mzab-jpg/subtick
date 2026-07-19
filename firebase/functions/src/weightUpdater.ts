@@ -13,6 +13,8 @@ import {
   MIN_CATEGORY_WEIGHT,
   MAX_CATEGORY_WEIGHT,
   DAILY_DECAY_RATE,
+  DEFAULT_SELECTED_WEIGHT,
+  DEFAULT_NOT_INTERESTED_WEIGHT,
 } from './constants.js';
 
 const db = admin.firestore();
@@ -111,42 +113,91 @@ export async function updateWeights(userId: string): Promise<void> {
   // 6. Apply daily decay
   const decayedWeights = applyDecay(updatedWeights);
 
-  // 7. Extract the 2D weights back out of decayedWeights
+  // 7. Extract the 2D weights back out of decayedWeights and Sync UI Arrays
   const newCategoryWeights: Record<string, number> = {};
   const newCategoryLengthWeights: Record<string, number> = {};
+
+  const newSelectedCategoryIds = new Set(profile.selectedCategoryIds || []);
+  const newNotInterestedCategoryIds = new Set(profile.notInterestedCategoryIds || []);
+  let uiArraysChanged = false;
 
   for (const [key, val] of Object.entries(decayedWeights)) {
     if (key.includes('::')) {
       newCategoryLengthWeights[key] = val;
     } else {
       newCategoryWeights[key] = val;
+
+      // Dynamic UI Sync: Adjust UI arrays based on algorithm confidence
+      if (val <= DEFAULT_NOT_INTERESTED_WEIGHT) {
+        if (!newNotInterestedCategoryIds.has(key)) {
+          newNotInterestedCategoryIds.add(key);
+          newSelectedCategoryIds.delete(key);
+          uiArraysChanged = true;
+        }
+      } else if (val >= DEFAULT_SELECTED_WEIGHT) {
+        if (!newSelectedCategoryIds.has(key)) {
+          newSelectedCategoryIds.add(key);
+          newNotInterestedCategoryIds.delete(key);
+          uiArraysChanged = true;
+        }
+      } else if (val > DEFAULT_NOT_INTERESTED_WEIGHT && val < DEFAULT_SELECTED_WEIGHT && newNotInterestedCategoryIds.has(key)) {
+        newNotInterestedCategoryIds.delete(key);
+        uiArraysChanged = true;
+      }
     }
   }
 
-  // 8. Calculate Rolling Average WPM
+  // 8. Calculate Rolling Average WPM & Total Reading Time
   // We look for events where the user finished reading an article
   let newAverageWpm = profile.averageWpm || 250;
   let wpmUpdated = false;
+  
+  let newTotalReadTimeMs = profile.totalReadTimeMs || 0;
+  let readTimeUpdated = false;
+  
+  let newTotalArticlesFinished = profile.totalArticlesRead || 0;
+  let articlesFinishedUpdated = false;
 
   for (const event of events) {
+    // Accumulate total reading time for any valid read event
+    if (event.eventType !== 'quick_exit' && event.eventType !== 'swipe_next' && event.eventType !== 'swipe_not_interested') {
+      newTotalReadTimeMs += event.sessionDuration;
+      readTimeUpdated = true;
+    }
+
     // If they scrolled deep, they likely finished it
     if ((event.eventType === 'read_thorough' || event.eventType === 'read_skim') && event.scrollDepth >= 0.8 && event.sessionDuration > 10000) {
-      // Fetch article word count to calculate WPM
-      try {
-        const articleDoc = await db.collection('articles').doc(event.articleId).get();
-        if (articleDoc.exists) {
-          const wordCount = articleDoc.data()?.wordCount;
-          if (wordCount && wordCount > 0) {
-            const minutesSpent = event.sessionDuration / 60000;
-            const sessionWpm = Math.min(1000, Math.max(50, wordCount / minutesSpent)); // clamp between 50 and 1000
-            
-            // Rolling average: 80% old, 20% new
-            newAverageWpm = Math.round((newAverageWpm * 0.8) + (sessionWpm * 0.2));
-            wpmUpdated = true;
+      newTotalArticlesFinished++;
+      articlesFinishedUpdated = true;
+
+      // We use the exact word count extracted from the live WebView, falling back to DB only if missing
+      let wordCount = event.actualWordCount;
+
+      if (!wordCount || wordCount <= 0) {
+        try {
+          const articleDoc = await db.collection('articles').doc(event.articleId).get();
+          if (articleDoc.exists) {
+            const articleData = articleDoc.data();
+            // Discard WPM calculation if the RSS feed was truncated, as the db word count is false
+            if (!articleData?.isTruncatedFeed) {
+              wordCount = articleData?.wordCount;
+            }
           }
+        } catch (e) {
+          console.warn('[weightUpdater] Failed to fetch article for WPM calculation', e);
         }
-      } catch (e) {
-        console.warn('[weightUpdater] Failed to fetch article for WPM calculation', e);
+      }
+
+      if (wordCount && wordCount > 0) {
+        const minutesSpent = event.sessionDuration / 60000;
+        const sessionWpm = wordCount / minutesSpent;
+        
+        // Strict bounds check: Discard artifacts of speed skimming or left-open phones
+        if (sessionWpm >= 150 && sessionWpm <= 750) {
+          // Rolling average: 80% old, 20% new
+          newAverageWpm = Math.round((newAverageWpm * 0.8) + (sessionWpm * 0.2));
+          wpmUpdated = true;
+        }
       }
     }
   }
@@ -155,7 +206,13 @@ export async function updateWeights(userId: string): Promise<void> {
   await userRef.update({
     categoryWeights: newCategoryWeights,
     categoryLengthWeights: newCategoryLengthWeights,
+    ...(uiArraysChanged && {
+      selectedCategoryIds: Array.from(newSelectedCategoryIds),
+      notInterestedCategoryIds: Array.from(newNotInterestedCategoryIds),
+    }),
     ...(wpmUpdated && { averageWpm: newAverageWpm }),
+    ...(readTimeUpdated && { totalReadTimeMs: newTotalReadTimeMs }),
+    ...(articlesFinishedUpdated && { totalArticlesRead: newTotalArticlesFinished }),
     lastUpdated: Date.now(),
   });
 

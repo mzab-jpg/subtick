@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { UserProfile, ThemeMode, FeedRequest } from '../types';
+import { UserProfile, ThemeMode, FeedRequest, Article } from '../types';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc, getDoc, collection, addDoc } from 'firebase/firestore';
 import {
@@ -36,6 +36,8 @@ import {
   MAX_CATEGORY_WEIGHT,
 } from '../utils/constants';
 import { validateFeedRequest } from '../utils/validation';
+import { fetchAndExtractArticle } from '../services/feedService';
+import { XMLParser } from 'fast-xml-parser';
 
 export default function SettingsScreen() {
   const { colors, mode, setThemeMode } = useTheme();
@@ -47,6 +49,9 @@ export default function SettingsScreen() {
   const [feedDescription, setFeedDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   
+  const [devSandboxUrl, setDevSandboxUrl] = useState('');
+  const [testingDevSandbox, setTestingDevSandbox] = useState(false);
+
   const [showCategoryPrefs, setShowCategoryPrefs] = useState(false);
   const [showStats, setShowStats] = useState(false);
 
@@ -161,6 +166,67 @@ export default function SettingsScreen() {
       await loadProfile();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Something went wrong.');
+    }
+  };
+
+  // --- Developer Sandbox ---
+  const handleDevSandboxTest = async () => {
+    const url = devSandboxUrl.trim();
+    if (!url) return;
+    
+    setTestingDevSandbox(true);
+    try {
+      const isRss = url.includes('/feed') || url.includes('.xml');
+
+      const mockArticle: Article = {
+        id: 'test_sandbox_123',
+        title: 'Developer Sandbox Test',
+        author: 'Tester',
+        publicationName: 'Sandbox Publication',
+        publicationUrl: url,
+        feedUrl: isRss ? url : '',
+        category: 'Technology & Innovation',
+        lengthStyle: 'medium',
+        publishDate: Date.now(),
+        cacheTimestamp: Date.now(),
+        isPaywalled: false,
+        estimatedReadMinutes: 5,
+        trendingScore: 0,
+        qualityScore: 1,
+        isSeed: false,
+        rssStatus: isRss ? 'current' : 'archived',
+      };
+
+      if (isRss) {
+        // Test parsing the RSS and sanitize HTML
+        const response = await fetch(url);
+        const xmlText = await response.text();
+        const parser = new XMLParser({ ignoreAttributes: false });
+        const parsed = parser.parse(xmlText);
+        const channel = parsed?.rss?.channel || parsed?.feed;
+        let items = channel?.item || channel?.entry || [];
+        if (!Array.isArray(items)) items = [items];
+        
+        if (items.length === 0) throw new Error('No items found in RSS feed');
+        
+        const firstItem = items[0];
+        const guid = firstItem.guid?.['#text'] || firstItem.guid || firstItem.link || '';
+        
+        // Pass to standard fetcher which extracts and sanitizes
+        const sanitizedHtml = await fetchAndExtractArticle(url, guid);
+        
+        mockArticle.title = firstItem.title || 'Untitled Sandbox RSS';
+        mockArticle.publicationUrl = firstItem.link || url;
+
+        navigation.navigate('Reader', { articleId: 'test_sandbox_123', mockArticle, mockHtml: sanitizedHtml });
+      } else {
+        // Direct URL test (Archived mode raw webview)
+        navigation.navigate('Reader', { articleId: 'test_sandbox_123', mockArticle });
+      }
+    } catch (error: any) {
+      Alert.alert('Sandbox Error', error.message || 'Failed to load test URL');
+    } finally {
+      setTestingDevSandbox(false);
     }
   };
 
@@ -477,6 +543,36 @@ export default function SettingsScreen() {
           <ActivityIndicator color="#FFFFFF" />
         ) : (
           <Text style={styles.submitButtonText}>Submit Request →</Text>
+        )}
+      </TouchableOpacity>
+
+      {/* Developer Sandbox */}
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Developer Sandbox</Text>
+      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+        Instantly test how any Substack URL or RSS Feed renders in the Reader.
+      </Text>
+      <TextInput
+        style={[
+          styles.input,
+          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
+        ]}
+        placeholder="https://kyla.substack.com/p/..."
+        placeholderTextColor={colors.textMuted}
+        value={devSandboxUrl}
+        onChangeText={setDevSandboxUrl}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+      />
+      <TouchableOpacity
+        style={[styles.submitButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, borderWidth: 1 }]}
+        onPress={handleDevSandboxTest}
+        disabled={testingDevSandbox}
+      >
+        {testingDevSandbox ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          <Text style={[styles.submitButtonText, { color: colors.primary }]}>Test URL in Reader</Text>
         )}
       </TouchableOpacity>
 

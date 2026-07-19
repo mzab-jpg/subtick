@@ -28,6 +28,7 @@ export async function queueBehaviorEvent(
   lengthStyle: string,
   sessionDuration: number,
   scrollDepth: number,
+  actualWordCount?: number
 ): Promise<void> {
   try {
     const userId = auth.currentUser?.uid;
@@ -43,6 +44,7 @@ export async function queueBehaviorEvent(
       lengthStyle,
       sessionDuration,
       scrollDepth,
+      actualWordCount,
       synced: false,
     };
 

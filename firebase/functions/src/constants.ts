@@ -70,6 +70,10 @@ export const MIN_CATEGORY_WEIGHT = 0.1;
 export const MAX_CATEGORY_WEIGHT = 5.0;
 export const DAILY_DECAY_RATE = 0.995;
 
+export const DEFAULT_SELECTED_WEIGHT = 1.5;
+export const DEFAULT_NOT_INTERESTED_WEIGHT = 0.2;
+export const DEFAULT_NEUTRAL_WEIGHT = 1.0;
+
 // --- Feed Configuration ---
 export const MAX_FEED_ARTICLES = 30;
 export const CANDIDATE_POOL_SIZE = 200;

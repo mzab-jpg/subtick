@@ -17,6 +17,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
     "react-native-webview": "13.16.1",
+    "rss-parser": "^3.13.0",
     "xss": "^1.0.15"
   },
   "devDependencies": {

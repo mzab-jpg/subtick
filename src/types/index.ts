@@ -21,6 +21,7 @@ export interface UserProfile {
   averageWpm: number;
   dashboardMetricIds: string[]; // up to 3 metric card IDs selected by user
   includeArchivedArticles?: boolean; // Whether user opts-in to reading raw Substack URIs for old articles
+  totalReadTimeMs?: number; // total active reading time in ms
   lastUpdated: number;
 }
 
@@ -60,6 +61,7 @@ export interface BehaviorEvent {
   lengthStyle: string;
   sessionDuration: number; // ms spent in active session
   scrollDepth: number; // Max scroll percentage (0.0 - 1.0)
+  actualWordCount?: number;
 }
 
 export type BehaviorEventType =
@@ -100,6 +102,7 @@ export interface PendingBehaviorEvent {
   lengthStyle: string;
   sessionDuration: number;
   scrollDepth: number;
+  actualWordCount?: number;
   synced: boolean;
 }
 
@@ -153,7 +156,7 @@ export interface ThemeColors {
 export type RootStackParamList = {
   Dashboard: { onboardingSelections?: any };
   Onboarding: undefined;
-  Reader: { articleId: string; queueArticleIds?: string[]; startIndex?: number; userWpm?: number; mode?: 'feed' | 'history' | 'saved' };
+  Reader: { articleId: string; queueArticleIds?: string[]; startIndex?: number; userWpm?: number; mode?: 'feed' | 'history' | 'saved'; mockArticle?: Article; mockHtml?: string };
   Settings: undefined;
   History: undefined;
   SavedReads: undefined;

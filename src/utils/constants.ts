@@ -134,16 +134,15 @@ export const DWELL_THRESHOLD_MS = 5 * 60_000; // 5 minutes
 // --- Available Dashboard Metrics ---
 export const DASHBOARD_METRIC_DEFS = [
   { id: 'streak', label: 'Streak Days', emoji: '🔥' },
-  { id: 'weeklyReads', label: 'Weekly Reads', emoji: '📊' },
-  { id: 'topCategory', label: 'Top Category', emoji: '📈' },
-  { id: 'totalRead', label: 'Total Read', emoji: '📚' },
   { id: 'avgWpm', label: 'Avg WPM', emoji: '⏱️' },
-  { id: 'weeklyStreak', label: 'This Week', emoji: '📅' },
-  { id: 'exploreScore', label: 'Explore Score', emoji: '🧭' },
+  { id: 'totalReadTime', label: 'Hours Read', emoji: '⏳' },
+  { id: 'totalRead', label: 'Finished', emoji: '📚' },
+  { id: 'topCategory', label: 'Top Category', emoji: '📈' },
+  { id: 'weeklyReads', label: 'Weekly Reads', emoji: '📊' },
 ];
 
 // --- Default Dashboard Metrics (shown if user hasn't customized) ---
-export const DEFAULT_DASHBOARD_METRIC_IDS = ['streak', 'weeklyReads', 'topCategory'];
+export const DEFAULT_DASHBOARD_METRIC_IDS = ['streak', 'totalReadTime', 'avgWpm'];
 
 // --- Firebase Emulator Configuration ---
 // In dev mode (__DEV__), the app connects to Firebase Emulator Suite on localhost.

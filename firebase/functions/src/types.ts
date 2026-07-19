@@ -20,6 +20,7 @@ export interface UserProfile {
   averageWpm: number;
   dashboardMetricIds: string[];
   includeArchivedArticles?: boolean;
+  totalReadTimeMs?: number;
   lastUpdated: number;
 }
 
@@ -67,6 +68,7 @@ export interface BehaviorEvent {
   lengthStyle: string;
   sessionDuration: number;
   scrollDepth: number;
+  actualWordCount?: number;
 }
 
 export interface RankedFeedResult {

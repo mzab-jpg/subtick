@@ -96,13 +96,14 @@ export default function DashboardScreen() {
     const metricIds = userProfile.dashboardMetricIds || DEFAULT_DASHBOARD_METRIC_IDS;
 
     const values: Record<string, string | number> = {
-      streak: userProfile.currentStreakDays,
-      weeklyReads: userProfile.weeklyReadCount,
+      streak: userProfile.currentStreakDays || 0,
+      weeklyReads: userProfile.weeklyReadCount || 0,
       topCategory: getTopCategory(),
-      totalRead: userProfile.totalArticlesRead,
-      avgWpm: userProfile.averageWpm,
-      weeklyStreak: `${userProfile.weeklyReadCount} this week`,
-      exploreScore: feedArticles.length,
+      totalRead: userProfile.totalArticlesRead || 0,
+      avgWpm: userProfile.averageWpm || 250,
+      totalReadTime: userProfile.totalReadTimeMs 
+        ? Math.max(0.1, parseFloat((userProfile.totalReadTimeMs / (1000 * 60 * 60)).toFixed(1)))
+        : 0,
     };
 
     return metricIds.slice(0, 3).map((id) => {

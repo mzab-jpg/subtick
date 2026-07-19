@@ -43,11 +43,13 @@ export default function ReaderScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'Reader'>>();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
-  const { articleId, queueArticleIds, startIndex, userWpm, mode } = route.params;
+  const { articleId, queueArticleIds, startIndex, userWpm, mode, mockArticle, mockHtml } = route.params;
   const currentWpm = userWpm || 250;
   const isHistoryMode = mode === 'history';
   const isSavedMode = mode === 'saved';
-  const isRestrictedMode = isHistoryMode || isSavedMode;
+  // Mock mode disables tracking completely
+  const isMockMode = !!mockArticle;
+  const isRestrictedMode = isHistoryMode || isSavedMode || isMockMode;
 
   // --- State ---
   const [article, setArticle] = useState<Article | null>(null);
@@ -70,6 +72,13 @@ export default function ReaderScreen() {
   const preloadingRef = useRef(false);
   const cacheRef = useRef<Record<string, Article>>({});
   const panX = useRef(new Animated.Value(0)).current;
+  const actualWordCountRef = useRef<number>(0);
+  const webViewInitialLoadRef = useRef<boolean>(true);
+
+  // Reset webview initial load guard whenever article changes
+  useEffect(() => {
+    webViewInitialLoadRef.current = true;
+  }, [currentIndex, articleId]);
 
   // --- Behavior tracker hook (replaces inline console.log) ---
   const behaviorTracker = useBehaviorTracker({
@@ -84,6 +93,13 @@ export default function ReaderScreen() {
     try {
       setLoading(true);
       setFetchError(false);
+
+      if (isMockMode && mockArticle && id === mockArticle.id) {
+        setArticle(mockArticle);
+        setResolvedHtml(mockHtml || '');
+        return;
+      }
+
       let data = cacheRef.current[id];
       
       if (!data) {
@@ -160,7 +176,7 @@ export default function ReaderScreen() {
       const resolvedArticles = await Promise.all(metadataPromises);
       const activeArticles = resolvedArticles.filter((a): a is Article => a !== null);
 
-      if (isSavedMode) return; // Saved mode uses offline database HTML, no live RSS fetches needed
+      if (isSavedMode || isMockMode) return; // Saved/Mock mode uses offline HTML, no live RSS fetches needed
 
       // We only fetch RSS feeds for 'current' articles.
       const currentArticles = activeArticles.filter(a => !a.rssStatus || a.rssStatus === 'current');
@@ -300,6 +316,8 @@ export default function ReaderScreen() {
         if (data.type === 'scrollDepth' && typeof data.depth === 'number') {
           const depth = Math.min(1, Math.max(0, data.depth));
           behaviorTracker.trackScrollDepth(depth);
+        } else if (data.type === 'wordCount' && typeof data.count === 'number') {
+          actualWordCountRef.current = data.count;
         }
       } catch {
         // Ignore non-JSON messages
@@ -334,7 +352,7 @@ export default function ReaderScreen() {
             // Swipe left (right edge) → Swipe Next
             if (!isRestrictedMode) {
               const expectedReadTimeMs = article?.wordCount ? (article.wordCount / currentWpm) * 60000 : 60000;
-              behaviorTracker.concludeSession(expectedReadTimeMs);
+              behaviorTracker.concludeSession(expectedReadTimeMs, actualWordCountRef.current);
               if (article?.id) markArticleSeen(article.id);
             }
             goToNext();
@@ -377,6 +395,10 @@ export default function ReaderScreen() {
         ${resolvedHtml}
         <script>
           (function() {
+            var text = document.body.innerText || document.body.textContent || '';
+            var wordCount = text.trim().split(/\\s+/).length;
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
+
             var maxDepth = 0;
             function reportScroll() {
               var scrollTop = window.scrollY || document.documentElement.scrollTop;
@@ -400,6 +422,10 @@ export default function ReaderScreen() {
 
   const rawWebpageInjectedScript = `
     (function() {
+      var text = document.body.innerText || document.body.textContent || '';
+      var wordCount = text.trim().split(/\\s+/).length;
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
+
       var maxDepth = 0;
       function reportScroll() {
         var scrollTop = window.scrollY || document.documentElement.scrollTop;
@@ -436,12 +462,15 @@ export default function ReaderScreen() {
       return true;
     } else {
       // In the raw Substack URI view:
-      // Substack sometimes does internal redirects (adding ?utm_source=...).
-      // We block the request only if it's explicitly navigating to a completely different path/article.
+      // Substack heavily relies on server redirects (custom domains, slug changes, etc).
+      // We allow all navigations during the initial load phase. Once the page is loaded,
+      // the lock engages and intercepts any further user clicks.
+      if (webViewInitialLoadRef.current) return true;
+
       const currentUrlBase = article.publicationUrl.split('?')[0];
       const reqUrlBase = request.url.split('?')[0];
       
-      if (reqUrlBase === currentUrlBase) return true; // Just a redirect or query param change
+      if (reqUrlBase === currentUrlBase) return true; // Just a query param change or anchor jump
       
       // User clicked a link to another page. Intercept and open in external browser.
       Linking.openURL(request.url);
@@ -587,6 +616,7 @@ export default function ReaderScreen() {
               source={{ uri: article.publicationUrl }}
               onMessage={handleWebViewMessage}
               onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+              onLoadEnd={() => { webViewInitialLoadRef.current = false; }}
               injectedJavaScript={rawWebpageInjectedScript}
               javaScriptEnabled
               domStorageEnabled

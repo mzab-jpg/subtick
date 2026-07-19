@@ -16,8 +16,8 @@ interface UseBehaviorTrackerOptions {
 
 interface UseBehaviorTrackerReturn {
   trackScrollDepth: (depth: number) => void;
-  trackEvent: (eventType: BehaviorEventType, extraScrollDepth?: number) => void;
-  concludeSession: (expectedReadTimeMs: number) => void;
+  trackEvent: (eventType: BehaviorEventType, extraScrollDepth?: number, actualWordCount?: number) => void;
+  concludeSession: (expectedReadTimeMs: number, actualWordCount?: number) => void;
   sessionStartTime: number;
   getMaxScrollDepth: () => number;
   getSessionDuration: () => number;
@@ -82,7 +82,7 @@ export function useBehaviorTracker({
   );
 
   const trackEvent = useCallback(
-    (eventType: BehaviorEventType, extraScrollDepth?: number) => {
+    (eventType: BehaviorEventType, extraScrollDepth?: number, actualWordCount?: number) => {
       if (!enabled) return;
       const depth = extraScrollDepth ?? stateRef.current.maxDepth;
       queueBehaviorEvent(
@@ -91,14 +91,15 @@ export function useBehaviorTracker({
         articleCategory,
         lengthStyle,
         Date.now() - stateRef.current.startTime,
-        depth
+        depth,
+        actualWordCount
       );
     },
     [enabled, articleId, articleCategory, lengthStyle]
   );
 
   const concludeSession = useCallback(
-    (expectedReadTimeMs: number) => {
+    (expectedReadTimeMs: number, actualWordCount?: number) => {
       if (!enabled || stateRef.current.concluded) return;
       
       const duration = Date.now() - stateRef.current.startTime;
@@ -124,7 +125,8 @@ export function useBehaviorTracker({
         articleCategory,
         lengthStyle,
         duration,
-        depth
+        depth,
+        actualWordCount
       );
       
       stateRef.current.concluded = true;
