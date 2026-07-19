@@ -97,6 +97,8 @@ export default function ReaderScreen() {
       
       if (data) {
         let contentHtml = '';
+        let needsFallback = false;
+
         if (isSavedMode) {
           const savedHtml = await getSavedArticleHtml(id);
           contentHtml = savedHtml || data.bodyHtml || '';
@@ -104,11 +106,23 @@ export default function ReaderScreen() {
           // Archived articles do not exist in live RSS. We will load the publicationUrl directly.
           contentHtml = '';
         } else if (data.guid && data.feedUrl) {
-          contentHtml = await fetchAndExtractArticle(data.feedUrl, data.guid);
+          try {
+            contentHtml = await fetchAndExtractArticle(data.feedUrl, data.guid);
+          } catch (rssError) {
+            console.warn(`[Reader] RSS fetch failed for ${data.guid}, falling back to raw URI.`);
+            needsFallback = true;
+          }
         } else {
           contentHtml = data.bodyHtml || '';
         }
         
+        // If the RSS fetch fails (e.g. 4-hour gap before article is officially tagged archived), 
+        // silently fallback to rendering the raw Substack URI so the user never hits a dead-end screen.
+        if (needsFallback) {
+          data.rssStatus = 'archived';
+          contentHtml = '';
+        }
+
         setResolvedHtml(contentHtml);
         setArticle(data);
       } else {
@@ -406,6 +420,35 @@ export default function ReaderScreen() {
   // Determine if we should load the raw URL instead of sanitized HTML
   const useDirectUri = article && (article.rssStatus === 'archived' || (isSavedMode && !resolvedHtml));
 
+  // --- Prevent WebView Escape (Lock Navigation) ---
+  const handleShouldStartLoadWithRequest = (request: any) => {
+    if (!article) return true;
+    
+    // Always allow internal about:blank or data: URIs (used by the WebView to load raw HTML)
+    if (request.url.startsWith('data:') || request.url.startsWith('about:')) return true;
+
+    if (!useDirectUri) {
+      // In the clean sanitized HTML view, ANY external link click is blocked
+      if (request.url.startsWith('http')) {
+        Linking.openURL(request.url);
+        return false;
+      }
+      return true;
+    } else {
+      // In the raw Substack URI view:
+      // Substack sometimes does internal redirects (adding ?utm_source=...).
+      // We block the request only if it's explicitly navigating to a completely different path/article.
+      const currentUrlBase = article.publicationUrl.split('?')[0];
+      const reqUrlBase = request.url.split('?')[0];
+      
+      if (reqUrlBase === currentUrlBase) return true; // Just a redirect or query param change
+      
+      // User clicked a link to another page. Intercept and open in external browser.
+      Linking.openURL(request.url);
+      return false;
+    }
+  };
+
   // --- Flush pending behavior events when leaving the Reader ---
   useEffect(() => {
     return () => {
@@ -543,6 +586,7 @@ export default function ReaderScreen() {
               style={[styles.webview, { backgroundColor: colors.background }]}
               source={{ uri: article.publicationUrl }}
               onMessage={handleWebViewMessage}
+              onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
               injectedJavaScript={rawWebpageInjectedScript}
               javaScriptEnabled
               domStorageEnabled
@@ -556,6 +600,7 @@ export default function ReaderScreen() {
             originWhitelist={['*']}
             source={{ html: articleHTML }}
             onMessage={handleWebViewMessage}
+            onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
             javaScriptEnabled
             domStorageEnabled
             scrollEnabled
