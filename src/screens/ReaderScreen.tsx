@@ -23,13 +23,14 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../contexts/ThemeContext';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { Article } from '../types';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { Article, RootStackParamList } from '../types';
 import { db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { MAX_FEED_ARTICLES } from '../utils/constants';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
-import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds, fetchAndExtractArticle, getSavedArticleHtml } from '../services/feedService';
+import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds, fetchAndExtractArticle, getSavedArticleHtml, pruneFeedSessionCache } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { Linking } from 'react-native';
 
@@ -39,8 +40,8 @@ const SWIPE_THRESHOLD = 60; // px — minimum horizontal swipe to trigger action
 
 export default function ReaderScreen() {
   const { colors, webViewCSS, isDark } = useTheme();
-  const route = useRoute<any>();
-  const navigation = useNavigation<any>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Reader'>>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   const { articleId, queueArticleIds, startIndex, userWpm, mode } = route.params;
   const currentWpm = userWpm || 250;
@@ -119,27 +120,54 @@ export default function ReaderScreen() {
     }
   }, [isSavedMode]);
 
-  // --- Background Sliding Prefetcher ---
-  const prefetchArticles = useCallback(async (idsToFetch: string[]) => {
-    for (const id of idsToFetch) {
-      try {
-        let data = cacheRef.current[id];
-        if (!data) {
+  // --- Background Sliding Prefetcher (Definite Future Reads sliding-window) ---
+  const prefetchArticles = useCallback(async (upcomingIds: string[]) => {
+    try {
+      // 1. Fetch metadata from Firestore for all upcoming articles in parallel
+      const metadataPromises = upcomingIds.map(async (id) => {
+        if (cacheRef.current[id]) return cacheRef.current[id];
+        try {
           const snap = await getDoc(doc(db, 'articles', id));
           if (snap.exists()) {
-            data = snap.data() as Article;
+            const data = snap.data() as Article;
             cacheRef.current[id] = data;
             setArticleCache(prev => ({ ...prev, [id]: data }));
+            return data;
           }
+        } catch (err) {
+          // Silent catch
         }
-        
-        // Also eagerly fetch the XML into the session cache
-        if (data && data.guid && data.feedUrl && !isSavedMode) {
-          await fetchAndExtractArticle(data.feedUrl, data.guid);
-        }
-      } catch (e) {
-        // silently fail prefetch
-      }
+        return null;
+      });
+
+      const resolvedArticles = await Promise.all(metadataPromises);
+      const activeArticles = resolvedArticles.filter((a): a is Article => a !== null);
+
+      if (isSavedMode) return; // Saved mode uses offline database HTML, no live RSS fetches needed
+
+      // 2. Extract unique feedUrls for the upcoming window
+      const uniqueFeedUrls = Array.from(
+        new Set(activeArticles.map(a => a.feedUrl).filter((url): url is string => !!url))
+      );
+
+      // 3. Prune our local in-memory feed cache to only keep feeds that show up in the look-ahead window.
+      // This is the "keep what's active, delete what's old" sliding window rule.
+      pruneFeedSessionCache(uniqueFeedUrls);
+
+      // 4. Concurrently fetch the unique RSS feeds (completely safe from duplication because feedService caches the active Promise)
+      await Promise.all(
+        activeArticles.map(async (art) => {
+          if (art.feedUrl && art.guid) {
+            try {
+              await fetchAndExtractArticle(art.feedUrl, art.guid);
+            } catch (err) {
+              // Silent fail for background prefetch
+            }
+          }
+        })
+      );
+    } catch (error) {
+      console.warn('[Reader] Background prefetching failed:', error);
     }
   }, [isSavedMode]);
 
@@ -148,8 +176,8 @@ export default function ReaderScreen() {
   }, [articleId]);
 
   useEffect(() => {
-    // Sliding window: Prefetch the next 2 articles automatically
-    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 3);
+    // Sliding look-ahead window: Scan the next 20 articles in the queue
+    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 21);
     if (upcomingIds.length > 0) {
       prefetchArticles(upcomingIds);
     }
@@ -425,15 +453,17 @@ export default function ReaderScreen() {
       </View>
 
       {/* Swipe Zone Indicators (edge hints) */}
+      {/* Left-edge is "Not Interested" in Feed Mode. Hide in History/Saved Modes */}
+      {!isRestrictedMode && (
+        <View style={[styles.edgeHintLeft, { backgroundColor: colors.surfaceSecondary + '20' }]}>
+          <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>◂</Text>
+        </View>
+      )}
+      {/* Right-edge is "Next" in both Feed Mode and Saved Mode. Hide only in History Mode */}
       {!isHistoryMode && (
-        <>
-          <View style={[styles.edgeHintLeft, { backgroundColor: colors.surfaceSecondary + '20' }]}>
-            <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>◂</Text>
-          </View>
-          <View style={[styles.edgeHintRight, { backgroundColor: colors.surfaceSecondary + '20' }]}>
-            <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>▸</Text>
-          </View>
-        </>
+        <View style={[styles.edgeHintRight, { backgroundColor: colors.surfaceSecondary + '20' }]}>
+          <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>▸</Text>
+        </View>
       )}
 
       {/* Content */}

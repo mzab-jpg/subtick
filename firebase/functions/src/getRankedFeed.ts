@@ -6,6 +6,7 @@
 // ============================================================
 
 import { onCall } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 import { Article, RankedFeedResult, UserProfile } from './types.js';
 import {
@@ -78,6 +79,71 @@ function calculateCompositeScore(
  * and caches exactly 1000 candidates (500 fresh, 500 archive) in memory for 10 minutes.
  * This completely prevents users from exhausting the queue.
  */
+/**
+ * Cron task that runs every 10 minutes to build the universal "candidate pool" box
+ * out of ALL available articles in the database.
+ * This completely eliminates the need for user-triggered requests to scan thousands of database entries,
+ * reducing our read bills by 99.9%.
+ */
+export const cronUpdateCandidatePool = onSchedule('every 10 minutes', async () => {
+  console.log('[Cron] Starting candidate pool generation (Universal Box)...');
+  try {
+    const now = Date.now();
+    
+    // We scan ALL articles in the database to build a perfect pool
+    const snapshot = await db.collection('articles').get();
+    const allArticles: Article[] = [];
+    
+    snapshot.forEach((doc) => {
+      const data = doc.data() as Article;
+      if (!data.isPaywalled && (data.wordCount === undefined || data.wordCount >= 150)) {
+        allArticles.push({
+          id: doc.id,
+          title: data.title,
+          author: data.author,
+          publicationName: data.publicationName,
+          publicationUrl: data.publicationUrl,
+          feedUrl: data.feedUrl,
+          category: data.category,
+          lengthStyle: data.lengthStyle,
+          guid: data.guid,
+          isTruncatedFeed: data.isTruncatedFeed ?? false,
+          description: data.description,
+          publishDate: data.publishDate,
+          isPaywalled: data.isPaywalled,
+          wordCount: data.wordCount,
+          estimatedReadMinutes: data.estimatedReadMinutes,
+          trendingScore: data.trendingScore || 0,
+          qualityScore: data.qualityScore || 0.8,
+          cacheTimestamp: data.cacheTimestamp || now,
+          isSeed: data.isSeed ?? false,
+        });
+      }
+    });
+
+    const fourWeeksAgo = now - (4 * 7 * 24 * 60 * 60 * 1000);
+    const freshArticles = allArticles.filter(a => a.publishDate >= fourWeeksAgo);
+    const archiveArticles = allArticles.filter(a => a.publishDate < fourWeeksAgo);
+
+    shuffleArray(freshArticles);
+    shuffleArray(archiveArticles);
+
+    const selectedFresh = freshArticles.slice(0, 500);
+    const selectedArchive = archiveArticles.slice(0, 500);
+
+    const pool = [...selectedFresh, ...selectedArchive];
+
+    await db.collection('system').doc('candidatePool').set({
+      articles: pool,
+      generatedAt: now,
+    });
+
+    console.log(`[Cron] Universal Box successfully written. Articles: ${pool.length} (out of ${allArticles.length} scanned)`);
+  } catch (error) {
+    console.error('[Cron] Error generating candidate pool:', error);
+  }
+});
+
 async function getOrUpdateCandidatePool(): Promise<Article[]> {
   const now = Date.now();
   if (candidateCache.length > 0 && (now - cacheTimestamp) < CACHE_LIFETIME_MS) {
@@ -85,8 +151,25 @@ async function getOrUpdateCandidatePool(): Promise<Article[]> {
     return candidateCache;
   }
 
-  console.log('[Cache] Cache expired or empty. Querying stratified buckets from Firestore for randomized 1000-article pool...');
+  console.log('[Cache] Cold cache. Fetching pre-compiled universal candidate pool from Firestore...');
 
+  try {
+    const docRef = db.collection('system').doc('candidatePool');
+    const snap = await docRef.get();
+    if (snap.exists) {
+      const data = snap.data();
+      if (data && Array.isArray(data.articles) && data.articles.length > 0) {
+        candidateCache = data.articles as Article[];
+        cacheTimestamp = data.generatedAt || now;
+        console.log(`[Cache] Successfully loaded pre-compiled pool with ${candidateCache.length} articles.`);
+        return candidateCache;
+      }
+    }
+  } catch (err) {
+    console.error('[Cache] Failed to fetch pre-compiled universal pool, falling back to on-the-fly generation:', err);
+  }
+
+  console.log('[Cache] Fallback triggered. Querying stratified buckets on-the-fly...');
   try {
     const fourWeeksAgo = now - (4 * 7 * 24 * 60 * 60 * 1000);
 
@@ -137,12 +220,12 @@ async function getOrUpdateCandidatePool(): Promise<Article[]> {
 
     candidateCache = Array.from(articlesMap.values());
     cacheTimestamp = now;
-    console.log(`[Cache] Rebuilt candidate pool cache. Total articles: ${candidateCache.length} (randomized out of ${freshArticles.length + archiveArticles.length} scanned)`);
+    console.log(`[Cache] Fallback rebuilt candidate pool cache. Total articles: ${candidateCache.length}`);
     return candidateCache;
   } catch (error) {
-    console.error('[Cache] Error building candidate pool:', error);
+    console.error('[Cache] Fallback error building candidate pool:', error);
     if (candidateCache.length > 0) {
-      console.warn('[Cache] Falling back to expired candidate pool cache');
+      console.warn('[Cache] Falling back to expired in-memory pool');
       return candidateCache;
     }
     throw error;

@@ -12,8 +12,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { Article, UserProfile, DashboardMetric } from '../types';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { Article, UserProfile, DashboardMetric, RootStackParamList } from '../types';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES } from '../utils/constants';
 import { auth } from '../services/firebase';
 import { fetchUserProfile, completeOnboarding } from '../services/auth';
@@ -21,8 +22,8 @@ import { getRankedFeed, getSeenArticleIds } from '../services/feedService';
 
 export default function DashboardScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'Dashboard'>>();
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [feedArticles, setFeedArticles] = useState<Article[]>([]);

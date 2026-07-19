@@ -66,86 +66,102 @@ function checkIsPaywalled(title: string, description: string, bodyHtml: string):
   return isPaywalled || hasPaywallClass || hasPaywallScript;
 }
 
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
 export const rssCollector = onSchedule('every 4 hours', async () => {
   console.log('[rssCollector] Starting RSS collection for 35 feeds...');
   let totalNew = 0;
   let totalErrors = 0;
 
-  for (const feed of SUBSTACK_FEEDS) {
-    try {
-      console.log(`[rssCollector] Fetching: ${feed.publicationName} (${feed.url})`);
-      const feedData = await parser.parseURL(feed.url);
+  // Process feeds concurrently in smaller batches of 5 to avoid connection issues or Substack rate limits
+  const feedChunks = chunkArray(SUBSTACK_FEEDS, 5);
 
-      if (!feedData.items || feedData.items.length === 0) {
-        console.log(`[rssCollector] No items for ${feed.publicationName}`);
-        continue;
-      }
-
-      for (const item of feedData.items) {
+  for (const chunk of feedChunks) {
+    await Promise.allSettled(
+      chunk.map(async (feed) => {
         try {
-          const title = item.title || 'Untitled';
-          const link = item.link || '';
-          const articleId = generateArticleId(link, title);
+          console.log(`[rssCollector] Fetching: ${feed.publicationName} (${feed.url})`);
+          const feedData = await parser.parseURL(feed.url);
 
-          const existing = await db.collection('articles').doc(articleId).get();
-          if (existing.exists) continue;
-
-          const bodyHtml = item['content:encoded'] || item.content || item.description || '';
-          const description = (item.contentSnippet || item.description || '').substring(0, 300);
-          const publishDate = item.pubDate ? new Date(item.pubDate).getTime() : Date.now();
-          const author = item.creator || item['dc:creator'] || 'Unknown';
-          const headerImageUrl = extractFirstImage(bodyHtml);
-          const guid = extractGuid(item);
-
-          const wordCount = calculateWordCount(bodyHtml);
-          let lengthStyle = 'medium';
-          if (wordCount < 800) lengthStyle = 'short';
-          else if (wordCount > 2000) lengthStyle = 'long';
-
-          const isPaywalled = checkIsPaywalled(title, description, bodyHtml);
-          
-          // Self-check for truncated feed (if description is suspiciously close to full body)
-          const isTruncatedFeed = bodyHtml.length > 0 && description.length / bodyHtml.length > 0.9;
-
-          const article: Record<string, any> = {
-            id: articleId,
-            title,
-            author,
-            publicationName: feed.publicationName,
-            publicationUrl: feedData.link || feed.url,
-            feedUrl: feed.url,
-            category: feed.category,
-            lengthStyle,
-            guid,
-            isTruncatedFeed,
-            description,
-            publishDate,
-            cacheTimestamp: Date.now(),
-            isPaywalled,
-            wordCount,
-            estimatedReadMinutes: estimateReadMinutes(wordCount),
-            trendingScore: 0,
-            qualityScore: feed.qualityScore,
-            isSeed: false,
-          };
-          
-          // Only add headerImageUrl if it's a string (Firestore rejects undefined)
-          if (typeof headerImageUrl === 'string') {
-            article.headerImageUrl = headerImageUrl;
+          if (!feedData.items || feedData.items.length === 0) {
+            console.log(`[rssCollector] No items for ${feed.publicationName}`);
+            return;
           }
 
-          await db.collection('articles').doc(articleId).set(article);
-          totalNew++;
-          console.log(`[rssCollector] New article: ${title.substring(0, 60)}`);
-        } catch (itemError: any) {
-          console.error(`[rssCollector] Item error for ${feed.publicationName}:`, itemError.message);
+          for (const item of feedData.items) {
+            try {
+              const title = item.title || 'Untitled';
+              const link = item.link || '';
+              const articleId = generateArticleId(link, title);
+
+              const existing = await db.collection('articles').doc(articleId).get();
+              if (existing.exists) continue;
+
+              const bodyHtml = item['content:encoded'] || item.content || item.description || '';
+              const description = (item.contentSnippet || item.description || '').substring(0, 300);
+              const publishDate = item.pubDate ? new Date(item.pubDate).getTime() : Date.now();
+              const author = item.creator || item['dc:creator'] || 'Unknown';
+              const headerImageUrl = extractFirstImage(bodyHtml);
+              const guid = extractGuid(item);
+
+              const wordCount = calculateWordCount(bodyHtml);
+              let lengthStyle = 'medium';
+              if (wordCount < 800) lengthStyle = 'short';
+              else if (wordCount > 2000) lengthStyle = 'long';
+
+              const isPaywalled = checkIsPaywalled(title, description, bodyHtml);
+              
+              // Self-check for truncated feed (if description is suspiciously close to full body)
+              // Protect from potential divide-by-zero
+              const isTruncatedFeed = bodyHtml.length > 0 && (description.length / bodyHtml.length) > 0.9;
+
+              const article: Record<string, any> = {
+                id: articleId,
+                title,
+                author,
+                publicationName: feed.publicationName,
+                publicationUrl: feedData.link || feed.url,
+                feedUrl: feed.url,
+                category: feed.category,
+                lengthStyle,
+                guid,
+                isTruncatedFeed,
+                description,
+                publishDate,
+                cacheTimestamp: Date.now(),
+                isPaywalled,
+                wordCount,
+                estimatedReadMinutes: estimateReadMinutes(wordCount),
+                trendingScore: 0,
+                qualityScore: feed.qualityScore,
+                isSeed: false,
+              };
+              
+              // Only add headerImageUrl if it's a string (Firestore rejects undefined)
+              if (typeof headerImageUrl === 'string') {
+                article.headerImageUrl = headerImageUrl;
+              }
+
+              await db.collection('articles').doc(articleId).set(article);
+              totalNew++;
+              console.log(`[rssCollector] New article: ${title.substring(0, 60)}`);
+            } catch (itemError: any) {
+              console.error(`[rssCollector] Item error for ${feed.publicationName}:`, itemError.message);
+              totalErrors++;
+            }
+          }
+        } catch (feedError: any) {
+          console.error(`[rssCollector] Feed error for ${feed.publicationName}:`, feedError.message);
           totalErrors++;
         }
-      }
-    } catch (feedError: any) {
-      console.error(`[rssCollector] Feed error for ${feed.publicationName}:`, feedError.message);
-      totalErrors++;
-    }
+      })
+    );
   }
 
   console.log(`[rssCollector] Complete. New articles: ${totalNew}, Errors: ${totalErrors}`);
