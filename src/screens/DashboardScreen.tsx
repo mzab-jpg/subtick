@@ -1,6 +1,6 @@
 // ============================================================
-// SubTick — Dashboard Screen
-// Stats bar, top 2 feed stack, Surprise Me, hamburger menu.
+// SubTick — Dashboard Screen (Editorial Redesign)
+// Hero layout, sleek pill stats, clean list rows.
 // ============================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -33,7 +34,6 @@ export default function DashboardScreen() {
   // --- Load user profile & feed on mount and focus ---
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
-      // 1. Optimistically filter out seen articles instantly for snappy UI
       try {
         const seenIds = await getSeenArticleIds();
         if (seenIds.length > 0) {
@@ -43,17 +43,14 @@ export default function DashboardScreen() {
         // ignore
       }
 
-      // 2. Re-fetch silently when returning to this screen (this will flush and get new recommendations)
       loadData(true);
     });
     
-    // Initial loud fetch
     loadData(false);
     
     return unsubscribe;
   }, [navigation]);
 
-  // --- Process onboarding selections if coming from Onboarding ---
   useEffect(() => {
     if (route.params?.onboardingSelections) {
       const { selectedCategoryIds, notInterestedCategoryIds } = route.params.onboardingSelections;
@@ -74,8 +71,6 @@ export default function DashboardScreen() {
         return;
       }
 
-      // Flush any pending behaviors from ReaderScreen before fetching new feed
-      // so that recommendations and seen history are completely up-to-date.
       try {
         await flushBehaviorQueue();
       } catch (err) {
@@ -174,111 +169,108 @@ export default function DashboardScreen() {
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading your feed...</Text>
+        <ActivityIndicator size="large" color={colors.text} />
       </View>
     );
   }
 
   const metrics = getMetrics();
+  const heroArticle = feedArticles.length > 0 ? feedArticles[0] : null;
+  const rowArticles = feedArticles.length > 1 ? feedArticles.slice(1, 3) : [];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
       <View style={styles.content}>
         {/* Header Row */}
         <View style={styles.headerRow}>
-          <View style={styles.menuButton} />
-          <Text style={[styles.headerTitle, { color: colors.text }]}>SubTick</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>SUBTICK</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.menuButton}>
-            <Text style={[styles.menuIcon, { color: colors.text }]}>☰</Text>
+            <View style={[styles.menuLine, { backgroundColor: colors.text }]} />
+            <View style={[styles.menuLine, { backgroundColor: colors.text, width: 14 }]} />
           </TouchableOpacity>
         </View>
 
-        {/* Stats Bar */}
+        {/* Stats Pill Bar */}
         {metrics.length > 0 && (
-          <View style={styles.statsRow}>
-            {metrics.map((metric) => (
-              <View
-                key={metric.id}
-                style={[styles.statCard, { backgroundColor: colors.surface, shadowColor: colors.cardShadow }]}
-              >
-                <Text style={styles.statEmoji}>{metric.emoji}</Text>
-                <Text style={[styles.statValue, { color: colors.text }]}>{metric.value}</Text>
-                <Text style={[styles.statLabel, { color: colors.textMuted }]}>{metric.label}</Text>
-              </View>
+          <View style={[styles.statsPillContainer, { backgroundColor: colors.surfaceSecondary }]}>
+            {metrics.map((metric, index) => (
+              <React.Fragment key={metric.id}>
+                <View style={styles.statPillItem}>
+                  <Text style={styles.statEmoji}>{metric.emoji}</Text>
+                  <Text style={[styles.statValue, { color: colors.text }]}>{metric.value}</Text>
+                </View>
+                {index < metrics.length - 1 && (
+                  <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                )}
+              </React.Fragment>
             ))}
           </View>
         )}
 
-        {/* Section Title */}
+        {/* Editorial Feed */}
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Feed</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-            Top {Math.min(3, feedArticles.length)} recommended reads
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>EDITION</Text>
         </View>
 
-        {/* Feed Stack (Top 3 Overlapping Physics-based Deck) */}
         {feedArticles.length > 0 ? (
-          <View style={styles.deckContainer}>
-            {feedArticles.slice(0, 3).map((article, index) => {
-              // Create physical-looking overlapping stack indices
-              // 0 is top (closest), 1 is middle, 2 is bottom
-              const scale = 1 - index * 0.04;
-              const translateY = index * 12; // downward cascading stack overlap
-              const zIndex = 10 - index;
-              const opacity = 1 - index * 0.15;
+          <View style={styles.editorialContainer}>
+            
+            {/* 1. Hero Article */}
+            {heroArticle && (
+              <TouchableOpacity
+                style={styles.heroCard}
+                onPress={() => navigateToReader(heroArticle.id, 0)}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.heroPublisher, { color: colors.accent }]}>
+                  {heroArticle.publicationName.toUpperCase()}
+                </Text>
+                <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={4}>
+                  {heroArticle.title}
+                </Text>
+                {heroArticle.description ? (
+                  <Text style={[styles.heroDescription, { color: colors.textSecondary }]} numberOfLines={2}>
+                    {heroArticle.description}
+                  </Text>
+                ) : null}
+                <View style={styles.cardMeta}>
+                  <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
+                    {heroArticle.category.charAt(0).toUpperCase() + heroArticle.category.slice(1)}
+                  </Text>
+                  <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
+                    {Math.max(1, Math.ceil((heroArticle.wordCount || 0) / (userProfile?.averageWpm || 250)))} min read
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
-              return (
-                <TouchableOpacity
-                  key={article.id}
-                  style={[
-                    styles.feedCard,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                      shadowColor: colors.cardShadow,
-                      zIndex,
-                      opacity,
-                      transform: [
-                        { scale },
-                        { translateY }
-                      ],
-                    }
-                  ]}
-                  onPress={() => navigateToReader(article.id, index)}
-                  activeOpacity={0.9}
-                >
-                  <View style={[styles.categoryBadge, { backgroundColor: colors.primaryLight }]}>
-                    <Text style={[styles.categoryText, { color: colors.primary }]}>
-                      {article.category.charAt(0).toUpperCase() + article.category.slice(1)}
-                    </Text>
-                  </View>
-
-                  <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={3}>
+            {/* 2. Sub-Row Articles */}
+            {rowArticles.map((article, index) => (
+              <TouchableOpacity
+                key={article.id}
+                style={[styles.rowCard, { borderTopColor: colors.border }]}
+                onPress={() => navigateToReader(article.id, index + 1)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.rowCardContent}>
+                  <Text style={[styles.rowPublisher, { color: colors.textSecondary }]}>
+                    {article.publicationName}
+                  </Text>
+                  <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={2}>
                     {article.title}
                   </Text>
+                </View>
+                <View style={styles.rowMetaContent}>
+                  <Text style={[styles.rowTime, { color: colors.textMuted }]}>
+                    {Math.max(1, Math.ceil((article.wordCount || 0) / (userProfile?.averageWpm || 250)))}m
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
 
-                  {article.description ? (
-                    <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {article.description}
-                    </Text>
-                  ) : null}
-
-                  <View style={styles.cardMeta}>
-                    <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
-                      {article.publicationName}
-                    </Text>
-                    <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
-                      {Math.max(1, Math.ceil((article.wordCount || 0) / (userProfile?.averageWpm || 250)))} min read
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
           </View>
         ) : (
-          <View style={[styles.emptyState, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+          <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>📭</Text>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No articles yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
@@ -290,103 +282,145 @@ export default function DashboardScreen() {
         {/* Surprise Me Button */}
         {feedArticles.length > 0 && (
           <TouchableOpacity
-            style={[styles.surpriseButton, { borderColor: colors.accent }]}
+            style={[styles.surpriseButton, { backgroundColor: colors.text }]}
             onPress={handleSurpriseMe}
-            activeOpacity={0.75}
+            activeOpacity={0.85}
           >
-            <Text style={styles.surpriseEmoji}>🎲</Text>
-            <Text style={[styles.surpriseText, { color: colors.accent }]}>Surprise Me</Text>
+            <Text style={[styles.surpriseText, { color: colors.background }]}>Discover</Text>
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { flex: 1, padding: 16, paddingBottom: 16, paddingTop: 32 },
+  content: { padding: 24, paddingTop: 60, paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 15 },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 24,
   },
-  menuButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  menuIcon: { fontSize: 26 },
-  headerTitle: { fontSize: 22, fontWeight: '800' },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  statCard: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+  headerTitle: { 
+    fontSize: 24, 
+    fontWeight: '900', 
+    letterSpacing: -1,
+    fontFamily: 'System'
+  },
+  menuButton: { 
+    width: 32, 
+    height: 32, 
+    justifyContent: 'center', 
+    alignItems: 'flex-end',
+    gap: 4
+  },
+  menuLine: {
+    height: 2,
+    width: 20,
+    borderRadius: 1,
+  },
+  statsPillContainer: { 
+    flexDirection: 'row', 
     alignItems: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 100, // perfect pill
+    marginBottom: 32,
   },
-  statEmoji: { fontSize: 20, marginBottom: 4 },
-  statValue: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  statLabel: { fontSize: 10, fontWeight: '700', marginTop: 4, opacity: 0.8, textTransform: 'uppercase', textAlign: 'center' },
-  sectionHeader: { marginBottom: 14 },
-  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
-  sectionSubtitle: { fontSize: 13, marginTop: 2, opacity: 0.8 },
-  deckContainer: {
-    height: 380, // Set height to contain absolute stacked items safely
-    position: 'relative',
-    marginVertical: 10,
-  },
-  feedCard: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    borderRadius: 24,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 5,
-  },
-  categoryBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  categoryText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
-  cardTitle: { fontSize: 18, fontWeight: '800', lineHeight: 24, letterSpacing: -0.4, marginBottom: 8 },
-  cardDescription: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
-  cardMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.04)' },
-  cardMetaText: { fontSize: 12, fontWeight: '600', opacity: 0.8 },
-  emptyState: {
-    flex: 1,
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  emptyEmoji: { fontSize: 36, marginBottom: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  emptySubtitle: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
-  surpriseButton: {
+  statPillItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    marginTop: 2,
+    gap: 6,
   },
-  surpriseEmoji: { fontSize: 20, marginRight: 8 },
-  surpriseText: { fontSize: 15, fontWeight: '700' },
+  statEmoji: { fontSize: 16 },
+  statValue: { fontSize: 16, fontWeight: '700', letterSpacing: -0.5 },
+  statDivider: {
+    width: 1,
+    height: 16,
+  },
+  sectionHeader: { marginBottom: 16 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  editorialContainer: {
+    gap: 0,
+  },
+  heroCard: {
+    marginBottom: 24,
+  },
+  heroPublisher: { 
+    fontSize: 12, 
+    fontWeight: '800', 
+    letterSpacing: 0.5, 
+    marginBottom: 8 
+  },
+  heroTitle: { 
+    fontSize: 32, 
+    fontWeight: '800', 
+    lineHeight: 38, 
+    letterSpacing: -1, 
+    marginBottom: 12 
+  },
+  heroDescription: { 
+    fontSize: 16, 
+    lineHeight: 24, 
+    marginBottom: 16 
+  },
+  cardMeta: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center'
+  },
+  cardMetaText: { 
+    fontSize: 13, 
+    fontWeight: '600' 
+  },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  rowCardContent: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  rowPublisher: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  rowTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+    letterSpacing: -0.5,
+  },
+  rowMetaContent: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  rowTime: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  emptyState: {
+    padding: 32,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  emptyEmoji: { fontSize: 40, marginBottom: 12 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  surpriseButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 100,
+    marginTop: 32,
+  },
+  surpriseText: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
 });

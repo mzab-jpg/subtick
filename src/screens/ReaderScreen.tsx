@@ -5,8 +5,8 @@
 // syncBehaviorEvents → weightUpdater pipeline.
 //
 // Features: Real-Time Calibrating Infinite Preloader.
-// When 10 articles are left in the queue, automatically flushes
-// swipes, calibrates weights, fetches the next 20 fresh articles,
+// When 5 articles are left in the queue, automatically flushes
+// swipes, calibrates weights, fetches the next batch of fresh articles,
 // and appends them cleanly in the background.
 // ============================================================
 
@@ -33,6 +33,7 @@ import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
 import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds, fetchAndExtractArticle, getSavedArticleHtml, pruneFeedSessionCache } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { Linking } from 'react-native';
+import { BlurView } from 'expo-blur';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 30; // px — touch-intercepting margin zones
@@ -383,9 +384,10 @@ export default function ReaderScreen() {
     if (!article) return '';
     const readMinutes = Math.max(1, Math.ceil((article.wordCount || 0) / currentWpm));
     
+    // Using elegant editorial typography styling
     const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${article.title}</h1>`;
-    const authorBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:8px;">${article.publicationName} — ${article.author}</p>`;
-    const metaBlock = `<p style="color:${colors.textMuted}; font-size:13px; margin-bottom:24px;">${readMinutes} min read · ${new Date(article.publishDate).toLocaleDateString()}</p>`;
+    const authorBlock = `<p style="color:${colors.textSecondary}; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid ${colors.border}; display:inline-block; padding-bottom:4px;">${article.publicationName}</p>`;
+    const metaBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:32px;">By ${article.author} · ${readMinutes} min read</p>`;
 
     return `
       <!DOCTYPE html>
@@ -396,8 +398,8 @@ export default function ReaderScreen() {
         ${webViewCSS}
       </head>
       <body>
-        ${titleBlock}
         ${authorBlock}
+        ${titleBlock}
         ${metaBlock}
         ${resolvedHtml}
         <script>
@@ -507,58 +509,83 @@ export default function ReaderScreen() {
   // --- Render ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      {/* HUD Overlay (Floating Glass Panel Actions) */}
-      <View style={[styles.hud, { backgroundColor: colors.hudBackground, borderColor: colors.border }]}>
-        <View style={styles.hudTopRow}>
-          {/* Back/Close Button */}
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.hudBackButton}>
-            <Text style={[styles.hudBackText, { color: colors.text }]}>✕</Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1}>
-            {article?.publicationName || 'Reading'}
-          </Text>
-
-          <View style={styles.hudActions}>
-            <TouchableOpacity
-              onPress={() => {
-                const newVal = !isLiked;
-                setIsLiked(newVal);
-                if (newVal) behaviorTracker.trackEvent('like');
-              }}
-              style={[styles.hudIconButton, { backgroundColor: colors.primaryLight }]}
-            >
-              <Text style={styles.hudIcon}>{isLiked ? '❤️' : '🤍'}</Text>
+      
+      {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
+      <View style={styles.hudContainer}>
+        <BlurView 
+          intensity={isDark ? 40 : 80} 
+          tint={isDark ? 'dark' : 'light'} 
+          style={styles.hudBlur}
+        >
+          <View style={styles.hudTopRow}>
+            {/* Back/Close Button */}
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.hudBackButton}>
+              <Text style={[styles.hudBackText, { color: colors.text }]}>✕</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                const newVal = !isSaved;
-                setIsSaved(newVal);
-                if (article) {
-                  if (newVal) {
-                    markArticleSaved(article.id, resolvedHtml);
-                    if (!isRestrictedMode) behaviorTracker.trackEvent('save');
-                  } else {
-                    unmarkArticleSaved(article.id);
+
+            <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1}>
+              {article?.publicationName || 'Reading'}
+            </Text>
+
+            <View style={styles.hudActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  const newVal = !isLiked;
+                  setIsLiked(newVal);
+                  if (newVal) behaviorTracker.trackEvent('like');
+                }}
+                style={styles.hudIconButton}
+              >
+                <Text style={styles.hudIcon}>{isLiked ? '❤️' : '🤍'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const newVal = !isSaved;
+                  setIsSaved(newVal);
+                  if (article) {
+                    if (newVal) {
+                      markArticleSaved(article.id, resolvedHtml);
+                      if (!isRestrictedMode) behaviorTracker.trackEvent('save');
+                    } else {
+                      unmarkArticleSaved(article.id);
+                    }
                   }
-                }
-              }}
-              style={[styles.hudIconButton, { backgroundColor: colors.primaryLight }]}
-            >
-              <Text style={styles.hudIcon}>{isSaved ? '🔖' : '🏷️'}</Text>
-            </TouchableOpacity>
+                }}
+                style={styles.hudIconButton}
+              >
+                <Text style={styles.hudIcon}>{isSaved ? '🔖' : '🏷️'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </BlurView>
+      </View>
+
+      {/* Glowing Neon Laser Progress Bar at Bottom */}
+      <View style={styles.bottomProgressBarContainer}>
+        <Animated.View
+          style={[
+            styles.bottomProgressBarFill,
+            {
+              backgroundColor: colors.primary,
+              shadowColor: colors.primary,
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 0.5,
+              shadowRadius: 8,
+              width: scrollProgress.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0%', '100%']
+              }),
+            },
+          ]}
+        />
       </View>
 
       {/* Swipe Zone Indicators (edge hints) */}
-      {/* Left-edge is "Not Interested" in Feed Mode. Hide in History/Saved Modes */}
       {!isRestrictedMode && (
         <View style={[styles.edgeHintLeft, { backgroundColor: colors.surfaceSecondary + '20' }]}>
           <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>◂</Text>
         </View>
       )}
-      {/* Right-edge is "Next" in both Feed Mode and Saved Mode. Hide only in History Mode */}
       {!isHistoryMode && (
         <View style={[styles.edgeHintRight, { backgroundColor: colors.surfaceSecondary + '20' }]}>
           <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>▸</Text>
@@ -603,7 +630,6 @@ export default function ReaderScreen() {
       ) : article ? (
         useDirectUri ? (
           <View style={{ flex: 1, paddingTop: 3 }}>
-            {/* Double Header native view for Archived Articles */}
             <View style={[styles.archivedHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.archivedTitle, { color: colors.text }]}>{article.title}</Text>
               <Text style={[styles.archivedAuthor, { color: colors.textMuted }]}>
@@ -643,44 +669,25 @@ export default function ReaderScreen() {
           <Text style={[styles.errorText, { color: colors.textSecondary }]}>Article could not be loaded.</Text>
         </View>
       )}
-
-      {/* Glowing Neon Laser Progress Bar at Bottom */}
-      <View style={[styles.bottomProgressBarContainer, { backgroundColor: colors.progressBarBackground }]}>
-        <Animated.View
-          style={[
-            styles.bottomProgressBarFill,
-            {
-              backgroundColor: colors.primary,
-              width: scrollProgress.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0%', '100%']
-              }),
-            },
-          ]}
-        />
-      </View>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  hud: {
+  hudContainer: {
     position: 'absolute',
-    top: 40,
-    left: 16,
-    right: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    top: 0,
+    left: 0,
+    right: 0,
     zIndex: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 3,
+  },
+  hudBlur: {
+    paddingTop: 54, // Safe area
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(150, 150, 150, 0.2)',
   },
   hudTopRow: {
     flexDirection: 'row',
@@ -688,32 +695,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hudBackButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(150,150,150,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   hudBackText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   hudTitle: {
     flex: 1,
     fontSize: 15,
     fontWeight: '800',
-    letterSpacing: -0.2,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     textAlign: 'center',
     marginHorizontal: 10,
+    opacity: 0.9,
   },
-  hudActions: { flexDirection: 'row', gap: 8 },
-  hudIconButton: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center', borderRadius: 17 },
+  hudActions: { flexDirection: 'row', gap: 12 },
+  hudIconButton: { 
+    width: 36, 
+    height: 36, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    borderRadius: 18,
+    backgroundColor: 'rgba(150,150,150,0.15)',
+  },
   hudIcon: { fontSize: 18 },
-  progressBg: { height: 3, borderRadius: 1.5, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 1.5 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
-  webview: { flex: 1, marginTop: 3 },
+  webview: { flex: 1, marginTop: 0 },
   catchUpContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -733,59 +747,55 @@ const styles = StyleSheet.create({
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
   errorText: { fontSize: 16 },
   bottomProgressBarContainer: {
-    height: 5,
+    height: 3,
     width: '100%',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     zIndex: 100,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    backgroundColor: 'transparent',
   },
   bottomProgressBarFill: {
     height: '100%',
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
   },
   edgeHintLeft: {
     position: 'absolute',
     left: 0,
-    top: '30%',
-    bottom: '30%',
+    top: '40%',
+    bottom: '40%',
     width: EDGE_ZONE_WIDTH,
     zIndex: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
   },
   edgeHintRight: {
     position: 'absolute',
     right: 0,
-    top: '30%',
-    bottom: '30%',
+    top: '40%',
+    bottom: '40%',
     width: EDGE_ZONE_WIDTH,
     zIndex: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    borderTopLeftRadius: 8,
-    borderBottomLeftRadius: 8,
   },
-  edgeHintText: { fontSize: 11, opacity: 0.4 },
+  edgeHintText: { fontSize: 14, opacity: 0.2 },
   archivedHeader: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
   archivedTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     marginBottom: 6,
   },
   archivedAuthor: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
 });
