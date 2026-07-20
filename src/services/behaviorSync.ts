@@ -26,6 +26,7 @@ export async function queueBehaviorEvent(
   eventType: BehaviorEventType,
   articleCategory: string,
   lengthStyle: string,
+  publicationName: string | undefined,
   sessionDuration: number,
   scrollDepth: number,
   actualWordCount?: number
@@ -42,6 +43,7 @@ export async function queueBehaviorEvent(
       timestamp: Date.now(),
       articleCategory,
       lengthStyle,
+      publicationName,
       sessionDuration,
       scrollDepth,
       actualWordCount,

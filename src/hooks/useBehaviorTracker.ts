@@ -11,6 +11,7 @@ interface UseBehaviorTrackerOptions {
   articleId: string;
   articleCategory: string;
   lengthStyle: string;
+  publicationName?: string;
   enabled: boolean;
 }
 
@@ -27,6 +28,7 @@ export function useBehaviorTracker({
   articleId,
   articleCategory,
   lengthStyle,
+  publicationName,
   enabled,
 }: UseBehaviorTrackerOptions): UseBehaviorTrackerReturn {
   // Keep tracking state in a ref that resets when articleId changes
@@ -65,6 +67,7 @@ export function useBehaviorTracker({
             'quick_exit',
             currentCategory,
             lengthStyle,
+            publicationName,
             duration,
             stateRef.current.maxDepth
           );
@@ -90,12 +93,13 @@ export function useBehaviorTracker({
         eventType,
         articleCategory,
         lengthStyle,
+        publicationName,
         Date.now() - stateRef.current.startTime,
         depth,
         actualWordCount
       );
     },
-    [enabled, articleId, articleCategory, lengthStyle]
+    [enabled, articleId, articleCategory, lengthStyle, publicationName]
   );
 
   const concludeSession = useCallback(
@@ -124,6 +128,7 @@ export function useBehaviorTracker({
         eventType,
         articleCategory,
         lengthStyle,
+        publicationName,
         duration,
         depth,
         actualWordCount
@@ -131,7 +136,7 @@ export function useBehaviorTracker({
       
       stateRef.current.concluded = true;
     },
-    [enabled, articleId, articleCategory, lengthStyle]
+    [enabled, articleId, articleCategory, lengthStyle, publicationName]
   );
 
   const getMaxScrollDepth = useCallback(() => stateRef.current.maxDepth, []);

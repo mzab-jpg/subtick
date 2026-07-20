@@ -9,6 +9,7 @@ export interface UserProfile {
   notInterestedCategoryIds: string[];
   categoryWeights: Record<string, number>;
   categoryLengthWeights?: Record<string, number>;
+  publisherWeights?: Record<string, number>;
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   totalArticlesRead: number;
@@ -66,6 +67,7 @@ export interface BehaviorEvent {
   timestamp: number;
   articleCategory: string;
   lengthStyle: string;
+  publicationName?: string;
   sessionDuration: number;
   scrollDepth: number;
   actualWordCount?: number;

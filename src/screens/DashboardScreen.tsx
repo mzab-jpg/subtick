@@ -19,6 +19,7 @@ import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_IN
 import { auth } from '../services/firebase';
 import { fetchUserProfile, completeOnboarding } from '../services/auth';
 import { getRankedFeed, getSeenArticleIds } from '../services/feedService';
+import { flushBehaviorQueue } from '../services/behaviorSync';
 
 export default function DashboardScreen() {
   const { colors } = useTheme();
@@ -31,8 +32,18 @@ export default function DashboardScreen() {
 
   // --- Load user profile & feed on mount and focus ---
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      // Re-fetch silently when returning to this screen
+    const unsubscribe = navigation.addListener('focus', async () => {
+      // 1. Optimistically filter out seen articles instantly for snappy UI
+      try {
+        const seenIds = await getSeenArticleIds();
+        if (seenIds.length > 0) {
+          setFeedArticles((prev) => prev.filter((a) => !seenIds.includes(a.id)));
+        }
+      } catch (err) {
+        // ignore
+      }
+
+      // 2. Re-fetch silently when returning to this screen (this will flush and get new recommendations)
       loadData(true);
     });
     
@@ -61,6 +72,14 @@ export default function DashboardScreen() {
       if (!user) {
         if (!silent) setLoading(false);
         return;
+      }
+
+      // Flush any pending behaviors from ReaderScreen before fetching new feed
+      // so that recommendations and seen history are completely up-to-date.
+      try {
+        await flushBehaviorQueue();
+      } catch (err) {
+        // silent fail
       }
 
       const profile = await fetchUserProfile(user.uid);

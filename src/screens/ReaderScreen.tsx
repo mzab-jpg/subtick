@@ -72,6 +72,7 @@ export default function ReaderScreen() {
   const preloadingRef = useRef(false);
   const cacheRef = useRef<Record<string, Article>>({});
   const panX = useRef(new Animated.Value(0)).current;
+  const scrollProgress = useRef(new Animated.Value(0)).current;
   const actualWordCountRef = useRef<number>(0);
   const webViewInitialLoadRef = useRef<boolean>(true);
 
@@ -85,6 +86,7 @@ export default function ReaderScreen() {
     articleId: article?.id || articleId,
     articleCategory: article?.category || 'misc',
     lengthStyle: article?.lengthStyle || 'medium',
+    publicationName: article?.publicationName,
     enabled: !!article && !loading && !isRestrictedMode,
   });
 
@@ -212,8 +214,8 @@ export default function ReaderScreen() {
   }, [articleId]);
 
   useEffect(() => {
-    // Sliding look-ahead window: Scan the next 20 articles in the queue
-    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 21);
+    // Sliding look-ahead window: Scan the next 10 articles in the queue
+    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 11);
     if (upcomingIds.length > 0) {
       prefetchArticles(upcomingIds);
     }
@@ -234,14 +236,14 @@ export default function ReaderScreen() {
 
   /**
    * Real-Time Calibrating Background Preloader:
-   * When 10 articles are left in the queue, we flush current swipes,
-   * trigger weightUpdater, pull a fresh tailored batch of 20, and append it.
+   * When 5 articles are left in the queue, we flush current swipes,
+   * trigger weightUpdater, pull a fresh tailored batch of 30, and append it.
    */
   const preloadNextArticles = useCallback(async () => {
     if (preloadingRef.current) return;
     preloadingRef.current = true;
     setPreloading(true);
-    console.log('[Preloader] Trigger zone reached. Synchronizing swipes & preloading next 20 articles...');
+    console.log('[Preloader] Trigger zone reached. Synchronizing swipes & preloading next batch...');
 
     try {
       // 1. Instantly trigger a background behavior events flush
@@ -249,7 +251,7 @@ export default function ReaderScreen() {
       await flushBehaviorQueue();
       console.log('[Preloader] Local behavior events successfully flushed to cloud.');
 
-      // 2. Query the next 20 articles from the Cloud.
+      // 2. Query the next batch of articles from the Cloud.
       // We pass combined historical seen IDs + currently active queue IDs 
       // so the filter avoids both previously read articles and ones currently in the queue.
       const historicalSeen = await getSeenArticleIds();
@@ -257,7 +259,7 @@ export default function ReaderScreen() {
       const result = await getRankedFeed(combinedSeenIds);
 
       if (result.articles && result.articles.length > 0) {
-        // Grab the top 20 new recommendations (highly tailored to their fresh swipes!)
+        // Grab the new recommendations (highly tailored to their fresh swipes!)
         const newIds = result.articles.map(a => a.id);
         
         // 3. Append them cleanly to our active queue
@@ -287,9 +289,9 @@ export default function ReaderScreen() {
     setIsSaved(false);
     loadArticle(activeQueueIds[nextIdx]);
 
-    // TRIGGER ZONE CHECK: If 10 articles or less are left in the active queue,
-    // preload the next 20 fresh articles in the background.
-    if (!isRestrictedMode && activeQueueIds.length - nextIdx <= 10 && !preloadingRef.current) {
+    // TRIGGER ZONE CHECK: If 5 articles or less are left in the active queue,
+    // preload the next batch of fresh articles in the background.
+    if (!isRestrictedMode && activeQueueIds.length - nextIdx <= 5 && !preloadingRef.current) {
       preloadNextArticles();
     }
     
@@ -316,6 +318,11 @@ export default function ReaderScreen() {
         if (data.type === 'scrollDepth' && typeof data.depth === 'number') {
           const depth = Math.min(1, Math.max(0, data.depth));
           behaviorTracker.trackScrollDepth(depth);
+          
+          if (typeof data.currentDepth === 'number') {
+            const current = Math.min(1, Math.max(0, data.currentDepth));
+            scrollProgress.setValue(current);
+          }
         } else if (data.type === 'wordCount' && typeof data.count === 'number') {
           actualWordCountRef.current = data.count;
         }
@@ -323,7 +330,7 @@ export default function ReaderScreen() {
         // Ignore non-JSON messages
       }
     },
-    [behaviorTracker]
+    [behaviorTracker, scrollProgress]
   );
 
   // --- PanResponder for edge swipe zones ---
@@ -407,8 +414,8 @@ export default function ReaderScreen() {
               var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
               if (depth > maxDepth) {
                 maxDepth = depth;
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: depth }));
               }
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
             }
             window.addEventListener('scroll', reportScroll, { passive: true });
             // Initial report
@@ -434,8 +441,8 @@ export default function ReaderScreen() {
         var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
         if (depth > maxDepth) {
           maxDepth = depth;
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: depth }));
         }
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
       }
       window.addEventListener('scroll', reportScroll, { passive: true });
       setTimeout(reportScroll, 100);
@@ -538,18 +545,6 @@ export default function ReaderScreen() {
           </View>
         </View>
 
-        {/* Progress Bar */}
-        <View style={[styles.progressBg, { backgroundColor: 'transparent' }]}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                backgroundColor: colors.progressBar,
-                width: `${Math.min(behaviorTracker.getMaxScrollDepth() * 100, 100)}%` as any,
-              },
-            ]}
-          />
-        </View>
       </View>
 
       {/* Swipe Zone Indicators (edge hints) */}
@@ -645,6 +640,22 @@ export default function ReaderScreen() {
         </View>
       )}
 
+      {/* Progress Bar at Bottom */}
+      <View style={[styles.bottomProgressBarContainer, { backgroundColor: colors.surface }]}>
+        <Animated.View
+          style={[
+            styles.bottomProgressBarFill,
+            {
+              backgroundColor: colors.primary,
+              width: scrollProgress.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0%', '100%']
+              }),
+            },
+          ]}
+        />
+      </View>
+
     </View>
   );
 }
@@ -692,6 +703,18 @@ const styles = StyleSheet.create({
   catchUpButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
   errorText: { fontSize: 16 },
+  bottomProgressBarContainer: {
+    height: 4,
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+  },
+  bottomProgressBarFill: {
+    height: '100%',
+  },
   edgeHintLeft: {
     position: 'absolute',
     left: 0,

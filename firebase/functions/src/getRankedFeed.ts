@@ -16,8 +16,8 @@ import {
 const db = admin.firestore();
 
 // --- Configuration ---
-const RETURN_FEED_SIZE = 100;
-const EXPLORATION_COUNT = 10; // 10% of returned feed is random/wildcard exploration
+const RETURN_FEED_SIZE = 30;
+const EXPLORATION_COUNT = 3; // 10% of returned feed is random/wildcard exploration
 const CACHE_LIFETIME_MS = 10 * 60 * 1000; // 10 minutes memory cache
 
 // Global Cache Variables (persistent across function container instances)
@@ -295,77 +295,105 @@ async function getOrUpdatePublisherQualities(): Promise<Record<string, number>> 
 }
 
 /**
- * Stage 2: Personalization & Exploration
- * Filters seen article IDs, scores candidates against user weights,
- * sorts them, and applies the 10% Exploration Rule to inject non-preferred categories.
+ * Stage 2: Feed Assembly via Tranches
+ * Groups articles by Personalization Weight (P), then selects target amounts
+ * randomly from top tranches, and strictly by quality from bottom tranches.
  */
-function assembleFeedWithExploration(
-  scoredList: { article: Article; score: number }[],
-  categoryWeights: Record<string, number>,
-  publisherQualities: Record<string, number>,
-  totalSize = RETURN_FEED_SIZE,
-  explorationCount = EXPLORATION_COUNT
+function assembleFeedWithTranches(
+  scoredList: { article: Article; score: number; pValue: number }[],
+  totalSize = 30
 ): Article[] {
   if (scoredList.length === 0) return [];
 
-  // Standard count is 90 articles (90%)
-  const standardCount = Math.max(0, totalSize - explorationCount);
-  
-  // Take top 90 standard articles
-  const topStandard = scoredList.slice(0, standardCount).map(s => s.article);
-  const standardIds = new Set(topStandard.map(a => a.id));
+  // Group into Tranches
+  const highBucket: { article: Article; score: number }[] = [];
+  const midBucket: { article: Article; score: number }[] = [];
+  const lowBucket: { article: Article; score: number }[] = [];
+  const discoveryBucket: { article: Article; score: number }[] = [];
 
-  // Identify non-preferred categories (weight <= 1.0)
-  const nonPreferredCategories = new Set<string>();
-  Object.entries(categoryWeights).forEach(([cat, w]) => {
-    if (w <= 1.0) {
-      nonPreferredCategories.add(cat);
+  for (const item of scoredList) {
+    if (item.pValue >= 1.5) {
+      highBucket.push(item);
+    } else if (item.pValue >= 1.15) {
+      midBucket.push(item);
+    } else if (item.pValue >= 1.0) {
+      lowBucket.push(item);
+    } else {
+      discoveryBucket.push(item);
     }
-  });
-
-  // Filter remaining articles for exploration
-  const remainingCandidates = scoredList
-    .slice(standardCount)
-    .map(s => s.article)
-    .filter(a => !standardIds.has(a.id));
-
-  // Filter exploration candidates to non-preferred categories
-  const explorationCandidates = remainingCandidates.filter(a => nonPreferredCategories.has(a.category));
-
-  let chosenExploration: Article[] = [];
-
-  if (explorationCandidates.length > 0) {
-    // Score them purely on non-category features (Recency, Quality, Trending, Diversity) so they compete fairly
-    const scoredExploration = explorationCandidates.map((article) => {
-      const daysOld = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
-      const C = 1.0; // treat category weight as neutral
-      const T = Math.max(0.1, 1.0 + (article.trendingScore || 0) / 2.5);
-      const R = 2.0 / (1.0 + daysOld / 7);
-      const Q = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
-      const score =
-        SCORE_WEIGHTS.categoryBoost * C +
-        SCORE_WEIGHTS.trendingBoost * T +
-        SCORE_WEIGHTS.recencyBoost * R +
-        SCORE_WEIGHTS.qualityBoost * Q;
-      return { article, score };
-    });
-
-    scoredExploration.sort((a, b) => b.score - a.score);
-    chosenExploration = scoredExploration.slice(0, explorationCount).map(s => s.article);
-    console.log(`[Exploration] Salted in ${chosenExploration.length} wildcard exploration articles from categories: ${Array.from(new Set(chosenExploration.map(e => e.category))).join(', ')}`);
   }
 
-  // If we couldn't find enough exploration candidates, fill the rest with standard scored articles
-  let finalFeed = [...topStandard, ...chosenExploration];
-  if (finalFeed.length < totalSize) {
-    const missingCount = totalSize - finalFeed.length;
-    const addedFromScored = remainingCandidates
-      .filter(a => !chosenExploration.some(ex => ex.id === a.id))
-      .slice(0, missingCount);
-    finalFeed = [...finalFeed, ...addedFromScored];
+  const finalFeed: Article[] = [];
+  let remainingCount = totalSize;
+
+  // Target quotas
+  let targetHigh = 12;
+  let targetMid = 8;
+  let targetLow = 4;
+  let targetDiscovery = 6;
+
+  // Helper to pick items
+  const pickItems = (bucket: { article: Article; score: number }[], target: number, shuffle: boolean) => {
+    if (bucket.length === 0 || target === 0) return [];
+    const count = Math.min(bucket.length, target);
+    
+    // Sort or Shuffle depending on the tranche
+    if (shuffle) {
+      shuffleArray(bucket);
+    } else {
+      // Sort by score (quality) descending
+      bucket.sort((a, b) => b.score - a.score);
+    }
+    
+    return bucket.slice(0, count).map(s => s.article);
+  };
+
+  // 1. Pick High Tranche (Random)
+  const pickedHigh = pickItems(highBucket, targetHigh, true);
+  finalFeed.push(...pickedHigh);
+  remainingCount -= pickedHigh.length;
+  if (pickedHigh.length < targetHigh) {
+    // Graceful fallback: Give missing quota to Mid
+    targetMid += (targetHigh - pickedHigh.length);
   }
 
-  return finalFeed.slice(0, totalSize);
+  // 2. Pick Mid Tranche (Random)
+  const pickedMid = pickItems(midBucket, targetMid, true);
+  finalFeed.push(...pickedMid);
+  remainingCount -= pickedMid.length;
+  if (pickedMid.length < targetMid) {
+    // Graceful fallback: Give missing quota to Low
+    targetLow += (targetMid - pickedMid.length);
+  }
+
+  // 3. Pick Low Tranche (Sorted by Quality)
+  const pickedLow = pickItems(lowBucket, targetLow, false);
+  finalFeed.push(...pickedLow);
+  remainingCount -= pickedLow.length;
+  if (pickedLow.length < targetLow) {
+    // Graceful fallback: Give missing quota to Discovery
+    targetDiscovery += (targetLow - pickedLow.length);
+  }
+
+  // 4. Pick Discovery Tranche (Sorted by Quality)
+  const pickedDiscovery = pickItems(discoveryBucket, targetDiscovery, false);
+  finalFeed.push(...pickedDiscovery);
+  remainingCount -= pickedDiscovery.length;
+
+  // 5. Final Graceful Fallback (if the overall pool was very small)
+  if (remainingCount > 0) {
+    const usedIds = new Set(finalFeed.map(a => a.id));
+    const leftovers = scoredList.filter(s => !usedIds.has(s.article.id));
+    leftovers.sort((a, b) => b.score - a.score);
+    finalFeed.push(...leftovers.slice(0, remainingCount).map(s => s.article));
+  }
+
+  // Final completely mixed shuffle
+  shuffleArray(finalFeed);
+
+  console.log(`[Tranche Selector] High: ${pickedHigh.length}, Mid: ${pickedMid.length}, Low: ${pickedLow.length}, Discovery: ${pickedDiscovery.length}`);
+
+  return finalFeed;
 }
 
 export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> => {
@@ -374,6 +402,7 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
 
   let categoryWeights: Record<string, number> = {};
   let categoryLengthWeights: Record<string, number> = {};
+  let publisherWeights: Record<string, number> = {};
   let includeArchivedArticles = false;
   try {
     const userDoc = await db.collection('users').doc(userId).get();
@@ -381,6 +410,7 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
       const data = userDoc.data() as UserProfile;
       categoryWeights = data.categoryWeights || {};
       categoryLengthWeights = data.categoryLengthWeights || {};
+      publisherWeights = data.publisherWeights || {};
       includeArchivedArticles = data.includeArchivedArticles || false;
     }
   } catch (err) {
@@ -410,21 +440,33 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
 
     const scored = unseenArticles.map((article) => {
       const compKey = `${article.category}::${article.lengthStyle}`;
-      const personalizationWeight = categoryLengthWeights[compKey] ?? categoryWeights[article.category] ?? 1.0;
+      
+      // Calculate 3D Matrix Personalization Weight
+      const baseCategoryWeight = categoryLengthWeights[compKey] ?? categoryWeights[article.category] ?? 1.0;
+      const basePublisherWeight = publisherWeights[article.publicationName] ?? 1.0;
+      
+      // Blended personalization multiplier
+      const personalizationWeight = baseCategoryWeight * basePublisherWeight;
+      const P = Math.max(0.1, personalizationWeight / 1.0);
       
       const pubCount = pubCounts[article.publicationName] || 1;
       
       // Use dynamic, crowd-sourced publisher quality score. Falls back to static seed if no feedback gathered yet
       const dynamicQuality = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
       
-      const score = calculateCompositeScore(article, personalizationWeight, pubCount, dynamicQuality);
-      return { article, score };
+      // For discovery articles (P < 1.0), we calculate their score ignoring their negative personalization 
+      // so they compete purely on quality, recency, and trending.
+      let effectivePWeight = personalizationWeight;
+      if (P < 1.0) {
+        effectivePWeight = 1.0; // Reset to neutral for fair Discovery comparison
+      }
+      
+      const score = calculateCompositeScore(article, effectivePWeight, pubCount, dynamicQuality);
+      return { article, score, pValue: P };
     });
 
-    scored.sort((a, b) => b.score - a.score);
-
-    // Assemble the top 100 with the 10% Exploration Rule
-    const finalFeed = assembleFeedWithExploration(scored, categoryWeights, publisherQualities, RETURN_FEED_SIZE, EXPLORATION_COUNT);
+    // Assemble the feed by bucketing into Tranches and pulling exact target counts
+    const finalFeed = assembleFeedWithTranches(scored, RETURN_FEED_SIZE);
 
     // --- Log top 5 articles with per-component scores for debugging ---
     console.log(`[getRankedFeed] User weights: ${JSON.stringify(categoryWeights)}, Style weights: ${JSON.stringify(categoryLengthWeights)}`);
@@ -432,7 +474,11 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
     scored.slice(0, 5).forEach((s, i) => {
       const daysOld = Math.max(0, (Date.now() - s.article.publishDate) / (1000 * 60 * 60 * 24));
       const compKey = `${s.article.category}::${s.article.lengthStyle}`;
-      const personalizationWeight = categoryLengthWeights[compKey] ?? categoryWeights[s.article.category] ?? 1.0;
+      
+      const baseCategoryWeight = categoryLengthWeights[compKey] ?? categoryWeights[s.article.category] ?? 1.0;
+      const basePublisherWeight = publisherWeights[s.article.publicationName] ?? 1.0;
+      const personalizationWeight = baseCategoryWeight * basePublisherWeight;
+      
       const pubCount = pubCounts[s.article.publicationName] || 1;
       const P = Math.max(0.1, personalizationWeight / 1.0);
       const T = Math.max(0.1, 1.0 + (s.article.trendingScore || 0) / 2.5);

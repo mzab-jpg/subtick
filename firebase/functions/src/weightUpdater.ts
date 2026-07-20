@@ -85,9 +85,15 @@ export async function updateWeights(userId: string): Promise<void> {
       updatedWeights[category] = 1.0;
     }
 
-    // Apply: NewWeight = CurrentWeight + (Δ × L)
-    updatedWeights[category] += delta * LEARNING_RATE;
-    deltasByCategory[category] = (deltasByCategory[category] || 0) + delta * LEARNING_RATE;
+    // Apply Dimension-Specific Learning Rates:
+    // Publisher = 0.20 (2.0x of L), Length = 0.15 (1.5x of L), Category = 0.10 (1.0x of L)
+    const categoryL = LEARNING_RATE * 1.0; // 0.10
+    const lengthL = LEARNING_RATE * 1.5;   // 0.15
+    const publisherL = LEARNING_RATE * 2.0;  // 0.20
+
+    // Category Weight Update
+    updatedWeights[category] += delta * categoryL;
+    deltasByCategory[category] = (deltasByCategory[category] || 0) + delta * categoryL;
 
     // --- 2D Matrix Style Learning ---
     // If the event has a lengthStyle, update the categoryLengthWeights (e.g. "Technology & Innovation::long")
@@ -98,7 +104,19 @@ export async function updateWeights(userId: string): Promise<void> {
       if (!updatedWeights[compKey]) {
         updatedWeights[compKey] = profile.categoryLengthWeights[compKey] || 1.0;
       }
-      updatedWeights[compKey] += delta * LEARNING_RATE;
+      updatedWeights[compKey] += delta * lengthL;
+    }
+
+    // --- 3D Matrix Publisher Learning ---
+    // If the event has a publisher, update the specific publisher weight
+    const publisherName = event.publicationName;
+    if (publisherName) {
+      const pubKey = `pub::${publisherName}`;
+      if (!profile.publisherWeights) profile.publisherWeights = {};
+      if (!updatedWeights[pubKey]) {
+        updatedWeights[pubKey] = profile.publisherWeights[publisherName] || 1.0;
+      }
+      updatedWeights[pubKey] += delta * publisherL;
     }
   }
 
@@ -113,16 +131,19 @@ export async function updateWeights(userId: string): Promise<void> {
   // 6. Apply daily decay
   const decayedWeights = applyDecay(updatedWeights);
 
-  // 7. Extract the 2D weights back out of decayedWeights and Sync UI Arrays
+  // 7. Extract the 2D/3D weights back out of decayedWeights and Sync UI Arrays
   const newCategoryWeights: Record<string, number> = {};
   const newCategoryLengthWeights: Record<string, number> = {};
+  const newPublisherWeights: Record<string, number> = {};
 
   const newSelectedCategoryIds = new Set(profile.selectedCategoryIds || []);
   const newNotInterestedCategoryIds = new Set(profile.notInterestedCategoryIds || []);
   let uiArraysChanged = false;
 
   for (const [key, val] of Object.entries(decayedWeights)) {
-    if (key.includes('::')) {
+    if (key.startsWith('pub::')) {
+      newPublisherWeights[key.replace('pub::', '')] = val;
+    } else if (key.includes('::')) {
       newCategoryLengthWeights[key] = val;
     } else {
       newCategoryWeights[key] = val;
@@ -206,6 +227,7 @@ export async function updateWeights(userId: string): Promise<void> {
   await userRef.update({
     categoryWeights: newCategoryWeights,
     categoryLengthWeights: newCategoryLengthWeights,
+    publisherWeights: newPublisherWeights,
     ...(uiArraysChanged && {
       selectedCategoryIds: Array.from(newSelectedCategoryIds),
       notInterestedCategoryIds: Array.from(newNotInterestedCategoryIds),

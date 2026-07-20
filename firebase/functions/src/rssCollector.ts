@@ -1,5 +1,5 @@
 // ============================================================
-// SubTick — rssCollector (Scheduled — every 4 hours)
+// SubTick — rssCollector (Scheduled — every 3 hours)
 // Parses 35 Substack RSS feeds and writes new articles to Firestore.
 // ============================================================
 
@@ -74,7 +74,7 @@ function chunkArray<T>(array: T[], size: number): T[][] {
   return chunks;
 }
 
-export const rssCollector = onSchedule('every 4 hours', async () => {
+export const rssCollector = onSchedule('every 3 hours', async () => {
   console.log('[rssCollector] Starting RSS collection for 35 feeds...');
   let totalNew = 0;
   let totalErrors = 0;

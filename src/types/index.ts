@@ -10,6 +10,7 @@ export interface UserProfile {
   notInterestedCategoryIds: string[];
   categoryWeights: Record<string, number>;
   categoryLengthWeights?: Record<string, number>;
+  publisherWeights?: Record<string, number>;
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   totalArticlesRead: number;
@@ -59,6 +60,7 @@ export interface BehaviorEvent {
   timestamp: number;
   articleCategory: string;
   lengthStyle: string;
+  publicationName?: string;
   sessionDuration: number; // ms spent in active session
   scrollDepth: number; // Max scroll percentage (0.0 - 1.0)
   actualWordCount?: number;
@@ -100,6 +102,7 @@ export interface PendingBehaviorEvent {
   timestamp: number;
   articleCategory: string;
   lengthStyle: string;
+  publicationName?: string;
   sessionDuration: number;
   scrollDepth: number;
   actualWordCount?: number;
