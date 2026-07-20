@@ -9,60 +9,60 @@ import { useColorScheme, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeMode, ThemeColors } from '../types';
 
-// --- Light Theme Palette ---
+// --- Light Theme Palette (Frosted Milk Glass Theme) ---
 const lightColors: ThemeColors = {
-  background: '#F9FAFB',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F3F4F6',
-  text: '#111827',
+  background: '#EDF1F7', // Milk Glass light backdrop
+  surface: 'rgba(255, 255, 255, 0.65)', // High-translucent glass card
+  surfaceSecondary: 'rgba(255, 255, 255, 0.40)', // Secondary soft glass
+  text: '#1F2937', // Deep slate
   textSecondary: '#4B5563',
   textMuted: '#9CA3AF',
-  primary: '#2563EB',
-  primaryLight: '#DBEAFE',
-  accent: '#8B5CF6',
-  border: '#E5E7EB',
+  primary: '#6366F1', // Glowing Indigo accent
+  primaryLight: 'rgba(99, 102, 241, 0.15)',
+  accent: '#EC4899', // Sunset Rose accent
+  border: 'rgba(255, 255, 255, 0.70)', // High-refraction solid white border highlight
   error: '#EF4444',
   success: '#10B981',
   warning: '#F59E0B',
-  cardShadow: 'rgba(0,0,0,0.08)',
-  hudBackground: 'rgba(255,255,255,0.95)',
-  progressBar: '#2563EB',
-  progressBarBackground: '#E5E7EB',
+  cardShadow: 'rgba(31, 41, 55, 0.04)',
+  hudBackground: 'rgba(255, 255, 255, 0.80)',
+  progressBar: '#6366F1',
+  progressBarBackground: 'rgba(0, 0, 0, 0.05)',
   skeleton: '#E5E7EB',
   skeletonHighlight: '#F3F4F6',
-  chipSelectedBg: '#DBEAFE',
+  chipSelectedBg: 'rgba(99, 102, 241, 0.15)',
   chipNotInterestedBg: '#FEE2E2',
-  chipNeutralBg: '#F3F4F6',
-  chipSelectedText: '#1E40AF',
+  chipNeutralBg: 'rgba(0, 0, 0, 0.05)',
+  chipSelectedText: '#4F46E5',
   chipNotInterestedText: '#991B1B',
   chipNeutralText: '#6B7280',
 };
 
-// --- Dark Theme Palette ---
+// --- Dark Theme Palette (Deep Obsidian Glass Theme) ---
 const darkColors: ThemeColors = {
-  background: '#0F172A',
-  surface: '#1E293B',
-  surfaceSecondary: '#334155',
-  text: '#F1F5F9',
+  background: '#0B0F19', // Deep Obsidian backdrop
+  surface: 'rgba(22, 29, 48, 0.70)', // Frosted dark glass
+  surfaceSecondary: 'rgba(30, 41, 59, 0.50)', // Translucent secondary glass
+  text: '#F1F5F9', // Ice white
   textSecondary: '#94A3B8',
   textMuted: '#64748B',
-  primary: '#3B82F6',
-  primaryLight: '#1E3A5F',
-  accent: '#A78BFA',
-  border: '#334155',
+  primary: '#6366F1', // Glowing Neon Indigo
+  primaryLight: 'rgba(99, 102, 241, 0.20)',
+  accent: '#EC4899', // Neon Rose
+  border: 'rgba(255, 255, 255, 0.08)', // Sharp rim light edge
   error: '#F87171',
   success: '#34D399',
   warning: '#FBBF24',
-  cardShadow: 'rgba(0,0,0,0.3)',
-  hudBackground: 'rgba(15,23,42,0.97)',
-  progressBar: '#3B82F6',
-  progressBarBackground: '#334155',
-  skeleton: '#334155',
-  skeletonHighlight: '#475569',
-  chipSelectedBg: '#1E3A5F',
+  cardShadow: 'rgba(0, 0, 0, 0.25)',
+  hudBackground: 'rgba(11, 15, 25, 0.85)',
+  progressBar: '#6366F1',
+  progressBarBackground: 'rgba(255, 255, 255, 0.05)',
+  skeleton: '#1E293B',
+  skeletonHighlight: '#334155',
+  chipSelectedBg: 'rgba(99, 102, 241, 0.20)',
   chipNotInterestedBg: '#7F1D1D',
-  chipNeutralBg: '#334155',
-  chipSelectedText: '#93C5FD',
+  chipNeutralBg: 'rgba(255, 255, 255, 0.05)',
+  chipSelectedText: '#A5B4FC',
   chipNotInterestedText: '#FCA5A5',
   chipNeutralText: '#94A3B8',
 };
@@ -119,6 +119,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Pre-compile WebView CSS to prevent dark flashing
   const webViewCSS = useMemo(() => {
     const c = colors;
+    const isDarkTheme = isDark;
     return `
       <style>
         * {
@@ -129,47 +130,62 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         body {
           background-color: ${c.background} !important;
           color: ${c.text} !important;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          line-height: 1.7;
-          font-size: 18px;
-          padding: 16px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          line-height: 1.8;
+          font-size: 17px;
+          font-weight: 400;
+          padding: 24px 20px;
           margin: 0;
+          letter-spacing: -0.011em;
+        }
+        h1 {
+          font-size: 32px;
+          line-height: 1.25;
+          font-weight: 800;
+          letter-spacing: -0.022em;
+          margin-bottom: 12px !important;
         }
         h2, h3, h4 {
           color: ${c.text} !important;
-          margin-top: 1.5em;
-          margin-bottom: 0.5em;
+          margin-top: 1.8em;
+          margin-bottom: 0.6em;
+          font-weight: 700;
+          letter-spacing: -0.015em;
         }
-        h2 { font-size: 24px; border-bottom: 1px solid ${c.border}; padding-bottom: 8px; }
-        h3 { font-size: 20px; }
-        p { margin: 1em 0; color: ${c.textSecondary} !important; }
-        ul, ol { color: ${c.textSecondary} !important; padding-left: 24px; }
-        li { margin: 0.5em 0; }
-        a { color: ${c.primary} !important; }
-        img { max-width: 100%; height: auto; border-radius: 8px; margin: 16px 0; }
+        h2 { font-size: 22px; border-bottom: 1px solid ${c.border}; padding-bottom: 8px; }
+        h3 { font-size: 19px; }
+        p { margin: 1.2em 0; color: ${c.textSecondary} !important; font-size: 17px; }
+        ul, ol { color: ${c.textSecondary} !important; padding-left: 20px; }
+        li { margin: 0.6em 0; }
+        a { color: ${c.primary} !important; text-decoration: none; font-weight: 500; }
+        img { max-width: 100%; height: auto; border-radius: 12px; margin: 24px 0; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
         blockquote {
-          border-left: 4px solid ${c.primary};
-          margin: 1em 0;
-          padding: 0.5em 1em;
+          border-left: 3px solid ${c.primary};
+          margin: 1.5em 0;
+          padding: 4px 18px;
           background-color: ${c.surfaceSecondary} !important;
           color: ${c.textSecondary} !important;
+          border-radius: 0 8px 8px 0;
+          font-style: italic;
         }
         code {
           background-color: ${c.surfaceSecondary} !important;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 15px;
+          padding: 3px 6px;
+          border-radius: 6px;
+          font-size: 14px;
+          font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
         }
         pre {
           background-color: ${c.surfaceSecondary} !important;
           padding: 16px;
-          border-radius: 8px;
+          border-radius: 10px;
           overflow-x: auto;
+          font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
         }
-        hr { border: none; border-top: 1px solid ${c.border}; margin: 24px 0; }
+        hr { border: none; border-top: 1px solid ${c.border}; margin: 32px 0; }
       </style>
     `;
-  }, [colors]);
+  }, [colors, isDark]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({ mode, colors, isDark, setThemeMode, webViewCSS }),

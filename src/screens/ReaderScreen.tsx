@@ -507,12 +507,17 @@ export default function ReaderScreen() {
   // --- Render ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      {/* HUD Overlay (Floating Actions + Progress) */}
-      <View style={styles.hud}>
-        {/* Top Row: Floating Actions only */}
+      {/* HUD Overlay (Floating Glass Panel Actions) */}
+      <View style={[styles.hud, { backgroundColor: colors.hudBackground, borderColor: colors.border }]}>
         <View style={styles.hudTopRow}>
-          {/* Spacer to push actions to the right */}
-          <View style={{ flex: 1 }} />
+          {/* Back/Close Button */}
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.hudBackButton}>
+            <Text style={[styles.hudBackText, { color: colors.text }]}>✕</Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1}>
+            {article?.publicationName || 'Reading'}
+          </Text>
 
           <View style={styles.hudActions}>
             <TouchableOpacity
@@ -521,7 +526,7 @@ export default function ReaderScreen() {
                 setIsLiked(newVal);
                 if (newVal) behaviorTracker.trackEvent('like');
               }}
-              style={styles.hudIconButton}
+              style={[styles.hudIconButton, { backgroundColor: colors.primaryLight }]}
             >
               <Text style={styles.hudIcon}>{isLiked ? '❤️' : '🤍'}</Text>
             </TouchableOpacity>
@@ -538,13 +543,12 @@ export default function ReaderScreen() {
                   }
                 }
               }}
-              style={styles.hudIconButton}
+              style={[styles.hudIconButton, { backgroundColor: colors.primaryLight }]}
             >
               <Text style={styles.hudIcon}>{isSaved ? '🔖' : '🏷️'}</Text>
             </TouchableOpacity>
           </View>
         </View>
-
       </View>
 
       {/* Swipe Zone Indicators (edge hints) */}
@@ -640,8 +644,8 @@ export default function ReaderScreen() {
         </View>
       )}
 
-      {/* Progress Bar at Bottom */}
-      <View style={[styles.bottomProgressBarContainer, { backgroundColor: colors.surface }]}>
+      {/* Glowing Neon Laser Progress Bar at Bottom */}
+      <View style={[styles.bottomProgressBarContainer, { backgroundColor: colors.progressBarBackground }]}>
         <Animated.View
           style={[
             styles.bottomProgressBarFill,
@@ -664,23 +668,48 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   hud: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    paddingTop: 48, // Safe area
+    top: 40,
+    left: 16,
+    right: 16,
+    borderRadius: 20,
+    borderWidth: 1,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingVertical: 10,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
   },
   hudTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+  },
+  hudBackButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hudBackText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  hudTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    textAlign: 'center',
+    marginHorizontal: 10,
   },
   hudActions: { flexDirection: 'row', gap: 8 },
-  hudIconButton: { padding: 4, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 20 },
-  hudIcon: { fontSize: 22 },
+  hudIconButton: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center', borderRadius: 17 },
+  hudIcon: { fontSize: 18 },
   progressBg: { height: 3, borderRadius: 1.5, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 1.5 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
@@ -704,13 +733,17 @@ const styles = StyleSheet.create({
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
   errorText: { fontSize: 16 },
   bottomProgressBarContainer: {
-    height: 4,
+    height: 5,
     width: '100%',
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     zIndex: 100,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
   },
   bottomProgressBarFill: {
     height: '100%',

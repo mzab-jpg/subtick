@@ -218,41 +218,65 @@ export default function DashboardScreen() {
           </Text>
         </View>
 
-        {/* Feed Stack (Top 3) */}
+        {/* Feed Stack (Top 3 Overlapping Physics-based Deck) */}
         {feedArticles.length > 0 ? (
-          feedArticles.slice(0, 3).map((article, index) => (
-            <TouchableOpacity
-              key={article.id}
-              style={[styles.feedCard, { backgroundColor: colors.surface, shadowColor: colors.cardShadow }]}
-              onPress={() => navigateToReader(article.id, index)}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.categoryBadge, { backgroundColor: colors.primaryLight }]}>
-                <Text style={[styles.categoryText, { color: colors.primary }]}>
-                  {article.category.charAt(0).toUpperCase() + article.category.slice(1)}
-                </Text>
-              </View>
+          <View style={styles.deckContainer}>
+            {feedArticles.slice(0, 3).map((article, index) => {
+              // Create physical-looking overlapping stack indices
+              // 0 is top (closest), 1 is middle, 2 is bottom
+              const scale = 1 - index * 0.04;
+              const translateY = index * 12; // downward cascading stack overlap
+              const zIndex = 10 - index;
+              const opacity = 1 - index * 0.15;
 
-              <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={3}>
-                {article.title}
-              </Text>
+              return (
+                <TouchableOpacity
+                  key={article.id}
+                  style={[
+                    styles.feedCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      shadowColor: colors.cardShadow,
+                      zIndex,
+                      opacity,
+                      transform: [
+                        { scale },
+                        { translateY }
+                      ],
+                    }
+                  ]}
+                  onPress={() => navigateToReader(article.id, index)}
+                  activeOpacity={0.9}
+                >
+                  <View style={[styles.categoryBadge, { backgroundColor: colors.primaryLight }]}>
+                    <Text style={[styles.categoryText, { color: colors.primary }]}>
+                      {article.category.charAt(0).toUpperCase() + article.category.slice(1)}
+                    </Text>
+                  </View>
 
-              {article.description ? (
-                <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {article.description}
-                </Text>
-              ) : null}
+                  <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={3}>
+                    {article.title}
+                  </Text>
 
-              <View style={styles.cardMeta}>
-                <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
-                  {article.publicationName}
-                </Text>
-                <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
-                  {Math.max(1, Math.ceil((article.wordCount || 0) / (userProfile?.averageWpm || 250)))} min read
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
+                  {article.description ? (
+                    <Text style={[styles.cardDescription, { color: colors.textSecondary }]} numberOfLines={2}>
+                      {article.description}
+                    </Text>
+                  ) : null}
+
+                  <View style={styles.cardMeta}>
+                    <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
+                      {article.publicationName}
+                    </Text>
+                    <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
+                      {Math.max(1, Math.ceil((article.wordCount || 0) / (userProfile?.averageWpm || 250)))} min read
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         ) : (
           <View style={[styles.emptyState, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
             <Text style={styles.emptyEmoji}>📭</Text>
@@ -293,44 +317,56 @@ const styles = StyleSheet.create({
   menuButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   menuIcon: { fontSize: 26 },
   headerTitle: { fontSize: 22, fontWeight: '800' },
-  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
     flex: 1,
-    padding: 8,
-    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  statEmoji: { fontSize: 18, marginBottom: 2 },
-  statValue: { fontSize: 16, fontWeight: '800' },
-  statLabel: { fontSize: 10, fontWeight: '600', marginTop: 2, textAlign: 'center' },
-  sectionHeader: { marginBottom: 8 },
-  sectionTitle: { fontSize: 18, fontWeight: '700' },
-  sectionSubtitle: { fontSize: 12, marginTop: 2 },
-  feedCard: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 2,
+  },
+  statEmoji: { fontSize: 20, marginBottom: 4 },
+  statValue: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+  statLabel: { fontSize: 10, fontWeight: '700', marginTop: 4, opacity: 0.8, textTransform: 'uppercase', textAlign: 'center' },
+  sectionHeader: { marginBottom: 14 },
+  sectionTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  sectionSubtitle: { fontSize: 13, marginTop: 2, opacity: 0.8 },
+  deckContainer: {
+    height: 380, // Set height to contain absolute stacked items safely
+    position: 'relative',
+    marginVertical: 10,
+  },
+  feedCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 5,
   },
   categoryBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginBottom: 10,
   },
-  categoryText: { fontSize: 10, fontWeight: '700' },
-  cardTitle: { fontSize: 15, fontWeight: '700', lineHeight: 20, marginBottom: 4 },
-  cardDescription: { fontSize: 12, lineHeight: 16, marginBottom: 6 },
-  cardMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  cardMetaText: { fontSize: 11, fontWeight: '500' },
+  categoryText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
+  cardTitle: { fontSize: 18, fontWeight: '800', lineHeight: 24, letterSpacing: -0.4, marginBottom: 8 },
+  cardDescription: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
+  cardMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.04)' },
+  cardMetaText: { fontSize: 12, fontWeight: '600', opacity: 0.8 },
   emptyState: {
     flex: 1,
     padding: 24,
