@@ -17,9 +17,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  PanResponder,
   Dimensions,
   Animated,
+  PanResponder,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../contexts/ThemeContext';
@@ -34,10 +34,14 @@ import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, un
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { Linking } from 'react-native';
 import { BlurView } from 'expo-blur';
+<<<<<<< Updated upstream
+=======
+import { X, Bookmark, Compass, AlertCircle } from 'lucide-react-native';
+>>>>>>> Stashed changes
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const EDGE_ZONE_WIDTH = 30; // px — touch-intercepting margin zones
-const SWIPE_THRESHOLD = 60; // px — minimum horizontal swipe to trigger action
+const EDGE_ZONE_WIDTH = 45; // px — touch-intercepting margin zones (more sensitive)
+const SWIPE_THRESHOLD = 40; // px — minimum horizontal swipe to trigger action (more sensitive)
 
 export default function ReaderScreen() {
   const { colors, webViewCSS, isDark } = useTheme();
@@ -61,6 +65,30 @@ export default function ReaderScreen() {
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [queueExhausted, setQueueExhausted] = useState(false);
+  const [hudVisible, setHudVisible] = useState(true);
+
+  const hudTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleHudAutoHide = useCallback((visible: boolean, duration: number = 2500) => {
+    if (hudTimeoutRef.current) {
+      clearTimeout(hudTimeoutRef.current);
+      hudTimeoutRef.current = null;
+    }
+    // Auto-hide after the specified duration
+    if (visible) {
+      hudTimeoutRef.current = setTimeout(() => {
+        setHudVisible(false);
+      }, duration);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Start auto-hide timer immediately on component mount with 1.5 seconds
+    handleHudAutoHide(true, 1500);
+    return () => {
+      if (hudTimeoutRef.current) clearTimeout(hudTimeoutRef.current);
+    };
+  }, [handleHudAutoHide]);
 
   // Sliding cache for instant swiping
   const [articleCache, setArticleCache] = useState<Record<string, Article>>({});
@@ -76,6 +104,7 @@ export default function ReaderScreen() {
   const scrollProgress = useRef(new Animated.Value(0)).current;
   const actualWordCountRef = useRef<number>(0);
   const webViewInitialLoadRef = useRef<boolean>(true);
+  const webViewRef = useRef<WebView>(null);
 
   // Reset webview initial load guard whenever article changes
   useEffect(() => {
@@ -326,12 +355,36 @@ export default function ReaderScreen() {
           }
         } else if (data.type === 'wordCount' && typeof data.count === 'number') {
           actualWordCountRef.current = data.count;
+        } else if (data.type === 'hud') {
+          setHudVisible(data.visible);
+          if (data.visible) {
+            handleHudAutoHide(true, 2500); // Scrolling up shows HUD for 2.5s
+          } else {
+            // Scrolling down hides HUD instantly (smoothly animated by transition)
+            if (hudTimeoutRef.current) {
+              clearTimeout(hudTimeoutRef.current);
+              hudTimeoutRef.current = null;
+            }
+          }
+        } else if (data.type === 'hudToggle') {
+          setHudVisible((prev) => {
+            const next = !prev;
+            if (next) {
+              handleHudAutoHide(true, 2500); // Tap to show HUD displays it for 2.5s
+            } else {
+              if (hudTimeoutRef.current) {
+                clearTimeout(hudTimeoutRef.current);
+                hudTimeoutRef.current = null;
+              }
+            }
+            return next;
+          });
         }
       } catch {
         // Ignore non-JSON messages
       }
     },
-    [behaviorTracker, scrollProgress]
+    [behaviorTracker, scrollProgress, handleHudAutoHide]
   );
 
   // --- PanResponder for edge swipe zones ---
@@ -379,6 +432,25 @@ export default function ReaderScreen() {
     [goToNext, goToPrev, behaviorTracker, panX, article, isRestrictedMode, isSavedMode, isHistoryMode]
   );
 
+  // --- HUD Fade Animation ---
+  const hudAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(hudAnim, {
+      toValue: hudVisible ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [hudVisible, hudAnim]);
+
+  const hudOpacity = hudAnim;
+  
+  const hudTranslateY = hudAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-100, 0],
+    extrapolate: 'clamp',
+  });
+
   // --- Pre-compiled HTML for WebView (NO post-load style injection — prevents flashing) ---
   const articleHTML = useMemo(() => {
     if (!article) return '';
@@ -405,10 +477,11 @@ export default function ReaderScreen() {
         <script>
           (function() {
             var text = document.body.innerText || document.body.textContent || '';
-            var wordCount = text.trim().split(/\\s+/).length;
+            var wordCount = text.trim().split(/\s+/).length;
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
 
             var maxDepth = 0;
+            var lastScrollTop = 0;
             function reportScroll() {
               var scrollTop = window.scrollY || document.documentElement.scrollTop;
               var docHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -417,9 +490,29 @@ export default function ReaderScreen() {
               if (depth > maxDepth) {
                 maxDepth = depth;
               }
+              
+              if (scrollTop > lastScrollTop + 15) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
+                lastScrollTop = scrollTop;
+              } else if (scrollTop < lastScrollTop - 15) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
+                lastScrollTop = scrollTop;
+              } else if (scrollTop <= 0) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: false }));
+                lastScrollTop = scrollTop;
+              }
+
               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
             }
             window.addEventListener('scroll', reportScroll, { passive: true });
+            
+            document.body.addEventListener('click', function(e) {
+               if (e.target.tagName !== 'A') {
+                 var scrollTop = window.scrollY || document.documentElement.scrollTop;
+                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
+               }
+            });
+
             // Initial report
             setTimeout(reportScroll, 100);
           })();
@@ -431,11 +524,17 @@ export default function ReaderScreen() {
 
   const rawWebpageInjectedScript = `
     (function() {
+      var meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.getElementsByTagName('head')[0].appendChild(meta);
+
       var text = document.body.innerText || document.body.textContent || '';
-      var wordCount = text.trim().split(/\\s+/).length;
+      var wordCount = text.trim().split(/\s+/).length;
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
 
       var maxDepth = 0;
+      var lastScrollTop = 0;
       function reportScroll() {
         var scrollTop = window.scrollY || document.documentElement.scrollTop;
         var docHeight = document.documentElement.scrollHeight - window.innerHeight;
@@ -444,9 +543,29 @@ export default function ReaderScreen() {
         if (depth > maxDepth) {
           maxDepth = depth;
         }
+        
+        if (scrollTop > lastScrollTop + 15) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
+          lastScrollTop = scrollTop;
+        } else if (scrollTop < lastScrollTop - 15) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
+          lastScrollTop = scrollTop;
+        } else if (scrollTop <= 0) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: false }));
+          lastScrollTop = scrollTop;
+        }
+
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
       }
       window.addEventListener('scroll', reportScroll, { passive: true });
+      
+      document.body.addEventListener('click', function(e) {
+         if (e.target.tagName !== 'A') {
+           var scrollTop = window.scrollY || document.documentElement.scrollTop;
+           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
+         }
+      });
+
       setTimeout(reportScroll, 100);
     })();
     true;
@@ -509,9 +628,15 @@ export default function ReaderScreen() {
   // --- Render ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
+<<<<<<< Updated upstream
       
       {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
       <View style={styles.hudContainer}>
+=======
+        
+      {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
+      <Animated.View style={[styles.hudContainer, { opacity: hudOpacity, transform: [{ translateY: hudTranslateY }] }]}>
+>>>>>>> Stashed changes
         <BlurView 
           intensity={isDark ? 40 : 80} 
           tint={isDark ? 'dark' : 'light'} 
@@ -520,7 +645,11 @@ export default function ReaderScreen() {
           <View style={styles.hudTopRow}>
             {/* Back/Close Button */}
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.hudBackButton}>
+<<<<<<< Updated upstream
               <Text style={[styles.hudBackText, { color: colors.text }]}>✕</Text>
+=======
+              <X size={24} color={colors.text} />
+>>>>>>> Stashed changes
             </TouchableOpacity>
 
             <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1}>
@@ -530,6 +659,7 @@ export default function ReaderScreen() {
             <View style={styles.hudActions}>
               <TouchableOpacity
                 onPress={() => {
+<<<<<<< Updated upstream
                   const newVal = !isLiked;
                   setIsLiked(newVal);
                   if (newVal) behaviorTracker.trackEvent('like');
@@ -540,6 +670,8 @@ export default function ReaderScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
+=======
+>>>>>>> Stashed changes
                   const newVal = !isSaved;
                   setIsSaved(newVal);
                   if (article) {
@@ -553,24 +685,42 @@ export default function ReaderScreen() {
                 }}
                 style={styles.hudIconButton}
               >
+<<<<<<< Updated upstream
                 <Text style={styles.hudIcon}>{isSaved ? '🔖' : '🏷️'}</Text>
+=======
+                <Bookmark 
+                  size={24} 
+                  color={isSaved ? colors.accent : colors.text} 
+                  fill={isSaved ? colors.accent : 'transparent'} 
+                />
+>>>>>>> Stashed changes
               </TouchableOpacity>
             </View>
           </View>
         </BlurView>
+<<<<<<< Updated upstream
       </View>
 
       {/* Glowing Neon Laser Progress Bar at Bottom */}
+=======
+      </Animated.View>
+
+      {/* Progress Bar at Bottom */}
+>>>>>>> Stashed changes
       <View style={styles.bottomProgressBarContainer}>
         <Animated.View
           style={[
             styles.bottomProgressBarFill,
             {
+<<<<<<< Updated upstream
               backgroundColor: colors.primary,
               shadowColor: colors.primary,
               shadowOffset: { width: 0, height: -2 },
               shadowOpacity: 0.5,
               shadowRadius: 8,
+=======
+              backgroundColor: colors.accent, // Red progress bar
+>>>>>>> Stashed changes
               width: scrollProgress.interpolate({
                 inputRange: [0, 1],
                 outputRange: ['0%', '100%']
@@ -599,7 +749,7 @@ export default function ReaderScreen() {
         </View>
       ) : queueExhausted ? (
         <View style={styles.catchUpContainer}>
-          <Text style={styles.catchUpEmoji}>✨</Text>
+          <Compass size={48} color={colors.textMuted} style={styles.emptyIcon} />
           <Text style={[styles.catchUpTitle, { color: colors.text }]}>Personalizing your next reads…</Text>
           <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
             We're finding more articles matched to your taste.
@@ -608,12 +758,12 @@ export default function ReaderScreen() {
             style={[styles.catchUpButton, { backgroundColor: colors.primary }]}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.catchUpButtonText}>Back to Dashboard</Text>
+            <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Back to Dashboard</Text>
           </TouchableOpacity>
         </View>
       ) : fetchError ? (
         <View style={styles.errorContainer}>
-          <Text style={styles.catchUpEmoji}>⚠️</Text>
+          <AlertCircle size={48} color={colors.textMuted} style={styles.emptyIcon} />
           <Text style={[styles.catchUpTitle, { color: colors.text }]}>Article failed to load</Text>
           <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
             This article may have been removed or is temporarily unavailable.
@@ -623,7 +773,7 @@ export default function ReaderScreen() {
               style={[styles.catchUpButton, { backgroundColor: colors.primary, marginTop: 16 }]}
               onPress={() => Linking.openURL(article.publicationUrl)}
             >
-              <Text style={styles.catchUpButtonText}>Open in Browser</Text>
+              <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Open in Browser</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -637,6 +787,7 @@ export default function ReaderScreen() {
               </Text>
             </View>
             <WebView
+              ref={webViewRef}
               style={[styles.webview, { backgroundColor: colors.background }]}
               source={{ uri: article.publicationUrl }}
               onMessage={handleWebViewMessage}
@@ -647,10 +798,12 @@ export default function ReaderScreen() {
               domStorageEnabled
               scrollEnabled
               showsVerticalScrollIndicator={false}
+              scalesPageToFit={false}
             />
           </View>
         ) : (
           <WebView
+            ref={webViewRef}
             style={[styles.webview, { backgroundColor: 'transparent' }]}
             originWhitelist={['*']}
             source={{ html: articleHTML }}
@@ -662,6 +815,7 @@ export default function ReaderScreen() {
             showsVerticalScrollIndicator={false}
             bounces={false}
             overScrollMode="never"
+            scalesPageToFit={false}
           />
         )
       ) : (
@@ -683,8 +837,13 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   hudBlur: {
+<<<<<<< Updated upstream
     paddingTop: 54, // Safe area
     paddingHorizontal: 20,
+=======
+    paddingTop: 56, // Safe area
+    paddingHorizontal: 24,
+>>>>>>> Stashed changes
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(150, 150, 150, 0.2)',
@@ -695,6 +854,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hudBackButton: {
+<<<<<<< Updated upstream
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -727,24 +887,47 @@ const styles = StyleSheet.create({
   },
   hudIcon: { fontSize: 18 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
+=======
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  hudTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  hudActions: { flexDirection: 'row', gap: 16 },
+  hudIconButton: { 
+    width: 40, 
+    height: 40, 
+    justifyContent: 'center', 
+    alignItems: 'flex-end', 
+  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+>>>>>>> Stashed changes
   webview: { flex: 1, marginTop: 0 },
   catchUpContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
-    marginTop: 100,
   },
-  catchUpEmoji: { fontSize: 48, marginBottom: 16 },
+  emptyIcon: { marginBottom: 24 },
   catchUpTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
-  catchUpSubtitle: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  catchUpSubtitle: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 },
   catchUpButton: {
     paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 999,
   },
-  catchUpButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
+  catchUpButtonText: { fontSize: 16, fontWeight: '700' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   errorText: { fontSize: 16 },
   bottomProgressBarContainer: {
     height: 3,
@@ -784,18 +967,35 @@ const styles = StyleSheet.create({
   edgeHintText: { fontSize: 14, opacity: 0.2 },
   archivedHeader: {
     paddingHorizontal: 24,
+<<<<<<< Updated upstream
     paddingTop: 12,
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
   archivedTitle: {
     fontSize: 24,
+=======
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+  },
+  archivedTitle: {
+    fontSize: 28,
+>>>>>>> Stashed changes
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: 8,
+    fontFamily: 'Georgia',
+    lineHeight: 34,
   },
   archivedAuthor: {
     fontSize: 14,
+<<<<<<< Updated upstream
     fontWeight: '600',
     textTransform: 'uppercase',
+=======
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+>>>>>>> Stashed changes
   },
 });

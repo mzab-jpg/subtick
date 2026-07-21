@@ -14,6 +14,8 @@ import {
   Alert,
   Switch,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -38,6 +40,25 @@ import {
 import { validateFeedRequest } from '../utils/validation';
 import { fetchAndExtractArticle } from '../services/feedService';
 import { XMLParser } from 'fast-xml-parser';
+import { 
+  ChevronLeft, 
+  ChevronDown, 
+  ChevronRight, 
+  Check, 
+  X, 
+  Minus, 
+  BookOpen, 
+  Bookmark,
+  Link,
+  Trash2,
+  Smartphone,
+  Sun,
+  Moon,
+  Zap,
+  Clock,
+  BarChart3,
+  TerminalSquare
+} from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const { colors, mode, setThemeMode } = useTheme();
@@ -266,18 +287,32 @@ export default function SettingsScreen() {
     );
   }
 
+  const getMetricIcon = (id: string, color: string) => {
+    switch (id) {
+      case 'streak': return <Zap size={16} color={color} />;
+      case 'weeklyReads': return <BookOpen size={16} color={color} />;
+      case 'totalReadTime': return <Clock size={16} color={color} />;
+      default: return <BarChart3 size={16} color={color} />;
+    }
+  };
+
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      style={{ flex: 1 }}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={[styles.closeText, { color: colors.primary }]}>← Close</Text>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
-        <View style={{ width: 60 }} />
+        <View style={styles.backButton} />
       </View>
 
       {/* Category Preferences */}
@@ -287,7 +322,7 @@ export default function SettingsScreen() {
         activeOpacity={0.7}
       >
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Category Preferences</Text>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{showCategoryPrefs ? '▼' : '▶'}</Text>
+        {showCategoryPrefs ? <ChevronDown size={20} color={colors.textMuted} /> : <ChevronRight size={20} color={colors.textMuted} />}
       </TouchableOpacity>
       
       {showCategoryPrefs && (
@@ -311,6 +346,8 @@ export default function SettingsScreen() {
                     ? colors.chipNotInterestedText
                     : colors.chipNeutralText;
 
+              const IconComp = state === 'selected' ? Check : state === 'not_interested' ? X : Minus;
+
               return (
                 <TouchableOpacity
                   key={cat.id}
@@ -318,7 +355,7 @@ export default function SettingsScreen() {
                   onPress={() => handleCategoryCycle(cat.id)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                  <IconComp size={20} color={textColor} style={{ marginRight: 16 }} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.categoryName, { color: textColor }]}>{cat.name}</Text>
                     <Text style={[styles.categoryWeight, { color: textColor }]}>
@@ -334,12 +371,12 @@ export default function SettingsScreen() {
 
       {/* Dashboard Metrics */}
       <TouchableOpacity 
-        style={[styles.collapsibleHeader, { marginTop: 28 }]} 
+        style={[styles.collapsibleHeader, { marginTop: 32 }]} 
         onPress={() => setShowStats(!showStats)}
         activeOpacity={0.7}
       >
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Stats</Text>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{showStats ? '▼' : '▶'}</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Dashboard Stats</Text>
+        {showStats ? <ChevronDown size={20} color={colors.textMuted} /> : <ChevronRight size={20} color={colors.textMuted} />}
       </TouchableOpacity>
       
       {showStats && (
@@ -377,9 +414,17 @@ export default function SettingsScreen() {
                   key={metric.id}
                   style={[styles.metricRow, { borderBottomColor: colors.border }]}
                 >
-                  <Text style={[styles.metricLabel, { color: colors.text }]}>
-                    {metric.emoji}  {metric.label}: <Text style={{fontWeight: '800'}}>{value}</Text> {isSelected ? '(Dashboard)' : ''}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    {getMetricIcon(metric.id, colors.textMuted)}
+                    <View style={{ marginLeft: 16 }}>
+                      <Text style={[styles.metricLabel, { color: colors.text }]}>
+                        {metric.label}
+                      </Text>
+                      <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4 }}>
+                        {value} {isSelected ? '• Showing on Dashboard' : ''}
+                      </Text>
+                    </View>
+                  </View>
                   <Switch
                     value={isSelected}
                     onValueChange={() => toggleMetric(metric.id)}
@@ -394,24 +439,30 @@ export default function SettingsScreen() {
       )}
 
       {/* Lists */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28, marginBottom: 12 }]}>Your Lists</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 32, marginBottom: 16 }]}>Your Lists</Text>
       <TouchableOpacity
-        style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}
+        style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 16 }]}
         onPress={() => navigation.navigate('History')}
       >
-        <Text style={[styles.linkButtonText, { color: colors.text }]}>📚 Reading History</Text>
-        <Text style={[styles.linkStatus, { color: colors.textMuted }]}>View past reads</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <BookOpen size={20} color={colors.text} style={{ marginRight: 16 }} />
+          <Text style={[styles.linkButtonText, { color: colors.text }]}>Reading History</Text>
+        </View>
+        <ChevronRight size={20} color={colors.textMuted} />
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => navigation.navigate('SavedReads')}
       >
-        <Text style={[styles.linkButtonText, { color: colors.text }]}>🔖 Saved Reads</Text>
-        <Text style={[styles.linkStatus, { color: colors.textMuted }]}>View saved articles</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Bookmark size={20} color={colors.text} style={{ marginRight: 16 }} />
+          <Text style={[styles.linkButtonText, { color: colors.text }]}>Saved Reads</Text>
+        </View>
+        <ChevronRight size={20} color={colors.textMuted} />
       </TouchableOpacity>
 
       {/* Article Sources */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Article Sources</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Article Sources</Text>
       <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
         Archived articles are older stories that are no longer available in standard RSS feeds. They will load the full Substack webpage directly inside the app.
       </Text>
@@ -434,49 +485,60 @@ export default function SettingsScreen() {
       </View>
 
       {/* Theme Selection */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Theme</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Theme</Text>
       <View style={styles.themeRow}>
-        {(['system', 'light', 'dark'] as ThemeMode[]).map((themeOption) => (
-          <TouchableOpacity
-            key={themeOption}
-            style={[
-              styles.themeButton,
-              {
-                backgroundColor: mode === themeOption ? colors.primary : colors.surfaceSecondary,
-                borderColor: mode === themeOption ? colors.primary : colors.border,
-              },
-            ]}
-            onPress={() => handleThemeChange(themeOption)}
-          >
-            <Text
+        {(['system', 'light', 'dark'] as ThemeMode[]).map((themeOption) => {
+          const ThemeIcon = themeOption === 'system' ? Smartphone : themeOption === 'light' ? Sun : Moon;
+          return (
+            <TouchableOpacity
+              key={themeOption}
               style={[
-                styles.themeButtonText,
-                { color: mode === themeOption ? '#FFFFFF' : colors.text },
+                styles.themeButton,
+                {
+                  backgroundColor: mode === themeOption ? colors.primary : colors.surfaceSecondary,
+                  borderColor: mode === themeOption ? colors.primary : colors.border,
+                },
               ]}
+              onPress={() => handleThemeChange(themeOption)}
             >
-              {themeOption === 'system' ? '📱 System' : themeOption === 'light' ? '☀️ Light' : '🌙 Dark'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <ThemeIcon size={18} color={mode === themeOption ? colors.background : colors.text} style={{ marginBottom: 8 }} />
+              <Text
+                style={[
+                  styles.themeButtonText,
+                  { color: mode === themeOption ? colors.background : colors.text },
+                ]}
+              >
+                {themeOption === 'system' ? 'System' : themeOption === 'light' ? 'Light' : 'Dark'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Account Linking */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Account</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Account</Text>
       <TouchableOpacity
         style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={handleGoogleLink}
       >
-        <Text style={[styles.linkButtonText, { color: colors.text }]}>
-          {profile?.linkedGoogleAccount ? '🔗 Unlink Google Account' : '🔗 Link Google Account'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Link size={20} color={colors.text} style={{ marginRight: 16 }} />
+          <Text style={[styles.linkButtonText, { color: colors.text }]}>
+            {profile?.linkedGoogleAccount ? 'Unlink Google Account' : 'Link Google Account'}
+          </Text>
+        </View>
         <Text style={[styles.linkStatus, { color: colors.textMuted }]}>
           {profile?.linkedGoogleAccount ? 'Connected' : 'Not connected'}
         </Text>
       </TouchableOpacity>
 
+      {/* Developer Settings Header */}
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 48, marginBottom: 8 }]}>Developer Settings</Text>
+      <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 24 }} />
+
       {/* Developer Reset */}
       <TouchableOpacity
-        style={[styles.linkButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, marginTop: 12 }]}
+        style={[styles.linkButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
         onPress={async () => {
           Alert.alert(
             'Reset Local Data',
@@ -500,12 +562,45 @@ export default function SettingsScreen() {
           );
         }}
       >
-        <Text style={[styles.linkButtonText, { color: colors.error }]}>🗑️ Clear Local Data</Text>
-        <Text style={[styles.linkStatus, { color: colors.textMuted }]}>Wipes History & Saves</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Trash2 size={20} color={colors.error} style={{ marginRight: 16 }} />
+          <Text style={[styles.linkButtonText, { color: colors.error }]}>Clear Local Data</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Developer Sandbox */}
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 32 }]}>Sandbox Reader</Text>
+      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+        Instantly test how any Substack URL or RSS Feed renders in the Reader.
+      </Text>
+      <TextInput
+        style={[
+          styles.input,
+          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
+        ]}
+        placeholder="https://kyla.substack.com/p/..."
+        placeholderTextColor={colors.textMuted}
+        value={devSandboxUrl}
+        onChangeText={setDevSandboxUrl}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+      />
+      <TouchableOpacity
+        style={[styles.submitButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, borderWidth: 1, flexDirection: 'row' }]}
+        onPress={handleDevSandboxTest}
+        disabled={testingDevSandbox}
+      >
+        {testingDevSandbox ? (
+          <ActivityIndicator color={colors.text} style={{ marginRight: 8 }} />
+        ) : (
+          <TerminalSquare size={18} color={colors.text} style={{ marginRight: 8 }} />
+        )}
+        <Text style={[styles.submitButtonText, { color: colors.text }]}>Test URL in Reader</Text>
       </TouchableOpacity>
 
       {/* Feed Request */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Request a Feed</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Request a Feed</Text>
       <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
         Submit a Substack URL you'd like us to add
       </Text>
@@ -540,39 +635,9 @@ export default function SettingsScreen() {
         disabled={submitting}
       >
         {submitting ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={colors.background} />
         ) : (
-          <Text style={styles.submitButtonText}>Submit Request →</Text>
-        )}
-      </TouchableOpacity>
-
-      {/* Developer Sandbox */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 28 }]}>Developer Sandbox</Text>
-      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-        Instantly test how any Substack URL or RSS Feed renders in the Reader.
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
-        ]}
-        placeholder="https://kyla.substack.com/p/..."
-        placeholderTextColor={colors.textMuted}
-        value={devSandboxUrl}
-        onChangeText={setDevSandboxUrl}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-      />
-      <TouchableOpacity
-        style={[styles.submitButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, borderWidth: 1 }]}
-        onPress={handleDevSandboxTest}
-        disabled={testingDevSandbox}
-      >
-        {testingDevSandbox ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : (
-          <Text style={[styles.submitButtonText, { color: colors.primary }]}>Test URL in Reader</Text>
+          <Text style={[styles.submitButtonText, { color: colors.background }]}>Submit Request</Text>
         )}
       </TouchableOpacity>
 
@@ -581,79 +646,82 @@ export default function SettingsScreen() {
         SubTick v1.0.0 · Built with Expo & Firebase
       </Text>
       <View style={{ height: 48 }} />
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 48 },
+  content: { paddingHorizontal: 24, paddingBottom: 64 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 48,
-    marginBottom: 24,
+    paddingTop: 64,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    marginBottom: 32,
   },
-  closeText: { fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 20, fontWeight: '800' },
-  collapsibleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  backButton: { width: 40, alignItems: 'flex-start' },
+  headerTitle: { fontSize: 18, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  collapsibleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   collapsibleContent: { marginTop: 8 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
-  sectionSubtitle: { fontSize: 13, marginBottom: 14, lineHeight: 18 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  sectionSubtitle: { fontSize: 14, marginBottom: 16, lineHeight: 20 },
   categoryGrid: { gap: 8 },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
   },
-  categoryEmoji: { fontSize: 24, marginRight: 12 },
-  categoryName: { fontSize: 15, fontWeight: '700' },
-  categoryWeight: { fontSize: 12, marginTop: 2 },
-  metricsList: { marginTop: 4 },
+  categoryName: { fontSize: 16, fontWeight: '600' },
+  categoryWeight: { fontSize: 14, marginTop: 4 },
+  metricsList: { marginTop: 8 },
   metricRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: 1,
   },
-  metricLabel: { fontSize: 15, fontWeight: '500' },
-  themeRow: { flexDirection: 'row', gap: 10 },
+  metricLabel: { fontSize: 16, fontWeight: '600' },
+  themeRow: { flexDirection: 'row', gap: 16 },
   themeButton: {
     flex: 1,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 2,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
     alignItems: 'center',
   },
   themeButtonText: { fontSize: 14, fontWeight: '600' },
   linkButton: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  linkButtonText: { fontSize: 15, fontWeight: '600' },
-  linkStatus: { fontSize: 13 },
+  linkButtonText: { fontSize: 16, fontWeight: '600' },
+  linkStatus: { fontSize: 14 },
   input: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 16,
   },
   submitButton: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 999,
     alignItems: 'center',
-    marginTop: 4,
+    justifyContent: 'center',
+    marginTop: 8,
   },
-  submitButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  appInfo: { textAlign: 'center', marginTop: 32, fontSize: 12 },
+  submitButtonText: { fontSize: 16, fontWeight: '700' },
+  appInfo: { textAlign: 'center', marginTop: 48, fontSize: 12 },
 });

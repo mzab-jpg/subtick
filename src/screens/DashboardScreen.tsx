@@ -11,11 +11,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+<<<<<<< Updated upstream
+=======
+  Image,
+>>>>>>> Stashed changes
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, UserProfile, DashboardMetric, RootStackParamList } from '../types';
+import { User, Search, BarChart3, Clock, Zap, BookOpen, Inbox } from 'lucide-react-native';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES } from '../utils/constants';
 import { auth } from '../services/firebase';
 import { fetchUserProfile, completeOnboarding } from '../services/auth';
@@ -131,6 +136,15 @@ export default function DashboardScreen() {
     });
   };
 
+  const getMetricIcon = (id: string, color: string) => {
+    switch (id) {
+      case 'streak': return <Zap size={16} color={color} />;
+      case 'weeklyReads': return <BookOpen size={16} color={color} />;
+      case 'totalReadTime': return <Clock size={16} color={color} />;
+      default: return <BarChart3 size={16} color={color} />;
+    }
+  };
+
   const getTopCategory = (): string => {
     if (!userProfile) return '—';
     const weights = userProfile.categoryWeights;
@@ -184,10 +198,21 @@ export default function DashboardScreen() {
         {/* Header Row */}
         <View style={styles.headerRow}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>SUBTICK</Text>
+<<<<<<< Updated upstream
           <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.menuButton}>
             <View style={[styles.menuLine, { backgroundColor: colors.text }]} />
             <View style={[styles.menuLine, { backgroundColor: colors.text, width: 14 }]} />
           </TouchableOpacity>
+=======
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => {}} style={styles.iconButton}>
+              <Search size={24} color={colors.text} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.iconButton}>
+              <User size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+>>>>>>> Stashed changes
         </View>
 
         {/* Stats Pill Bar */}
@@ -196,7 +221,11 @@ export default function DashboardScreen() {
             {metrics.map((metric, index) => (
               <React.Fragment key={metric.id}>
                 <View style={styles.statPillItem}>
+<<<<<<< Updated upstream
                   <Text style={styles.statEmoji}>{metric.emoji}</Text>
+=======
+                  {getMetricIcon(metric.id, colors.textMuted)}
+>>>>>>> Stashed changes
                   <Text style={[styles.statValue, { color: colors.text }]}>{metric.value}</Text>
                 </View>
                 {index < metrics.length - 1 && (
@@ -271,7 +300,11 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View style={styles.emptyState}>
+<<<<<<< Updated upstream
             <Text style={styles.emptyEmoji}>📭</Text>
+=======
+            <Inbox size={48} color={colors.textMuted} style={styles.emptyIcon} />
+>>>>>>> Stashed changes
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No articles yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
               Articles from your favorite Substacks will appear here once they're fetched.
@@ -296,12 +329,17 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+<<<<<<< Updated upstream
   content: { padding: 24, paddingTop: 60, paddingBottom: 40 },
+=======
+  content: { padding: 24, paddingTop: 64, paddingBottom: 48 },
+>>>>>>> Stashed changes
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+<<<<<<< Updated upstream
     marginBottom: 24,
   },
   headerTitle: { 
@@ -338,35 +376,96 @@ const styles = StyleSheet.create({
   },
   statEmoji: { fontSize: 16 },
   statValue: { fontSize: 16, fontWeight: '700', letterSpacing: -0.5 },
+=======
+    marginBottom: 32,
+  },
+  headerTitle: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    letterSpacing: -1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconButton: { 
+    padding: 4,
+  },
+  statsPillContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 16,
+    marginBottom: 40,
+    borderWidth: 1,
+  },
+  statPillItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statValue: { fontSize: 16, fontWeight: '600', letterSpacing: -0.5 },
+>>>>>>> Stashed changes
   statDivider: {
     width: 1,
     height: 16,
   },
   sectionHeader: { marginBottom: 16 },
+<<<<<<< Updated upstream
   sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+=======
+  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
+>>>>>>> Stashed changes
   editorialContainer: {
     gap: 0,
   },
   heroCard: {
+<<<<<<< Updated upstream
     marginBottom: 24,
+=======
+    marginBottom: 32,
+>>>>>>> Stashed changes
   },
   heroPublisher: { 
     fontSize: 12, 
     fontWeight: '800', 
     letterSpacing: 0.5, 
+<<<<<<< Updated upstream
     marginBottom: 8 
+=======
+    marginBottom: 8,
+    textTransform: 'uppercase'
+>>>>>>> Stashed changes
   },
   heroTitle: { 
     fontSize: 32, 
     fontWeight: '800', 
     lineHeight: 38, 
     letterSpacing: -1, 
+<<<<<<< Updated upstream
     marginBottom: 12 
+=======
+    marginBottom: 16,
+    fontFamily: 'Georgia',
+>>>>>>> Stashed changes
   },
   heroDescription: { 
     fontSize: 16, 
     lineHeight: 24, 
+<<<<<<< Updated upstream
     marginBottom: 16 
+=======
+    marginBottom: 16,
+  },
+  heroImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 16,
+    marginBottom: 16,
+>>>>>>> Stashed changes
   },
   cardMeta: { 
     flexDirection: 'row', 
@@ -374,15 +473,25 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   cardMetaText: { 
+<<<<<<< Updated upstream
     fontSize: 13, 
     fontWeight: '600' 
+=======
+    fontSize: 14, 
+    fontWeight: '500' 
+>>>>>>> Stashed changes
   },
   rowCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+<<<<<<< Updated upstream
     paddingVertical: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
+=======
+    paddingVertical: 24,
+    borderTopWidth: 1,
+>>>>>>> Stashed changes
   },
   rowCardContent: {
     flex: 1,
@@ -391,7 +500,12 @@ const styles = StyleSheet.create({
   rowPublisher: {
     fontSize: 12,
     fontWeight: '600',
+<<<<<<< Updated upstream
     marginBottom: 4,
+=======
+    marginBottom: 8,
+    textTransform: 'uppercase'
+>>>>>>> Stashed changes
   },
   rowTitle: {
     fontSize: 18,
@@ -404,23 +518,41 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   rowTime: {
+<<<<<<< Updated upstream
     fontSize: 13,
     fontWeight: '600',
+=======
+    fontSize: 14,
+    fontWeight: '500',
+>>>>>>> Stashed changes
   },
   emptyState: {
     padding: 32,
     alignItems: 'center',
+<<<<<<< Updated upstream
     marginTop: 20,
   },
   emptyEmoji: { fontSize: 40, marginBottom: 12 },
+=======
+    marginTop: 24,
+  },
+  emptyIcon: { marginBottom: 16 },
+>>>>>>> Stashed changes
   emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
   surpriseButton: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
+<<<<<<< Updated upstream
     borderRadius: 100,
     marginTop: 32,
   },
   surpriseText: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
+=======
+    borderRadius: 999,
+    marginTop: 40,
+  },
+  surpriseText: { fontSize: 16, fontWeight: '700' },
+>>>>>>> Stashed changes
 });

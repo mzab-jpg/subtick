@@ -16,6 +16,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { Article } from '../types';
 import { getSeenArticleIds, getArticleById } from '../services/feedService';
+import { ChevronLeft, Inbox } from 'lucide-react-native';
 
 export default function HistoryScreen() {
   const { colors } = useTheme();
@@ -70,18 +71,20 @@ export default function HistoryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={[styles.closeText, { color: colors.primary }]}>← Back</Text>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Reading History</Text>
-        <View style={{ width: 60 }} />
+        <Text style={[styles.headerTitle, { color: colors.text }]}>History</Text>
+        <View style={styles.backButton} />
       </View>
 
       {articles.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            No history yet. Start reading!
+        <View style={styles.emptyState}>
+          <Inbox size={48} color={colors.textMuted} style={styles.emptyIcon} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No history yet</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+            Articles you've read will appear here.
           </Text>
         </View>
       ) : (
@@ -89,17 +92,21 @@ export default function HistoryScreen() {
           data={articles}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={[styles.articleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              style={[styles.rowCard, { borderBottomColor: colors.border }]}
               onPress={() => navigateToReader(item.id)}
+              activeOpacity={0.8}
             >
-              <Text style={[styles.articleTitle, { color: colors.text }]} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <Text style={[styles.articleMeta, { color: colors.textMuted }]}>
-                {item.publicationName} · {item.category}
-              </Text>
+              <View style={styles.rowCardContent}>
+                <Text style={[styles.rowPublisher, { color: colors.textSecondary }]}>
+                  {item.publicationName}
+                </Text>
+                <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </View>
             </TouchableOpacity>
           )}
         />
@@ -115,20 +122,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 48,
-    marginBottom: 16,
-    paddingHorizontal: 20,
+    paddingTop: 64,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
   },
-  closeText: { fontSize: 16, fontWeight: '600' },
-  headerTitle: { fontSize: 20, fontWeight: '800' },
-  listContent: { padding: 20, paddingBottom: 48 },
-  articleCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
+  backButton: { width: 40, alignItems: 'flex-start' },
+  headerTitle: { fontSize: 18, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  listContent: { paddingHorizontal: 24, paddingBottom: 48 },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 24,
+    borderBottomWidth: 1,
   },
-  articleTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  articleMeta: { fontSize: 13 },
-  emptyText: { fontSize: 16 },
+  rowCardContent: {
+    flex: 1,
+  },
+  rowPublisher: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase'
+  },
+  rowTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+    letterSpacing: -0.5,
+  },
+  emptyState: {
+    flex: 1,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  emptyIcon: { marginBottom: 16 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });
