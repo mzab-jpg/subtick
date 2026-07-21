@@ -1,6 +1,7 @@
 // ============================================================
 // SubTick — Saved Reads Screen
-// Shows the user's saved articles.
+// Shows the user's saved articles using locally cached metadata.
+// Fully offline — no Firestore or network needed for the list.
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
@@ -14,18 +15,27 @@ import {
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { Article } from '../types';
-import { getSavedArticleIds, getArticleById } from '../services/feedService';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../types';
+import { getSavedArticleMetas } from '../services/feedService';
 import { ChevronLeft, Bookmark } from 'lucide-react-native';
+
+interface ArticleMeta {
+  id: string;
+  title: string;
+  publicationName: string;
+  category: string;
+  estimatedReadMinutes: number;
+}
 
 export default function SavedReadsScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [articles, setArticles] = useState<ArticleMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // We add a listener to re-fetch when returning from Reader
+  // Re-fetch when returning from Reader (in case user unsaved an article)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadSaved();
@@ -37,17 +47,9 @@ export default function SavedReadsScreen() {
   const loadSaved = async () => {
     try {
       setLoading(true);
-      const savedIds = await getSavedArticleIds();
-      const recentIds = savedIds.slice(-50).reverse(); // limit to 50 for performance
-      
-      const fetchedArticles: Article[] = [];
-      for (const id of recentIds) {
-        const article = await getArticleById(id);
-        if (article) {
-          fetchedArticles.push(article);
-        }
-      }
-      setArticles(fetchedArticles);
+      // Fully offline — reads from device storage only
+      const metas = await getSavedArticleMetas();
+      setArticles(metas);
     } catch (error) {
       console.error('[SavedReads] loadSaved error:', error);
     } finally {
@@ -88,7 +90,7 @@ export default function SavedReadsScreen() {
           <Bookmark size={48} color={colors.textMuted} style={styles.emptyIcon} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No saved articles</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Articles you save will appear here.
+            Articles you save will appear here, available offline.
           </Text>
         </View>
       ) : (
@@ -111,6 +113,9 @@ export default function SavedReadsScreen() {
                   {item.title}
                 </Text>
               </View>
+              <Text style={[styles.rowTime, { color: colors.textMuted }]}>
+                {item.estimatedReadMinutes}m
+              </Text>
             </TouchableOpacity>
           )}
         />
@@ -143,18 +148,23 @@ const styles = StyleSheet.create({
   },
   rowCardContent: {
     flex: 1,
+    paddingRight: 16,
   },
   rowPublisher: {
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 8,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
   },
   rowTitle: {
     fontSize: 18,
     fontWeight: '700',
     lineHeight: 24,
     letterSpacing: -0.5,
+  },
+  rowTime: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   emptyState: {
     flex: 1,

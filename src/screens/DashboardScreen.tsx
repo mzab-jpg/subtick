@@ -11,21 +11,20 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
-<<<<<<< Updated upstream
-=======
-  Image,
->>>>>>> Stashed changes
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, UserProfile, DashboardMetric, RootStackParamList } from '../types';
-import { User, Search, BarChart3, Clock, Zap, BookOpen, Inbox } from 'lucide-react-native';
+import { User, BarChart3, Clock, Zap, BookOpen, Inbox, Shuffle } from 'lucide-react-native';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES } from '../utils/constants';
 import { auth } from '../services/firebase';
 import { fetchUserProfile, completeOnboarding } from '../services/auth';
 import { getRankedFeed, getSeenArticleIds } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
+
+// Minimum remaining articles before a background refetch is triggered
+const PRELOAD_THRESHOLD = 5;
 
 export default function DashboardScreen() {
   const { colors } = useTheme();
@@ -39,6 +38,9 @@ export default function DashboardScreen() {
   // --- Load user profile & feed on mount and focus ---
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
+      // FIX #1: Filter seen articles INSTANTLY from local AsyncStorage before any
+      // network work begins. This removes the just-read card from the display
+      // within ~50ms of returning to the dashboard, with no loading state.
       try {
         const seenIds = await getSeenArticleIds();
         if (seenIds.length > 0) {
@@ -48,11 +50,23 @@ export default function DashboardScreen() {
         // ignore
       }
 
-      loadData(true);
+      // Then flush + refresh profile in the background (non-blocking).
+      // This updates the stats bar after the server processes the session.
+      // The article list is already visually correct by the time this completes.
+      (async () => {
+        try {
+          await flushBehaviorQueue();
+          // Give the server ~800ms to process the events before reading back updated stats
+          await new Promise(resolve => setTimeout(resolve, 800));
+        } catch (err) {
+          // Silent fail — proceed to refresh anyway
+        }
+        loadData(true);
+      })();
     });
-    
+
     loadData(false);
-    
+
     return unsubscribe;
   }, [navigation]);
 
@@ -120,7 +134,7 @@ export default function DashboardScreen() {
       topCategory: getTopCategory(),
       totalRead: userProfile.totalArticlesRead || 0,
       avgWpm: userProfile.averageWpm || 250,
-      totalReadTime: userProfile.totalReadTimeMs 
+      totalReadTime: userProfile.totalReadTimeMs
         ? Math.max(0.1, parseFloat((userProfile.totalReadTimeMs / (1000 * 60 * 60)).toFixed(1)))
         : 0,
     };
@@ -150,13 +164,16 @@ export default function DashboardScreen() {
     const weights = userProfile.categoryWeights;
     let topCat = '—';
     let topWeight = 0;
+    // Only consider plain category keys (not composite length/publisher keys)
     Object.entries(weights).forEach(([cat, w]) => {
-      if (w > topWeight) {
+      if (!cat.includes('::') && !cat.startsWith('pub::') && w > topWeight) {
         topWeight = w;
         topCat = cat;
       }
     });
-    return topCat.charAt(0).toUpperCase() + topCat.slice(1);
+    const name = topCat.charAt(0).toUpperCase() + topCat.slice(1);
+    // Shorten long category names so they fit in the stats bar
+    return name.replace('Philosophy & Human Behavior', 'Philosophy & Human');
   };
 
   const handleSurpriseMe = () => {
@@ -170,13 +187,32 @@ export default function DashboardScreen() {
     navigateToReader(feedArticles[randomIndex].id, randomIndex);
   };
 
+  // FIX #2: Shuffle removes the top 3 displayed articles entirely.
+  // They are sliced off the front of feedArticles so neither the dashboard
+  // nor the Reader queue can reach them. If ≤ PRELOAD_THRESHOLD articles
+  // remain, a silent background refetch is triggered automatically.
+  const handleShuffle = () => {
+    setFeedArticles((prev) => {
+      const next = prev.slice(3);
+      if (next.length <= PRELOAD_THRESHOLD) {
+        // Fire background refetch — don't await, don't show loading state
+        loadFeedArticles(userProfile).catch(() => {});
+      }
+      return next;
+    });
+  };
+
   const navigateToReader = (articleId: string, index: number) => {
     if (index < 0 || index >= feedArticles.length) return;
+    // Immediately remove the tapped article from the displayed list so the
+    // card is already gone when the user swipes back — no focus listener needed.
+    setFeedArticles((prev) => prev.filter((a) => a.id !== articleId));
     navigation.navigate('Reader', {
       articleId,
       queueArticleIds: feedArticles.map((a) => a.id),
       startIndex: index,
       userWpm: userProfile?.averageWpm || 250,
+      mode: 'feed',
     });
   };
 
@@ -198,34 +234,20 @@ export default function DashboardScreen() {
         {/* Header Row */}
         <View style={styles.headerRow}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>SUBTICK</Text>
-<<<<<<< Updated upstream
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.menuButton}>
-            <View style={[styles.menuLine, { backgroundColor: colors.text }]} />
-            <View style={[styles.menuLine, { backgroundColor: colors.text, width: 14 }]} />
-          </TouchableOpacity>
-=======
           <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => {}} style={styles.iconButton}>
-              <Search size={24} color={colors.text} />
-            </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.iconButton}>
               <User size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
->>>>>>> Stashed changes
         </View>
 
         {/* Stats Pill Bar */}
         {metrics.length > 0 && (
-          <View style={[styles.statsPillContainer, { backgroundColor: colors.surfaceSecondary }]}>
+          <View style={[styles.statsPillContainer, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
             {metrics.map((metric, index) => (
               <React.Fragment key={metric.id}>
                 <View style={styles.statPillItem}>
-<<<<<<< Updated upstream
-                  <Text style={styles.statEmoji}>{metric.emoji}</Text>
-=======
                   {getMetricIcon(metric.id, colors.textMuted)}
->>>>>>> Stashed changes
                   <Text style={[styles.statValue, { color: colors.text }]}>{metric.value}</Text>
                 </View>
                 {index < metrics.length - 1 && (
@@ -236,14 +258,9 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Editorial Feed */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>EDITION</Text>
-        </View>
-
         {feedArticles.length > 0 ? (
           <View style={styles.editorialContainer}>
-            
+
             {/* 1. Hero Article */}
             {heroArticle && (
               <TouchableOpacity
@@ -300,11 +317,7 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View style={styles.emptyState}>
-<<<<<<< Updated upstream
-            <Text style={styles.emptyEmoji}>📭</Text>
-=======
             <Inbox size={48} color={colors.textMuted} style={styles.emptyIcon} />
->>>>>>> Stashed changes
             <Text style={[styles.emptyTitle, { color: colors.text }]}>No articles yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
               Articles from your favorite Substacks will appear here once they're fetched.
@@ -312,15 +325,35 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Surprise Me Button */}
+        {/* Split Discover / Shuffle pill.
+            Uses a symmetric spacer layout to true-centre "Discover" across
+            the full pill width without any absolute positioning or overflow
+            clipping conflicts:
+              [56px spacer] [flex:1 Discover] [56px Shuffle button]
+            The spacer mirrors the shuffle button width exactly. */}
         {feedArticles.length > 0 && (
-          <TouchableOpacity
-            style={[styles.surpriseButton, { backgroundColor: colors.text }]}
-            onPress={handleSurpriseMe}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.surpriseText, { color: colors.background }]}>Discover</Text>
-          </TouchableOpacity>
+          <View style={[styles.discoverRow, { backgroundColor: colors.text, marginTop: 40 }]}>
+            {/* Left spacer — mirrors shuffle button width to centre text */}
+            <View style={styles.discoverSpacer} />
+
+            {/* Discover — flex:1 centres text across the full remaining space */}
+            <TouchableOpacity
+              style={styles.discoverLeft}
+              onPress={handleSurpriseMe}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.discoverText, { color: colors.background }]}>Discover</Text>
+            </TouchableOpacity>
+
+            {/* Shuffle — same width as spacer; bg is contrast colour, icon is accent */}
+            <TouchableOpacity
+              style={[styles.discoverRight, { backgroundColor: colors.background, borderLeftColor: colors.border }]}
+              onPress={handleShuffle}
+              activeOpacity={0.85}
+            >
+              <Shuffle size={18} color={colors.accent} style={{ transform: [{ rotate: '-90deg' }] }} />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </ScrollView>
@@ -329,59 +362,17 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-<<<<<<< Updated upstream
-  content: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-=======
-  content: { padding: 24, paddingTop: 64, paddingBottom: 48 },
->>>>>>> Stashed changes
+  content: { padding: 28, paddingTop: 80, paddingBottom: 64 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-<<<<<<< Updated upstream
-    marginBottom: 24,
+    marginBottom: 36,
   },
-  headerTitle: { 
-    fontSize: 24, 
-    fontWeight: '900', 
-    letterSpacing: -1,
-    fontFamily: 'System'
-  },
-  menuButton: { 
-    width: 32, 
-    height: 32, 
-    justifyContent: 'center', 
-    alignItems: 'flex-end',
-    gap: 4
-  },
-  menuLine: {
-    height: 2,
-    width: 20,
-    borderRadius: 1,
-  },
-  statsPillContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 100, // perfect pill
-    marginBottom: 32,
-  },
-  statPillItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statEmoji: { fontSize: 16 },
-  statValue: { fontSize: 16, fontWeight: '700', letterSpacing: -0.5 },
-=======
-    marginBottom: 32,
-  },
-  headerTitle: { 
-    fontSize: 24, 
-    fontWeight: '800', 
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
     letterSpacing: -1,
   },
   headerActions: {
@@ -389,17 +380,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  iconButton: { 
+  iconButton: {
     padding: 4,
   },
-  statsPillContainer: { 
-    flexDirection: 'row', 
+  statsPillContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingVertical: 18,
     borderRadius: 16,
-    marginBottom: 40,
+    marginBottom: 52,
     borderWidth: 1,
   },
   statPillItem: {
@@ -408,90 +399,55 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statValue: { fontSize: 16, fontWeight: '600', letterSpacing: -0.5 },
->>>>>>> Stashed changes
   statDivider: {
     width: 1,
     height: 16,
   },
-  sectionHeader: { marginBottom: 16 },
-<<<<<<< Updated upstream
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-=======
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
->>>>>>> Stashed changes
   editorialContainer: {
     gap: 0,
+    // Fixed height reserves exactly enough space for all 3 cards at all times.
+    // The button below is therefore always at the same Y position regardless
+    // of how many cards are currently shown.
+    height: 560,
   },
   heroCard: {
-<<<<<<< Updated upstream
-    marginBottom: 24,
-=======
-    marginBottom: 32,
->>>>>>> Stashed changes
+    marginBottom: 40,
   },
-  heroPublisher: { 
-    fontSize: 12, 
-    fontWeight: '800', 
-    letterSpacing: 0.5, 
-<<<<<<< Updated upstream
-    marginBottom: 8 
-=======
+  heroPublisher: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
     marginBottom: 8,
-    textTransform: 'uppercase'
->>>>>>> Stashed changes
+    textTransform: 'uppercase',
   },
-  heroTitle: { 
-    fontSize: 32, 
-    fontWeight: '800', 
-    lineHeight: 38, 
-    letterSpacing: -1, 
-<<<<<<< Updated upstream
-    marginBottom: 12 
-=======
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    lineHeight: 38,
+    letterSpacing: -1,
     marginBottom: 16,
     fontFamily: 'Georgia',
->>>>>>> Stashed changes
   },
-  heroDescription: { 
-    fontSize: 16, 
-    lineHeight: 24, 
-<<<<<<< Updated upstream
-    marginBottom: 16 
-=======
+  heroDescription: {
+    fontSize: 16,
+    lineHeight: 24,
     marginBottom: 16,
   },
-  heroImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 16,
-    marginBottom: 16,
->>>>>>> Stashed changes
+  cardMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  cardMeta: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center'
-  },
-  cardMetaText: { 
-<<<<<<< Updated upstream
-    fontSize: 13, 
-    fontWeight: '600' 
-=======
-    fontSize: 14, 
-    fontWeight: '500' 
->>>>>>> Stashed changes
+  cardMetaText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   rowCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-<<<<<<< Updated upstream
-    paddingVertical: 20,
-    borderTopWidth: StyleSheet.hairlineWidth,
-=======
     paddingVertical: 24,
     borderTopWidth: 1,
->>>>>>> Stashed changes
   },
   rowCardContent: {
     flex: 1,
@@ -500,12 +456,8 @@ const styles = StyleSheet.create({
   rowPublisher: {
     fontSize: 12,
     fontWeight: '600',
-<<<<<<< Updated upstream
-    marginBottom: 4,
-=======
     marginBottom: 8,
-    textTransform: 'uppercase'
->>>>>>> Stashed changes
+    textTransform: 'uppercase',
   },
   rowTitle: {
     fontSize: 18,
@@ -518,41 +470,46 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   rowTime: {
-<<<<<<< Updated upstream
-    fontSize: 13,
-    fontWeight: '600',
-=======
     fontSize: 14,
     fontWeight: '500',
->>>>>>> Stashed changes
   },
   emptyState: {
     padding: 32,
     alignItems: 'center',
-<<<<<<< Updated upstream
-    marginTop: 20,
-  },
-  emptyEmoji: { fontSize: 40, marginBottom: 12 },
-=======
     marginTop: 24,
   },
   emptyIcon: { marginBottom: 16 },
->>>>>>> Stashed changes
   emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  surpriseButton: {
+
+  // --- Split Discover / Shuffle pill ---
+  // Layout: [56px spacer] [flex:1 Discover] [56px Shuffle]
+  // The left spacer mirrors the shuffle button width so the "Discover"
+  // label is optically centred across the entire pill. No absolute
+  // positioning — avoids the overflow:hidden clipping issue.
+  discoverRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  discoverSpacer: {
+    width: 56,
+  },
+  discoverLeft: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-<<<<<<< Updated upstream
-    borderRadius: 100,
-    marginTop: 32,
+    paddingVertical: 16,
   },
-  surpriseText: { fontSize: 16, fontWeight: '800', letterSpacing: -0.5 },
-=======
-    borderRadius: 999,
-    marginTop: 40,
+  discoverText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
-  surpriseText: { fontSize: 16, fontWeight: '700' },
->>>>>>> Stashed changes
+  discoverRight: {
+    width: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+  },
 });

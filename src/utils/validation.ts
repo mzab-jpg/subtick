@@ -53,17 +53,7 @@ export function validateFeedRequest(url: string, description?: string): {
   return { isValid: true };
 }
 
-/**
- * Generates a simple hash from a URL and title for article deduplication.
- * (Cloud Functions will use a more robust crypto hash.)
- */
-export function generateArticleId(url: string, title: string): string {
-  const combined = `${url}::${title}`;
-  let hash = 0;
-  for (let i = 0; i < combined.length; i++) {
-    const char = combined.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return `article_${Math.abs(hash).toString(36)}`;
-}
+// NOTE: Article ID generation is handled exclusively by the Cloud Function (rssCollector.ts)
+// using SHA-256 hashing. Any client-side ID would use a different algorithm and would never
+// match server-generated IDs, making client-side deduplication impossible. IDs should only
+// be compared using values received from the server.

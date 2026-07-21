@@ -27,17 +27,13 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, RootStackParamList } from '../types';
 import { db } from '../services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { MAX_FEED_ARTICLES } from '../utils/constants';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
 import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds, fetchAndExtractArticle, getSavedArticleHtml, pruneFeedSessionCache } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { Linking } from 'react-native';
 import { BlurView } from 'expo-blur';
-<<<<<<< Updated upstream
-=======
-import { X, Bookmark, Compass, AlertCircle } from 'lucide-react-native';
->>>>>>> Stashed changes
+import { X, Bookmark, Compass, AlertCircle, Heart } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 45; // px — touch-intercepting margin zones (more sensitive)
@@ -65,7 +61,10 @@ export default function ReaderScreen() {
   const [isLiked, setIsLiked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [queueExhausted, setQueueExhausted] = useState(false);
-  const [hudVisible, setHudVisible] = useState(true);
+  // HUD starts hidden — revealed only on tap or scroll-up
+  const [hudVisible, setHudVisible] = useState(false);
+  // Bug #4: Track WebView load errors for archived articles
+  const [webViewLoadError, setWebViewLoadError] = useState(false);
 
   const hudTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -83,8 +82,7 @@ export default function ReaderScreen() {
   }, []);
 
   useEffect(() => {
-    // Start auto-hide timer immediately on component mount with 1.5 seconds
-    handleHudAutoHide(true, 1500);
+    // Cleanup only — HUD starts hidden, no auto-show on mount
     return () => {
       if (hudTimeoutRef.current) clearTimeout(hudTimeoutRef.current);
     };
@@ -96,7 +94,7 @@ export default function ReaderScreen() {
   // Dynamic preloaded queue (initially populated from Dashboard)
   const [activeQueueIds, setQueueIds] = useState<string[]>(queueArticleIds || []);
   const [preloading, setPreloading] = useState(false);
-  
+
   // Guard references
   const preloadingRef = useRef(false);
   const cacheRef = useRef<Record<string, Article>>({});
@@ -109,9 +107,10 @@ export default function ReaderScreen() {
   // Reset webview initial load guard whenever article changes
   useEffect(() => {
     webViewInitialLoadRef.current = true;
+    setWebViewLoadError(false); // Reset error state on article change
   }, [currentIndex, articleId]);
 
-  // --- Behavior tracker hook (replaces inline console.log) ---
+  // --- Behavior tracker hook ---
   const behaviorTracker = useBehaviorTracker({
     articleId: article?.id || articleId,
     articleCategory: article?.category || 'misc',
@@ -125,6 +124,7 @@ export default function ReaderScreen() {
     try {
       setLoading(true);
       setFetchError(false);
+      setWebViewLoadError(false);
 
       if (isMockMode && mockArticle && id === mockArticle.id) {
         setArticle(mockArticle);
@@ -133,7 +133,7 @@ export default function ReaderScreen() {
       }
 
       let data = cacheRef.current[id];
-      
+
       if (!data) {
         const snap = await getDoc(doc(db, 'articles', id));
         if (snap.exists()) {
@@ -142,7 +142,7 @@ export default function ReaderScreen() {
           setArticleCache(prev => ({ ...prev, [id]: data }));
         }
       }
-      
+
       if (data) {
         let contentHtml = '';
         let needsFallback = false;
@@ -163,12 +163,18 @@ export default function ReaderScreen() {
         } else {
           contentHtml = data.bodyHtml || '';
         }
-        
-        // If the RSS fetch fails (e.g. 4-hour gap before article is officially tagged archived), 
-        // silently fallback to rendering the raw Substack URI so the user never hits a dead-end screen.
+
+        // Bug #3 Fix: If the RSS fetch fails, persist rssStatus 'archived' to Firestore
+        // so future loads skip the failed RSS fetch entirely.
         if (needsFallback) {
           data.rssStatus = 'archived';
           contentHtml = '';
+          try {
+            await updateDoc(doc(db, 'articles', id), { rssStatus: 'archived' });
+            console.log(`[Reader] Persisted rssStatus=archived for article ${id}`);
+          } catch (persistErr) {
+            console.warn('[Reader] Failed to persist rssStatus update:', persistErr);
+          }
         }
 
         setResolvedHtml(contentHtml);
@@ -210,8 +216,9 @@ export default function ReaderScreen() {
 
       if (isSavedMode || isMockMode) return; // Saved/Mock mode uses offline HTML, no live RSS fetches needed
 
-      // We only fetch RSS feeds for 'current' articles.
-      const currentArticles = activeArticles.filter(a => !a.rssStatus || a.rssStatus === 'current');
+      // Bug #6 Fix: Only fetch RSS feeds for explicitly 'current' articles.
+      // Articles with undefined rssStatus are treated as archived to avoid wasteful failed fetches.
+      const currentArticles = activeArticles.filter(a => a.rssStatus === 'current');
 
       // 2. Extract unique feedUrls for the upcoming window
       const uniqueFeedUrls = Array.from(
@@ -219,10 +226,9 @@ export default function ReaderScreen() {
       );
 
       // 3. Prune our local in-memory feed cache to only keep feeds that show up in the look-ahead window.
-      // This is the "keep what's active, delete what's old" sliding window rule.
       pruneFeedSessionCache(uniqueFeedUrls);
 
-      // 4. Concurrently fetch the unique RSS feeds (completely safe from duplication because feedService caches the active Promise)
+      // 4. Concurrently fetch the unique RSS feeds
       await Promise.all(
         currentArticles.map(async (art) => {
           if (art.feedUrl && art.guid) {
@@ -276,25 +282,17 @@ export default function ReaderScreen() {
     console.log('[Preloader] Trigger zone reached. Synchronizing swipes & preloading next batch...');
 
     try {
-      // 1. Instantly trigger a background behavior events flush
-      // This forces the weights to update in the database in real-time
       await flushBehaviorQueue();
       console.log('[Preloader] Local behavior events successfully flushed to cloud.');
 
-      // 2. Query the next batch of articles from the Cloud.
-      // We pass combined historical seen IDs + currently active queue IDs 
-      // so the filter avoids both previously read articles and ones currently in the queue.
       const historicalSeen = await getSeenArticleIds();
       const combinedSeenIds = Array.from(new Set([...historicalSeen, ...activeQueueIds]));
       const result = await getRankedFeed(combinedSeenIds);
 
       if (result.articles && result.articles.length > 0) {
-        // Grab the new recommendations (highly tailored to their fresh swipes!)
         const newIds = result.articles.map(a => a.id);
-        
-        // 3. Append them cleanly to our active queue
         setQueueIds(prev => [...prev, ...newIds]);
-        console.log(`[Preloader] Preloaded and appended ${newIds.length} fresh, highly-tailored articles to the queue.`);
+        console.log(`[Preloader] Preloaded and appended ${newIds.length} fresh articles to the queue.`);
       } else {
         console.log('[Preloader] No new recommendations available from cloud.');
       }
@@ -313,18 +311,17 @@ export default function ReaderScreen() {
     }
     const nextIdx = currentIndex + 1;
     setCurrentIndex(nextIdx);
-    
+
     // Reset reader state
     setIsLiked(false);
     setIsSaved(false);
     loadArticle(activeQueueIds[nextIdx]);
 
-    // TRIGGER ZONE CHECK: If 5 articles or less are left in the active queue,
-    // preload the next batch of fresh articles in the background.
+    // TRIGGER ZONE CHECK: If 5 articles or less are left, preload the next batch.
     if (!isRestrictedMode && activeQueueIds.length - nextIdx <= 5 && !preloadingRef.current) {
       preloadNextArticles();
     }
-    
+
     // Refresh saved state for next article
     getSavedArticleIds().then(saved => setIsSaved(saved.includes(activeQueueIds[nextIdx])));
   }, [hasNext, currentIndex, activeQueueIds, loadArticle, preloadNextArticles, isRestrictedMode]);
@@ -334,8 +331,7 @@ export default function ReaderScreen() {
     const prevIdx = currentIndex - 1;
     setCurrentIndex(prevIdx);
     setIsLiked(false);
-    
-    // Refresh saved state for prev article
+
     getSavedArticleIds().then(saved => setIsSaved(saved.includes(activeQueueIds[prevIdx])));
     loadArticle(activeQueueIds[prevIdx]);
   }, [hasPrev, currentIndex, activeQueueIds, loadArticle]);
@@ -348,7 +344,7 @@ export default function ReaderScreen() {
         if (data.type === 'scrollDepth' && typeof data.depth === 'number') {
           const depth = Math.min(1, Math.max(0, data.depth));
           behaviorTracker.trackScrollDepth(depth);
-          
+
           if (typeof data.currentDepth === 'number') {
             const current = Math.min(1, Math.max(0, data.currentDepth));
             scrollProgress.setValue(current);
@@ -358,9 +354,8 @@ export default function ReaderScreen() {
         } else if (data.type === 'hud') {
           setHudVisible(data.visible);
           if (data.visible) {
-            handleHudAutoHide(true, 2500); // Scrolling up shows HUD for 2.5s
+            handleHudAutoHide(true, 2500);
           } else {
-            // Scrolling down hides HUD instantly (smoothly animated by transition)
             if (hudTimeoutRef.current) {
               clearTimeout(hudTimeoutRef.current);
               hudTimeoutRef.current = null;
@@ -370,7 +365,7 @@ export default function ReaderScreen() {
           setHudVisible((prev) => {
             const next = !prev;
             if (next) {
-              handleHudAutoHide(true, 2500); // Tap to show HUD displays it for 2.5s
+              handleHudAutoHide(true, 2500);
             } else {
               if (hudTimeoutRef.current) {
                 clearTimeout(hudTimeoutRef.current);
@@ -392,13 +387,11 @@ export default function ReaderScreen() {
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: (evt) => {
-          if (isHistoryMode) return false; // disable swiping in history mode
+          if (isHistoryMode) return false;
           const x = evt.nativeEvent.locationX;
-          // Only intercept touches in edge zones (left 30px or right 30px)
           return x <= EDGE_ZONE_WIDTH || x >= SCREEN_WIDTH - EDGE_ZONE_WIDTH;
         },
         onMoveShouldSetPanResponder: (evt, gestureState) => {
-          // Already captured — prevent vertical scrolling interference
           return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         },
         onPanResponderMove: (evt, gestureState) => {
@@ -406,25 +399,23 @@ export default function ReaderScreen() {
         },
         onPanResponderRelease: (evt, gestureState) => {
           const dx = gestureState.dx;
-          // Animate back to 0
           Animated.spring(panX, { toValue: 0, useNativeDriver: true }).start();
 
           if (dx < -SWIPE_THRESHOLD) {
-            // Swipe left (right edge) → Swipe Next
             if (!isRestrictedMode) {
               const expectedReadTimeMs = article?.wordCount ? (article.wordCount / currentWpm) * 60000 : 60000;
               behaviorTracker.concludeSession(expectedReadTimeMs, actualWordCountRef.current);
-              if (article?.id) markArticleSeen(article.id);
+              // Pass article object so metadata is cached for the History screen (no Firestore needed)
+              if (article?.id) markArticleSeen(article.id, article);
             }
             goToNext();
           } else if (dx > SWIPE_THRESHOLD) {
-            // Swipe right (left edge) → Swipe Prev if saved mode, or Not Interested if feed mode
             if (isSavedMode) {
               goToPrev();
             } else if (!isRestrictedMode) {
               behaviorTracker.trackEvent('swipe_not_interested');
-              if (article?.id) markArticleSeen(article.id);
-              goToNext(); // advances (dismisses) article
+              if (article?.id) markArticleSeen(article.id, article);
+              goToNext();
             }
           }
         },
@@ -444,19 +435,19 @@ export default function ReaderScreen() {
   }, [hudVisible, hudAnim]);
 
   const hudOpacity = hudAnim;
-  
+
   const hudTranslateY = hudAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [-100, 0],
     extrapolate: 'clamp',
   });
 
-  // --- Pre-compiled HTML for WebView (NO post-load style injection — prevents flashing) ---
+  // --- Pre-compiled HTML for WebView ---
   const articleHTML = useMemo(() => {
     if (!article) return '';
     const readMinutes = Math.max(1, Math.ceil((article.wordCount || 0) / currentWpm));
-    
-    // Using elegant editorial typography styling
+    const frontendRules = article.frontendRules;
+
     const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${article.title}</h1>`;
     const authorBlock = `<p style="color:${colors.textSecondary}; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid ${colors.border}; display:inline-block; padding-bottom:4px;">${article.publicationName}</p>`;
     const metaBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:32px;">By ${article.author} · ${readMinutes} min read</p>`;
@@ -467,6 +458,9 @@ export default function ReaderScreen() {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <style>
+          ${frontendRules?.injectCss || ''}
+        </style>
         ${webViewCSS}
       </head>
       <body>
@@ -476,6 +470,20 @@ export default function ReaderScreen() {
         ${resolvedHtml}
         <script>
           (function() {
+            try {
+              var rules = ${JSON.stringify(frontendRules?.removeCss || [])};
+              if (rules && rules.length > 0) {
+                rules.forEach(function(selector) {
+                  var els = document.querySelectorAll(selector);
+                  for (var i = 0; i < els.length; i++) {
+                    els[i].style.display = 'none';
+                  }
+                });
+              }
+            } catch (e) {
+              console.warn('SubTick Rule Error: ' + e);
+            }
+
             var text = document.body.innerText || document.body.textContent || '';
             var wordCount = text.trim().split(/\s+/).length;
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
@@ -487,10 +495,8 @@ export default function ReaderScreen() {
               var docHeight = document.documentElement.scrollHeight - window.innerHeight;
               if (docHeight <= 0) return;
               var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
-              if (depth > maxDepth) {
-                maxDepth = depth;
-              }
-              
+              if (depth > maxDepth) { maxDepth = depth; }
+
               if (scrollTop > lastScrollTop + 15) {
                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
                 lastScrollTop = scrollTop;
@@ -501,19 +507,17 @@ export default function ReaderScreen() {
                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: false }));
                 lastScrollTop = scrollTop;
               }
-
               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
             }
             window.addEventListener('scroll', reportScroll, { passive: true });
-            
+
             document.body.addEventListener('click', function(e) {
-               if (e.target.tagName !== 'A') {
-                 var scrollTop = window.scrollY || document.documentElement.scrollTop;
-                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
-               }
+              if (e.target.tagName !== 'A') {
+                var scrollTop = window.scrollY || document.documentElement.scrollTop;
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
+              }
             });
 
-            // Initial report
             setTimeout(reportScroll, 100);
           })();
         </script>
@@ -522,85 +526,122 @@ export default function ReaderScreen() {
     `;
   }, [article, resolvedHtml, colors, webViewCSS]);
 
-  const rawWebpageInjectedScript = `
-    (function() {
-      var meta = document.createElement('meta');
-      meta.name = 'viewport';
-      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-      document.getElementsByTagName('head')[0].appendChild(meta);
-
-      var text = document.body.innerText || document.body.textContent || '';
-      var wordCount = text.trim().split(/\s+/).length;
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
-
-      var maxDepth = 0;
-      var lastScrollTop = 0;
-      function reportScroll() {
-        var scrollTop = window.scrollY || document.documentElement.scrollTop;
-        var docHeight = document.documentElement.scrollHeight - window.innerHeight;
-        if (docHeight <= 0) return;
-        var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
-        if (depth > maxDepth) {
-          maxDepth = depth;
-        }
-        
-        if (scrollTop > lastScrollTop + 15) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
-          lastScrollTop = scrollTop;
-        } else if (scrollTop < lastScrollTop - 15) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
-          lastScrollTop = scrollTop;
-        } else if (scrollTop <= 0) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: false }));
-          lastScrollTop = scrollTop;
+  const rawWebpageInjectedScript = useMemo(() => {
+    const frontendRules = article?.frontendRules;
+    return `
+      (function() {
+        try {
+          var rules = ${JSON.stringify(frontendRules?.removeCss || [])};
+          if (rules && rules.length > 0) {
+            rules.forEach(function(selector) {
+              var els = document.querySelectorAll(selector);
+              for (var i = 0; i < els.length; i++) {
+                els[i].style.display = 'none';
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('SubTick Rule Error: ' + e);
         }
 
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
-      }
-      window.addEventListener('scroll', reportScroll, { passive: true });
-      
-      document.body.addEventListener('click', function(e) {
-         if (e.target.tagName !== 'A') {
-           var scrollTop = window.scrollY || document.documentElement.scrollTop;
-           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
-         }
-      });
+        try {
+          var css = ${JSON.stringify(frontendRules?.injectCss || '')};
+          if (css) {
+            var style = document.createElement('style');
+            style.innerHTML = css;
+            document.head.appendChild(style);
+          }
+        } catch (e) {
+          console.warn('SubTick CSS Error: ' + e);
+        }
 
-      setTimeout(reportScroll, 100);
-    })();
-    true;
-  `;
+        var meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+
+        var text = document.body.innerText || document.body.textContent || '';
+        var wordCount = text.trim().split(/\\s+/).length;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
+
+        var maxDepth = 0;
+        var lastScrollTop = 0;
+        function reportScroll() {
+          var scrollTop = window.scrollY || document.documentElement.scrollTop;
+          var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+          if (docHeight <= 0) return;
+          var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
+          if (depth > maxDepth) { maxDepth = depth; }
+
+          if (scrollTop > lastScrollTop + 15) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
+            lastScrollTop = scrollTop;
+          } else if (scrollTop < lastScrollTop - 15) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
+            lastScrollTop = scrollTop;
+          } else if (scrollTop <= 0) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: false }));
+            lastScrollTop = scrollTop;
+          }
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
+        }
+        window.addEventListener('scroll', reportScroll, { passive: true });
+
+        document.body.addEventListener('click', function(e) {
+          if (e.target.tagName !== 'A') {
+            var scrollTop = window.scrollY || document.documentElement.scrollTop;
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
+          }
+        });
+
+        setTimeout(reportScroll, 100);
+      })();
+      true;
+    `;
+  }, [article]);
 
   // Determine if we should load the raw URL instead of sanitized HTML
   const useDirectUri = article && (article.rssStatus === 'archived' || (isSavedMode && !resolvedHtml));
 
+  // Bug #1/#2 Fix: Use the article's own URL (publicationUrl = item.link from RSS) as the source.
+  // For legacy articles where publicationUrl was incorrectly stored as the feed homepage,
+  // fall back to the guid (which holds the article-level URL).
+  const archivedArticleUrl = article
+    ? (article.publicationUrl || article.guid || '')
+    : '';
+
   // --- Prevent WebView Escape (Lock Navigation) ---
   const handleShouldStartLoadWithRequest = (request: any) => {
     if (!article) return true;
-    
-    // Always allow internal about:blank or data: URIs (used by the WebView to load raw HTML)
+
+    // Always allow internal about:blank or data: URIs
     if (request.url.startsWith('data:') || request.url.startsWith('about:')) return true;
 
     if (!useDirectUri) {
-      // In the clean sanitized HTML view, ANY external link click is blocked
+      // In the clean sanitized HTML view, ANY external link click is sent to browser
       if (request.url.startsWith('http')) {
         Linking.openURL(request.url);
         return false;
       }
       return true;
     } else {
-      // In the raw Substack URI view:
-      // Substack heavily relies on server redirects (custom domains, slug changes, etc).
-      // We allow all navigations during the initial load phase. Once the page is loaded,
-      // the lock engages and intercepts any further user clicks.
+      // In the raw URI view, allow all navigations during initial load (redirects, custom domains, etc.)
       if (webViewInitialLoadRef.current) return true;
 
-      const currentUrlBase = article.publicationUrl.split('?')[0];
-      const reqUrlBase = request.url.split('?')[0];
-      
-      if (reqUrlBase === currentUrlBase) return true; // Just a query param change or anchor jump
-      
-      // User clicked a link to another page. Intercept and open in external browser.
+      // Bug #5 Fix: Compare using the archived article URL (article-level), not the publication homepage.
+      // Use domain comparison for broader compatibility with redirects and slug changes.
+      try {
+        const currentDomain = new URL(archivedArticleUrl).hostname;
+        const requestDomain = new URL(request.url).hostname;
+        if (currentDomain === requestDomain) return true;
+      } catch {
+        // URL parsing failed — fall back to simple prefix check
+        const currentUrlBase = archivedArticleUrl.split('?')[0];
+        const reqUrlBase = request.url.split('?')[0];
+        if (reqUrlBase === currentUrlBase) return true;
+      }
+
+      // User clicked an external link — open in browser
       Linking.openURL(request.url);
       return false;
     }
@@ -620,7 +661,6 @@ export default function ReaderScreen() {
     if (queueExhausted && currentIndex < activeQueueIds.length - 1) {
       console.log('[Reader] Queue replenished! Auto-recovering from exhaustion screen.');
       setQueueExhausted(false);
-      // Automatically advance to the newly arrived article
       goToNext();
     }
   }, [queueExhausted, currentIndex, activeQueueIds.length, goToNext]);
@@ -628,28 +668,18 @@ export default function ReaderScreen() {
   // --- Render ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-<<<<<<< Updated upstream
-      
-      {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
-      <View style={styles.hudContainer}>
-=======
-        
+
       {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
       <Animated.View style={[styles.hudContainer, { opacity: hudOpacity, transform: [{ translateY: hudTranslateY }] }]}>
->>>>>>> Stashed changes
-        <BlurView 
-          intensity={isDark ? 40 : 80} 
-          tint={isDark ? 'dark' : 'light'} 
+        <BlurView
+          intensity={isDark ? 40 : 80}
+          tint={isDark ? 'dark' : 'light'}
           style={styles.hudBlur}
         >
           <View style={styles.hudTopRow}>
             {/* Back/Close Button */}
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.hudBackButton}>
-<<<<<<< Updated upstream
-              <Text style={[styles.hudBackText, { color: colors.text }]}>✕</Text>
-=======
               <X size={24} color={colors.text} />
->>>>>>> Stashed changes
             </TouchableOpacity>
 
             <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1}>
@@ -659,24 +689,26 @@ export default function ReaderScreen() {
             <View style={styles.hudActions}>
               <TouchableOpacity
                 onPress={() => {
-<<<<<<< Updated upstream
                   const newVal = !isLiked;
                   setIsLiked(newVal);
                   if (newVal) behaviorTracker.trackEvent('like');
                 }}
                 style={styles.hudIconButton}
               >
-                <Text style={styles.hudIcon}>{isLiked ? '❤️' : '🤍'}</Text>
+                <Heart
+                  size={24}
+                  color={isLiked ? colors.accent : colors.text}
+                  fill={isLiked ? colors.accent : 'transparent'}
+                />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
-=======
->>>>>>> Stashed changes
                   const newVal = !isSaved;
                   setIsSaved(newVal);
                   if (article) {
                     if (newVal) {
-                      markArticleSaved(article.id, resolvedHtml);
+                      // Pass article object so metadata is cached for offline SavedReads list
+                      markArticleSaved(article.id, resolvedHtml, article);
                       if (!isRestrictedMode) behaviorTracker.trackEvent('save');
                     } else {
                       unmarkArticleSaved(article.id);
@@ -685,45 +717,31 @@ export default function ReaderScreen() {
                 }}
                 style={styles.hudIconButton}
               >
-<<<<<<< Updated upstream
-                <Text style={styles.hudIcon}>{isSaved ? '🔖' : '🏷️'}</Text>
-=======
-                <Bookmark 
-                  size={24} 
-                  color={isSaved ? colors.accent : colors.text} 
-                  fill={isSaved ? colors.accent : 'transparent'} 
+                <Bookmark
+                  size={24}
+                  color={isSaved ? colors.accent : colors.text}
+                  fill={isSaved ? colors.accent : 'transparent'}
                 />
->>>>>>> Stashed changes
               </TouchableOpacity>
             </View>
           </View>
         </BlurView>
-<<<<<<< Updated upstream
-      </View>
-
-      {/* Glowing Neon Laser Progress Bar at Bottom */}
-=======
       </Animated.View>
 
       {/* Progress Bar at Bottom */}
->>>>>>> Stashed changes
       <View style={styles.bottomProgressBarContainer}>
         <Animated.View
           style={[
             styles.bottomProgressBarFill,
             {
-<<<<<<< Updated upstream
-              backgroundColor: colors.primary,
-              shadowColor: colors.primary,
+              backgroundColor: colors.accent,
+              shadowColor: colors.accent,
               shadowOffset: { width: 0, height: -2 },
               shadowOpacity: 0.5,
               shadowRadius: 8,
-=======
-              backgroundColor: colors.accent, // Red progress bar
->>>>>>> Stashed changes
               width: scrollProgress.interpolate({
                 inputRange: [0, 1],
-                outputRange: ['0%', '100%']
+                outputRange: ['0%', '100%'],
               }),
             },
           ]}
@@ -768,14 +786,14 @@ export default function ReaderScreen() {
           <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
             This article may have been removed or is temporarily unavailable.
           </Text>
-          {article?.publicationUrl && (
+          {archivedArticleUrl ? (
             <TouchableOpacity
               style={[styles.catchUpButton, { backgroundColor: colors.primary, marginTop: 16 }]}
-              onPress={() => Linking.openURL(article.publicationUrl)}
+              onPress={() => Linking.openURL(archivedArticleUrl)}
             >
               <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Open in Browser</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       ) : article ? (
         useDirectUri ? (
@@ -786,20 +804,48 @@ export default function ReaderScreen() {
                 {article.publicationName} — {Math.max(1, Math.ceil((article.wordCount || 0) / currentWpm))} min read
               </Text>
             </View>
-            <WebView
-              ref={webViewRef}
-              style={[styles.webview, { backgroundColor: colors.background }]}
-              source={{ uri: article.publicationUrl }}
-              onMessage={handleWebViewMessage}
-              onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
-              onLoadEnd={() => { webViewInitialLoadRef.current = false; }}
-              injectedJavaScript={rawWebpageInjectedScript}
-              javaScriptEnabled
-              domStorageEnabled
-              scrollEnabled
-              showsVerticalScrollIndicator={false}
-              scalesPageToFit={false}
-            />
+            {/* Bug #4 Fix: Show error state if WebView fails to load the archived URL */}
+            {webViewLoadError ? (
+              <View style={styles.catchUpContainer}>
+                <AlertCircle size={48} color={colors.textMuted} style={styles.emptyIcon} />
+                <Text style={[styles.catchUpTitle, { color: colors.text }]}>Page could not load</Text>
+                <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
+                  This article may have been moved or deleted by the publisher.
+                </Text>
+                {archivedArticleUrl ? (
+                  <TouchableOpacity
+                    style={[styles.catchUpButton, { backgroundColor: colors.primary, marginTop: 16 }]}
+                    onPress={() => Linking.openURL(archivedArticleUrl)}
+                  >
+                    <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Open in Browser</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : (
+              <WebView
+                ref={webViewRef}
+                style={[styles.webview, { backgroundColor: colors.background }]}
+                source={{ uri: archivedArticleUrl }}
+                onMessage={handleWebViewMessage}
+                onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
+                onLoadEnd={() => { webViewInitialLoadRef.current = false; }}
+                onError={(syntheticEvent) => {
+                  console.error('[Reader] WebView load error:', syntheticEvent.nativeEvent);
+                  setWebViewLoadError(true);
+                }}
+                onHttpError={(syntheticEvent) => {
+                  const { statusCode } = syntheticEvent.nativeEvent;
+                  console.error('[Reader] WebView HTTP error:', statusCode);
+                  if (statusCode >= 400) setWebViewLoadError(true);
+                }}
+                injectedJavaScript={rawWebpageInjectedScript}
+                javaScriptEnabled
+                domStorageEnabled
+                scrollEnabled
+                showsVerticalScrollIndicator={false}
+                scalesPageToFit={false}
+              />
+            )}
           </View>
         ) : (
           <WebView
@@ -837,13 +883,8 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   hudBlur: {
-<<<<<<< Updated upstream
-    paddingTop: 54, // Safe area
-    paddingHorizontal: 20,
-=======
-    paddingTop: 56, // Safe area
+    paddingTop: 56,
     paddingHorizontal: 24,
->>>>>>> Stashed changes
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(150, 150, 150, 0.2)',
@@ -854,40 +895,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hudBackButton: {
-<<<<<<< Updated upstream
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(150,150,150,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  hudBackText: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  hudTitle: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    marginHorizontal: 10,
-    opacity: 0.9,
-  },
-  hudActions: { flexDirection: 'row', gap: 12 },
-  hudIconButton: { 
-    width: 36, 
-    height: 36, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderRadius: 18,
-    backgroundColor: 'rgba(150,150,150,0.15)',
-  },
-  hudIcon: { fontSize: 18 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
-=======
     width: 40,
     height: 40,
     justifyContent: 'center',
@@ -903,14 +910,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   hudActions: { flexDirection: 'row', gap: 16 },
-  hudIconButton: { 
-    width: 40, 
-    height: 40, 
-    justifyContent: 'center', 
-    alignItems: 'flex-end', 
+  hudIconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
   },
+  hudIcon: { fontSize: 18 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
->>>>>>> Stashed changes
   webview: { flex: 1, marginTop: 0 },
   catchUpContainer: {
     flex: 1,
@@ -967,21 +974,12 @@ const styles = StyleSheet.create({
   edgeHintText: { fontSize: 14, opacity: 0.2 },
   archivedHeader: {
     paddingHorizontal: 24,
-<<<<<<< Updated upstream
-    paddingTop: 12,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  archivedTitle: {
-    fontSize: 24,
-=======
     paddingTop: 16,
     paddingBottom: 24,
     borderBottomWidth: 1,
   },
   archivedTitle: {
     fontSize: 28,
->>>>>>> Stashed changes
     fontWeight: '800',
     marginBottom: 8,
     fontFamily: 'Georgia',
@@ -989,13 +987,8 @@ const styles = StyleSheet.create({
   },
   archivedAuthor: {
     fontSize: 14,
-<<<<<<< Updated upstream
-    fontWeight: '600',
-    textTransform: 'uppercase',
-=======
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
->>>>>>> Stashed changes
   },
 });

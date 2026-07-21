@@ -1,6 +1,6 @@
 // ============================================================
 // SubTick — rssCollector (Scheduled — every 3 hours)
-// Parses 35 Substack RSS feeds and writes new articles to Firestore.
+// Parses dynamic RSS feeds from Firestore and writes new articles.
 // ============================================================
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -16,6 +16,86 @@ const parser = new Parser({
 });
 
 const db = admin.firestore();
+
+interface OgMetadata {
+  headerImageUrl?: string;
+  description?: string;
+  author?: string;
+  title?: string;
+}
+
+/**
+ * Fallback metadata scraper that extracts Open Graph details from an article's live webpage.
+ */
+async function fetchOgMetadata(url: string): Promise<OgMetadata> {
+  const metadata: OgMetadata = {};
+  if (!url) return metadata;
+
+  try {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 6000); // 6 second timeout for scraper fallback
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      }
+    });
+    clearTimeout(id);
+
+    if (!response.ok) return metadata;
+    const html = await response.text();
+
+    // 1. og:image
+    const ogImageMatch = 
+      html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    if (ogImageMatch && ogImageMatch[1]) {
+      metadata.headerImageUrl = ogImageMatch[1];
+    }
+
+    // 2. og:description / twitter:description / name=description
+    const ogDescMatch = 
+      html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i) ||
+      html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
+    if (ogDescMatch && ogDescMatch[1]) {
+      metadata.description = ogDescMatch[1]
+        .replace(/"/g, '"')
+        .replace(/&/g, '&')
+        .replace(/</g, '<')
+        .replace(/>/g, '>')
+        .replace(/&#39;/g, "'")
+        .substring(0, 300);
+    }
+
+    // 3. author
+    const authorMatch = 
+      html.match(/<meta[^>]*name=["']author["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']author["']/i) ||
+      html.match(/<meta[^>]*property=["']article:author["'][^>]*content=["']([^"']+)["']/i);
+    if (authorMatch && authorMatch[1]) {
+      metadata.author = authorMatch[1];
+    }
+
+    // 4. title fallback
+    const ogTitleMatch = 
+      html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i) ||
+      html.match(/<title>([^<]+)<\/title>/i);
+    if (ogTitleMatch && ogTitleMatch[1]) {
+      metadata.title = ogTitleMatch[1].replace(/"/g, '"').replace(/&/g, '&').trim();
+    }
+
+  } catch (err: any) {
+    console.log(`[rssCollector] OG metadata scrape failed for ${url}:`, err.message);
+  }
+
+  return metadata;
+}
 
 function generateArticleId(url: string, title: string): string {
   const hash = createHash('sha256').update(`${url}::${title}`).digest('hex');
@@ -75,12 +155,33 @@ function chunkArray<T>(array: T[], size: number): T[][] {
 }
 
 export const rssCollector = onSchedule('every 3 hours', async () => {
-  console.log('[rssCollector] Starting RSS collection for 35 feeds...');
+  console.log('[rssCollector] Starting RSS collection...');
   let totalNew = 0;
   let totalErrors = 0;
 
-  // Process feeds concurrently in smaller batches of 5 to avoid connection issues or Substack rate limits
-  const feedChunks = chunkArray(SUBSTACK_FEEDS, 5);
+  // 1. Fetch dynamic feed configuration from Firestore collection 'feeds'
+  let feedsList: any[] = [];
+  try {
+    const feedsSnap = await db.collection('feeds').get();
+    feedsSnap.forEach((doc) => {
+      const data = doc.data();
+      if (data.isActive !== false) {
+        feedsList.push(data);
+      }
+    });
+    console.log(`[rssCollector] Loaded ${feedsList.length} active feeds from Firestore 'feeds' collection.`);
+  } catch (dbErr: any) {
+    console.warn('[rssCollector] Failed to query Firestore feeds, falling back to static list:', dbErr.message);
+  }
+
+  // 2. Fallback to static list if database query returned no active feeds
+  if (feedsList.length === 0) {
+    console.log('[rssCollector] No active feeds found in Firestore. Using static SUBSTACK_FEEDS fallback.');
+    feedsList = SUBSTACK_FEEDS.map(f => ({ ...f, isActive: true, forceArchived: false }));
+  }
+
+  // Process feeds concurrently in smaller batches of 5 to avoid connection issues or rate limits
+  const feedChunks = chunkArray(feedsList, 5);
 
   for (const chunk of feedChunks) {
     await Promise.allSettled(
@@ -98,7 +199,7 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
 
           for (const item of feedData.items) {
             try {
-              const title = item.title || 'Untitled';
+              let title = item.title || 'Untitled';
               const link = item.link || '';
               const articleId = generateArticleId(link, title);
               const guid = extractGuid(item);
@@ -109,10 +210,28 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
               if (existing.exists) continue;
 
               const bodyHtml = item['content:encoded'] || item.content || item.description || '';
-              const description = (item.contentSnippet || item.description || '').substring(0, 300);
-              const publishDate = item.pubDate ? new Date(item.pubDate).getTime() : Date.now();
-              const author = item.creator || item['dc:creator'] || 'Unknown';
-              const headerImageUrl = extractFirstImage(bodyHtml);
+              let description = (item.contentSnippet || item.description || '').substring(0, 300);
+              let author = item.creator || item['dc:creator'] || 'Unknown';
+              let headerImageUrl = extractFirstImage(bodyHtml);
+
+              // 3. Automated Web-Scraping Fallback for incomplete/missing metadata
+              if (!headerImageUrl || !description || author === 'Unknown' || title === 'Untitled') {
+                console.log(`[rssCollector] Missing metadata for "${title}". Scraping live webpage: ${link}`);
+                const og = await fetchOgMetadata(link);
+                
+                if (!headerImageUrl && og.headerImageUrl) {
+                  headerImageUrl = og.headerImageUrl;
+                }
+                if (!description && og.description) {
+                  description = og.description;
+                }
+                if (author === 'Unknown' && og.author) {
+                  author = og.author;
+                }
+                if (title === 'Untitled' && og.title) {
+                  title = og.title;
+                }
+              }
 
               const wordCount = calculateWordCount(bodyHtml);
               let lengthStyle = 'medium';
@@ -122,22 +241,25 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
               const isPaywalled = checkIsPaywalled(title, description, bodyHtml);
               
               // Self-check for truncated feed (if description is suspiciously close to full body)
-              // Protect from potential divide-by-zero
               const isTruncatedFeed = bodyHtml.length > 0 && (description.length / bodyHtml.length) > 0.9;
+
+              // 4. Layout Rule Support: if feed is forced to archived or is web-only/truncated
+              const shouldForceArchived = feed.forceArchived === true;
+              const rssStatus = shouldForceArchived ? 'archived' : 'current';
 
               const article: Record<string, any> = {
                 id: articleId,
                 title,
                 author,
                 publicationName: feed.publicationName,
-                publicationUrl: feedData.link || feed.url,
+                publicationUrl: item.link || feedData.link || feed.url,
                 feedUrl: feed.url,
                 category: feed.category,
                 lengthStyle,
                 guid,
                 isTruncatedFeed,
                 description,
-                publishDate,
+                publishDate: item.pubDate ? new Date(item.pubDate).getTime() : Date.now(),
                 cacheTimestamp: Date.now(),
                 isPaywalled,
                 wordCount,
@@ -145,17 +267,20 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
                 trendingScore: 0,
                 qualityScore: feed.qualityScore,
                 isSeed: false,
-                rssStatus: 'current',
+                rssStatus,
               };
+
+              if (feed.frontendRules) {
+                article.frontendRules = feed.frontendRules;
+              }
               
-              // Only add headerImageUrl if it's a string (Firestore rejects undefined)
               if (typeof headerImageUrl === 'string') {
                 article.headerImageUrl = headerImageUrl;
               }
 
               await db.collection('articles').doc(articleId).set(article);
               totalNew++;
-              console.log(`[rssCollector] New article: ${title.substring(0, 60)}`);
+              console.log(`[rssCollector] New article: ${title.substring(0, 60)} (Status: ${rssStatus})`);
             } catch (itemError: any) {
               console.error(`[rssCollector] Item error for ${feed.publicationName}:`, itemError.message);
               totalErrors++;
@@ -171,10 +296,17 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
 
             allArticlesSnap.forEach((doc) => {
               const data = doc.data() as Article;
-              if (data.guid && !activeGuids.has(data.guid) && data.rssStatus !== 'archived') {
+              
+              // Respect forced archived layout even during sync
+              const expectedStatus = (feed.forceArchived === true) ? 'archived' : 'current';
+
+              if (feed.forceArchived === true && data.rssStatus !== 'archived') {
                 batch.update(doc.ref, { rssStatus: 'archived' });
                 archivedCount++;
-              } else if (data.guid && activeGuids.has(data.guid) && data.rssStatus !== 'current') {
+              } else if (data.guid && !activeGuids.has(data.guid) && data.rssStatus !== 'archived') {
+                batch.update(doc.ref, { rssStatus: 'archived' });
+                archivedCount++;
+              } else if (data.guid && activeGuids.has(data.guid) && feed.forceArchived !== true && data.rssStatus !== 'current') {
                 batch.update(doc.ref, { rssStatus: 'current' });
                 currentUpdateCount++;
               }

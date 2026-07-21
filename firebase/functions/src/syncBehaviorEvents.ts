@@ -97,6 +97,10 @@ export const syncBehaviorEvents = onCall(async (request) => {
         lengthStyle: event.lengthStyle,
         sessionDuration: event.sessionDuration,
         scrollDepth: event.scrollDepth,
+        // Store publicationName and actualWordCount so weightUpdater can use them
+        // for publisher preference learning and WPM calibration respectively.
+        ...(event.publicationName && { publicationName: event.publicationName }),
+        ...(event.actualWordCount && event.actualWordCount > 0 && { actualWordCount: event.actualWordCount }),
       });
 
       // Increment Article Trending Score atomically in real-time

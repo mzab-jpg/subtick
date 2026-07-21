@@ -4,45 +4,6 @@
 
 import { CategoryDefinition } from '../types';
 
-// --- Curated Substack RSS Feed Endpoints (35 feeds) ---
-export const SUBSTACK_FEEDS: { url: string; category: string; publicationName: string; qualityScore: number }[] = [
-  { url: "https://www.platformer.news/feed", category: "Technology & Innovation", publicationName: "Platformer", qualityScore: 0.92 },
-  { url: "https://stratechery.com/feed/", category: "Technology & Innovation", publicationName: "Stratechery", qualityScore: 0.95 },
-  { url: "https://newsletter.pragmaticengineer.com/feed", category: "Technology & Innovation", publicationName: "The Pragmatic Engineer", qualityScore: 0.90 },
-  { url: "https://www.lennysnewsletter.com/feed", category: "Technology & Innovation", publicationName: "Lenny's Newsletter", qualityScore: 0.88 },
-  { url: "https://thealgorithmicbridge.substack.com/feed", category: "Technology & Innovation", publicationName: "The Algorithmic Bridge", qualityScore: 0.78 },
-  { url: "https://aisupremacy.substack.com/feed", category: "Technology & Innovation", publicationName: "AI Supremacy", qualityScore: 0.72 },
-  { url: "https://www.noahpinion.blog/feed", category: "Business & Finance", publicationName: "Noahpinion", qualityScore: 0.85 },
-  { url: "https://plus.thebulwark.com/feed", category: "Politics & Global Affairs", publicationName: "The Bulwark", qualityScore: 0.80 },
-  { url: "https://www.slowboring.com/feed", category: "Politics & Global Affairs", publicationName: "Slow Boring", qualityScore: 0.90 },
-  { url: "https://heathercoxrichardson.substack.com/feed", category: "Politics & Global Affairs", publicationName: "Heather Cox Richardson", qualityScore: 0.82 },
-  { url: "https://www.readtangle.com/feed", category: "Politics & Global Affairs", publicationName: "Tangle", qualityScore: 0.88 },
-  { url: "https://thedispatch.com/feed/", category: "Politics & Global Affairs", publicationName: "The Dispatch", qualityScore: 0.78 },
-  { url: "https://kyla.substack.com/feed", category: "Business & Finance", publicationName: "Kyla's Newsletter", qualityScore: 0.70 },
-  { url: "https://www.netinterest.co/feed", category: "Business & Finance", publicationName: "Net Interest", qualityScore: 0.85 },
-  { url: "https://newsletter.doomberg.com/feed", category: "Business & Finance", publicationName: "Doomberg", qualityScore: 0.80 },
-  { url: "https://thebearcave.substack.com/feed", category: "Business & Finance", publicationName: "The Bear Cave", qualityScore: 0.82 },
-  { url: "https://calculatedrisk.substack.com/feed", category: "Business & Finance", publicationName: "Calculated Risk", qualityScore: 0.75 },
-  { url: "https://annehelen.substack.com/feed", category: "Arts & Culture", publicationName: "Culture Study", qualityScore: 0.88 },
-  { url: "https://www.honest-broker.com/feed", category: "Arts & Culture", publicationName: "The Honest Broker", qualityScore: 0.90 },
-  { url: "https://maybebaby.substack.com/feed", category: "Arts & Culture", publicationName: "Maybe Baby", qualityScore: 0.72 },
-  { url: "https://freddiedeboer.substack.com/feed", category: "Philosophy & Human Behavior", publicationName: "Freddie deBoer", qualityScore: 0.78 },
-  { url: "https://www.blockedandreported.org/feed", category: "Arts & Culture", publicationName: "Blocked and Reported", qualityScore: 0.75 },
-  { url: "https://nightcrawler.substack.com/feed", category: "Arts & Culture", publicationName: "The Nightcrawler", qualityScore: 0.65 },
-  { url: "https://www.garbageday.email/feed", category: "Arts & Culture", publicationName: "Garbage Day", qualityScore: 0.80 },
-  { url: "https://astralcodexten.substack.com/feed", category: "Philosophy & Human Behavior", publicationName: "Astral Codex Ten", qualityScore: 0.95 },
-  { url: "https://worksinprogress.co/feed", category: "Science & Health", publicationName: "Works in Progress", qualityScore: 0.88 },
-  { url: "https://experimentalhistory.substack.com/feed", category: "Philosophy & Human Behavior", publicationName: "Experimental History", qualityScore: 0.85 },
-  { url: "https://dynomight.substack.com/feed", category: "Science & Health", publicationName: "Dynomight", qualityScore: 0.82 },
-  { url: "https://mindthesciencegap.substack.com/feed", category: "Science & Health", publicationName: "Mind the Science Gap", qualityScore: 0.70 },
-  { url: "https://yourlocalepidemiologist.substack.com/feed", category: "Science & Health", publicationName: "Your Local Epidemiologist", qualityScore: 0.88 },
-  { url: "https://examined.substack.com/feed", category: "Science & Health", publicationName: "Examined", qualityScore: 0.78 },
-  { url: "https://unsettledscience.substack.com/feed", category: "Science & Health", publicationName: "Unsettled Science", qualityScore: 0.65 },
-  { url: "https://whyisthisinteresting.substack.com/feed", category: "Arts & Culture", publicationName: "Why Is This Interesting?", qualityScore: 0.85 },
-  { url: "https://numlock.substack.com/feed", category: "Business & Finance", publicationName: "Numlock News", qualityScore: 0.75 },
-  { url: "https://www.thediff.co/feed", category: "Business & Finance", publicationName: "The Diff", qualityScore: 0.88 }
-];
-
 // --- Category Definitions ---
 export const CATEGORIES: CategoryDefinition[] = [
   {
@@ -124,9 +85,10 @@ export const MAX_FEED_ARTICLES = 30;
 export const CANDIDATE_POOL_SIZE = 200;
 export const SURPRISE_ME_MIN_INDEX = 10;
 
-// --- Quick Exit Thresholds ---
-export const QUICK_EXIT_MAX_DURATION_MS = 30_000; // 30 seconds
-export const QUICK_EXIT_MAX_SCROLL = 0.4; // 40%
+// --- Quick Exit Thresholds (15 seconds, <20% scroll) ---
+// These match the thresholds used in useBehaviorTracker.ts concludeSession()
+export const QUICK_EXIT_MAX_DURATION_MS = 15_000;
+export const QUICK_EXIT_MAX_SCROLL = 0.2;
 
 // --- Dwell Threshold ---
 export const DWELL_THRESHOLD_MS = 5 * 60_000; // 5 minutes
@@ -157,6 +119,9 @@ export const FIREBASE_EMULATOR_CONFIG = {
 export const BEHAVIOR_QUEUE_KEY = '@subtick_behavior_queue';
 export const SEEN_ARTICLES_KEY = '@subtick_seen_articles';
 export const SAVED_ARTICLES_KEY = '@subtick_saved_articles';
+// Stores lightweight metadata objects (title, publicationName, category) for local list rendering
+export const SEEN_ARTICLES_META_KEY = '@subtick_seen_articles_meta';
+export const SAVED_ARTICLES_META_KEY = '@subtick_saved_articles_meta';
 export const SYNC_BATCH_SIZE = 20;
 export const MAX_QUEUE_SIZE = 500;
 

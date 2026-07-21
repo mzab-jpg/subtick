@@ -8,7 +8,7 @@ import { functions, db } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Article, RankedFeedResult } from '../types';
-import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES } from '../utils/constants';
+import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES } from '../utils/constants';
 import { auth } from './firebase';
 import { XMLParser } from 'fast-xml-parser';
 import xss from 'xss';
@@ -174,27 +174,32 @@ export async function getRankedFeed(seenArticleIds: string[]): Promise<RankedFee
     };
   } catch (error) {
     console.warn('[FeedService] getRankedFeed callable failed, falling back to Firestore:', error);
-    return fallbackGetArticles();
+    return fallbackGetArticles(seenArticleIds);
   }
 }
 
 /**
  * Fallback: directly query Firestore for recent non-paywalled articles.
+ * Filters out already-seen articles so users don't see repeats even when the
+ * Cloud Function is unavailable.
  */
-async function fallbackGetArticles(): Promise<RankedFeedResult> {
+async function fallbackGetArticles(seenArticleIds: string[] = []): Promise<RankedFeedResult> {
   try {
     const articlesRef = collection(db, 'articles');
     const q = query(
       articlesRef,
       orderBy('publishDate', 'desc'),
-      limit(MAX_FEED_ARTICLES * 2)
+      limit(MAX_FEED_ARTICLES * 3) // Fetch extra to account for seen + paywall filtering
     );
     const snapshot = await getDocs(q);
 
-    // Filter paywalled in memory (no index needed)
+    const seenSet = new Set(seenArticleIds);
+
+    // Filter out paywalled and already-seen articles
     const articles = snapshot.docs
       .map((doc) => ({ ...doc.data(), id: doc.id } as Article))
-      .filter((a) => !a.isPaywalled);
+      .filter((a) => !a.isPaywalled && !seenSet.has(a.id))
+      .slice(0, MAX_FEED_ARTICLES);
 
     return {
       articles,
@@ -240,11 +245,20 @@ export async function getSeenArticleIds(): Promise<string[]> {
   });
 }
 
+// --- Lightweight Article Metadata (for offline list rendering) ---
+interface ArticleMeta {
+  id: string;
+  title: string;
+  publicationName: string;
+  category: string;
+  estimatedReadMinutes: number;
+}
+
 /**
- * Mark an article as seen (append to local AsyncStorage list).
+ * Mark an article as seen and cache its metadata for instant offline History list rendering.
  * Serialized in storageQueue to prevent rapid swiping race conditions.
  */
-export async function markArticleSeen(articleId: string): Promise<void> {
+export async function markArticleSeen(articleId: string, article?: Article): Promise<void> {
   return enqueueStorageOperation(async () => {
     try {
       const raw = await AsyncStorage.getItem(SEEN_ARTICLES_KEY);
@@ -259,10 +273,47 @@ export async function markArticleSeen(articleId: string): Promise<void> {
         }
         await AsyncStorage.setItem(SEEN_ARTICLES_KEY, JSON.stringify(seen));
       }
+
+      // Also cache metadata so History can render without Firestore
+      if (article) {
+        const metaRaw = await AsyncStorage.getItem(SEEN_ARTICLES_META_KEY);
+        const metas: Record<string, ArticleMeta> = metaRaw ? JSON.parse(metaRaw) : {};
+        metas[articleId] = {
+          id: articleId,
+          title: article.title,
+          publicationName: article.publicationName,
+          category: article.category,
+          estimatedReadMinutes: article.estimatedReadMinutes,
+        };
+        await AsyncStorage.setItem(SEEN_ARTICLES_META_KEY, JSON.stringify(metas));
+      }
     } catch (error) {
       console.error('[FeedService] markArticleSeen error:', error);
     }
   });
+}
+
+/**
+ * Get cached metadata for seen articles (ordered most-recent first by seen IDs order).
+ * Returns only articles that have cached metadata; any legacy IDs without metadata are skipped.
+ */
+export async function getSeenArticleMetas(limit = 30): Promise<ArticleMeta[]> {
+  try {
+    const [idsRaw, metaRaw] = await Promise.all([
+      AsyncStorage.getItem(SEEN_ARTICLES_KEY),
+      AsyncStorage.getItem(SEEN_ARTICLES_META_KEY),
+    ]);
+    const ids: string[] = idsRaw ? JSON.parse(idsRaw) : [];
+    const metas: Record<string, ArticleMeta> = metaRaw ? JSON.parse(metaRaw) : {};
+    // Most recent first (ids are stored oldest→newest so we reverse)
+    return ids
+      .slice(-limit)
+      .reverse()
+      .filter(id => !!metas[id])
+      .map(id => metas[id]);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -281,10 +332,10 @@ export async function getSavedArticleIds(): Promise<string[]> {
 }
 
 /**
- * Mark an article as saved and store its full sanitized HTML for offline access.
+ * Mark an article as saved, store its full sanitized HTML, and cache metadata for offline list rendering.
  * Serialized in storageQueue to prevent concurrent write collisions.
  */
-export async function markArticleSaved(articleId: string, extractedHtml: string): Promise<void> {
+export async function markArticleSaved(articleId: string, extractedHtml: string, article?: Article): Promise<void> {
   return enqueueStorageOperation(async () => {
     try {
       const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
@@ -296,6 +347,20 @@ export async function markArticleSaved(articleId: string, extractedHtml: string)
         // Save the personal copy of the HTML locally so it never hits the network or backend again
         await AsyncStorage.setItem(`@subtick_saved_html_${articleId}`, extractedHtml);
       }
+
+      // Also cache metadata so SavedReads can render without Firestore (fully offline)
+      if (article) {
+        const metaRaw = await AsyncStorage.getItem(SAVED_ARTICLES_META_KEY);
+        const metas: Record<string, ArticleMeta> = metaRaw ? JSON.parse(metaRaw) : {};
+        metas[articleId] = {
+          id: articleId,
+          title: article.title,
+          publicationName: article.publicationName,
+          category: article.category,
+          estimatedReadMinutes: article.estimatedReadMinutes,
+        };
+        await AsyncStorage.setItem(SAVED_ARTICLES_META_KEY, JSON.stringify(metas));
+      }
     } catch (error) {
       console.error('[FeedService] markArticleSaved error:', error);
     }
@@ -303,7 +368,30 @@ export async function markArticleSaved(articleId: string, extractedHtml: string)
 }
 
 /**
- * Unmark an article as saved and delete its local HTML.
+ * Get cached metadata for saved articles (ordered most-recently saved first).
+ * Fully offline — no network or Firestore needed.
+ */
+export async function getSavedArticleMetas(): Promise<ArticleMeta[]> {
+  try {
+    const [idsRaw, metaRaw] = await Promise.all([
+      AsyncStorage.getItem(SAVED_ARTICLES_KEY),
+      AsyncStorage.getItem(SAVED_ARTICLES_META_KEY),
+    ]);
+    const ids: string[] = idsRaw ? JSON.parse(idsRaw) : [];
+    const metas: Record<string, ArticleMeta> = metaRaw ? JSON.parse(metaRaw) : {};
+    // Most recently saved first
+    return ids
+      .slice()
+      .reverse()
+      .filter(id => !!metas[id])
+      .map(id => metas[id]);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Unmark an article as saved and delete its local HTML and metadata.
  * Serialized in storageQueue to prevent concurrent write collisions.
  */
 export async function unmarkArticleSaved(articleId: string): Promise<void> {
@@ -317,6 +405,13 @@ export async function unmarkArticleSaved(articleId: string): Promise<void> {
         saved.splice(index, 1);
         await AsyncStorage.setItem(SAVED_ARTICLES_KEY, JSON.stringify(saved));
         await AsyncStorage.removeItem(`@subtick_saved_html_${articleId}`);
+        // Also clean up cached metadata
+        const metaRaw = await AsyncStorage.getItem(SAVED_ARTICLES_META_KEY);
+        if (metaRaw) {
+          const metas: Record<string, ArticleMeta> = JSON.parse(metaRaw);
+          delete metas[articleId];
+          await AsyncStorage.setItem(SAVED_ARTICLES_META_KEY, JSON.stringify(metas));
+        }
       }
     } catch (error) {
       console.error('[FeedService] unmarkArticleSaved error:', error);
@@ -335,24 +430,6 @@ export async function getSavedArticleHtml(articleId: string): Promise<string | n
   }
 }
 
-/**
- * Increment article read count for the current user in Firestore.
- */
-export async function incrementReadCount(): Promise<void> {
-  try {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
-    const userRef = doc(db, 'users', userId);
-    await setDoc(
-      userRef,
-      {
-        totalArticlesRead: 1, // Will be merged/incremented via Cloud Function weightUpdater
-        lastReadDate: Date.now(),
-        lastUpdated: Date.now(),
-      },
-      { merge: true }
-    );
-  } catch (error) {
-    console.error('[FeedService] incrementReadCount error:', error);
-  }
-}
+// NOTE: totalArticlesRead is incremented exclusively by the weightUpdater Cloud Function
+// (firebase/functions/src/weightUpdater.ts) whenever a read_thorough or read_skim event
+// is processed. There is no client-side increment needed.

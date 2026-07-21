@@ -38,11 +38,16 @@ export async function updateWeights(userId: string): Promise<void> {
   const profile = userDoc.data() as UserProfile;
   const currentWeights = { ...profile.categoryWeights };
 
-  // 2. Fetch behavior events from user-nested subcollection (inherently private to user)
+  // 2. Fetch the 100 MOST RECENT behavior events from the user's subcollection.
+  // Ordering by timestamp descending ensures we always process the latest interactions,
+  // not the oldest ones (which is what the default Firestore ordering would give us).
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
   const eventsSnapshot = await db
     .collection('users')
     .doc(userId)
     .collection('behavior_events')
+    .where('timestamp', '>=', oneDayAgo)
+    .orderBy('timestamp', 'desc')
     .limit(100)
     .get();
 
@@ -51,14 +56,10 @@ export async function updateWeights(userId: string): Promise<void> {
     return;
   }
 
-  // 3. Filter to recent events (last 24 hours) in memory
-  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  // 3. All events from the query are already filtered to the last 24 hours by Firestore.
   const events: BehaviorEvent[] = [];
   eventsSnapshot.forEach((doc) => {
-    const event = doc.data() as BehaviorEvent;
-    if (event.timestamp >= oneDayAgo) {
-      events.push(event);
-    }
+    events.push(doc.data() as BehaviorEvent);
   });
 
   if (events.length === 0) {
@@ -272,21 +273,20 @@ async function updateReadStats(
   const now = Date.now();
   const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-  // Fetch all events for this user from subcollection, filter in memory
+  // Fetch only events from the past 7 days, filtered by Firestore — not in memory.
+  // This prevents downloading the user's entire interaction history just to count one week.
   const weeklySnap = await db
     .collection('users')
     .doc(userId)
     .collection('behavior_events')
+    .where('timestamp', '>=', oneWeekAgo)
     .get();
 
-  // Count "reads" this week
+  // Count "reads" this week (all returned events are already within the 7-day window)
   let weeklyReadCount = 0;
   weeklySnap.forEach((doc) => {
     const event = doc.data() as BehaviorEvent;
-    if (
-      event.timestamp >= oneWeekAgo &&
-      (event.eventType === 'read_thorough' || event.eventType === 'read_skim')
-    ) {
+    if (event.eventType === 'read_thorough' || event.eventType === 'read_skim') {
       weeklyReadCount++;
     }
   });

@@ -50,6 +50,10 @@ export interface Article {
   qualityScore: number; // Baseline publisher score (0.0 to 1.0)
   isSeed: boolean; // Set to false for real fetched RSS items
   rssStatus?: 'current' | 'archived'; // Indicates if article is available in live RSS
+  frontendRules?: {
+    removeCss?: string[];   // CSS selectors to hide (e.g. subscribe widgets, paywall overlays)
+    injectCss?: string;     // Raw CSS to inject for per-publisher styling fixes
+  };
 }
 
 // --- Behavior Event (Firestore: behavior_events/{id}) ---

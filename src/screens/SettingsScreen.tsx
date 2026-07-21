@@ -95,7 +95,9 @@ export default function SettingsScreen() {
 
   // --- Category Weight Adjustment ---
   const handleCategoryCycle = async (categoryId: string) => {
-    if (!profile) return;
+    if (!profile || !auth.currentUser) return;
+
+    const previousProfile = profile; // snapshot for revert on failure
     const newWeights = { ...profile.categoryWeights };
     const newSelected = [...profile.selectedCategoryIds];
     const newNotInterested = [...profile.notInterestedCategoryIds];
@@ -124,15 +126,21 @@ export default function SettingsScreen() {
       selectedCategoryIds: newSelected,
       notInterestedCategoryIds: newNotInterested,
     };
+    // Optimistically update UI
     setProfile(updatedProfile);
 
-    if (auth.currentUser) {
+    try {
       await updateCategoryWeights(
         auth.currentUser.uid,
         newWeights,
         newSelected,
         newNotInterested
       );
+    } catch (error) {
+      console.error('[Settings] handleCategoryCycle save failed:', error);
+      // Revert UI to previous state so user knows their change didn't save
+      setProfile(previousProfile);
+      Alert.alert('Save Failed', 'Could not save your preference. Please check your connection and try again.');
     }
   };
 
@@ -176,17 +184,33 @@ export default function SettingsScreen() {
 
   // --- Google Account Linking ---
   const handleGoogleLink = async () => {
+    // Note: linkWithPopup is a web-only API. On iOS/Android it will throw
+    // "auth/operation-not-supported-in-this-environment". Until native Google
+    // sign-in is implemented (requires expo-auth-session or @react-native-google-signin),
+    // we show a clear, actionable message instead of a raw technical error.
     try {
       if (profile?.linkedGoogleAccount) {
         await unlinkGoogleAccount();
         Alert.alert('Unlinked', 'Google account has been unlinked.');
+        await loadProfile();
       } else {
         await linkGoogleAccount();
         Alert.alert('Linked', 'Google account linked successfully!');
+        await loadProfile();
       }
-      await loadProfile();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Something went wrong.');
+      const isUnsupportedEnv =
+        error.code === 'auth/operation-not-supported-in-this-environment' ||
+        error.message?.includes('not-supported');
+
+      if (isUnsupportedEnv) {
+        Alert.alert(
+          'Not Available on Mobile',
+          'Google account linking requires a web browser sign-in flow that is not yet supported in the mobile app. This feature is coming soon.'
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Something went wrong. Please try again.');
+      }
     }
   };
 
@@ -197,7 +221,19 @@ export default function SettingsScreen() {
     
     setTestingDevSandbox(true);
     try {
-      const isRss = url.includes('/feed') || url.includes('.xml');
+      // Improved RSS detection: checks for common feed URL patterns including
+      // Substack feeds (/feed), RSS files (.xml, .rss), Atom feeds, and
+      // query-string based feeds (feed=rss, format=feed, etc.)
+      const urlLower = url.toLowerCase();
+      const isRss =
+        urlLower.includes('/feed') ||
+        urlLower.includes('.xml') ||
+        urlLower.includes('.rss') ||
+        urlLower.includes('/rss') ||
+        urlLower.includes('/atom') ||
+        urlLower.includes('feed=rss') ||
+        urlLower.includes('format=feed') ||
+        urlLower.includes('type=rss');
 
       const mockArticle: Article = {
         id: 'test_sandbox_123',
@@ -397,8 +433,12 @@ export default function SettingsScreen() {
                   case 'topCategory':
                     let topCat = '—';
                     let topWeight = 0;
+                    // Skip composite keys like "Technology::long" and "pub::Stratechery"
                     Object.entries(profile.categoryWeights).forEach(([cat, w]) => {
-                      if (w > topWeight) { topWeight = w; topCat = cat; }
+                      if (!cat.includes('::') && !cat.startsWith('pub::') && w > topWeight) {
+                        topWeight = w;
+                        topCat = cat;
+                      }
                     });
                     value = topCat.charAt(0).toUpperCase() + topCat.slice(1);
                     break;

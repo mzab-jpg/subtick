@@ -1,6 +1,7 @@
 // ============================================================
 // SubTick — History Screen
-// Shows the user's reading history (seen articles).
+// Shows the user's reading history using locally cached metadata.
+// No Firestore reads — loads instantly from device storage.
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
@@ -14,15 +15,24 @@ import {
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { Article } from '../types';
-import { getSeenArticleIds, getArticleById } from '../services/feedService';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../types';
+import { getSeenArticleMetas } from '../services/feedService';
 import { ChevronLeft, Inbox } from 'lucide-react-native';
+
+interface ArticleMeta {
+  id: string;
+  title: string;
+  publicationName: string;
+  category: string;
+  estimatedReadMinutes: number;
+}
 
 export default function HistoryScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
-  const [articles, setArticles] = useState<Article[]>([]);
+  const [articles, setArticles] = useState<ArticleMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,18 +42,9 @@ export default function HistoryScreen() {
   const loadHistory = async () => {
     try {
       setLoading(true);
-      const seenIds = await getSeenArticleIds();
-      // Only fetch the last 30 for performance reasons
-      const recentIds = seenIds.slice(-30).reverse();
-      
-      const fetchedArticles: Article[] = [];
-      for (const id of recentIds) {
-        const article = await getArticleById(id);
-        if (article) {
-          fetchedArticles.push(article);
-        }
-      }
-      setArticles(fetchedArticles);
+      // Load from local device storage — no network needed
+      const metas = await getSeenArticleMetas(30);
+      setArticles(metas);
     } catch (error) {
       console.error('[History] loadHistory error:', error);
     } finally {
@@ -107,6 +108,9 @@ export default function HistoryScreen() {
                   {item.title}
                 </Text>
               </View>
+              <Text style={[styles.rowTime, { color: colors.textMuted }]}>
+                {item.estimatedReadMinutes}m
+              </Text>
             </TouchableOpacity>
           )}
         />
@@ -139,18 +143,23 @@ const styles = StyleSheet.create({
   },
   rowCardContent: {
     flex: 1,
+    paddingRight: 16,
   },
   rowPublisher: {
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 8,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
   },
   rowTitle: {
     fontSize: 18,
     fontWeight: '700',
     lineHeight: 24,
     letterSpacing: -0.5,
+  },
+  rowTime: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   emptyState: {
     flex: 1,

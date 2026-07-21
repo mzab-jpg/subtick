@@ -49,27 +49,36 @@ export function useBehaviorTracker({
     };
   }
 
-  // Fallback cleanup to ensure quick_exit is recorded if they unmount the reader quickly
+  // Fallback cleanup to ensure quick_exit is recorded if they unmount the reader quickly.
+  // IMPORTANT: We capture stateRef.current values into a snapshot object so the cleanup
+  // function always reads the values that belonged to THIS specific article session,
+  // not the values that might have been overwritten by a subsequent article load.
   useEffect(() => {
     if (!enabled) return;
 
-    const currentArticleId = articleId;
-    const currentCategory = articleCategory;
-    const currentStartTime = stateRef.current.startTime;
+    // Snapshot the article-specific identity at the moment this effect fires.
+    // If the article changes, a new effect runs with a new snapshot — so the old
+    // cleanup correctly fires with the OLD article's data.
+    const snapshot = {
+      articleId,
+      articleCategory,
+      startTime: stateRef.current.startTime,
+      stateRef, // ref to shared mutable state (concluded, maxDepth)
+    };
 
     return () => {
       // If unmounting and session wasn't explicitly concluded
-      if (!stateRef.current.concluded) {
-        const duration = Date.now() - currentStartTime;
-        if (duration < 15000 && stateRef.current.maxDepth < 0.2) {
+      if (!snapshot.stateRef.current.concluded) {
+        const duration = Date.now() - snapshot.startTime;
+        if (duration < 15000 && snapshot.stateRef.current.maxDepth < 0.2) {
           queueBehaviorEvent(
-            currentArticleId,
+            snapshot.articleId,
             'quick_exit',
-            currentCategory,
+            snapshot.articleCategory,
             lengthStyle,
             publicationName,
             duration,
-            stateRef.current.maxDepth
+            snapshot.stateRef.current.maxDepth
           );
         }
       }

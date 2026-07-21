@@ -48,6 +48,10 @@ export interface Article {
   qualityScore: number;
   isSeed: boolean;
   rssStatus?: 'current' | 'archived';
+  frontendRules?: {
+    removeCss?: string[];
+    injectCss?: string;
+  };
 }
 
 export type BehaviorEventType =
@@ -84,4 +88,10 @@ export interface FeedSource {
   category: string;
   publicationName: string;
   qualityScore: number;
+  isActive?: boolean;
+  forceArchived?: boolean;
+  frontendRules?: {
+    removeCss?: string[];
+    injectCss?: string;
+  };
 }

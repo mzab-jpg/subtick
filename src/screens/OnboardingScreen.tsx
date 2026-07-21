@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Animated,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { CATEGORIES, DEFAULT_SELECTED_WEIGHT, DEFAULT_NOT_INTERESTED_WEIGHT, DEFAULT_NEUTRAL_WEIGHT } from '../utils/constants';
@@ -120,12 +119,12 @@ export default function OnboardingScreen({ navigation }: any) {
           {selectedIds.length}/3 minimum selected
         </Text>
         <View style={[styles.progressBarBg, { backgroundColor: colors.progressBarBackground }]}>
-          <Animated.View
+          <View
             style={[
               styles.progressBarFill,
               {
                 backgroundColor: selectedIds.length >= 3 ? colors.success : colors.primary,
-                width: `${Math.min(progress * 100, 100)}%` as any,
+                width: `${Math.min(progress * 100, 100)}%`,
               },
             ]}
           />
