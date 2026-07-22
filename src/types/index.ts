@@ -167,4 +167,9 @@ export type RootStackParamList = {
   Settings: undefined;
   History: undefined;
   SavedReads: undefined;
+  CategoryPreferences: undefined;
+  DashboardStats: undefined;
+  DeveloperOptions: undefined;
+  Feedback: undefined;
+  FeedRequest: undefined;
 };

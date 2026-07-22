@@ -15,6 +15,11 @@ import ReaderScreen from '../screens/ReaderScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import SavedReadsScreen from '../screens/SavedReadsScreen';
+import CategoryPreferencesScreen from '../screens/CategoryPreferencesScreen';
+import DashboardStatsScreen from '../screens/DashboardStatsScreen';
+import DeveloperOptionsScreen from '../screens/DeveloperOptionsScreen';
+import FeedbackScreen from '../screens/FeedbackScreen';
+import FeedRequestScreen from '../screens/FeedRequestScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -93,6 +98,39 @@ export default function RootNavigator() {
           name="SavedReads"
           component={SavedReadsScreen}
           options={{ gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="CategoryPreferences"
+          component={CategoryPreferencesScreen}
+          options={{ gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="DashboardStats"
+          component={DashboardStatsScreen}
+          options={{ gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="DeveloperOptions"
+          component={DeveloperOptionsScreen}
+          options={{ gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="Feedback"
+          component={FeedbackScreen}
+          options={{
+            presentation: 'modal',
+            gestureEnabled: true,
+            gestureDirection: 'vertical',
+          }}
+        />
+        <Stack.Screen
+          name="FeedRequest"
+          component={FeedRequestScreen}
+          options={{
+            presentation: 'modal',
+            gestureEnabled: true,
+            gestureDirection: 'vertical',
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

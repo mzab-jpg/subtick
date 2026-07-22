@@ -1,68 +1,63 @@
 // ============================================================
-// SubTick — Settings Screen
-// Category weights, metric toggles, theme, feed requests.
+// SubTick — Settings Screen (Redesigned)
+// Clean grouped-card layout. Complex sub-sections are
+// promoted to their own sub-screens.
 // ============================================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Alert,
   Switch,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
+  Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { UserProfile, ThemeMode, FeedRequest, Article } from '../types';
+import { UserProfile, ThemeMode } from '../types';
 import { auth, db } from '../services/firebase';
-import { doc, setDoc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import {
   fetchUserProfile,
-  updateCategoryWeights,
   linkGoogleAccount,
   unlinkGoogleAccount,
 } from '../services/auth';
 import {
   CATEGORIES,
   DASHBOARD_METRIC_DEFS,
-  DEFAULT_SELECTED_WEIGHT,
-  DEFAULT_NOT_INTERESTED_WEIGHT,
-  DEFAULT_NEUTRAL_WEIGHT,
-  MIN_CATEGORY_WEIGHT,
-  MAX_CATEGORY_WEIGHT,
   TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
   TEXT_LG,
 } from '../utils/constants';
-import { validateFeedRequest } from '../utils/validation';
-import { fetchAndExtractArticle } from '../services/feedService';
-import { XMLParser } from 'fast-xml-parser';
-import { 
-  ChevronLeft, 
-  ChevronDown, 
-  ChevronRight, 
-  Check, 
-  X, 
-  Minus, 
-  BookOpen, 
-  Bookmark,
+import {
+  ChevronLeft,
+  ChevronRight,
   Link,
-  Trash2,
   Smartphone,
   Sun,
   Moon,
-  Zap,
-  Clock,
+  Tag,
   BarChart3,
-  TerminalSquare
+  MessageSquare,
+  Rss,
+  TerminalSquare,
 } from 'lucide-react-native';
+
+// ── Helper: count selected categories ───────────────────────
+const getSelectedCategoryCount = (profile: UserProfile | null): number => {
+  if (!profile) return 0;
+  return profile.selectedCategoryIds.length;
+};
+
+// ── Helper: count active dashboard metrics ───────────────────
+const getActiveMetricCount = (profile: UserProfile | null): number => {
+  if (!profile) return 0;
+  return (profile.dashboardMetricIds || []).length;
+};
 
 export default function SettingsScreen() {
   const { colors, mode, setThemeMode } = useTheme();
@@ -70,24 +65,18 @@ export default function SettingsScreen() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [feedUrl, setFeedUrl] = useState('');
-  const [feedDescription, setFeedDescription] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  
-  const [devSandboxUrl, setDevSandboxUrl] = useState('');
-  const [testingDevSandbox, setTestingDevSandbox] = useState(false);
-
-  const [showCategoryPrefs, setShowCategoryPrefs] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-
-  const [feedbackMessage, setFeedbackMessage] = useState('');
-  const [submittingFeedback, setSubmittingFeedback] = useState(false);
-
-  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     loadProfile();
   }, []);
+
+  // Re-load profile when returning from a sub-screen so counts update
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (!loading) loadProfile();
+    });
+    return unsubscribe;
+  }, [navigation, loading]);
 
   const loadProfile = async () => {
     try {
@@ -102,89 +91,9 @@ export default function SettingsScreen() {
     }
   };
 
-  // --- Category Weight Adjustment ---
-  const handleCategoryCycle = async (categoryId: string) => {
-    if (!profile || !auth.currentUser) return;
-
-    const previousProfile = profile; // snapshot for revert on failure
-    const newWeights = { ...profile.categoryWeights };
-    const newSelected = [...profile.selectedCategoryIds];
-    const newNotInterested = [...profile.notInterestedCategoryIds];
-
-    const isSelected = newSelected.includes(categoryId);
-    const isNotInterested = newNotInterested.includes(categoryId);
-
-    if (isSelected) {
-      // Selected → Not Interested
-      newSelected.splice(newSelected.indexOf(categoryId), 1);
-      newNotInterested.push(categoryId);
-      newWeights[categoryId] = DEFAULT_NOT_INTERESTED_WEIGHT;
-    } else if (isNotInterested) {
-      // Not Interested → Neutral
-      newNotInterested.splice(newNotInterested.indexOf(categoryId), 1);
-      newWeights[categoryId] = DEFAULT_NEUTRAL_WEIGHT;
-    } else {
-      // Neutral → Selected
-      newSelected.push(categoryId);
-      newWeights[categoryId] = DEFAULT_SELECTED_WEIGHT;
-    }
-
-    const updatedProfile = {
-      ...profile,
-      categoryWeights: newWeights,
-      selectedCategoryIds: newSelected,
-      notInterestedCategoryIds: newNotInterested,
-    };
-    // Optimistically update UI
-    setProfile(updatedProfile);
-
-    try {
-      await updateCategoryWeights(
-        auth.currentUser.uid,
-        newWeights,
-        newSelected,
-        newNotInterested
-      );
-    } catch (error) {
-      console.error('[Settings] handleCategoryCycle save failed:', error);
-      // Revert UI to previous state so user knows their change didn't save
-      setProfile(previousProfile);
-      Alert.alert('Save Failed', 'Could not save your preference. Please check your connection and try again.');
-    }
-  };
-
-  const getCategoryState = (catId: string): 'selected' | 'not_interested' | 'neutral' => {
-    if (!profile) return 'neutral';
-    if (profile.selectedCategoryIds.includes(catId)) return 'selected';
-    if (profile.notInterestedCategoryIds.includes(catId)) return 'not_interested';
-    return 'neutral';
-  };
-
-  // --- Dashboard Metric Toggles ---
-  const toggleMetric = async (metricId: string) => {
-    if (!profile) return;
-    const current = profile.dashboardMetricIds || [];
-    let updated: string[];
-    if (current.includes(metricId)) {
-      updated = current.filter((id) => id !== metricId);
-    } else {
-      if (current.length >= 3) {
-        Alert.alert('Limit Reached', 'You can display up to 3 metrics. Remove one first.');
-        return;
-      }
-      updated = [...current, metricId];
-    }
-    const updatedProfile = { ...profile, dashboardMetricIds: updated };
-    setProfile(updatedProfile);
-
-    const userRef = doc(db, 'users', auth.currentUser!.uid);
-    await setDoc(userRef, { dashboardMetricIds: updated, lastUpdated: Date.now() }, { merge: true });
-  };
-
   // --- Theme Selection ---
   const handleThemeChange = (newMode: ThemeMode) => {
     setThemeMode(newMode);
-    // Also persist to Firestore
     if (auth.currentUser) {
       const userRef = doc(db, 'users', auth.currentUser.uid);
       setDoc(userRef, { themePreference: newMode, lastUpdated: Date.now() }, { merge: true });
@@ -193,10 +102,6 @@ export default function SettingsScreen() {
 
   // --- Google Account Linking ---
   const handleGoogleLink = async () => {
-    // Note: linkWithPopup is a web-only API. On iOS/Android it will throw
-    // "auth/operation-not-supported-in-this-environment". Until native Google
-    // sign-in is implemented (requires expo-auth-session or @react-native-google-signin),
-    // we show a clear, actionable message instead of a raw technical error.
     try {
       if (profile?.linkedGoogleAccount) {
         await unlinkGoogleAccount();
@@ -223,131 +128,6 @@ export default function SettingsScreen() {
     }
   };
 
-  // --- Developer Sandbox ---
-  const handleDevSandboxTest = async () => {
-    const url = devSandboxUrl.trim();
-    if (!url) return;
-    
-    setTestingDevSandbox(true);
-    try {
-      // Improved RSS detection: checks for common feed URL patterns including
-      // Substack feeds (/feed), RSS files (.xml, .rss), Atom feeds, and
-      // query-string based feeds (feed=rss, format=feed, etc.)
-      const urlLower = url.toLowerCase();
-      const isRss =
-        urlLower.includes('/feed') ||
-        urlLower.includes('.xml') ||
-        urlLower.includes('.rss') ||
-        urlLower.includes('/rss') ||
-        urlLower.includes('/atom') ||
-        urlLower.includes('feed=rss') ||
-        urlLower.includes('format=feed') ||
-        urlLower.includes('type=rss');
-
-      const mockArticle: Article = {
-        id: 'test_sandbox_123',
-        title: 'Developer Sandbox Test',
-        author: 'Tester',
-        publicationName: 'Sandbox Publication',
-        publicationUrl: url,
-        feedUrl: isRss ? url : '',
-        category: 'Technology & Innovation',
-        lengthStyle: 'medium',
-        publishDate: Date.now(),
-        cacheTimestamp: Date.now(),
-        isPaywalled: false,
-        estimatedReadMinutes: 5,
-        trendingScore: 0,
-        qualityScore: 1,
-        isSeed: false,
-        rssStatus: isRss ? 'current' : 'archived',
-      };
-
-      if (isRss) {
-        // Test parsing the RSS and sanitize HTML
-        const response = await fetch(url);
-        const xmlText = await response.text();
-        const parser = new XMLParser({ ignoreAttributes: false });
-        const parsed = parser.parse(xmlText);
-        const channel = parsed?.rss?.channel || parsed?.feed;
-        let items = channel?.item || channel?.entry || [];
-        if (!Array.isArray(items)) items = [items];
-        
-        if (items.length === 0) throw new Error('No items found in RSS feed');
-        
-        const firstItem = items[0];
-        const guid = firstItem.guid?.['#text'] || firstItem.guid || firstItem.link || '';
-        
-        // Pass to standard fetcher which extracts and sanitizes
-        const sanitizedHtml = await fetchAndExtractArticle(url, guid);
-        
-        mockArticle.title = firstItem.title || 'Untitled Sandbox RSS';
-        mockArticle.publicationUrl = firstItem.link || url;
-
-        navigation.navigate('Reader', { articleId: 'test_sandbox_123', mockArticle, mockHtml: sanitizedHtml });
-      } else {
-        // Direct URL test (Archived mode raw webview)
-        navigation.navigate('Reader', { articleId: 'test_sandbox_123', mockArticle });
-      }
-    } catch (error: any) {
-      Alert.alert('Sandbox Error', error.message || 'Failed to load test URL');
-    } finally {
-      setTestingDevSandbox(false);
-    }
-  };
-
-  // --- Feedback Submission ---
-  const handleSubmitFeedback = async () => {
-    const message = feedbackMessage.trim();
-    if (!message) {
-      Alert.alert('Empty', 'Please write something before submitting.');
-      return;
-    }
-    setSubmittingFeedback(true);
-    try {
-      await addDoc(collection(db, 'feedback'), {
-        userId: auth.currentUser!.uid,
-        message,
-        timestamp: Date.now(),
-        status: 'pending',
-      });
-      Alert.alert('Thank you!', 'Your feedback has been received.');
-      setFeedbackMessage('');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit feedback.');
-    } finally {
-      setSubmittingFeedback(false);
-    }
-  };
-
-  // --- Feed Request Submission ---
-  const handleSubmitFeedRequest = async () => {
-    const validation = validateFeedRequest(feedUrl, feedDescription);
-    if (!validation.isValid) {
-      Alert.alert('Invalid', validation.errorMessage);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const request: Omit<FeedRequest, 'id'> = {
-        userId: auth.currentUser!.uid,
-        url: feedUrl.trim(),
-        description: feedDescription.trim() || undefined,
-        timestamp: Date.now(),
-        status: 'pending',
-      };
-      await addDoc(collection(db, 'feed_requests'), request);
-      Alert.alert('Submitted', 'Your feed request has been submitted for review!');
-      setFeedUrl('');
-      setFeedDescription('');
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit request.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -356,28 +136,16 @@ export default function SettingsScreen() {
     );
   }
 
-  const getMetricIcon = (id: string, color: string) => {
-    switch (id) {
-      case 'streak': return <Zap size={16} color={color} />;
-      case 'weeklyReads': return <BookOpen size={16} color={color} />;
-      case 'totalReadTime': return <Clock size={16} color={color} />;
-      default: return <BarChart3 size={16} color={color} />;
-    }
-  };
+  const selectedCategoryCount = getSelectedCategoryCount(profile);
+  const activeMetricCount = getActiveMetricCount(profile);
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-      style={{ flex: 1 }}
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
-      <ScrollView
-        ref={scrollViewRef}
-        style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header */}
+      {/* ── Page Header ─────────────────────────────────── */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <ChevronLeft size={24} color={colors.text} />
@@ -386,385 +154,218 @@ export default function SettingsScreen() {
         <View style={styles.backButton} />
       </View>
 
-      {/* Category Preferences */}
-      <TouchableOpacity 
-        style={styles.collapsibleHeader} 
-        onPress={() => setShowCategoryPrefs(!showCategoryPrefs)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Category Preferences</Text>
-        {showCategoryPrefs ? <ChevronDown size={20} color={colors.textMuted} /> : <ChevronRight size={20} color={colors.textMuted} />}
-      </TouchableOpacity>
-      
-      {showCategoryPrefs && (
-        <View style={styles.collapsibleContent}>
-          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-            Tap to cycle: Interested → Not Interested → Neutral
-          </Text>
-          <View style={styles.categoryGrid}>
-            {CATEGORIES.map((cat) => {
-              const state = getCategoryState(cat.id);
-              const bgColor =
-                state === 'selected'
-                  ? colors.chipSelectedBg
-                  : state === 'not_interested'
-                    ? colors.chipNotInterestedBg
-                    : colors.chipNeutralBg;
-              const textColor =
-                state === 'selected'
-                  ? colors.chipSelectedText
-                  : state === 'not_interested'
-                    ? colors.chipNotInterestedText
-                    : colors.chipNeutralText;
-
-              const IconComp = state === 'selected' ? Check : state === 'not_interested' ? X : Minus;
-
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.categoryRow, { backgroundColor: bgColor, borderColor: colors.border }]}
-                  onPress={() => handleCategoryCycle(cat.id)}
-                  activeOpacity={0.7}
-                >
-                  <IconComp size={20} color={textColor} style={{ marginRight: 16 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.categoryName, { color: textColor }]}>{cat.name}</Text>
-                    <Text style={[styles.categoryWeight, { color: textColor }]}>
-                      {state === 'selected' ? 'Interested' : state === 'not_interested' ? 'Not Interested' : 'Neutral'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+      {/* ══════════════════════════════════════════════════
+          SECTION: ACCOUNT
+      ══════════════════════════════════════════════════ */}
+      <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ACCOUNT</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleGoogleLink}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              <Link size={16} color={colors.text} />
+            </View>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Link Google Account</Text>
           </View>
-        </View>
-      )}
-
-      {/* Dashboard Metrics */}
-      <TouchableOpacity 
-        style={[styles.collapsibleHeader, { marginTop: 32 }]} 
-        onPress={() => setShowStats(!showStats)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Dashboard Stats</Text>
-        {showStats ? <ChevronDown size={20} color={colors.textMuted} /> : <ChevronRight size={20} color={colors.textMuted} />}
-      </TouchableOpacity>
-      
-      {showStats && (
-        <View style={styles.collapsibleContent}>
-          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-            Choose up to 3 stats to display on your dashboard
+          <Text style={[styles.rowValue, { color: colors.textMuted }]}>
+            {profile?.linkedGoogleAccount ? 'Connected' : 'Not Connected'}
           </Text>
-          <View style={styles.metricsList}>
-            {DASHBOARD_METRIC_DEFS.map((metric) => {
-              const isSelected = (profile?.dashboardMetricIds || []).includes(metric.id);
-              
-              // Helper to map metric id to profile value
-              let value: string | number = 0;
-              if (profile) {
-                switch(metric.id) {
-                  case 'streak': value = profile.currentStreakDays; break;
-                  case 'weeklyReads': value = profile.weeklyReadCount; break;
-                  case 'topCategory':
-                    let topCat = '—';
-                    let topWeight = 0;
-                    // Skip composite keys like "Technology::long" and "pub::Stratechery"
-                    Object.entries(profile.categoryWeights).forEach(([cat, w]) => {
-                      if (!cat.includes('::') && !cat.startsWith('pub::') && w > topWeight) {
-                        topWeight = w;
-                        topCat = cat;
-                      }
-                    });
-                    value = topCat.charAt(0).toUpperCase() + topCat.slice(1);
-                    break;
-                  case 'totalRead': value = profile.totalArticlesRead; break;
-                  case 'avgWpm': value = profile.averageWpm; break;
-                  case 'weeklyStreak': value = `${profile.weeklyReadCount} this week`; break;
-                  case 'exploreScore': value = 'Active'; break;
-                }
-              }
-
-              return (
-                <View
-                  key={metric.id}
-                  style={[styles.metricRow, { borderBottomColor: colors.border }]}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    {getMetricIcon(metric.id, colors.textMuted)}
-                    <View style={{ marginLeft: 16 }}>
-                      <Text style={[styles.metricLabel, { color: colors.text }]}>
-                        {metric.label}
-                      </Text>
-                      <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 4 }}>
-                        {value} {isSelected ? '• Showing on Dashboard' : ''}
-                      </Text>
-                    </View>
-                  </View>
-                  <Switch
-                    value={isSelected}
-                    onValueChange={() => toggleMetric(metric.id)}
-                    trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
-                    thumbColor={isSelected ? colors.primary : colors.textMuted}
-                  />
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {/* Lists */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 32, marginBottom: 16 }]}>Your Lists</Text>
-      <TouchableOpacity
-        style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 16 }]}
-        onPress={() => navigation.navigate('History')}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <BookOpen size={20} color={colors.text} style={{ marginRight: 16 }} />
-          <Text style={[styles.linkButtonText, { color: colors.text }]}>Reading History</Text>
-        </View>
-        <ChevronRight size={20} color={colors.textMuted} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => navigation.navigate('SavedReads')}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Bookmark size={20} color={colors.text} style={{ marginRight: 16 }} />
-          <Text style={[styles.linkButtonText, { color: colors.text }]}>Saved Reads</Text>
-        </View>
-        <ChevronRight size={20} color={colors.textMuted} />
-      </TouchableOpacity>
-
-      {/* Article Sources */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Article Sources</Text>
-      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-        Archived articles are older stories that are no longer available in standard RSS feeds. They will load the full Substack webpage directly inside the app.
-      </Text>
-      <View style={[styles.metricRow, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
-        <Text style={[styles.metricLabel, { color: colors.text, flex: 1, paddingRight: 16 }]}>
-          Include Archived Articles
-        </Text>
-        <Switch
-          value={profile?.includeArchivedArticles || false}
-          onValueChange={async (value) => {
-            if (!profile || !auth.currentUser) return;
-            const updatedProfile = { ...profile, includeArchivedArticles: value };
-            setProfile(updatedProfile);
-            const userRef = doc(db, 'users', auth.currentUser.uid);
-            await setDoc(userRef, { includeArchivedArticles: value, lastUpdated: Date.now() }, { merge: true });
-          }}
-          trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
-          thumbColor={profile?.includeArchivedArticles ? colors.primary : colors.textMuted}
-        />
+        </TouchableOpacity>
       </View>
 
-      {/* Theme Selection */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Theme</Text>
-      <View style={styles.themeRow}>
-        {(['system', 'light', 'dark'] as ThemeMode[]).map((themeOption) => {
-          const ThemeIcon = themeOption === 'system' ? Smartphone : themeOption === 'light' ? Sun : Moon;
-          return (
-            <TouchableOpacity
-              key={themeOption}
-              style={[
-                styles.themeButton,
-                {
-                  backgroundColor: mode === themeOption ? colors.primary : colors.surfaceSecondary,
-                  borderColor: mode === themeOption ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => handleThemeChange(themeOption)}
-            >
-              <ThemeIcon size={18} color={mode === themeOption ? colors.background : colors.text} style={{ marginBottom: 8 }} />
-              <Text
+      {/* ══════════════════════════════════════════════════
+          SECTION: PREFERENCES
+      ══════════════════════════════════════════════════ */}
+      <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PREFERENCES</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+
+        {/* Theme — 3-segment control inside the card */}
+        <View style={[styles.row, styles.rowNoBorder]}>
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              {mode === 'dark'
+                ? <Moon size={16} color={colors.text} />
+                : mode === 'light'
+                  ? <Sun size={16} color={colors.text} />
+                  : <Smartphone size={16} color={colors.text} />
+              }
+            </View>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Theme</Text>
+          </View>
+          <View style={[styles.segmentControl, { backgroundColor: colors.surfaceSecondary }]}>
+            {(['system', 'light', 'dark'] as ThemeMode[]).map((themeOption) => (
+              <TouchableOpacity
+                key={themeOption}
                 style={[
-                  styles.themeButtonText,
-                  { color: mode === themeOption ? colors.background : colors.text },
+                  styles.segment,
+                  mode === themeOption && { backgroundColor: colors.background },
                 ]}
+                onPress={() => handleThemeChange(themeOption)}
+                activeOpacity={0.7}
               >
-                {themeOption === 'system' ? 'System' : themeOption === 'light' ? 'Light' : 'Dark'}
+                <Text
+                  style={[
+                    styles.segmentText,
+                    { color: mode === themeOption ? colors.text : colors.textMuted },
+                  ]}
+                >
+                  {themeOption === 'system' ? 'Auto' : themeOption === 'light' ? 'Light' : 'Dark'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        {/* Category Preferences → sub-screen */}
+        <TouchableOpacity
+          style={[styles.row, styles.rowNoBorder]}
+          onPress={() => navigation.navigate('CategoryPreferences')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              <Tag size={16} color={colors.text} />
+            </View>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Category Preferences</Text>
+          </View>
+          <View style={styles.rowRight}>
+            <Text style={[styles.rowValue, { color: colors.textMuted }]}>
+              {selectedCategoryCount} Selected
+            </Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        {/* Dashboard Stats → sub-screen */}
+        <TouchableOpacity
+          style={[styles.row, styles.rowNoBorder]}
+          onPress={() => navigation.navigate('DashboardStats')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              <BarChart3 size={16} color={colors.text} />
+            </View>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Dashboard Stats</Text>
+          </View>
+          <View style={styles.rowRight}>
+            <Text style={[styles.rowValue, { color: colors.textMuted }]}>
+              {activeMetricCount} Selected
+            </Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        {/* Include Archived Articles — toggle */}
+        <View style={[styles.row, styles.rowNoBorder]}>
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              <Rss size={16} color={colors.text} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: colors.text }]}>Archived Articles</Text>
+              <Text style={[styles.rowHint, { color: colors.textMuted }]}>
+                Load older articles from Substack directly
               </Text>
-            </TouchableOpacity>
-          );
-        })}
+            </View>
+          </View>
+          <Switch
+            value={profile?.includeArchivedArticles || false}
+            onValueChange={async (value) => {
+              if (!profile || !auth.currentUser) return;
+              setProfile({ ...profile, includeArchivedArticles: value });
+              const userRef = doc(db, 'users', auth.currentUser.uid);
+              await setDoc(userRef, { includeArchivedArticles: value, lastUpdated: Date.now() }, { merge: true });
+            }}
+            trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
+            thumbColor={profile?.includeArchivedArticles ? colors.primary : colors.textMuted}
+          />
+        </View>
       </View>
 
-      {/* Account Linking */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Account</Text>
-      <TouchableOpacity
-        style={[styles.linkButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={handleGoogleLink}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Link size={20} color={colors.text} style={{ marginRight: 16 }} />
-          <Text style={[styles.linkButtonText, { color: colors.text }]}>
-            {profile?.linkedGoogleAccount ? 'Unlink Google Account' : 'Link Google Account'}
-          </Text>
-        </View>
-        <Text style={[styles.linkStatus, { color: colors.textMuted }]}>
-          {profile?.linkedGoogleAccount ? 'Connected' : 'Not connected'}
-        </Text>
-      </TouchableOpacity>
+      {/* ══════════════════════════════════════════════════
+          SECTION: SUPPORT & FEEDBACK
+      ══════════════════════════════════════════════════ */}
+      <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SUPPORT & FEEDBACK</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
 
-      {/* Developer Settings Header */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 48, marginBottom: 8 }]}>Developer Settings</Text>
-      <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 24 }} />
+        {/* Send Feedback */}
+        <TouchableOpacity
+          style={[styles.row, styles.rowNoBorder]}
+          onPress={() => navigation.navigate('Feedback')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              <MessageSquare size={16} color={colors.text} />
+            </View>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Send Feedback</Text>
+          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </TouchableOpacity>
 
-      {/* Developer Reset */}
-      <TouchableOpacity
-        style={[styles.linkButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
-        onPress={async () => {
-          Alert.alert(
-            'Reset Local Data',
-            'This will permanently wipe your reading history, saved articles, and behavior queue from this device. Are you sure?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'Wipe Data', 
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-                    await AsyncStorage.clear();
-                    Alert.alert('Cleared', 'Local storage has been completely wiped.');
-                  } catch (e) {
-                    Alert.alert('Error', 'Failed to clear local storage.');
-                  }
-                }
-              }
-            ]
-          );
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Trash2 size={20} color={colors.error} style={{ marginRight: 16 }} />
-          <Text style={[styles.linkButtonText, { color: colors.error }]}>Clear Local Data</Text>
-        </View>
-      </TouchableOpacity>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-      {/* Developer Sandbox */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 32 }]}>Sandbox Reader</Text>
-      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-        Instantly test how any Substack URL or RSS Feed renders in the Reader.
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
-        ]}
-        placeholder="https://kyla.substack.com/p/..."
-        placeholderTextColor={colors.textMuted}
-        value={devSandboxUrl}
-        onChangeText={setDevSandboxUrl}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-      />
-      <TouchableOpacity
-        style={[styles.submitButton, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, borderWidth: 1, flexDirection: 'row' }]}
-        onPress={handleDevSandboxTest}
-        disabled={testingDevSandbox}
-      >
-        {testingDevSandbox ? (
-          <ActivityIndicator color={colors.text} style={{ marginRight: 8 }} />
-        ) : (
-          <TerminalSquare size={18} color={colors.text} style={{ marginRight: 8 }} />
-        )}
-        <Text style={[styles.submitButtonText, { color: colors.text }]}>Test URL in Reader</Text>
-      </TouchableOpacity>
+        {/* Request a Feed */}
+        <TouchableOpacity
+          style={[styles.row, styles.rowNoBorder]}
+          onPress={() => navigation.navigate('FeedRequest')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              <Rss size={16} color={colors.text} />
+            </View>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Request a Feed</Text>
+          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
 
-      {/* Feedback */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Send Feedback</Text>
-      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-        Bugs, ideas, or anything on your mind — we read everything.
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          styles.textArea,
-          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
-        ]}
-        placeholder="What's on your mind?"
-        placeholderTextColor={colors.textMuted}
-        value={feedbackMessage}
-        onChangeText={setFeedbackMessage}
-        multiline
-        numberOfLines={4}
-        textAlignVertical="top"
-        onFocus={() => {
-          // Delay slightly so the keyboard has time to measure, then scroll to end
-          setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300);
-        }}
-      />
-      <TouchableOpacity
-        style={[styles.submitButton, { backgroundColor: colors.primary, opacity: submittingFeedback ? 0.6 : 1 }]}
-        onPress={handleSubmitFeedback}
-        disabled={submittingFeedback}
-      >
-        {submittingFeedback ? (
-          <ActivityIndicator color={colors.background} />
-        ) : (
-          <Text style={[styles.submitButtonText, { color: colors.background }]}>Send Feedback</Text>
-        )}
-      </TouchableOpacity>
+      {/* ══════════════════════════════════════════════════
+          SECTION: DEVELOPER
+      ══════════════════════════════════════════════════ */}
+      <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>DEVELOPER</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.row, styles.rowNoBorder]}
+          onPress={() => navigation.navigate('DeveloperOptions')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.rowLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+              <TerminalSquare size={16} color={colors.text} />
+            </View>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Developer Options</Text>
+          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
 
-      {/* Feed Request */}
-      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Request a Feed</Text>
-      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-        Submit a Substack URL you'd like us to add
-      </Text>
-      <TextInput
-        style={[
-          styles.input,
-          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
-        ]}
-        placeholder="https://example.substack.com/feed"
-        placeholderTextColor={colors.textMuted}
-        value={feedUrl}
-        onChangeText={setFeedUrl}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-      />
-      <TextInput
-        style={[
-          styles.input,
-          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
-        ]}
-        placeholder="Why do you recommend this? (optional)"
-        placeholderTextColor={colors.textMuted}
-        value={feedDescription}
-        onChangeText={setFeedDescription}
-        multiline
-        numberOfLines={3}
-      />
-      <TouchableOpacity
-        style={[styles.submitButton, { backgroundColor: colors.primary, opacity: submitting ? 0.6 : 1 }]}
-        onPress={handleSubmitFeedRequest}
-        disabled={submitting}
-      >
-        {submitting ? (
-          <ActivityIndicator color={colors.background} />
-        ) : (
-          <Text style={[styles.submitButtonText, { color: colors.background }]}>Submit Request</Text>
-        )}
-      </TouchableOpacity>
-
-      {/* App Info */}
+      {/* App Version */}
       <Text style={[styles.appInfo, { color: colors.textMuted }]}>
         Tangent v1.0.0 · Built with Expo & Firebase
       </Text>
+
       <View style={{ height: 48 }} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 24, paddingBottom: 64 },
+  content: { paddingHorizontal: 28, paddingBottom: 64 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -773,68 +374,75 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     borderBottomWidth: 1,
     marginBottom: 32,
+    paddingHorizontal: 0,
   },
   backButton: { width: 40, alignItems: 'flex-start' },
   headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  collapsibleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  collapsibleContent: { marginTop: 8 },
-  sectionTitle: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 8 },
-  sectionSubtitle: { fontSize: TEXT_SM, marginBottom: 16, lineHeight: 20 },
-  categoryGrid: { gap: 8 },
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+
+  // Section label above each card group
+  sectionLabel: {
+    fontSize: TEXT_XS,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+
+  // Card container
+  card: {
+    borderRadius: 10,
     borderWidth: 1,
+    marginBottom: 28,
+    overflow: 'hidden',
   },
-  categoryName: { fontSize: TEXT_BASE, fontWeight: '600' },
-  categoryWeight: { fontSize: TEXT_SM, marginTop: 4 },
-  metricsList: { marginTop: 8 },
-  metricRow: {
+
+  // Individual row inside a card
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  metricLabel: { fontSize: TEXT_BASE, fontWeight: '600' },
-  themeRow: { flexDirection: 'row', gap: 16 },
-  themeButton: {
+  rowNoBorder: {
+    // border handled by explicit divider below
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
+    gap: 12,
   },
-  themeButtonText: { fontSize: TEXT_SM, fontWeight: '600' },
-  linkButton: {
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
+  rowRight: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 4,
   },
-  linkButtonText: { fontSize: TEXT_BASE, fontWeight: '600' },
-  linkStatus: { fontSize: TEXT_SM },
-  input: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    fontSize: TEXT_BASE,
-    marginBottom: 16,
-  },
-  textArea: {
-    minHeight: 100,
-  },
-  submitButton: {
-    padding: 16,
-    borderRadius: 999,
+  iconWrap: {
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
   },
-  submitButtonText: { fontSize: TEXT_BASE, fontWeight: '700' },
-  appInfo: { textAlign: 'center', marginTop: 48, fontSize: TEXT_XS },
+  rowLabel: { fontSize: TEXT_BASE, fontWeight: '500' },
+  rowValue: { fontSize: TEXT_SM },
+  rowHint: { fontSize: TEXT_XS, marginTop: 2, lineHeight: 16 },
+
+  divider: { height: 1, marginLeft: 60 },
+
+  // 3-segment theme control
+  segmentControl: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 3,
+    gap: 2,
+  },
+  segment: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  segmentText: { fontSize: TEXT_XS, fontWeight: '600' },
+
+  appInfo: { textAlign: 'center', marginTop: 8, fontSize: TEXT_XS },
 });
