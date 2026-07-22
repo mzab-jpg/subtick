@@ -16,9 +16,10 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, UserProfile, DashboardMetric, RootStackParamList } from '../types';
-import { User, BarChart3, Clock, Zap, BookOpen, Inbox, Shuffle } from 'lucide-react-native';
+import { User, BarChart3, Clock, Flame, BookOpen, CalendarDays, Gauge, BookCheck, BookHeart, Inbox, Shuffle } from 'lucide-react-native';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_XL, TEXT_2XL } from '../utils/constants';
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { fetchUserProfile, completeOnboarding } from '../services/auth';
 import { getRankedFeed, getSeenArticleIds } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
@@ -38,6 +39,34 @@ export default function DashboardScreen() {
   // Passed to getRankedFeed as exclusions so we never recycle cards within a session.
   // In-memory only — resets on Dashboard unmount; articles reappear freely in future sessions.
   const sessionShownIds = useRef<Set<string>>(new Set());
+
+  // --- Real-time profile listener — stats update instantly when Cloud Function writes back ---
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribeSnapshot = onSnapshot(userRef, (snap) => {
+      if (snap.exists()) {
+        const updated = snap.data() as import('../types').UserProfile;
+        setUserProfile((prev) => {
+          // Preserve local state — only update stats fields
+          if (!prev) return updated;
+          return {
+            ...prev,
+            currentStreakDays: updated.currentStreakDays,
+            weeklyReadCount: updated.weeklyReadCount,
+            totalArticlesRead: updated.totalArticlesRead,
+            averageWpm: updated.averageWpm,
+            totalReadTimeMs: updated.totalReadTimeMs,
+            dashboardMetricIds: updated.dashboardMetricIds,
+          };
+        });
+      }
+    }, (error) => {
+      console.error('[Dashboard] onSnapshot error:', error);
+    });
+    return () => unsubscribeSnapshot();
+  }, []);
 
   // --- Load on mount; refresh profile silently on focus ---
   useEffect(() => {
@@ -136,9 +165,12 @@ export default function DashboardScreen() {
 
   const getMetricIcon = (id: string, color: string) => {
     switch (id) {
-      case 'streak': return <Zap size={16} color={color} />;
-      case 'weeklyReads': return <BookOpen size={16} color={color} />;
+      case 'streak': return <Flame size={16} color={color} />;
+      case 'weeklyReads': return <CalendarDays size={16} color={color} />;
       case 'totalReadTime': return <Clock size={16} color={color} />;
+      case 'avgWpm': return <Gauge size={16} color={color} />;
+      case 'totalRead': return <BookCheck size={16} color={color} />;
+      case 'topCategory': return <BookHeart size={16} color={color} />;
       default: return <BarChart3 size={16} color={color} />;
     }
   };

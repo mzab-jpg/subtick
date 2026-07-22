@@ -9,7 +9,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Switch,
   ActivityIndicator,
@@ -45,6 +44,8 @@ import {
   MessageSquare,
   Rss,
   TerminalSquare,
+  History,
+  Bookmark,
 } from 'lucide-react-native';
 
 // ── Helper: count selected categories ───────────────────────
@@ -140,10 +141,8 @@ export default function SettingsScreen() {
   const activeMetricCount = getActiveMetricCount(profile);
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
+    <View
+      style={[styles.container, styles.content, { backgroundColor: colors.background }]}
     >
       {/* ── Page Header ─────────────────────────────────── */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -174,6 +173,32 @@ export default function SettingsScreen() {
             {profile?.linkedGoogleAccount ? 'Connected' : 'Not Connected'}
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* ══════════════════════════════════════════════════
+          SECTION: LIBRARY
+      ══════════════════════════════════════════════════ */}
+      <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LIBRARY</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Split row: History (left) | Saved Reads (right) */}
+        <View style={styles.splitRow}>
+          <TouchableOpacity
+            style={[styles.splitCell, { borderRightColor: colors.border }]}
+            onPress={() => navigation.navigate('History')}
+            activeOpacity={0.7}
+          >
+            <History size={16} color={colors.text} />
+            <Text style={[styles.splitLabel, { color: colors.text }]}>History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.splitCell, { borderRightWidth: 0 }]}
+            onPress={() => navigation.navigate('SavedReads')}
+            activeOpacity={0.7}
+          >
+            <Bookmark size={16} color={colors.text} />
+            <Text style={[styles.splitLabel, { color: colors.text }]}>Saved Reads</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ══════════════════════════════════════════════════
@@ -353,27 +378,27 @@ export default function SettingsScreen() {
 
       {/* App Version */}
       <Text style={[styles.appInfo, { color: colors.textMuted }]}>
-        Tangent v1.0.0 · Built with Expo & Firebase
+        Tangent v1.0.0
       </Text>
 
       <View style={{ height: 48 }} />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 28, paddingBottom: 64 },
+  content: { paddingHorizontal: 28, paddingTop: 0, paddingBottom: 0 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 64,
-    paddingBottom: 24,
+    paddingTop: 52,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    marginBottom: 32,
+    marginBottom: 20,
     paddingHorizontal: 0,
   },
   backButton: { width: 40, alignItems: 'flex-start' },
@@ -430,6 +455,21 @@ const styles = StyleSheet.create({
 
   divider: { height: 1, marginLeft: 60 },
 
+  // Split row (Library card)
+  splitRow: {
+    flexDirection: 'row',
+  },
+  splitCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+    borderRightWidth: 1,
+  },
+  splitLabel: { fontSize: TEXT_SM, fontWeight: '600' },
+
   // 3-segment theme control
   segmentControl: {
     flexDirection: 'row',
@@ -444,5 +484,5 @@ const styles = StyleSheet.create({
   },
   segmentText: { fontSize: TEXT_XS, fontWeight: '600' },
 
-  appInfo: { textAlign: 'center', marginTop: 8, fontSize: TEXT_XS },
+  appInfo: { textAlign: 'center', marginTop: 20, marginBottom: 16, fontSize: TEXT_XS },
 });

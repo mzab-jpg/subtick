@@ -1,7 +1,7 @@
 // ============================================================
 // SubTick — Onboarding Screen
-// Category chip grid with 3-state toggle (Selected / Not Interested / Neutral).
-// Requires ≥3 Selected categories to proceed.
+// Grouped list, lucide icons, colour-coded state rows.
+// Requires ≥1 Selected category to proceed.
 // ============================================================
 
 import React, { useState } from 'react';
@@ -14,11 +14,35 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { CATEGORIES, DEFAULT_SELECTED_WEIGHT, DEFAULT_NOT_INTERESTED_WEIGHT, DEFAULT_NEUTRAL_WEIGHT, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_2XL } from '../utils/constants';
+import {
+  CATEGORIES,
+  TEXT_XS,
+  TEXT_SM,
+  TEXT_BASE,
+  TEXT_LG,
+  TEXT_2XL,
+} from '../utils/constants';
 import { validateOnboardingSelection } from '../utils/validation';
-import { CategoryDefinition } from '../types';
+import {
+  Cpu,
+  TrendingUp,
+  Globe,
+  Palette,
+  FlaskConical,
+  Brain,
+} from 'lucide-react-native';
+import { LucideIcon } from 'lucide-react-native';
 
 type ChipState = 'selected' | 'not_interested' | 'neutral';
+
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  'Technology & Innovation': Cpu,
+  'Business & Finance': TrendingUp,
+  'Politics & Global Affairs': Globe,
+  'Arts & Culture': Palette,
+  'Science & Health': FlaskConical,
+  'Philosophy & Human Behavior': Brain,
+};
 
 export default function OnboardingScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -37,42 +61,6 @@ export default function OnboardingScreen({ navigation }: any) {
     });
   };
 
-  const getChipStyle = (catId: string) => {
-    const state = chipStates[catId] || 'neutral';
-    switch (state) {
-      case 'selected':
-        return { backgroundColor: colors.chipSelectedBg, borderColor: colors.primary };
-      case 'not_interested':
-        return { backgroundColor: colors.chipNotInterestedBg, borderColor: colors.error };
-      default:
-        return { backgroundColor: colors.chipNeutralBg, borderColor: colors.border };
-    }
-  };
-
-  const getChipTextStyle = (catId: string) => {
-    const state = chipStates[catId] || 'neutral';
-    switch (state) {
-      case 'selected':
-        return { color: colors.chipSelectedText };
-      case 'not_interested':
-        return { color: colors.chipNotInterestedText };
-      default:
-        return { color: colors.chipNeutralText };
-    }
-  };
-
-  const getChipLabel = (catId: string) => {
-    const state = chipStates[catId] || 'neutral';
-    switch (state) {
-      case 'selected':
-        return '✓ Interested';
-      case 'not_interested':
-        return '✗ Not Interested';
-      default:
-        return 'Neutral';
-    }
-  };
-
   const selectedIds = Object.entries(chipStates)
     .filter(([_, state]) => state === 'selected')
     .map(([id]) => id);
@@ -87,7 +75,6 @@ export default function OnboardingScreen({ navigation }: any) {
       Alert.alert('Almost there!', validation.errorMessage);
       return;
     }
-    // Navigate to Dashboard, passing onboarding selections
     navigation.replace('Dashboard', {
       onboardingSelections: {
         selectedCategoryIds: selectedIds,
@@ -96,126 +83,164 @@ export default function OnboardingScreen({ navigation }: any) {
     });
   };
 
-  const progress = selectedIds.length / 3; // 3 minimum → 100%
+  const progress = Math.min(selectedIds.length / 3, 1);
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Welcome to Tangent</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          TikTok for reading. Pick at least 3 topics you're interested in, and we'll build your
-          personalized feed.
-        </Text>
-      </View>
-
-      {/* Progress indicator */}
-      <View style={styles.progressRow}>
-        <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
-          {selectedIds.length}/3 minimum selected
-        </Text>
-        <View style={[styles.progressBarBg, { backgroundColor: colors.progressBarBackground }]}>
-          <View
-            style={[
-              styles.progressBarFill,
-              {
-                backgroundColor: selectedIds.length >= 3 ? colors.success : colors.primary,
-                width: `${Math.min(progress * 100, 100)}%`,
-              },
-            ]}
-          />
-        </View>
-      </View>
-
-      {/* Category Chips */}
-      <View style={styles.chipGrid}>
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[styles.chip, getChipStyle(cat.id)]}
-            onPress={() => toggleChip(cat.id)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.chipEmoji}>{cat.emoji}</Text>
-            <View style={styles.chipTextContainer}>
-              <Text style={[styles.chipName, getChipTextStyle(cat.id)]}>{cat.name}</Text>
-              <Text style={[styles.chipDesc, { color: colors.textMuted }]} numberOfLines={2}>
-                {cat.description}
-              </Text>
-              <Text style={[styles.chipStateLabel, getChipTextStyle(cat.id)]}>
-                {getChipLabel(cat.id)}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Continue Button */}
-      <TouchableOpacity
-        style={[
-          styles.continueButton,
-          {
-            backgroundColor: selectedIds.length >= 3 ? colors.primary : colors.surfaceSecondary,
-          },
-        ]}
-        onPress={handleContinue}
-        activeOpacity={0.8}
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        <Text
-          style={[
-            styles.continueText,
-            { color: selectedIds.length >= 3 ? '#FFFFFF' : colors.textMuted },
-          ]}
-        >
-          {selectedIds.length >= 3
-            ? 'Start Reading →'
-            : `Select ${3 - selectedIds.length} more categor${3 - selectedIds.length === 1 ? 'y' : 'ies'}`}
-        </Text>
-      </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.text }]}>Welcome to Tangent</Text>
+        </View>
 
-      <Text style={[styles.footerText, { color: colors.textMuted }]}>
-        Tap a chip to cycle: Neutral → Interested → Not Interested. Weights can be adjusted later
-        in Settings.
-      </Text>
-    </ScrollView>
+        {/* Progress bar */}
+        <View style={styles.progressRow}>
+          <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
+            {selectedIds.length} / 3 minimum selected
+          </Text>
+          <View style={[styles.progressBarBg, { backgroundColor: colors.progressBarBackground }]}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  backgroundColor: selectedIds.length >= 3 ? colors.success : colors.primary,
+                  width: `${Math.min(progress * 100, 100)}%`,
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        {/* Category list — single grouped container matching CategoryPreferencesScreen */}
+        <View style={[styles.group, { borderColor: colors.border }]}>
+          {CATEGORIES.map((cat, index) => {
+            const state = chipStates[cat.id] || 'neutral';
+            const isLast = index === CATEGORIES.length - 1;
+
+            const bgColor =
+              state === 'selected'
+                ? colors.chipSelectedBg
+                : state === 'not_interested'
+                  ? colors.chipNotInterestedBg
+                  : colors.background;
+
+            const textColor =
+              state === 'selected'
+                ? colors.chipSelectedText
+                : state === 'not_interested'
+                  ? colors.chipNotInterestedText
+                  : colors.text;
+
+            const mutedColor =
+              state === 'selected'
+                ? colors.chipSelectedText
+                : state === 'not_interested'
+                  ? colors.chipNotInterestedText
+                  : colors.textMuted;
+
+            const stateLabel =
+              state === 'selected' ? 'Interested'
+              : state === 'not_interested' ? 'Not Interested'
+              : 'Neutral';
+
+            const CategoryIcon = CATEGORY_ICONS[cat.id];
+
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.row,
+                  { backgroundColor: bgColor },
+                  !isLast && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                ]}
+                onPress={() => toggleChip(cat.id)}
+                activeOpacity={0.7}
+              >
+                {CategoryIcon && (
+                  <CategoryIcon size={20} color={mutedColor} style={styles.rowIcon} />
+                )}
+                <View style={styles.rowContent}>
+                  <Text style={[styles.catName, { color: textColor }]}>{cat.name}</Text>
+                  <Text style={[styles.catState, { color: mutedColor }]}>{stateLabel}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      {/* Sticky Continue Button */}
+      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <TouchableOpacity
+          style={[
+            styles.continueButton,
+            { backgroundColor: selectedIds.length >= 3 ? colors.primary : colors.surfaceSecondary },
+          ]}
+          onPress={handleContinue}
+          activeOpacity={0.8}
+        >
+          <Text
+            style={[
+              styles.continueText,
+              { color: selectedIds.length >= 3 ? colors.background : colors.textMuted },
+            ]}
+          >
+            {selectedIds.length >= 3
+              ? 'Start Reading →'
+              : `Select ${3 - selectedIds.length} more categor${3 - selectedIds.length === 1 ? 'y' : 'ies'}`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 24, paddingBottom: 48 },
-  header: { marginBottom: 24, marginTop: 60 },
-  title: { fontSize: TEXT_2XL, fontWeight: '800', marginBottom: 12 },
-  subtitle: { fontSize: TEXT_BASE, lineHeight: 24 },
+  screen: { flex: 1 },
+  content: { paddingHorizontal: 28, paddingBottom: 48 },
+  header: { marginTop: 64, marginBottom: 24 },
+  title: { fontSize: TEXT_2XL, fontWeight: '800', letterSpacing: -0.5 },
   progressRow: { marginBottom: 24 },
   progressLabel: { fontSize: TEXT_SM, fontWeight: '600', marginBottom: 8 },
-  progressBarBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: 3 },
-  chipGrid: { gap: 12 },
-  chip: {
+  progressBarBg: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  progressBarFill: { height: '100%', borderRadius: 2 },
+
+  group: {
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 2,
-    marginBottom: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
-  chipEmoji: { fontSize: TEXT_2XL, marginRight: 14 },
-  chipTextContainer: { flex: 1 },
-  chipName: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 2 },
-  chipDesc: { fontSize: TEXT_SM, lineHeight: 18, marginBottom: 4 },
-  chipStateLabel: { fontSize: TEXT_XS, fontWeight: '600', marginTop: 2 },
+  rowIcon: { marginRight: 14 },
+  rowContent: { flex: 1 },
+  catName: { fontSize: TEXT_BASE, fontWeight: '600' },
+  catState: { fontSize: TEXT_SM, marginTop: 3 },
+
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 28,
+    paddingBottom: 40,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
   continueButton: {
-    padding: 18,
-    borderRadius: 16,
+    padding: 16,
+    borderRadius: 999,
     alignItems: 'center',
-    marginTop: 32,
-    marginBottom: 16,
+    justifyContent: 'center',
   },
-  continueText: { fontSize: TEXT_LG, fontWeight: '700' },
-  footerText: { textAlign: 'center', fontSize: TEXT_SM, lineHeight: 20 },
+  continueText: { fontSize: TEXT_BASE, fontWeight: '700' },
 });

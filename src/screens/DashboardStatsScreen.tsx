@@ -27,13 +27,16 @@ import {
   TEXT_BASE,
   TEXT_LG,
 } from '../utils/constants';
-import { ChevronLeft, Zap, BookOpen, Clock, BarChart3 } from 'lucide-react-native';
+import { ChevronLeft, Flame, CalendarDays, Clock, Gauge, BookCheck, BookHeart, BarChart3 } from 'lucide-react-native';
 
 const getMetricIcon = (id: string, color: string) => {
   switch (id) {
-    case 'streak': return <Zap size={18} color={color} />;
-    case 'weeklyReads': return <BookOpen size={18} color={color} />;
+    case 'streak': return <Flame size={18} color={color} />;
+    case 'weeklyReads': return <CalendarDays size={18} color={color} />;
     case 'totalReadTime': return <Clock size={18} color={color} />;
+    case 'avgWpm': return <Gauge size={18} color={color} />;
+    case 'totalRead': return <BookCheck size={18} color={color} />;
+    case 'topCategory': return <BookHeart size={18} color={color} />;
     default: return <BarChart3 size={18} color={color} />;
   }
 };
