@@ -3,7 +3,7 @@
 // Category weights, metric toggles, theme, feed requests.
 // ============================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,10 @@ import {
   DEFAULT_NEUTRAL_WEIGHT,
   MIN_CATEGORY_WEIGHT,
   MAX_CATEGORY_WEIGHT,
+  TEXT_XS,
+  TEXT_SM,
+  TEXT_BASE,
+  TEXT_LG,
 } from '../utils/constants';
 import { validateFeedRequest } from '../utils/validation';
 import { fetchAndExtractArticle } from '../services/feedService';
@@ -75,6 +79,11 @@ export default function SettingsScreen() {
 
   const [showCategoryPrefs, setShowCategoryPrefs] = useState(false);
   const [showStats, setShowStats] = useState(false);
+
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     loadProfile();
@@ -287,6 +296,30 @@ export default function SettingsScreen() {
     }
   };
 
+  // --- Feedback Submission ---
+  const handleSubmitFeedback = async () => {
+    const message = feedbackMessage.trim();
+    if (!message) {
+      Alert.alert('Empty', 'Please write something before submitting.');
+      return;
+    }
+    setSubmittingFeedback(true);
+    try {
+      await addDoc(collection(db, 'feedback'), {
+        userId: auth.currentUser!.uid,
+        message,
+        timestamp: Date.now(),
+        status: 'pending',
+      });
+      Alert.alert('Thank you!', 'Your feedback has been received.');
+      setFeedbackMessage('');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to submit feedback.');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
   // --- Feed Request Submission ---
   const handleSubmitFeedRequest = async () => {
     const validation = validateFeedRequest(feedUrl, feedDescription);
@@ -338,9 +371,11 @@ export default function SettingsScreen() {
       style={{ flex: 1 }}
     >
       <ScrollView
+        ref={scrollViewRef}
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -639,6 +674,41 @@ export default function SettingsScreen() {
         <Text style={[styles.submitButtonText, { color: colors.text }]}>Test URL in Reader</Text>
       </TouchableOpacity>
 
+      {/* Feedback */}
+      <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Send Feedback</Text>
+      <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
+        Bugs, ideas, or anything on your mind — we read everything.
+      </Text>
+      <TextInput
+        style={[
+          styles.input,
+          styles.textArea,
+          { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text },
+        ]}
+        placeholder="What's on your mind?"
+        placeholderTextColor={colors.textMuted}
+        value={feedbackMessage}
+        onChangeText={setFeedbackMessage}
+        multiline
+        numberOfLines={4}
+        textAlignVertical="top"
+        onFocus={() => {
+          // Delay slightly so the keyboard has time to measure, then scroll to end
+          setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 300);
+        }}
+      />
+      <TouchableOpacity
+        style={[styles.submitButton, { backgroundColor: colors.primary, opacity: submittingFeedback ? 0.6 : 1 }]}
+        onPress={handleSubmitFeedback}
+        disabled={submittingFeedback}
+      >
+        {submittingFeedback ? (
+          <ActivityIndicator color={colors.background} />
+        ) : (
+          <Text style={[styles.submitButtonText, { color: colors.background }]}>Send Feedback</Text>
+        )}
+      </TouchableOpacity>
+
       {/* Feed Request */}
       <Text style={[styles.sectionTitle, { color: colors.text, marginTop: 40 }]}>Request a Feed</Text>
       <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
@@ -683,7 +753,7 @@ export default function SettingsScreen() {
 
       {/* App Info */}
       <Text style={[styles.appInfo, { color: colors.textMuted }]}>
-        SubTick v1.0.0 · Built with Expo & Firebase
+        Tangent v1.0.0 · Built with Expo & Firebase
       </Text>
       <View style={{ height: 48 }} />
       </ScrollView>
@@ -705,11 +775,11 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: 18, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   collapsibleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   collapsibleContent: { marginTop: 8 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  sectionSubtitle: { fontSize: 14, marginBottom: 16, lineHeight: 20 },
+  sectionTitle: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 8 },
+  sectionSubtitle: { fontSize: TEXT_SM, marginBottom: 16, lineHeight: 20 },
   categoryGrid: { gap: 8 },
   categoryRow: {
     flexDirection: 'row',
@@ -718,8 +788,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
   },
-  categoryName: { fontSize: 16, fontWeight: '600' },
-  categoryWeight: { fontSize: 14, marginTop: 4 },
+  categoryName: { fontSize: TEXT_BASE, fontWeight: '600' },
+  categoryWeight: { fontSize: TEXT_SM, marginTop: 4 },
   metricsList: { marginTop: 8 },
   metricRow: {
     flexDirection: 'row',
@@ -728,7 +798,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
   },
-  metricLabel: { fontSize: 16, fontWeight: '600' },
+  metricLabel: { fontSize: TEXT_BASE, fontWeight: '600' },
   themeRow: { flexDirection: 'row', gap: 16 },
   themeButton: {
     flex: 1,
@@ -737,7 +807,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
   },
-  themeButtonText: { fontSize: 14, fontWeight: '600' },
+  themeButtonText: { fontSize: TEXT_SM, fontWeight: '600' },
   linkButton: {
     padding: 16,
     borderRadius: 16,
@@ -746,14 +816,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  linkButtonText: { fontSize: 16, fontWeight: '600' },
-  linkStatus: { fontSize: 14 },
+  linkButtonText: { fontSize: TEXT_BASE, fontWeight: '600' },
+  linkStatus: { fontSize: TEXT_SM },
   input: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
-    fontSize: 16,
+    fontSize: TEXT_BASE,
     marginBottom: 16,
+  },
+  textArea: {
+    minHeight: 100,
   },
   submitButton: {
     padding: 16,
@@ -762,6 +835,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
   },
-  submitButtonText: { fontSize: 16, fontWeight: '700' },
-  appInfo: { textAlign: 'center', marginTop: 48, fontSize: 12 },
+  submitButtonText: { fontSize: TEXT_BASE, fontWeight: '700' },
+  appInfo: { textAlign: 'center', marginTop: 48, fontSize: TEXT_XS },
 });

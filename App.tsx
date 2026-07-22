@@ -57,10 +57,7 @@ function AppContent() {
     return (
       <View style={[styles.splash, { backgroundColor: colors.background }]}>
         <Text style={styles.splashEmoji}>📖</Text>
-        <Text style={[styles.splashTitle, { color: colors.text }]}>SubTick</Text>
-        <Text style={[styles.splashSubtitle, { color: colors.textSecondary }]}>
-          TikTok for reading
-        </Text>
+        <Text style={[styles.splashTitle, { color: colors.text }]}>Tangent</Text>
         <ActivityIndicator
           size="large"
           color={colors.primary}

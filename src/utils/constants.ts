@@ -2,6 +2,16 @@
 // SubTick — Constants & Configuration
 // ============================================================
 
+// --- Type Scale ---
+// Every fontSize in the app must use one of these 6 values.
+// Do not use arbitrary font sizes anywhere.
+export const TEXT_XS   = 11;  // Publisher eyebrow labels (uppercase, tight tracking)
+export const TEXT_SM   = 13;  // Metadata, timestamps, captions, helper text
+export const TEXT_BASE = 16;  // Body, buttons, inputs, category names
+export const TEXT_LG   = 18;  // Screen headers, section titles, article list titles
+export const TEXT_XL   = 24;  // App name / primary screen title
+export const TEXT_2XL  = 28;  // Hero article headline
+
 import { CategoryDefinition } from '../types';
 
 // --- Category Definitions ---

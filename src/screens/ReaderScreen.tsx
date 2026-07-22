@@ -34,6 +34,7 @@ import { flushBehaviorQueue } from '../services/behaviorSync';
 import { Linking } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { X, Bookmark, Compass, AlertCircle, Heart } from 'lucide-react-native';
+import { TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_2XL } from '../utils/constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 45; // px — touch-intercepting margin zones (more sensitive)
@@ -902,7 +903,7 @@ const styles = StyleSheet.create({
   },
   hudTitle: {
     flex: 1,
-    fontSize: 14,
+    fontSize: TEXT_SM,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -926,16 +927,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyIcon: { marginBottom: 24 },
-  catchUpTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
-  catchUpSubtitle: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 32 },
+  catchUpTitle: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  catchUpSubtitle: { fontSize: TEXT_BASE, textAlign: 'center', lineHeight: 24, marginBottom: 32 },
   catchUpButton: {
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 999,
   },
-  catchUpButtonText: { fontSize: 16, fontWeight: '700' },
+  catchUpButtonText: { fontSize: TEXT_BASE, fontWeight: '700' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  errorText: { fontSize: 16 },
+  errorText: { fontSize: TEXT_BASE },
   bottomProgressBarContainer: {
     height: 3,
     width: '100%',
@@ -971,7 +972,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  edgeHintText: { fontSize: 14, opacity: 0.2 },
+  edgeHintText: { fontSize: TEXT_SM, opacity: 0.2 },
   archivedHeader: {
     paddingHorizontal: 24,
     paddingTop: 16,
@@ -979,14 +980,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   archivedTitle: {
-    fontSize: 28,
+    fontSize: TEXT_2XL,
     fontWeight: '800',
     marginBottom: 8,
     fontFamily: 'Georgia',
     lineHeight: 34,
   },
   archivedAuthor: {
-    fontSize: 14,
+    fontSize: TEXT_SM,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,

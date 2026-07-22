@@ -19,6 +19,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { getSeenArticleMetas } from '../services/feedService';
 import { ChevronLeft, Inbox } from 'lucide-react-native';
+import { TEXT_XS, TEXT_SM, TEXT_LG } from '../utils/constants';
 
 interface ArticleMeta {
   id: string;
@@ -132,7 +133,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: 18, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   listContent: { paddingHorizontal: 24, paddingBottom: 48 },
   rowCard: {
     flexDirection: 'row',
@@ -146,19 +147,19 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   rowPublisher: {
-    fontSize: 12,
+    fontSize: TEXT_XS,
     fontWeight: '600',
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   rowTitle: {
-    fontSize: 18,
+    fontSize: TEXT_LG,
     fontWeight: '700',
     lineHeight: 24,
     letterSpacing: -0.5,
   },
   rowTime: {
-    fontSize: 13,
+    fontSize: TEXT_SM,
     fontWeight: '500',
   },
   emptyState: {
@@ -169,6 +170,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   emptyIcon: { marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 8 },
+  emptySubtitle: { fontSize: TEXT_SM, textAlign: 'center', lineHeight: 20 },
 });

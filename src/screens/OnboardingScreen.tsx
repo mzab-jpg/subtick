@@ -14,7 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { CATEGORIES, DEFAULT_SELECTED_WEIGHT, DEFAULT_NOT_INTERESTED_WEIGHT, DEFAULT_NEUTRAL_WEIGHT } from '../utils/constants';
+import { CATEGORIES, DEFAULT_SELECTED_WEIGHT, DEFAULT_NOT_INTERESTED_WEIGHT, DEFAULT_NEUTRAL_WEIGHT, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_2XL } from '../utils/constants';
 import { validateOnboardingSelection } from '../utils/validation';
 import { CategoryDefinition } from '../types';
 
@@ -106,7 +106,7 @@ export default function OnboardingScreen({ navigation }: any) {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Welcome to SubTick</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Welcome to Tangent</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           TikTok for reading. Pick at least 3 topics you're interested in, and we'll build your
           personalized feed.
@@ -189,10 +189,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 24, paddingBottom: 48 },
   header: { marginBottom: 24, marginTop: 60 },
-  title: { fontSize: 32, fontWeight: '800', marginBottom: 12 },
-  subtitle: { fontSize: 16, lineHeight: 24 },
+  title: { fontSize: TEXT_2XL, fontWeight: '800', marginBottom: 12 },
+  subtitle: { fontSize: TEXT_BASE, lineHeight: 24 },
   progressRow: { marginBottom: 24 },
-  progressLabel: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  progressLabel: { fontSize: TEXT_SM, fontWeight: '600', marginBottom: 8 },
   progressBarBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressBarFill: { height: '100%', borderRadius: 3 },
   chipGrid: { gap: 12 },
@@ -204,11 +204,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     marginBottom: 8,
   },
-  chipEmoji: { fontSize: 28, marginRight: 14 },
+  chipEmoji: { fontSize: TEXT_2XL, marginRight: 14 },
   chipTextContainer: { flex: 1 },
-  chipName: { fontSize: 17, fontWeight: '700', marginBottom: 2 },
-  chipDesc: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
-  chipStateLabel: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  chipName: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 2 },
+  chipDesc: { fontSize: TEXT_SM, lineHeight: 18, marginBottom: 4 },
+  chipStateLabel: { fontSize: TEXT_XS, fontWeight: '600', marginTop: 2 },
   continueButton: {
     padding: 18,
     borderRadius: 16,
@@ -216,6 +216,6 @@ const styles = StyleSheet.create({
     marginTop: 32,
     marginBottom: 16,
   },
-  continueText: { fontSize: 18, fontWeight: '700' },
-  footerText: { textAlign: 'center', fontSize: 13, lineHeight: 20 },
+  continueText: { fontSize: TEXT_LG, fontWeight: '700' },
+  footerText: { textAlign: 'center', fontSize: TEXT_SM, lineHeight: 20 },
 });
