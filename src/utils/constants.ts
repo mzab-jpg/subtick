@@ -69,11 +69,12 @@ export const SCORE_WEIGHTS = {
 };
 
 // --- Feedback Delta Multipliers (Δ) ---
+// Must stay in sync with firebase/functions/src/constants.ts
 export const FEEDBACK_DELTAS: Record<string, number> = {
-  save: 0.40,
-  like: 0.30,
-  read_thorough: 0.20,
-  read_skim: 0.05,
+  save: 0.55,
+  like: 0.40,
+  read_thorough: 0.30,
+  read_skim: 0.10,
   read_shallow: 0.00,
   swipe_next: 0.00,
   quick_exit: -0.20,
@@ -113,6 +114,9 @@ export const DASHBOARD_METRIC_DEFS = [
   { id: 'weeklyReads', label: 'Weekly Reads', emoji: '📊' },
 ];
 
+// --- Default Average WPM Fallback ---
+export const DEFAULT_AVG_WPM = 200;
+
 // --- Default Dashboard Metrics (shown if user hasn't customized) ---
 export const DEFAULT_DASHBOARD_METRIC_IDS = ['streak', 'totalReadTime', 'avgWpm'];
 
@@ -132,6 +136,8 @@ export const SAVED_ARTICLES_KEY = '@subtick_saved_articles';
 // Stores lightweight metadata objects (title, publicationName, category) for local list rendering
 export const SEEN_ARTICLES_META_KEY = '@subtick_seen_articles_meta';
 export const SAVED_ARTICLES_META_KEY = '@subtick_saved_articles_meta';
+// Prefix for per-article flags marking RSS feeds as permanently failed on this device
+export const RSS_FAILED_KEY_PREFIX = '@subtick_rss_failed_';
 export const SYNC_BATCH_SIZE = 20;
 export const MAX_QUEUE_SIZE = 500;
 

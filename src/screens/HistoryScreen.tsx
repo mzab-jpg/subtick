@@ -36,9 +36,14 @@ export default function HistoryScreen() {
   const [articles, setArticles] = useState<ArticleMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Re-fetch when returning from Reader (in case new articles were read)
   useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadHistory();
+    });
     loadHistory();
-  }, []);
+    return unsubscribe;
+  }, [navigation]);
 
   const loadHistory = async () => {
     try {

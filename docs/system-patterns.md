@@ -1,6 +1,6 @@
 # SubTick — System Patterns
 
-> **Last verified:** July 2026 against commit `fb3b62ab`.  
+> **Last verified:** July 2026 against current codebase (post-bugfix session).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -14,29 +14,28 @@
 | Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` | Recomputed on theme change, never persisted |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean` — fetched fresh on every screen focus
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount)
 - `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`
 - `OnboardingScreen.tsx`: `chipStates: Record<string, 'selected'|'not_interested'|'neutral'>` — pure local, never synced until Continue is pressed
-- `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched once on mount, optimistically updated on category changes
+- `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes
 
 ### On-Device-Only State (AsyncStorage — never sent to server)
 | Key | Content | Max Size |
 |---|---|---|
 | `@subtick_seen_articles` | `string[]` of article IDs | 1000 entries (oldest dropped) |
-| `@subtick_seen_articles_meta` | `Record<string, {id,title,publicationName,category,estimatedReadMinutes}>` | Unbounded (mirrors seen IDs) |
+| `@subtick_seen_articles_meta` | `Record<string, {id,title,publicationName,category,estimatedReadMinutes}>` | Unbounded |
 | `@subtick_saved_articles` | `string[]` of saved article IDs | Unbounded |
 | `@subtick_saved_articles_meta` | `Record<string, ArticleMeta>` | Unbounded |
 | `@subtick_saved_html_{articleId}` | Full sanitized HTML string for offline reading | One key per saved article |
 | `@subtick_behavior_queue` | `PendingBehaviorEvent[]` pending sync | 500 max (oldest dropped first) |
 | `@subtick_theme_preference` | `'system'|'light'|'dark'` | Tiny |
-
-Sources: `src/utils/constants.ts:119-127`, `src/services/feedService.ts`, `src/contexts/ThemeContext.tsx:70`
+| `@subtick_rss_failed_{articleId}` | `'1'` flag indicating this article's RSS feed has failed | One key per failed article |
 
 ### AsyncStorage Mutex (Concurrency Safety)
-All AsyncStorage operations in `feedService.ts` that involve read-modify-write (seen/saved lists) are serialized through a **Promise chain mutex**:
+All AsyncStorage operations in `feedService.ts` involving read-modify-write (seen/saved lists) are serialized through a **Promise chain mutex**:
 
 ```typescript
-// feedService.ts:42-48
+// feedService.ts
 let storageQueue = Promise.resolve();
 
 async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<T> {
@@ -46,118 +45,146 @@ async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<
 }
 ```
 
-This prevents rapid-swipe race conditions where two concurrent writes would both read the same stale array and each overwrite the other's changes. All `markArticleSeen`, `markArticleSaved`, `unmarkArticleSaved`, `getSeenArticleIds`, `getSavedArticleIds` calls go through this queue.
+Prevents rapid-swipe race conditions where two concurrent writes would both read the same stale array and overwrite each other. All `markArticleSeen`, `markArticleSaved`, `unmarkArticleSaved`, `getSeenArticleIds`, `getSavedArticleIds` calls go through this queue.
 
 ---
 
 ## 2. The Ranking / Scoring Algorithm
 
-### 2a. 5-Component Composite Score Formula
+### 2a. Component Normalization
 
-Source: `firebase/functions/src/getRankedFeed.ts:50-76`, constants from `firebase/functions/src/constants.ts:47-53`
+**All 5 scoring components output values in [0, 1].** This ensures the formula weights mean exactly what they say — a 40% weight produces exactly 40% of the score contribution at maximum.
 
-```
-Score = (0.30 × P) + (0.20 × T) + (0.25 × R) + (0.15 × Q) + (0.10 × U)
-```
+### 2b. P — Personalization [0, 1]
 
-| Component | Symbol | Weight | Formula | Source |
-|---|---|---|---|---|
-| Personalization Boost | P | 0.30 | `max(0.1, personalizationWeight / 1.0)` | `getRankedFeed.ts:58` |
-| Trending Boost | T | 0.20 | `max(0.1, 1.0 + article.trendingScore / 2.5)` | `getRankedFeed.ts:59` |
-| Recency Boost | R | 0.25 | `2.0 / (1.0 + daysOld / 7)` | `getRankedFeed.ts:60` |
-| Quality Boost | Q | 0.15 | `dynamicPublisherQualityScore` (clamped [0.20, 1.00]) | `getRankedFeed.ts:61,283` |
-| Cross-User Collaboration (Diversity) | U | 0.10 | `1.0 - (min(1.0, (articlesInSamePub - 1) / 15) * 0.6)` | `getRankedFeed.ts:67` |
-
-**SCORE_WEIGHTS** in `constants.ts:47-53`:
-```typescript
-export const SCORE_WEIGHTS = {
-  categoryBoost: 0.3,
-  trendingBoost: 0.2,
-  recencyBoost: 0.25,
-  qualityBoost: 0.15,
-  crossUserCollab: 0.1,
-};
-```
-
-### 2b. Personalization Weight (P) — 3D Matrix
-
-Source: `getRankedFeed.ts:441-464`
+Source: `getRankedFeed.ts: normalizeP()`
 
 ```typescript
-const compKey = `${article.category}::${article.lengthStyle}`;
-const baseCategoryWeight = categoryLengthWeights[compKey]
-  ?? categoryWeights[article.category]
-  ?? 1.0;
-const basePublisherWeight = publisherWeights[article.publicationName] ?? 1.0;
-const personalizationWeight = baseCategoryWeight * basePublisherWeight;
-const P = Math.max(0.1, personalizationWeight / 1.0);
-
-// Discovery articles (P < 1.0) compete on quality alone, not negative personalization
-if (P < 1.0) { effectivePWeight = 1.0; }
+const MIN_W = 0.1, MAX_W = 5.0, RANGE = 4.9;
+catFraction = (categoryWeight - MIN_W) / RANGE
+pubFraction = (publisherWeight - MIN_W) / RANGE
+P = catFraction × 0.7 + pubFraction × 0.3
 ```
 
-Three dimensions, multiplied together:
-1. **Category weight** (e.g., `"Technology & Innovation"` → `1.5`)
-2. **Category+Length composite weight** (e.g., `"Technology & Innovation::long"` → `1.7`) — overrides category-only weight
-3. **Publisher weight** (e.g., `"Stratechery"` → `1.3`)
+Category gets 70% of P, publisher gets 30%.
 
-### 2c. Recency Boost (R) — Half-Life Logic
-
-`R = 2.0 / (1.0 + daysOld / 7)`
-
-| Age | R Value |
-|---|---|
-| 0 days | 2.00 (maximum) |
-| 7 days | 1.00 |
-| 14 days | 0.67 |
-| 28 days | 0.44 |
-| 56 days | 0.27 |
-
-### 2d. Diversity Penalty (U) — Inverted Publisher Score
-
-`U = 1.0 - (min(1.0, (articlesInSamePub - 1) / 15) * 0.6)`
-
-| Articles from same publisher in pool | U Value | Notes |
-|---|---|---|
-| 1 | 1.00 | No penalty |
-| 8 | 0.72 | Moderate penalty |
-| 16+ | 0.40 | Maximum 60% penalty floor |
-
-### 2e. Trending Score Increments
-
-Source: `firebase/functions/src/syncBehaviorEvents.ts:17-26`
-
-```typescript
-function getTrendingIncrement(eventType: string): number {
-  switch (eventType) {
-    case 'save':          return 3.0;
-    case 'like':          return 2.0;
-    case 'read_thorough': return 1.5;
-    case 'read_skim':     return 0.5;
-    case 'read_shallow':  return 0.2;
-    default:              return 0.0;  // swipe_next, quick_exit, swipe_not_interested
-  }
-}
-```
-
-`trendingScore` is a raw accumulator on the `articles/{id}` Firestore document, incremented atomically with `FieldValue.increment()`. There is no decay or normalization logic currently applied to `trendingScore` on the server — it grows unboundedly. The T component in scoring divides it by 2.5 (`1.0 + trendingScore / 2.5`) to moderate impact.
-
-### 2f. Tranche-Based Feed Assembly
-
-Source: `getRankedFeed.ts:302-397`
-
-After scoring, articles are sorted into 4 buckets by P value, then exact counts are picked per bucket:
-
-| Tranche | P threshold | Target count | Selection method |
+| Situation | catWeight | pubWeight | P |
 |---|---|---|---|
-| High | P ≥ 1.5 | 12 | **Random shuffle** |
-| Mid | P ≥ 1.15 | 8 | **Random shuffle** |
-| Low | P ≥ 1.0 | 4 | Sorted by score DESC |
-| Discovery | P < 1.0 | 6 | Sorted by score DESC |
+| New user (neutral) | 1.0 | 1.0 | ≈ 0.18 |
+| Likes category | 3.0 | 1.0 | ≈ 0.47 |
+| Loves both | 4.5 | 3.5 | ≈ 0.84 |
+| Hates category | 0.1 | 1.0 | ≈ 0.05 |
+| Maximum | 5.0 | 5.0 | 1.00 |
 
-**Overflow/fallback:** If a higher tranche has fewer articles than its target, the shortfall is cascaded down to the next tranche's target. Final feed of 30 is shuffled entirely before return (`shuffleArray(finalFeed)`).
+Weights come from the user profile (3D matrix: category × category+length composite × publisher). Neutral = 1.0, max = 5.0, min = 0.1.
 
-**Total feed size:** `RETURN_FEED_SIZE = 30` (`getRankedFeed.ts:19`), `MAX_FEED_ARTICLES = 30` (client, `constants.ts:84`).
+### 2c. T — Trending [0, 1]
+
+Source: `getRankedFeed.ts: normalizeT()`, decay in `cronDecayTrendingScores`
+
+```typescript
+T = min(trendingScore, MAX_TRENDING_SCORE) / MAX_TRENDING_SCORE
+// MAX_TRENDING_SCORE = 50
+```
+
+`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days via `cronDecayTrendingScores`).
+
+Trending increments (`syncBehaviorEvents.ts`):
+| Action | trendingScore increment |
+|---|---|
+| Save | +3.0 |
+| Like | +2.0 |
+| Read thoroughly | +1.5 |
+| Read skim | +0.5 |
+| Read shallow | +0.2 |
+| Swipe past / exit | +0.0 |
+
+### 2d. R — Recency [0, 1]
+
+Source: `getRankedFeed.ts: normalizeR()`
+
+**Two-phase decay** — stays high for the first 7 days, then falls more steeply:
+
+```typescript
+if (daysOld <= 7):
+    R = 1.0 - (daysOld / 7) × 0.2      // Linear: 1.0 → 0.8
+else:
+    R = 0.8 × (7 / daysOld)^1.5         // Power-law: steep after day 7
+```
+
+| Age | R value |
+|---|---|
+| 0 days | 1.00 |
+| 3 days | 0.91 |
+| 7 days | 0.80 |
+| 14 days | 0.43 |
+| 28 days | 0.15 |
+| 60 days | 0.04 |
+
+### 2e. Q — Publisher Quality [0, 1]
+
+Source: `getRankedFeed.ts: normalizeQ()`
+
+```typescript
+Q = (publisherQualityScore - 0.2) / 0.8
+// Crowd-sourced qualityScore is clamped to [0.20, 1.00]
+```
+
+| Raw quality | Q |
+|---|---|
+| 0.20 (worst) | 0.00 |
+| 0.80 (default new) | 0.75 |
+| 1.00 (best) | 1.00 |
+
+Publisher quality increments (`syncBehaviorEvents.ts`):
+```
+save: +0.010 / like: +0.005 / read_thorough: +0.005 / read_skim: +0.001
+swipe_not_interested: -0.010 / quick_exit: -0.005
+```
+
+### 2f. U — Diversity [0, 1]
+
+Source: `getRankedFeed.ts: normalizeU()`
+
+```typescript
+rawU = 1.0 - (min(1.0, (articlesInSamePub - 1) / 15) × 0.6)
+U = (rawU - 0.4) / 0.6
+```
+
+| Articles from same publisher | U |
+|---|---|
+| 1 | 1.00 (no penalty) |
+| 8 | 0.53 |
+| 16+ | 0.00 (maximum penalty) |
+
+### 2g. Scoring Formulas by Tranche
+
+**High & Mid tranches (personalized):**
+```
+Score = 0.40×P + 0.15×T + 0.20×R + 0.15×Q + 0.10×U
+```
+Weights defined in `SCORE_WEIGHTS` (constants.ts). Sum = 1.0. Output: [0, 1].
+
+**Low & Discovery tranches (merit-based):**
+```
+Score = 0.40×R + 0.30×T + 0.30×Q
+```
+Weights defined in `SCORE_WEIGHTS_MERIT` (constants.ts). Sum = 1.0. No personalization, no diversity penalty.
+
+### 2h. Tranche Assembly
+
+Source: `getRankedFeed.ts: assembleFeedWithTranches()`
+
+Articles bucketed by normalized P value:
+
+| Tranche | P threshold | Target | Selection |
+|---|---|---|---|
+| High | P ≥ 0.40 | 12 | **Random shuffle** |
+| Mid | P ≥ 0.20 | 8 | **Random shuffle** |
+| Low | P ≥ 0.10 | 4 | **Merit score DESC** |
+| Discovery | P < 0.10 | 6 | **Merit score DESC** |
+
+High/Mid are shuffled randomly to provide variety within preferred categories. Low/Discovery are sorted by merit score to surface the best objectively-good articles for neutral/disinterested categories. Overflow from underpopulated tranches cascades down. Final feed of 30 is shuffled before return.
 
 ---
 
@@ -165,14 +192,14 @@ After scoring, articles are sorted into 4 buckets by P value, then exact counts 
 
 ### 3a. Feedback Delta Multipliers (Δ)
 
-Source: `firebase/functions/src/constants.ts:56-65` (server) and `src/utils/constants.ts:62-71` (client — identical values)
+Source: `firebase/functions/src/constants.ts` (server) and `src/utils/constants.ts` (client — identical values)
 
 ```typescript
-export const FEEDBACK_DELTAS: Record<string, number> = {
-  save:                +0.40,
-  like:                +0.30,
-  read_thorough:       +0.20,
-  read_skim:           +0.05,
+export const FEEDBACK_DELTAS = {
+  save:                +0.55,
+  like:                +0.40,
+  read_thorough:       +0.30,
+  read_skim:           +0.10,
   read_shallow:        +0.00,
   swipe_next:          +0.00,
   quick_exit:          -0.20,
@@ -182,86 +209,66 @@ export const FEEDBACK_DELTAS: Record<string, number> = {
 
 ### 3b. Dimension-Specific Learning Rates
 
-Source: `firebase/functions/src/weightUpdater.ts:90-93`
+Source: `weightUpdater.ts`
 
 ```typescript
-const categoryL  = LEARNING_RATE * 1.0;  // 0.08 × 1.0 = 0.08
-const lengthL    = LEARNING_RATE * 1.5;  // 0.08 × 1.5 = 0.12
-const publisherL = LEARNING_RATE * 2.0;  // 0.08 × 2.0 = 0.16
+const categoryL  = LEARNING_RATE × 1.0;  // 0.08
+const lengthL    = LEARNING_RATE × 1.5;  // 0.12
+const publisherL = LEARNING_RATE × 2.0;  // 0.16
 ```
 
-`LEARNING_RATE = 0.08` (`constants.ts:68`)
+`LEARNING_RATE = 0.08`
 
-### 3c. Weight Update Formula
+Each behavior event updates three dimensions:
+```
+categoryWeight[category]          += Δ × 0.08
+categoryLengthWeights[cat::style] += Δ × 0.12
+publisherWeights[publisher]       += Δ × 0.16
+```
 
-For each behavior event processed:
-```
-newWeight[category]   += Δ × 0.08
-newWeight[cat::style] += Δ × 0.12
-newWeight[pub::name]  += Δ × 0.16
-```
+### 3c. Watermark-Based Event Processing
+
+Source: `weightUpdater.ts`
+
+`updateWeights()` stores `weightUpdatedAt` (Unix ms timestamp) on the user profile. On each call:
+1. Queries only events with `timestamp > weightUpdatedAt` (new events only — no replay)
+2. Processes those events
+3. Updates `weightUpdatedAt` to the latest processed event's timestamp
+4. Applies daily decay only if `now - watermark >= 23 hours`
 
 ### 3d. Clamping
 
 ```
-weight = max(MIN_CATEGORY_WEIGHT, min(MAX_CATEGORY_WEIGHT, weight))
-MIN_CATEGORY_WEIGHT = 0.1   (constants.ts:69)
-MAX_CATEGORY_WEIGHT = 5.0   (constants.ts:70)
+weight = max(0.1, min(5.0, weight))
 ```
 
 ### 3e. Daily Decay
 
-Source: `weightUpdater.ts:255-263`
-
 ```typescript
-function applyDecay(weights: Record<string, number>): Record<string, number> {
-  // Move weight towards 1.0 by the decay rate
-  decayed[cat] = 1.0 + (weight - 1.0) * DAILY_DECAY_RATE;
-}
-// DAILY_DECAY_RATE = 0.995  (constants.ts:71)
+decayed[cat] = 1.0 + (weight - 1.0) × DAILY_DECAY_RATE
+// DAILY_DECAY_RATE = 0.995 (0.5% per day)
 ```
 
-Effect: each day, a weight's distance from 1.0 is reduced by 0.5%. A weight of 5.0 decays toward 1.0 over ~139 days if no further feedback occurs.
+Weights drift back toward 1.0 (neutral) if unused. Applied at most once per 23-hour window.
 
 ### 3f. UI Sync Thresholds
 
-When `weightUpdater.ts` runs after syncing events, it also updates `selectedCategoryIds` and `notInterestedCategoryIds` arrays to stay in sync with the learned weights:
-
-```typescript
-// Source: weightUpdater.ts:152-170
-if (val <= DEFAULT_NOT_INTERESTED_WEIGHT)  // 0.2 — add to notInterested, remove from selected
-if (val >= DEFAULT_SELECTED_WEIGHT)        // 1.5 — add to selected, remove from notInterested
-if (val > 0.2 && val < 1.5 && wasNotInterested) // remove from notInterested (re-neutralized)
-```
-
-Constants: `DEFAULT_SELECTED_WEIGHT = 1.5`, `DEFAULT_NOT_INTERESTED_WEIGHT = 0.2`, `DEFAULT_NEUTRAL_WEIGHT = 1.0` (`constants.ts:48-50`)
-
-### 3g. Reading Stats Updates (WPM, Articles Finished)
-
-Source: `weightUpdater.ts:172-225`
-
-- **`totalArticlesRead`** incremented when: `(read_thorough OR read_skim) AND scrollDepth >= 0.8 AND sessionDuration > 10000ms`
-- **`averageWpm`** rolling average: `newWpm = round((oldWpm × 0.8) + (sessionWpm × 0.2))`
-  - `sessionWpm = wordCount / minutesSpent`
-  - Bounds check: discards sessions where `sessionWpm < 150` or `sessionWpm > 750`
-  - Uses `event.actualWordCount` (reported live from WebView JavaScript) first; falls back to Firestore `articles/{id}.wordCount`
-  - **Skips WPM calculation if `article.isTruncatedFeed === true`** (word count from DB would be wrong for truncated feeds)
-- **`totalReadTimeMs`** accumulates `event.sessionDuration` for any non-exit event
-- **`weeklyReadCount`** and **`currentStreakDays`** recomputed from subcollection query in `updateReadStats()`
+After weight update, `selectedCategoryIds` and `notInterestedCategoryIds` are synced:
+- `weight <= 0.2` → add to `notInterestedCategoryIds`, remove from `selectedCategoryIds`
+- `weight >= 1.5` → add to `selectedCategoryIds`, remove from `notInterestedCategoryIds`
+- `0.2 < weight < 1.5` (if was notInterested) → remove from `notInterestedCategoryIds`
 
 ---
 
 ## 4. Behavior Event Classification
 
-Source: `useBehaviorTracker.ts:114-146`
-
-Called on swipe-left (next article). Decision tree:
+Source: `useBehaviorTracker.ts: concludeSession()`
 
 ```
-if (scrollDepth < 0.2 AND sessionDuration < 15000ms):
+if (scrollDepth < 0.2 AND sessionDuration < 15s):
     → 'quick_exit'
 else if (scrollDepth >= 0.8):
-    if (sessionDuration >= expectedReadTimeMs × 0.7):
+    if (sessionDuration >= expectedReadTime × 0.7):
         → 'read_thorough'
     else:
         → 'read_skim'
@@ -271,102 +278,82 @@ else:
     → 'swipe_next'
 ```
 
-Right-swipe always emits `'swipe_not_interested'` (`ReaderScreen.tsx:416`).
+Right-swipe always emits `'swipe_not_interested'`.
 
-**Quick exit fallback on unmount** (`useBehaviorTracker.ts:56-85`): If the user closes the Reader without swiping, the `useEffect` cleanup fires a `'quick_exit'` event only if `duration < 15000ms AND scrollDepth < 0.2` and the session was not already `concluded`.
+**Quick-exit double-fire prevention:** The `useEffect` cleanup snapshots `concluded`, `maxDepth`, and `startTime` as plain values at effect-setup time. If `concludeSession()` was already called (e.g., on swipe_not_interested), `snapshot.concluded = true` and the cleanup fires nothing. This prevents the old pattern where the shared ref was reset to the next article's state before cleanup could read it.
 
-**Tracking is fully disabled** (`enabled: false`) in modes: `'history'`, `'saved'`, mock/sandbox mode. Source: `ReaderScreen.tsx:119`.
+**Tracking disabled** in `'history'`, `'saved'`, and mock/sandbox modes.
 
 ---
 
 ## 5. Async / Failure Handling
 
-### 5a. RSS Collector (Cloud Function)
-| Operation | Timeout | Failure behavior |
+### RSS Collector
+| Operation | Timeout | Failure |
 |---|---|---|
-| `parser.parseURL(feed.url)` | `15000ms` (rss-parser config, `rssCollector.ts:14`) | Caught per-feed; `totalErrors++`; other feeds continue |
-| `fetchOgMetadata(link)` | `6000ms` (AbortController, `rssCollector.ts:36`) | `catch` returns empty `{}` metadata; article still written without image/description |
-| Feed processing batches | `Promise.allSettled()` | One feed failure never blocks others |
-| Post-collection archive sync | Separate try/catch per feed | Errors logged, not rethrown |
+| `parser.parseURL()` | 15s | Caught per-feed; other feeds continue |
+| `fetchOgMetadata()` | 6s | Returns empty `{}`; article written without image/description |
+| Feed batches | `Promise.allSettled()` | One feed failure never blocks others |
 
-### 5b. Client RSS Fetch (feedService.ts)
-| Operation | Timeout | Failure behavior |
+### Client RSS Fetch
+| Operation | Timeout | Failure |
 |---|---|---|
-| `fetch(feedUrl)` | No explicit timeout set | Network error throws; `feedSessionCache.delete(feedUrl)` clears cache so next request retries; error rethrown to `loadArticle` |
-| Article not found in parsed feed | — | Throws `'Article not found in recent feed items.'`; `ReaderScreen.tsx` catches → sets `needsFallback=true` → writes `rssStatus='archived'` to Firestore → `useDirectUri=true` (raw WebView) |
+| `fetch(feedUrl)` | 15s (AbortController) | Throws; `feedSessionCache.delete(feedUrl)` so next request retries |
+| Article not found | — | `markRssFailed(id)` in AsyncStorage; article renders as archived (raw URL) |
 
-### 5c. getRankedFeed Cloud Function
-| Operation | Failure behavior |
+### getRankedFeed Cloud Function
+| Operation | Failure |
 |---|---|
-| Firestore `system/candidatePool` read fails | Falls back to on-the-fly stratified bucket query (`getRankedFeed.ts:201`) |
-| On-the-fly query also fails | Returns expired in-memory cache if available (`getRankedFeed.ts:257-260`); throws if cache is empty |
-| Publisher quality scores fail | Returns expired/empty cache; articles fall back to `article.qualityScore` baseline (`getRankedFeed.ts:455`) |
+| `system/candidatePool` read | Falls back to on-the-fly stratified query |
+| On-the-fly query | Returns expired in-memory cache if available; throws if empty |
+| Publisher quality fetch | Returns expired/empty cache; articles fall back to `article.qualityScore` |
 
-### 5d. Client getRankedFeed Call (feedService.ts)
+### Client getRankedFeed Call
 | Failure | Fallback |
 |---|---|
-| Cloud Function call fails | `fallbackGetArticles()`: direct Firestore query `articles` ORDER BY `publishDate DESC` LIMIT 90, filter non-paywalled, filter seen (`feedService.ts:186-217`) |
+| Cloud Function call fails | `fallbackGetArticles()`: Firestore query `articles` ORDER BY `publishDate DESC` LIMIT 90, filter seen + paywalled |
 
-### 5e. Behavior Sync (offlineManager.ts + behaviorSync.ts)
+### Behavior Sync
 | Scenario | Behavior |
 |---|---|
 | No network | Events remain in `@subtick_behavior_queue` |
-| Network restored | `offlineManager.ts` NetInfo listener fires `attemptFlush()` |
-| Sync fails | `lastFailureTime = Date.now()`; **30-second cooldown** before retry (`RETRY_COOLDOWN_MS = 30_000`, `offlineManager.ts:13`) |
-| Concurrent flush already running | `isSyncing` guard prevents double-flush (`offlineManager.ts:52`) |
-| `syncBehaviorEvents` batch commit fails | Logged; events remain in queue with `synced: false`; will retry on next flush |
-| Flush on Reader exit | `useEffect` cleanup in `ReaderScreen.tsx:651-657` calls `flushBehaviorQueue().catch(() => {})` — silently fails, events stay queued |
-| Queue overflow | `MAX_QUEUE_SIZE = 500`; oldest events dropped when exceeded (`behaviorSync.ts:58-61`) |
-| Synced events cleanup | Events older than 5 minutes with `synced: true` are pruned after each flush (`behaviorSync.ts:113-116`) |
+| Network restored | `offlineManager.ts` fires `attemptFlush()` |
+| Sync fails | 30s cooldown (`RETRY_COOLDOWN_MS`), then retry |
+| Concurrent flush | `isSyncing` guard prevents double-flush |
+| Queue overflow | 500 cap; oldest events dropped |
+| Synced events cleanup | Events older than 5 min with `synced: true` pruned after flush |
 
-### 5f. WebView Navigation Lock
-Source: `ReaderScreen.tsx:614-648`
-
-In sanitized HTML mode: any `http` link click intercepted by `handleShouldStartLoadWithRequest` → `Linking.openURL(url); return false` (opens in OS browser).
-
-In raw URI (archived) mode: same-domain navigations allowed (for redirects, slug changes); cross-domain links sent to OS browser. Initial load fully allowed for redirects (`webViewInitialLoadRef.current`).
-
-WebView HTTP errors (status >= 400) or load errors set `webViewLoadError=true` → error UI with "Open in Browser" fallback link.
+### WebView Navigation Lock
+- **Sanitized HTML mode:** Any `http` link click → `Linking.openURL(url); return false`
+- **Raw URI (archived) mode:** Same-domain navigations allowed (redirects); cross-domain → OS browser. Initial load fully allowed.
+- HTTP errors (≥400) or load errors → error UI with "Open in Browser" button.
 
 ---
 
 ## 6. Functions with Legal / Compliance Significance
 
-> ⚠️ **Future editors: do not modify these without understanding the implications.**
+> ⚠️ **Do not modify these without understanding the implications.**
 
-### 6a. Paywall Detection — `checkIsPaywalled()` (`rssCollector.ts:132-147`)
-
-This function determines whether an article is paywalled and therefore excluded from the feed. Articles marked `isPaywalled: true` are filtered out at:
-- Candidate pool build time (`cronUpdateCandidatePool`: `!data.isPaywalled`, `getRankedFeed.ts:102`)
-- On-the-fly fallback query (`getRankedFeed.ts:224`)
-- Client fallback query (`feedService.ts:201`)
-
-**The paywall check has three mechanisms:**
-1. Keyword match against `PAYWALL_KEYWORDS` list (23 phrases, `constants.ts:82-107`)
-2. CSS class match: `class="*paywall*"`, `class="*subscriber-only*"`, `class="*locked-content*"`
+### Paywall Detection — `checkIsPaywalled()` (`rssCollector.ts`)
+Paywalled articles are excluded from all candidate pools and feed results. Three mechanisms:
+1. Keyword match against PAYWALL_KEYWORDS (24 phrases)
+2. CSS class: `class="*paywall*"`, `class="*subscriber-only*"`, `class="*locked-content*"`
 3. Script pattern: body contains both `/paywall/i` and `<script`
 
-Distributing paywalled content would be a terms-of-service violation with publishers. The `isPaywalled` flag being `false` should not be changed manually without verifying the article is actually free.
-
-### 6b. `isTruncatedFeed` Flag (`rssCollector.ts:244`)
-
+### `isTruncatedFeed` Flag (`rssCollector.ts`)
 ```typescript
 const isTruncatedFeed = bodyHtml.length > 0 && (description.length / bodyHtml.length) > 0.9;
 ```
+Used in `weightUpdater.ts` to skip WPM calibration for articles where the RSS body is truncated. Removing this guard corrupts users' `averageWpm`.
 
-This flag is used in `weightUpdater.ts:203-206` to **skip WPM calibration** for articles where the RSS body is truncated (the word count in the DB would be falsely low). Removing this guard would corrupt all users' `averageWpm` statistics for publications that publish truncated feeds.
-
-### 6c. Article ID Generation — `generateArticleId()` (`rssCollector.ts:100-103`)
-
+### Article ID Generation — `generateArticleId()` (`rssCollector.ts`)
 ```typescript
-function generateArticleId(url: string, title: string): string {
-  const hash = createHash('sha256').update(`${url}::${title}`).digest('hex');
-  return `article_${hash.substring(0, 16)}`;
-}
+const hash = createHash('sha256').update(`${url}::${title}`).digest('hex');
+return `article_${hash.substring(0, 16)}`;
 ```
+Sole deduplication mechanism. Format must remain stable across deployments.
 
-This deterministic hash-based ID is the **sole deduplication mechanism** preventing the same article from being written to Firestore twice across different `rssCollector` runs. The client-side `validation.ts:56` explicitly states: "Article ID generation is handled exclusively by the Cloud Function (rssCollector.ts) using SHA-256 hashing. Any client-side ID would use a different algorithm and would never match server-generated IDs." The ID format must remain stable across deployments.
-
-### 6d. `rssStatus` Lifecycle (`rssCollector.ts:291-320`)
-
-The `rssStatus` field (`'current'` | `'archived'`) determines whether the Reader fetches live RSS content or loads the raw webpage. Changing an article's `rssStatus` to `'archived'` means the app will load the full Substack webpage directly in a WebView (including publisher headers, ads, subscription prompts). The `forceArchived` flag on feed documents gives admins per-feed control. The client (`ReaderScreen.tsx:169-176`) also self-heals by writing `rssStatus='archived'` to Firestore when a live RSS fetch fails at read time.
+### `rssStatus` Lifecycle
+- `'current'`: Reader fetches live RSS content
+- `'archived'`: Reader loads `publicationUrl` directly as a full webpage
+- Client sets `@subtick_rss_failed_{id}` in AsyncStorage when live RSS fetch fails (replaces the previously-broken Firestore write, which was blocked by security rules)

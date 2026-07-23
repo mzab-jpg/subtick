@@ -37,37 +37,41 @@ export async function updateWeights(userId: string): Promise<void> {
 
   const profile = userDoc.data() as UserProfile;
   const currentWeights = { ...profile.categoryWeights };
+  const now = Date.now();
 
-  // 2. Fetch the 100 MOST RECENT behavior events from the user's subcollection.
-  // Ordering by timestamp descending ensures we always process the latest interactions,
-  // not the oldest ones (which is what the default Firestore ordering would give us).
-  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  // P0 Fix: Use a watermark (weightUpdatedAt) so we only process NEW events,
+  // never replay events that were already applied in a previous sync.
+  // On first run, fall back to 24h ago to bootstrap from recent history.
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const watermark = profile.weightUpdatedAt ?? oneDayAgo;
+
+  // 2. Fetch only events that arrived AFTER the last processed watermark.
   const eventsSnapshot = await db
     .collection('users')
     .doc(userId)
     .collection('behavior_events')
-    .where('timestamp', '>=', oneDayAgo)
-    .orderBy('timestamp', 'desc')
+    .where('timestamp', '>', watermark)
+    .orderBy('timestamp', 'asc')
     .limit(100)
     .get();
 
   if (eventsSnapshot.empty) {
-    console.log(`[weightUpdater] No behavior events for user ${userId}`);
+    console.log(`[weightUpdater] No new events since watermark (${new Date(watermark).toISOString()}) for ${userId}`);
     return;
   }
 
-  // 3. All events from the query are already filtered to the last 24 hours by Firestore.
+  // 3. Collect new events and track the most recent timestamp for the new watermark.
   const events: BehaviorEvent[] = [];
+  let latestEventTimestamp = watermark;
   eventsSnapshot.forEach((doc) => {
-    events.push(doc.data() as BehaviorEvent);
+    const event = doc.data() as BehaviorEvent;
+    events.push(event);
+    if (event.timestamp > latestEventTimestamp) {
+      latestEventTimestamp = event.timestamp;
+    }
   });
 
-  if (events.length === 0) {
-    console.log(`[weightUpdater] No recent events for ${userId} (all older than 24h)`);
-    return;
-  }
-
-  console.log(`[weightUpdater] Processing ${events.length} recent events from subcollection for ${userId}`);
+  console.log(`[weightUpdater] Processing ${events.length} new events for ${userId} (since ${new Date(watermark).toISOString()})`);
 
   // 4. Apply feedback deltas
   const updatedWeights = { ...currentWeights };
@@ -87,10 +91,10 @@ export async function updateWeights(userId: string): Promise<void> {
     }
 
     // Apply Dimension-Specific Learning Rates:
-    // Publisher = 0.20 (2.0x of L), Length = 0.15 (1.5x of L), Category = 0.10 (1.0x of L)
-    const categoryL = LEARNING_RATE * 1.0; // 0.10
-    const lengthL = LEARNING_RATE * 1.5;   // 0.15
-    const publisherL = LEARNING_RATE * 2.0;  // 0.20
+    // Publisher = 0.16 (2.0x of L), Length = 0.12 (1.5x of L), Category = 0.08 (1.0x of L)
+    const categoryL = LEARNING_RATE * 1.0; // 0.08
+    const lengthL = LEARNING_RATE * 1.5;   // 0.12
+    const publisherL = LEARNING_RATE * 2.0;  // 0.16
 
     // Category Weight Update
     updatedWeights[category] += delta * categoryL;
@@ -129,8 +133,14 @@ export async function updateWeights(userId: string): Promise<void> {
     );
   }
 
-  // 6. Apply daily decay
-  const decayedWeights = applyDecay(updatedWeights);
+  // 6. Apply daily decay ONLY once per day — not on every sync.
+  // Check if at least 23 hours have passed since the last weight update.
+  const TWENTY_THREE_HOURS = 23 * 60 * 60 * 1000;
+  const shouldApplyDecay = (now - watermark) >= TWENTY_THREE_HOURS;
+  const decayedWeights = shouldApplyDecay ? applyDecay(updatedWeights) : updatedWeights;
+  if (shouldApplyDecay) {
+    console.log(`[weightUpdater] Applying daily decay for ${userId}`);
+  }
 
   // 7. Extract the 2D/3D weights back out of decayedWeights and Sync UI Arrays
   const newCategoryWeights: Record<string, number> = {};
@@ -171,7 +181,7 @@ export async function updateWeights(userId: string): Promise<void> {
 
   // 8. Calculate Rolling Average WPM & Total Reading Time
   // We look for events where the user finished reading an article
-  let newAverageWpm = profile.averageWpm || 250;
+  let newAverageWpm = profile.averageWpm || 200;
   let wpmUpdated = false;
   
   let newTotalReadTimeMs = profile.totalReadTimeMs || 0;
@@ -224,11 +234,12 @@ export async function updateWeights(userId: string): Promise<void> {
     }
   }
 
-  // 9. Update Firestore
+  // 9. Update Firestore — advance the watermark to the most recent processed event
   await userRef.update({
     categoryWeights: newCategoryWeights,
     categoryLengthWeights: newCategoryLengthWeights,
     publisherWeights: newPublisherWeights,
+    weightUpdatedAt: latestEventTimestamp, // P0 Fix: advance watermark so events are never replayed
     ...(uiArraysChanged && {
       selectedCategoryIds: Array.from(newSelectedCategoryIds),
       notInterestedCategoryIds: Array.from(newNotInterestedCategoryIds),
@@ -236,7 +247,7 @@ export async function updateWeights(userId: string): Promise<void> {
     ...(wpmUpdated && { averageWpm: newAverageWpm }),
     ...(readTimeUpdated && { totalReadTimeMs: newTotalReadTimeMs }),
     ...(articlesFinishedUpdated && { totalArticlesRead: newTotalArticlesFinished }),
-    lastUpdated: Date.now(),
+    lastUpdated: now,
   });
 
   console.log(

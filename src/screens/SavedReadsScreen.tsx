@@ -36,12 +36,16 @@ export default function SavedReadsScreen() {
   const [articles, setArticles] = useState<ArticleMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // P1-F Fix: Load on mount (first open), and also on focus (to refresh after unsaving).
+  useEffect(() => {
+    loadSaved();
+  }, []);
+
   // Re-fetch when returning from Reader (in case user unsaved an article)
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadSaved();
     });
-    loadSaved();
     return unsubscribe;
   }, [navigation]);
 

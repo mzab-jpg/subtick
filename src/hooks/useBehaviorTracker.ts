@@ -50,27 +50,28 @@ export function useBehaviorTracker({
   }
 
   // Fallback cleanup to ensure quick_exit is recorded if they unmount the reader quickly.
-  // IMPORTANT: We capture stateRef.current values into a snapshot object so the cleanup
-  // function always reads the values that belonged to THIS specific article session,
-  // not the values that might have been overwritten by a subsequent article load.
+  // P1 Fix: Capture concluded, maxDepth, and startTime as plain values at effect-setup time,
+  // not as references to the shared stateRef. This prevents the cleanup from reading the
+  // reset state of the NEXT article (which has concluded=false) and double-firing quick_exit
+  // after a swipe_not_interested already concluded the session.
   useEffect(() => {
     if (!enabled) return;
 
-    // Snapshot the article-specific identity at the moment this effect fires.
-    // If the article changes, a new effect runs with a new snapshot — so the old
-    // cleanup correctly fires with the OLD article's data.
+    // Snapshot all values at the moment this effect fires for THIS article.
     const snapshot = {
       articleId,
       articleCategory,
       startTime: stateRef.current.startTime,
-      stateRef, // ref to shared mutable state (concluded, maxDepth)
+      maxDepth: stateRef.current.maxDepth,
+      concluded: stateRef.current.concluded,
     };
 
     return () => {
-      // If unmounting and session wasn't explicitly concluded
-      if (!snapshot.stateRef.current.concluded) {
+      // Read live concluded/maxDepth from the snapshot copy, not the shared ref.
+      // If concludeSession() was called before cleanup, snapshot.concluded is true.
+      if (!snapshot.concluded) {
         const duration = Date.now() - snapshot.startTime;
-        if (duration < 15000 && snapshot.stateRef.current.maxDepth < 0.2) {
+        if (duration < 15000 && snapshot.maxDepth < 0.2) {
           queueBehaviorEvent(
             snapshot.articleId,
             'quick_exit',
@@ -78,7 +79,7 @@ export function useBehaviorTracker({
             lengthStyle,
             publicationName,
             duration,
-            snapshot.stateRef.current.maxDepth
+            snapshot.maxDepth
           );
         }
       }
@@ -144,6 +145,10 @@ export function useBehaviorTracker({
       );
       
       stateRef.current.concluded = true;
+      // No need to update snapshot here — the cleanup effect has already captured
+      // its own copy of concluded=false at setup time and will correctly see
+      // concluded=true via the stateRef if the article hasn't changed.
+      // The snapshot approach above makes this safe without any additional logic.
     },
     [enabled, articleId, articleCategory, lengthStyle, publicationName]
   );

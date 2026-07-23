@@ -13,6 +13,7 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
@@ -141,10 +142,8 @@ export default function SettingsScreen() {
   const activeMetricCount = getActiveMetricCount(profile);
 
   return (
-    <View
-      style={[styles.container, styles.content, { backgroundColor: colors.background }]}
-    >
-      {/* ── Page Header ─────────────────────────────────── */}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* ── Page Header (fixed, outside ScrollView) ───── */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <ChevronLeft size={24} color={colors.text} />
@@ -152,6 +151,9 @@ export default function SettingsScreen() {
         <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
         <View style={styles.backButton} />
       </View>
+
+      {/* ── Scrollable content below the fixed header ── */}
+      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner} showsVerticalScrollIndicator={false}>
 
       {/* ══════════════════════════════════════════════════
           SECTION: ACCOUNT
@@ -357,24 +359,28 @@ export default function SettingsScreen() {
       </View>
 
       {/* ══════════════════════════════════════════════════
-          SECTION: DEVELOPER
+          SECTION: DEVELOPER (only shown in development builds)
       ══════════════════════════════════════════════════ */}
-      <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>DEVELOPER</Text>
-      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.row, styles.rowNoBorder]}
-          onPress={() => navigation.navigate('DeveloperOptions')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.rowLeft}>
-            <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
-              <TerminalSquare size={16} color={colors.text} />
-            </View>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Developer Options</Text>
+      {__DEV__ && (
+        <>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>DEVELOPER</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowNoBorder]}
+              onPress={() => navigation.navigate('DeveloperOptions')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLeft}>
+                <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
+                  <TerminalSquare size={16} color={colors.text} />
+                </View>
+                <Text style={[styles.rowLabel, { color: colors.text }]}>Developer Options</Text>
+              </View>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
-          <ChevronRight size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-      </View>
+        </>
+      )}
 
       {/* App Version */}
       <Text style={[styles.appInfo, { color: colors.textMuted }]}>
@@ -382,13 +388,15 @@ export default function SettingsScreen() {
       </Text>
 
       <View style={{ height: 48 }} />
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 28, paddingTop: 0, paddingBottom: 0 },
+  scrollContent: { flex: 1 },
+  scrollInner: { paddingHorizontal: 28, paddingTop: 0 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   header: {
@@ -399,7 +407,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomWidth: 1,
     marginBottom: 20,
-    paddingHorizontal: 0,
+    paddingHorizontal: 28,
   },
   backButton: { width: 40, alignItems: 'flex-start' },
   headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },

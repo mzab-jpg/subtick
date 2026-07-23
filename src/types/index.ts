@@ -23,6 +23,7 @@ export interface UserProfile {
   dashboardMetricIds: string[]; // up to 3 metric card IDs selected by user
   includeArchivedArticles?: boolean; // Whether user opts-in to reading raw Substack URIs for old articles
   totalReadTimeMs?: number; // total active reading time in ms
+  weightUpdatedAt?: number; // Watermark: timestamp of the last event processed by updateWeights
   lastUpdated: number;
 }
 
@@ -58,6 +59,7 @@ export interface Article {
 
 // --- Behavior Event (Firestore: behavior_events/{id}) ---
 export interface BehaviorEvent {
+  id: string; // Client-generated ID used as Firestore document ID for idempotent retries
   articleId: string;
   userId: string;
   eventType: BehaviorEventType;

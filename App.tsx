@@ -8,7 +8,6 @@ import { View, Text, ActivityIndicator, StyleSheet, LogBox } from 'react-native'
 
 // Suppress deprecation warnings from third-party libraries
 LogBox.ignoreLogs(['InteractionManager has been deprecated']);
-import { StatusBar } from 'react-native';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';
@@ -95,7 +94,6 @@ function AppContent() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar hidden={true} />
       <ThemeProvider>
         <AppContent />
       </ThemeProvider>

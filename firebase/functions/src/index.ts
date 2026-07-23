@@ -10,7 +10,7 @@ admin.initializeApp();
 
 // --- Export all Cloud Functions ---
 export { rssCollector } from './rssCollector.js';
-export { getRankedFeed, cronUpdateCandidatePool } from './getRankedFeed.js';
+export { getRankedFeed, cronUpdateCandidatePool, cronDecayTrendingScores } from './getRankedFeed.js';
 export { syncBehaviorEvents } from './syncBehaviorEvents.js';
 // weightUpdater is an internal helper, not exported as a Cloud Function directly,
 // but is called by syncBehaviorEvents.

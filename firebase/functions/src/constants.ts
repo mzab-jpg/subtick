@@ -43,21 +43,34 @@ export const SUBSTACK_FEEDS: FeedSource[] = [
   { url: "https://www.thediff.co/feed", category: "Business & Finance", publicationName: "The Diff", qualityScore: 0.88 }
 ];
 
-// --- Scoring Formula Weights ---
+// --- Scoring Formula Weights (High/Mid tranches — personalized) ---
+// All components normalized to [0,1] so these weights are honest percentages.
+// Weights must sum to 1.0.
 export const SCORE_WEIGHTS = {
-  categoryBoost: 0.3,
-  trendingBoost: 0.2,
-  recencyBoost: 0.25,
-  qualityBoost: 0.15,
-  crossUserCollab: 0.1,
+  personalization: 0.40, // P: how much you like this category × publisher
+  trending: 0.15,        // T: crowd engagement (normalized, decays over time)
+  recency: 0.20,         // R: how recently published (two-phase decay)
+  quality: 0.15,         // Q: crowd-sourced publisher quality
+  diversity: 0.10,       // U: penalty for too many articles from same publisher
+};
+
+// --- Scoring Formula Weights (Low/Discovery tranches — merit-based) ---
+// No personalization or diversity. Pure recency + trending + quality.
+// Weights must sum to 1.0.
+export const SCORE_WEIGHTS_MERIT = {
+  recency: 0.40,
+  trending: 0.30,
+  quality: 0.30,
 };
 
 // --- Feedback Delta Multipliers ---
+// Controls how strongly each user action moves the personalization weights.
+// Higher values = faster personalization.
 export const FEEDBACK_DELTAS: Record<string, number> = {
-  save: 0.40,
-  like: 0.30,
-  read_thorough: 0.20,
-  read_skim: 0.05,
+  save: 0.55,
+  like: 0.40,
+  read_thorough: 0.30,
+  read_skim: 0.10,
   read_shallow: 0.00,
   swipe_next: 0.00,
   quick_exit: -0.20,
@@ -68,7 +81,13 @@ export const FEEDBACK_DELTAS: Record<string, number> = {
 export const LEARNING_RATE = 0.08;
 export const MIN_CATEGORY_WEIGHT = 0.1;
 export const MAX_CATEGORY_WEIGHT = 5.0;
-export const DAILY_DECAY_RATE = 0.995;
+export const DAILY_DECAY_RATE = 0.995; // User preference weights decay by 0.5% per day
+
+// --- Trending Score Decay ---
+// trendingScore decays daily at this rate: halves every 7 days.
+// 2^(-1/7) ≈ 0.9057
+export const TRENDING_DECAY_RATE = 0.9057;
+export const MAX_TRENDING_SCORE = 50.0; // Cap for T normalization
 
 export const DEFAULT_SELECTED_WEIGHT = 1.5;
 export const DEFAULT_NOT_INTERESTED_WEIGHT = 0.2;

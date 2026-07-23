@@ -38,8 +38,18 @@ function getPublisherQualityIncrement(eventType: string): number {
 }
 
 export const syncBehaviorEvents = onCall(async (request) => {
+  // P0 Security: Verify the caller is authenticated. Never trust client-supplied userId.
+  if (!request.auth) {
+    throw new Error('unauthenticated');
+  }
+  const authenticatedUserId = request.auth.uid;
+
   const data = request.data as { events: BehaviorEvent[] };
-  const events = data.events || [];
+  const events = (data.events || []).map(e => ({
+    ...e,
+    // Overwrite any client-supplied userId with the verified auth UID
+    userId: authenticatedUserId,
+  }));
 
   if (!events.length) {
     return { synced: 0, errors: 0 };
@@ -69,6 +79,17 @@ export const syncBehaviorEvents = onCall(async (request) => {
     console.warn('[syncBehaviorEvents] Failed to fetch article publisher info:', err.message);
   }
 
+  // 1b. Fetch existing publisher documents so we know which ones already have a qualityScore.
+  // This lets us use increment() for existing publishers and set the default for new ones.
+  // Publishers are few (35 feeds) so this read is cheap.
+  const existingPublisherIds = new Set<string>();
+  try {
+    const publisherSnap = await db.collection('publishers').get();
+    publisherSnap.forEach(doc => existingPublisherIds.add(doc.id));
+  } catch (err: any) {
+    console.warn('[syncBehaviorEvents] Could not pre-fetch publisher list:', err.message);
+  }
+
   let synced = 0;
   let errors = 0;
   const batch = db.batch();
@@ -82,11 +103,13 @@ export const syncBehaviorEvents = onCall(async (request) => {
       }
 
       // Stage raw event log in subcollection: users/{userId}/behavior_events/{eventId}
+      // P0 Idempotency: Use the client-generated event.id as the document ID so that
+      // retries after a network timeout do not create duplicate events.
       const eventDocRef = db
         .collection('users')
         .doc(event.userId)
         .collection('behavior_events')
-        .doc();
+        .doc(event.id || db.collection('users').doc().id);
 
       batch.set(eventDocRef, {
         articleId: event.articleId,
@@ -97,8 +120,6 @@ export const syncBehaviorEvents = onCall(async (request) => {
         lengthStyle: event.lengthStyle,
         sessionDuration: event.sessionDuration,
         scrollDepth: event.scrollDepth,
-        // Store publicationName and actualWordCount so weightUpdater can use them
-        // for publisher preference learning and WPM calibration respectively.
         ...(event.publicationName && { publicationName: event.publicationName }),
         ...(event.actualWordCount && event.actualWordCount > 0 && { actualWordCount: event.actualWordCount }),
       });
@@ -113,19 +134,35 @@ export const syncBehaviorEvents = onCall(async (request) => {
           });
         }
 
-        // Increment Publisher Quality Score atomically in real-time
+        // Update Publisher Quality Score.
+        // Fix: FieldValue.increment on a missing field initializes it to 0, not DEFAULT_PUBLISHER_QUALITY.
+        // For NEW publishers (not yet in Firestore), we write the explicit default + delta as a
+        // concrete number. For EXISTING publishers, we use increment() which is atomic and correct.
         const pubName = articleToPublisher[event.articleId];
         if (pubName) {
           const qualityDelta = getPublisherQualityIncrement(event.eventType);
           if (qualityDelta !== 0) {
-            // Sanitize publication name to make it path-safe for Firestore Doc IDs (no slashes)
             const sanitizedDocId = pubName.replace(/\//g, '-');
             const publisherRef = db.collection('publishers').doc(sanitizedDocId);
-            batch.set(publisherRef, {
-              name: pubName,
-              qualityScore: admin.firestore.FieldValue.increment(qualityDelta),
-              lastUpdated: Date.now()
-            }, { merge: true });
+
+            if (existingPublisherIds.has(sanitizedDocId)) {
+              // Existing publisher — safe to use atomic increment
+              batch.set(publisherRef, {
+                name: pubName,
+                qualityScore: admin.firestore.FieldValue.increment(qualityDelta),
+                lastUpdated: Date.now(),
+              }, { merge: true });
+            } else {
+              // New publisher — seed at DEFAULT_PUBLISHER_QUALITY + delta to avoid starting at 0
+              const initialScore = Math.max(0.2, Math.min(1.0, DEFAULT_PUBLISHER_QUALITY + qualityDelta));
+              batch.set(publisherRef, {
+                name: pubName,
+                qualityScore: initialScore,
+                lastUpdated: Date.now(),
+              });
+              // Mark as existing so subsequent events in this batch use increment
+              existingPublisherIds.add(sanitizedDocId);
+            }
           }
         }
       }
@@ -143,6 +180,7 @@ export const syncBehaviorEvents = onCall(async (request) => {
     console.log(`[syncBehaviorEvents] Synced ${synced} events, updated trending and publisher quality scores in real-time`);
   } catch (error: any) {
     console.error('[syncBehaviorEvents] Batch commit failed:', error.message);
+    throw error; // Rethrow to inform client sync failed so events remain in queue
   }
 
   // 3. Trigger weight updates for affected users

@@ -78,27 +78,28 @@ export default function DashboardScreen() {
         }
       }).catch(() => {});
 
-      // Flush + refresh profile in background — does not affect article list
-      (async () => {
-        try {
-          await flushBehaviorQueue();
-          await new Promise(resolve => setTimeout(resolve, 800));
-        } catch {}
-        loadData(true);
-      })();
+      // Perf fix: removed 800ms artificial delay. Flush in background then refresh profile.
+      flushBehaviorQueue().catch(() => {}).finally(() => loadData(true));
     });
 
     loadData(false);
     return unsubscribe;
   }, [navigation]);
 
+  // Onboarding race fix: await completeOnboarding before re-fetching the profile.
   useEffect(() => {
     if (route.params?.onboardingSelections) {
       const { selectedCategoryIds, notInterestedCategoryIds } = route.params.onboardingSelections;
       const userId = auth.currentUser?.uid;
       if (userId) {
-        completeOnboarding(userId, selectedCategoryIds, notInterestedCategoryIds)
-          .then(() => loadData(false));
+        (async () => {
+          try {
+            await completeOnboarding(userId, selectedCategoryIds, notInterestedCategoryIds);
+          } catch (err) {
+            console.error('[Dashboard] completeOnboarding error:', err);
+          }
+          loadData(false);
+        })();
       }
     }
   }, [route.params?.onboardingSelections]);
@@ -109,7 +110,9 @@ export default function DashboardScreen() {
       const user = auth.currentUser;
       if (!user) { if (!silent) setLoading(false); return; }
 
-      try { await flushBehaviorQueue(); } catch {}
+      // Perf fix: removed redundant flushBehaviorQueue() — the focus listener
+      // already flushes before calling loadData(true). On initial mount there
+      // is nothing in the queue yet.
 
       const profile = await fetchUserProfile(user.uid);
       if (profile) {
@@ -315,7 +318,7 @@ export default function DashboardScreen() {
                     </Text>
                   </View>
                   <Text style={[styles.rowTime, { color: colors.textMuted }]}>
-                    {Math.max(1, Math.ceil((article.wordCount || 0) / (userProfile?.averageWpm || 250)))}m
+                    {Math.max(1, Math.ceil((article.wordCount || 0) / (userProfile?.averageWpm || 200)))}m
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -373,9 +376,9 @@ const styles = StyleSheet.create({
   // Inner flex column — fills the screen, stacks sections vertically
   inner: {
     flex: 1,
-    paddingHorizontal: 28, 
-    paddingTop: 64,    
-    paddingBottom: 120, //me
+    paddingHorizontal: 28,
+    paddingTop: 64,
+    paddingBottom: 120,
   },
 
   // Header
@@ -383,7 +386,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32, //me
+    marginBottom: 32,
   },
   headerTitle: { fontSize: TEXT_XL, fontWeight: '800', letterSpacing: -1 },
   iconButton: { padding: 4 },
@@ -446,8 +449,8 @@ const styles = StyleSheet.create({
   pillRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderRadius: 16, //me
-    marginTop: 32, 
+    borderRadius: 16,
+    marginTop: 32,
   },
   // Invisible spacer mirrors shuffle width to optically centre "Discover"
   pillSpacer: { width: 72 },
@@ -456,20 +459,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16, 
+    paddingVertical: 16,
   },
   pillDiscoverText: { fontSize: 18, fontWeight: '700' },
   // Shuffle section: wider, flat left edge (straight where it meets Discover),
   // rounded right edge only. Has a visible border ring in colors.text.
   pillShuffle: {
     width: 72,
-    paddingVertical: 16, 
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderTopRightRadius: 16, //me
-    borderBottomRightRadius: 16, //me
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
     borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0, 
+    borderBottomLeftRadius: 0,
     borderWidth: 2,
     borderLeftWidth: 0,
   },

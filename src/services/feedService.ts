@@ -4,12 +4,11 @@
 // ============================================================
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { functions, db } from './firebase';
+import { functions, db, auth } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Article, RankedFeedResult } from '../types';
-import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES } from '../utils/constants';
-import { auth } from './firebase';
+import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX } from '../utils/constants';
 import { XMLParser } from 'fast-xml-parser';
 import xss from 'xss';
 
@@ -97,8 +96,11 @@ export async function fetchAndExtractArticle(feedUrl: string, guid: string): Pro
     if (!fetchPromise) {
       console.log(`[feedService] Cache miss, fetching live feed: ${feedUrl}`);
       fetchPromise = (async () => {
-        const response = await fetch(feedUrl);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        const response = await fetch(feedUrl, { signal: controller.signal });
         const xmlText = await response.text();
+        clearTimeout(timeoutId);
         
         const parser = new XMLParser({
           ignoreAttributes: false,
@@ -427,6 +429,31 @@ export async function getSavedArticleHtml(articleId: string): Promise<string | n
     return await AsyncStorage.getItem(`@subtick_saved_html_${articleId}`);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Mark an article's RSS feed as permanently failed on this device.
+ * Used as a replacement for writing rssStatus='archived' to Firestore,
+ * which is blocked by security rules. This flag persists across sessions.
+ */
+export async function markRssFailed(articleId: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(`${RSS_FAILED_KEY_PREFIX}${articleId}`, '1');
+  } catch (error) {
+    console.error('[FeedService] markRssFailed error:', error);
+  }
+}
+
+/**
+ * Check whether an article's RSS feed was previously marked as failed on this device.
+ */
+export async function isRssFailed(articleId: string): Promise<boolean> {
+  try {
+    const val = await AsyncStorage.getItem(`${RSS_FAILED_KEY_PREFIX}${articleId}`);
+    return val === '1';
+  } catch {
+    return false;
   }
 }
 

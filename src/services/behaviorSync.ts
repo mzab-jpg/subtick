@@ -11,6 +11,18 @@ import { PendingBehaviorEvent, BehaviorEventType } from '../types';
 import { BEHAVIOR_QUEUE_KEY, SYNC_BATCH_SIZE, MAX_QUEUE_SIZE } from '../utils/constants';
 import { auth } from './firebase';
 
+// --- AsyncStorage Concurrency Mutex Queue ---
+// Since AsyncStorage is asynchronous, rapid swiping can cause concurrent
+// queue operations to collide and overwrite each other.
+// This queue chains all storage operations in a single-file line (mutex).
+let storageQueue = Promise.resolve();
+
+async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const nextInLine = storageQueue.then(operation);
+  storageQueue = nextInLine.then(() => {}).catch(() => {});
+  return nextInLine;
+}
+
 /**
  * Generate a simple UUID for event IDs.
  */
@@ -31,48 +43,50 @@ export async function queueBehaviorEvent(
   scrollDepth: number,
   actualWordCount?: number
 ): Promise<void> {
-  try {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
+  return enqueueStorageOperation(async () => {
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) return;
 
-    const event: PendingBehaviorEvent = {
-      id: generateId(),
-      articleId,
-      userId,
-      eventType,
-      timestamp: Date.now(),
-      articleCategory,
-      lengthStyle,
-      publicationName,
-      sessionDuration,
-      scrollDepth,
-      actualWordCount,
-      synced: false,
-    };
+      const event: PendingBehaviorEvent = {
+        id: generateId(),
+        articleId,
+        userId,
+        eventType,
+        timestamp: Date.now(),
+        articleCategory,
+        lengthStyle,
+        publicationName,
+        sessionDuration,
+        scrollDepth,
+        actualWordCount,
+        synced: false,
+      };
 
-    // Read current queue
-    const raw = await AsyncStorage.getItem(BEHAVIOR_QUEUE_KEY);
-    const queue: PendingBehaviorEvent[] = raw ? JSON.parse(raw) : [];
+      // Read current queue
+      const raw = await AsyncStorage.getItem(BEHAVIOR_QUEUE_KEY);
+      const queue: PendingBehaviorEvent[] = raw ? JSON.parse(raw) : [];
 
-    // Prevent unbounded growth
-    if (queue.length >= MAX_QUEUE_SIZE) {
-      // Drop oldest unsynced events
-      queue.splice(0, queue.length - MAX_QUEUE_SIZE + 1);
+      // Prevent unbounded growth
+      if (queue.length >= MAX_QUEUE_SIZE) {
+        // Drop oldest unsynced events
+        queue.splice(0, queue.length - MAX_QUEUE_SIZE + 1);
+      }
+
+      queue.push(event);
+      await AsyncStorage.setItem(BEHAVIOR_QUEUE_KEY, JSON.stringify(queue));
+
+      // If we have a batch ready, trigger an immediate flush
+      const unsynced = queue.filter((e) => !e.synced).length;
+      if (unsynced >= SYNC_BATCH_SIZE) {
+        flushBehaviorQueue().catch(() => {
+          // Silently fail — will retry on next network check
+        });
+      }
+    } catch (error) {
+      console.error('[BehaviorSync] queueBehaviorEvent error:', error);
     }
-
-    queue.push(event);
-    await AsyncStorage.setItem(BEHAVIOR_QUEUE_KEY, JSON.stringify(queue));
-
-    // If we have a batch ready, trigger an immediate flush
-    const unsynced = queue.filter((e) => !e.synced).length;
-    if (unsynced >= SYNC_BATCH_SIZE) {
-      flushBehaviorQueue().catch(() => {
-        // Silently fail — will retry on next network check
-      });
-    }
-  } catch (error) {
-    console.error('[BehaviorSync] queueBehaviorEvent error:', error);
-  }
+  });
 }
 
 /**
@@ -99,7 +113,7 @@ export async function flushBehaviorQueue(): Promise<number> {
     );
 
     const result = await syncFn({ events: batch });
-    const syncedCount = result.data.synced || batch.length;
+    const syncedCount = result.data.synced ?? batch.length;
 
     console.log(`[BehaviorSync] Cloud Function synced ${syncedCount}/${batch.length} events`);
 

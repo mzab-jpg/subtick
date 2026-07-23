@@ -22,6 +22,7 @@ export interface UserProfile {
   dashboardMetricIds: string[];
   includeArchivedArticles?: boolean;
   totalReadTimeMs?: number;
+  weightUpdatedAt?: number; // Watermark: timestamp of the last event processed by updateWeights
   lastUpdated: number;
 }
 
@@ -65,6 +66,7 @@ export type BehaviorEventType =
   | 'quick_exit';
 
 export interface BehaviorEvent {
+  id: string; // Client-generated ID used as Firestore document ID for idempotent retries
   articleId: string;
   userId: string;
   eventType: BehaviorEventType;

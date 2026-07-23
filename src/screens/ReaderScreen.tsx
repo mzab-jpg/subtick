@@ -27,9 +27,9 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, RootStackParamList } from '../types';
 import { db } from '../services/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
-import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds, fetchAndExtractArticle, getSavedArticleHtml, pruneFeedSessionCache } from '../services/feedService';
+import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, unmarkArticleSaved, getSavedArticleIds, fetchAndExtractArticle, getSavedArticleHtml, pruneFeedSessionCache, markRssFailed, isRssFailed } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { Linking } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -104,6 +104,9 @@ export default function ReaderScreen() {
   const actualWordCountRef = useRef<number>(0);
   const webViewInitialLoadRef = useRef<boolean>(true);
   const webViewRef = useRef<WebView>(null);
+  // Swipe pause detection — if finger stops moving for 200ms, the swipe is cancelled
+  const swipeLastMoveTimeRef = useRef<number>(0);
+  const SWIPE_PAUSE_THRESHOLD_MS = 200;
 
   // Reset webview initial load guard whenever article changes
   useEffect(() => {
@@ -151,31 +154,38 @@ export default function ReaderScreen() {
         if (isSavedMode) {
           const savedHtml = await getSavedArticleHtml(id);
           contentHtml = savedHtml || data.bodyHtml || '';
-        } else if (data.rssStatus === 'archived') {
+      } else if (data.rssStatus === 'archived') {
           // Archived articles do not exist in live RSS. We will load the publicationUrl directly.
           contentHtml = '';
         } else if (data.guid && data.feedUrl) {
-          try {
-            contentHtml = await fetchAndExtractArticle(data.feedUrl, data.guid);
-          } catch (rssError) {
-            console.warn(`[Reader] RSS fetch failed for ${data.guid}, falling back to raw URI.`);
+          // P1-C Fix: Check local AsyncStorage flag before attempting RSS fetch.
+          // This avoids repeatedly retrying feeds that have already failed,
+          // without needing a Firestore write (which is blocked by security rules).
+          const alreadyFailed = await isRssFailed(id);
+          if (alreadyFailed) {
+            console.log(`[Reader] Skipping RSS fetch for ${id} — previously marked failed in AsyncStorage.`);
             needsFallback = true;
+          } else {
+            try {
+              contentHtml = await fetchAndExtractArticle(data.feedUrl, data.guid);
+            } catch (rssError) {
+              console.warn(`[Reader] RSS fetch failed for ${data.guid}, falling back to raw URI.`);
+              needsFallback = true;
+            }
           }
         } else {
           contentHtml = data.bodyHtml || '';
         }
 
-        // Bug #3 Fix: If the RSS fetch fails, persist rssStatus 'archived' to Firestore
-        // so future loads skip the failed RSS fetch entirely.
+        // P1-C Fix: If the RSS fetch fails, record this in AsyncStorage so future loads
+        // skip the failed fetch. Firestore article updates are blocked by security rules,
+        // so we use device-local storage instead. The flag is per-article and persists
+        // across sessions on this device.
         if (needsFallback) {
           data.rssStatus = 'archived';
           contentHtml = '';
-          try {
-            await updateDoc(doc(db, 'articles', id), { rssStatus: 'archived' });
-            console.log(`[Reader] Persisted rssStatus=archived for article ${id}`);
-          } catch (persistErr) {
-            console.warn('[Reader] Failed to persist rssStatus update:', persistErr);
-          }
+          await markRssFailed(id);
+          console.log(`[Reader] Marked RSS as failed in AsyncStorage for article ${id}`);
         }
 
         setResolvedHtml(contentHtml);
@@ -283,8 +293,10 @@ export default function ReaderScreen() {
     console.log('[Preloader] Trigger zone reached. Synchronizing swipes & preloading next batch...');
 
     try {
-      await flushBehaviorQueue();
-      console.log('[Preloader] Local behavior events successfully flushed to cloud.');
+      // Perf fix: fire-and-forget the flush — don't block the feed fetch waiting for
+      // the Cloud Function to process events. The feed fetch and weight sync are independent.
+      flushBehaviorQueue().catch(e => console.warn('[Preloader] Flush failed silently:', e));
+      console.log('[Preloader] Behavior flush initiated (non-blocking). Fetching next batch...');
 
       const historicalSeen = await getSeenArticleIds();
       const combinedSeenIds = Array.from(new Set([...historicalSeen, ...activeQueueIds]));
@@ -315,7 +327,6 @@ export default function ReaderScreen() {
 
     // Reset reader state
     setIsLiked(false);
-    setIsSaved(false);
     loadArticle(activeQueueIds[nextIdx]);
 
     // TRIGGER ZONE CHECK: If 5 articles or less are left, preload the next batch.
@@ -323,7 +334,7 @@ export default function ReaderScreen() {
       preloadNextArticles();
     }
 
-    // Refresh saved state for next article
+    // Set saved state for next article after checking storage
     getSavedArticleIds().then(saved => setIsSaved(saved.includes(activeQueueIds[nextIdx])));
   }, [hasNext, currentIndex, activeQueueIds, loadArticle, preloadNextArticles, isRestrictedMode]);
 
@@ -397,10 +408,20 @@ export default function ReaderScreen() {
         },
         onPanResponderMove: (evt, gestureState) => {
           panX.setValue(gestureState.dx);
+          // Track the last time the finger moved significantly
+          if (Math.abs(gestureState.dx) > 5) {
+            swipeLastMoveTimeRef.current = Date.now();
+          }
         },
         onPanResponderRelease: (evt, gestureState) => {
           const dx = gestureState.dx;
           Animated.spring(panX, { toValue: 0, useNativeDriver: true }).start();
+
+          // If the user paused mid-swipe (finger stopped moving for 200ms+), cancel the swipe
+          const timeSinceLastMove = Date.now() - swipeLastMoveTimeRef.current;
+          if (timeSinceLastMove > SWIPE_PAUSE_THRESHOLD_MS) {
+            return; // Abort — user paused, treat as cancelled swipe
+          }
 
           if (dx < -SWIPE_THRESHOLD) {
             if (!isRestrictedMode) {
@@ -443,15 +464,30 @@ export default function ReaderScreen() {
     extrapolate: 'clamp',
   });
 
+  // P1-D Fix: Escape HTML special characters in metadata fields before inserting into WebView HTML.
+  // article.title, publicationName, and author come from RSS and must not be trusted as safe HTML.
+  const escapeHtml = (str: string): string => {
+    return str
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"')
+      .replace(/'/g, '&#39;');
+  };
+
   // --- Pre-compiled HTML for WebView ---
   const articleHTML = useMemo(() => {
     if (!article) return '';
     const readMinutes = Math.max(1, Math.ceil((article.wordCount || 0) / currentWpm));
     const frontendRules = article.frontendRules;
 
-    const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${article.title}</h1>`;
-    const authorBlock = `<p style="color:${colors.textSecondary}; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid ${colors.border}; display:inline-block; padding-bottom:4px;">${article.publicationName}</p>`;
-    const metaBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:32px;">By ${article.author} · ${readMinutes} min read</p>`;
+    const safeTitle = escapeHtml(article.title);
+    const safePublicationName = escapeHtml(article.publicationName);
+    const safeAuthor = escapeHtml(article.author);
+
+    const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${safeTitle}</h1>`;
+    const authorBlock = `<p style="color:${colors.textSecondary}; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid ${colors.border}; display:inline-block; padding-bottom:4px;">${safePublicationName}</p>`;
+    const metaBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:32px;">By ${safeAuthor} · ${readMinutes} min read</p>`;
 
     return `
       <!DOCTYPE html>
@@ -525,7 +561,7 @@ export default function ReaderScreen() {
       </body>
       </html>
     `;
-  }, [article, resolvedHtml, colors, webViewCSS]);
+  }, [article, resolvedHtml, colors, webViewCSS, currentWpm]);
 
   const rawWebpageInjectedScript = useMemo(() => {
     const frontendRules = article?.frontendRules;

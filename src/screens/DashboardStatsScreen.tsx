@@ -86,6 +86,9 @@ export default function DashboardStatsScreen() {
         return topCat.charAt(0).toUpperCase() + topCat.slice(1);
       }
       case 'totalRead': return profile.totalArticlesRead;
+      case 'totalReadTime': return profile.totalReadTimeMs
+        ? Math.max(0.1, parseFloat((profile.totalReadTimeMs / 3_600_000).toFixed(1)))
+        : 0;
       case 'avgWpm': return profile.averageWpm;
       case 'weeklyStreak': return `${profile.weeklyReadCount} this week`;
       case 'exploreScore': return 'Active';

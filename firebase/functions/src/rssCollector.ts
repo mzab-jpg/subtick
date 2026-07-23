@@ -56,6 +56,17 @@ async function fetchOgMetadata(url: string): Promise<OgMetadata> {
       metadata.headerImageUrl = ogImageMatch[1];
     }
 
+    // Helper to decode basic HTML entities
+    const decodeHtmlEntities = (str: string) => {
+      return str
+        .replace(/"/g, '"')
+        .replace(/&/g, '&')
+        .replace(/</g, '<')
+        .replace(/>/g, '>')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ');
+    };
+
     // 2. og:description / twitter:description / name=description
     const ogDescMatch = 
       html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
@@ -63,13 +74,7 @@ async function fetchOgMetadata(url: string): Promise<OgMetadata> {
       html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
       html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
     if (ogDescMatch && ogDescMatch[1]) {
-      metadata.description = ogDescMatch[1]
-        .replace(/"/g, '"')
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>')
-        .replace(/&#39;/g, "'")
-        .substring(0, 300);
+      metadata.description = decodeHtmlEntities(ogDescMatch[1]).substring(0, 300);
     }
 
     // 3. author
@@ -78,7 +83,7 @@ async function fetchOgMetadata(url: string): Promise<OgMetadata> {
       html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']author["']/i) ||
       html.match(/<meta[^>]*property=["']article:author["'][^>]*content=["']([^"']+)["']/i);
     if (authorMatch && authorMatch[1]) {
-      metadata.author = authorMatch[1];
+      metadata.author = decodeHtmlEntities(authorMatch[1]);
     }
 
     // 4. title fallback
@@ -87,7 +92,7 @@ async function fetchOgMetadata(url: string): Promise<OgMetadata> {
       html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i) ||
       html.match(/<title>([^<]+)<\/title>/i);
     if (ogTitleMatch && ogTitleMatch[1]) {
-      metadata.title = ogTitleMatch[1].replace(/"/g, '"').replace(/&/g, '&').trim();
+      metadata.title = decodeHtmlEntities(ogTitleMatch[1]).trim();
     }
 
   } catch (err: any) {
