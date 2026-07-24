@@ -177,14 +177,14 @@ Source: `getRankedFeed.ts: assembleFeedWithTranches()`
 
 Articles bucketed by normalized P value:
 
-| Tranche | P threshold | Target | Selection |
-|---|---|---|---|
-| High | P ≥ 0.40 | 12 | **Random shuffle** |
-| Mid | P ≥ 0.20 | 8 | **Random shuffle** |
-| Low | P ≥ 0.10 | 4 | **Merit score DESC** |
-| Discovery | P < 0.10 | 6 | **Merit score DESC** |
+| Tranche | P threshold | Target | Selection (established users) | Selection (new users, <30 reads) |
+|---|---|---|---|---|
+| High | P ≥ 0.40 | 12 | **Random shuffle** | **Random shuffle** |
+| Mid | P ≥ 0.20 | 8 | **Random shuffle** | **Random shuffle** |
+| Low | P ≥ 0.10 | 4 | **Merit score DESC** | **Random shuffle** |
+| Discovery | P < 0.10 | 6 | **Merit score DESC** | **Random shuffle** |
 
-High/Mid are shuffled randomly to provide variety within preferred categories. Low/Discovery are sorted by merit score to surface the best objectively-good articles for neutral/disinterested categories. Overflow from underpopulated tranches cascades down. Final feed of 30 is shuffled before return.
+High/Mid are always shuffled randomly to provide variety within preferred categories. Low/Discovery are sorted by merit score (R+T+Q) for established users to surface the best objectively-good articles, but **randomized for new users with fewer than 30 total reads** to give them variety while they build personalization data. Overflow from underpopulated tranches cascades down. Final feed of 30 is shuffled before return.
 
 ---
 

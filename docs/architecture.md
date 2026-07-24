@@ -170,11 +170,11 @@ CLIENT: DashboardScreen.tsx → loadFeedArticles()
                     │      Q = normalizeQ(publisherQuality)          → [0, 1]
                     │      U = normalizeU(articlesInSamePub)         → [0, 1]
                     │
-                    ├── STAGE 4: assembleFeedWithTranches(scored, 30)
-                    │      High (P≥0.40): 12 — random
-                    │      Mid  (P≥0.20): 8  — random
-                    │      Low  (P≥0.10): 4  — sorted by merit (R+T+Q)
-                    │      Discovery:     6  — sorted by merit (R+T+Q)
+                    ├── STAGE 4: assembleFeedWithTranches(scored, 30, totalArticlesRead)
+                    │      High (P≥0.40): 12 — random (always)
+                    │      Mid  (P≥0.20): 8  — random (always)
+                    │      Low  (P≥0.10): 4  — random if <30 reads, else merit-sorted (R+T+Q)
+                    │      Discovery:     6  — random if <30 reads, else merit-sorted (R+T+Q)
                     │      Final shuffle of all 30
                     │
                     └── Returns: { articles: Article[30], generatedAt, remainingCount }

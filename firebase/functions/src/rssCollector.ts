@@ -257,7 +257,7 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
                 title,
                 author,
                 publicationName: feed.publicationName,
-                publicationUrl: item.link || feedData.link || feed.url,
+                publicationUrl: item.link || guid,
                 feedUrl: feed.url,
                 category: feed.category,
                 lengthStyle,

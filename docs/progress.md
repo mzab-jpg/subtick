@@ -14,7 +14,7 @@
 - ✅ **Dual candidate pool cron** — `cronUpdateCandidatePool` runs every 10 minutes, builds `system/candidatePool_current` (500 fresh + 500 old) and `system/candidatePool_mixed` (500 current + 500 archived).
 - ✅ **Trending score decay cron** — `cronDecayTrendingScores` runs daily, applies `trendingScore × 0.9057` (halves every 7 days) to all articles with `trendingScore > 0.1`.
 - ✅ **Normalized 5-component ranked feed** — `getRankedFeed` implements fully normalized scoring. All 5 components output [0,1] so formula weights are honest. Two formulas: personalized (High/Mid tranches) and merit-based (Low/Discovery tranches).
-- ✅ **Tranche-based feed assembly** — 4-bucket tranche system using normalized P thresholds: High (P≥0.40): 12 random, Mid (P≥0.20): 8 random, Low (P≥0.10): 4 merit-sorted, Discovery (<0.10): 6 merit-sorted.
+- ✅ **Tranche-based feed assembly** — 4-bucket tranche system using normalized P thresholds: High (P≥0.40): 12 random, Mid (P≥0.20): 8 random, Low (P≥0.10): 4 random if <30 reads else merit-sorted, Discovery (<0.10): 6 random if <30 reads else merit-sorted.
 - ✅ **Dynamic crowd-sourced publisher quality** — `publishers` collection. New publishers seeded at DEFAULT_PUBLISHER_QUALITY (0.8) + delta; existing publishers use atomic increment.
 - ✅ **Firestore fallback** — If Cloud Function unavailable, client falls back to direct Firestore query.
 - ✅ **P0 Security** — Both `getRankedFeed` and `syncBehaviorEvents` enforce `request.auth.uid`. Client-supplied `userId` is ignored. Unauthenticated calls throw immediately.

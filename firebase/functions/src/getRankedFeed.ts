@@ -396,7 +396,8 @@ async function getOrUpdatePublisherQualities(): Promise<Record<string, number>> 
  */
 function assembleFeedWithTranches(
   scoredList: { article: Article; personalizedScore: number; meritScore: number; pNorm: number }[],
-  totalSize = 30
+  totalSize = 30,
+  totalArticlesRead = 0
 ): Article[] {
   if (scoredList.length === 0) return [];
 
@@ -439,15 +440,23 @@ function assembleFeedWithTranches(
   remainingCount -= pickedMid.length;
   if (pickedMid.length < targetMid) targetLow += (targetMid - pickedMid.length);
 
-  // Low Tranche — sorted by merit score (R+T+Q)
-  lowBucket.sort((a, b) => b.meritScore - a.meritScore);
+  // Low Tranche — sorted by merit score (R+T+Q), or randomized for new users
+  if (totalArticlesRead < 30) {
+    shuffleArray(lowBucket);
+  } else {
+    lowBucket.sort((a, b) => b.meritScore - a.meritScore);
+  }
   const pickedLow = lowBucket.slice(0, Math.min(lowBucket.length, targetLow)).map(s => s.article);
   finalFeed.push(...pickedLow);
   remainingCount -= pickedLow.length;
   if (pickedLow.length < targetLow) targetDiscovery += (targetLow - pickedLow.length);
 
-  // Discovery Tranche — sorted by merit score (R+T+Q)
-  discoveryBucket.sort((a, b) => b.meritScore - a.meritScore);
+  // Discovery Tranche — sorted by merit score (R+T+Q), or randomized for new users
+  if (totalArticlesRead < 30) {
+    shuffleArray(discoveryBucket);
+  } else {
+    discoveryBucket.sort((a, b) => b.meritScore - a.meritScore);
+  }
   const pickedDiscovery = discoveryBucket.slice(0, Math.min(discoveryBucket.length, targetDiscovery)).map(s => s.article);
   finalFeed.push(...pickedDiscovery);
   remainingCount -= pickedDiscovery.length;
@@ -481,6 +490,7 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
   let categoryLengthWeights: Record<string, number> = {};
   let publisherWeights: Record<string, number> = {};
   let includeArchivedArticles = false;
+  let totalArticlesRead = 0;
   try {
     const userDoc = await db.collection('users').doc(userId).get();
     if (userDoc.exists) {
@@ -489,6 +499,7 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
       categoryLengthWeights = data.categoryLengthWeights || {};
       publisherWeights = data.publisherWeights || {};
       includeArchivedArticles = data.includeArchivedArticles || false;
+      totalArticlesRead = data.totalArticlesRead || 0;
     }
   } catch (err) {
     console.warn('[getRankedFeed] Could not fetch user profile');
@@ -536,7 +547,7 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
       return { article, personalizedScore, meritScore, pNorm: P };
     });
 
-    const finalFeed = assembleFeedWithTranches(scored, RETURN_FEED_SIZE);
+    const finalFeed = assembleFeedWithTranches(scored, RETURN_FEED_SIZE, totalArticlesRead);
 
     // Debug logging for top 5 scored articles
     console.log(`[getRankedFeed] --- Top 5 by personalized score ---`);
