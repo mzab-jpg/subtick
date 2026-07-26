@@ -273,6 +273,10 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
                 qualityScore: feed.qualityScore,
                 isSeed: false,
                 rssStatus,
+                // random_score: uniformly distributed [0,1) random number used for cheap random
+                // sampling in cronUpdateCandidatePool. Refreshed daily by cronDecayTrendingScores
+                // so the candidate pool never stagnates.
+                random_score: Math.random(),
               };
 
               if (feed.frontendRules) {

@@ -46,6 +46,7 @@ export interface Article {
   wordCount?: number;
   estimatedReadMinutes: number;
   trendingScore: number;
+  peakTrendingScore: number; // All-time high trendingScore — never decays, used for cleanup ranking
   qualityScore: number;
   isSeed: boolean;
   rssStatus?: 'current' | 'archived';
@@ -59,7 +60,9 @@ export type BehaviorEventType =
   | 'swipe_next'
   | 'swipe_not_interested'
   | 'like'
+  | 'unlike'
   | 'save'
+  | 'unsave'
   | 'read_thorough'
   | 'read_skim'
   | 'read_shallow'

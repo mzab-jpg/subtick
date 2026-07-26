@@ -1,4 +1,4 @@
-// ============================================================
+ // ============================================================
 // SubTick — getRankedFeed (HTTPS Callable)
 // Normalized 5-component scoring formula, cached, time-stratified,
 // with per-tranche formulas and daily trending score decay.
@@ -150,65 +150,125 @@ function scoreMerit(T: number, R: number, Q: number): number {
 }
 
 /**
- * Cron task that runs every 10 minutes to build the universal "candidate pool" box
- * out of ALL available articles in the database.
+ * Runs a capped Firestore query using random_score to retrieve a truly random,
+ * cost-controlled sample of articles. Uses circular wrap-around to guarantee
+ * the target count is always met regardless of where the random threshold lands.
+ *
+ * random_score is a [0,1) float assigned on ingestion and refreshed daily by
+ * cronDecayTrendingScores at zero extra cost, ensuring the pool content changes
+ * on every cron run without any additional database reads.
+ *
+ * @param fresh - If true, queries articles published within the last 28 days.
+ * @param currentOnly - If true, restricts to rssStatus == 'current' (Box 1).
+ *                      If false, no status filter (Box 2 — active + archived naturally included).
+ * @param threshold - The random starting point [0,1).
+ * @param limit - Maximum number of articles to return.
  */
-export const cronUpdateCandidatePool = onSchedule('every 10 minutes', async () => {
+async function queryRandomSample(
+  fresh: boolean,
+  currentOnly: boolean,
+  threshold: number,
+  limit: number
+): Promise<Article[]> {
+  const now = Date.now();
+  const fourWeeksAgo = now - 4 * 7 * 24 * 60 * 60 * 1000;
+  const results: Article[] = [];
+
+  const runQuery = async (scoreMin: number, scoreMax: number | null, cap: number) => {
+    try {
+      let q = db.collection('articles')
+        .where('isPaywalled', '==', false)
+        .where('publishDate', fresh ? '>=' : '<', fourWeeksAgo)
+        .where('random_score', '>=', scoreMin);
+      if (scoreMax !== null) {
+        q = (q as any).where('random_score', '<', scoreMax);
+      }
+      if (currentOnly) {
+        q = (q as any).where('rssStatus', '==', 'current');
+      }
+      const snap = await (q as any).orderBy('random_score', 'asc').limit(cap).get();
+      snap.forEach((doc: any) => {
+        const data = doc.data() as Article;
+        if (data.wordCount === undefined || data.wordCount >= 150) {
+          results.push({ ...data, id: doc.id });
+        }
+      });
+    } catch (e) {
+      console.warn('[CandidatePool] Query failed (fresh=%s, currentOnly=%s):', fresh, currentOnly, e);
+    }
+  };
+
+  // First pass: random_score from threshold up to 1.0
+  await runQuery(threshold, null, limit);
+
+  // Circular wrap-around: if we still need more, query from 0.0 up to threshold
+  if (results.length < limit) {
+    const existingIds = new Set(results.map(a => a.id));
+    const remaining = limit - results.length;
+    const wrapResults: Article[] = [];
+    try {
+      let q = db.collection('articles')
+        .where('isPaywalled', '==', false)
+        .where('publishDate', fresh ? '>=' : '<', fourWeeksAgo)
+        .where('random_score', '>=', 0)
+        .where('random_score', '<', threshold);
+      if (currentOnly) {
+        q = (q as any).where('rssStatus', '==', 'current');
+      }
+      const wrapSnap = await (q as any).orderBy('random_score', 'asc').limit(remaining).get();
+      wrapSnap.forEach((doc: any) => {
+        if (!existingIds.has(doc.id)) {
+          const data = doc.data() as Article;
+          if (data.wordCount === undefined || data.wordCount >= 150) {
+            wrapResults.push({ ...data, id: doc.id });
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('[CandidatePool] Wrap-around query failed:', e);
+    }
+    results.push(...wrapResults);
+  }
+
+  return results;
+}
+
+/**
+ * Cron task that runs every 6 hours to build the universal "candidate pool" boxes.
+ *
+ * Uses random_score (refreshed daily by cronDecayTrendingScores at zero extra cost) for
+ * cheap, truly random sampling without scanning the full articles collection.
+ *
+ * Cost: 4 capped queries × up to 500 docs = max ~2,000 reads per run (plus wrap-around
+ * if needed), regardless of total database size. Free at virtually any scale.
+ *
+ * Box 1 (candidatePool_current): 500 fresh active + 500 old active articles.
+ * Box 2 (candidatePool_mixed):   500 fresh any-status + 500 old any-status articles.
+ *   Box 2 does NOT deliberately target archived articles — it simply does not exclude them,
+ *   so the pool expands naturally to include the full article history proportionally.
+ */
+export const cronUpdateCandidatePool = onSchedule('every 6 hours', async () => {
   console.log('[Cron] Starting dual candidate pool generation (Current vs Mixed)...');
   try {
     const now = Date.now();
+    // Single random threshold shared across all 4 queries this run.
+    // Changes on every invocation so the pool content is always different.
+    const threshold = Math.random();
+    console.log(`[Cron] Using random_score threshold: ${threshold.toFixed(6)}`);
 
-    const snapshot = await db.collection('articles').get();
-    const currentArticles: Article[] = [];
-    const archivedArticles: Article[] = [];
+    // Run all 4 queries in parallel for speed
+    const [freshCurrent, oldCurrent, freshMixed, oldMixed] = await Promise.all([
+      queryRandomSample(true,  true,  threshold, 500),  // Fresh active  (Box 1)
+      queryRandomSample(false, true,  threshold, 500),  // Old active    (Box 1)
+      queryRandomSample(true,  false, threshold, 500),  // Fresh any     (Box 2)
+      queryRandomSample(false, false, threshold, 500),  // Old any       (Box 2)
+    ]);
 
-    snapshot.forEach((doc) => {
-      const data = doc.data() as Article;
-      if (!data.isPaywalled && (data.wordCount === undefined || data.wordCount >= 150)) {
-        const article = {
-          id: doc.id,
-          title: data.title,
-          author: data.author,
-          publicationName: data.publicationName,
-          publicationUrl: data.publicationUrl,
-          feedUrl: data.feedUrl,
-          category: data.category,
-          lengthStyle: data.lengthStyle,
-          guid: data.guid,
-          isTruncatedFeed: data.isTruncatedFeed ?? false,
-          description: data.description,
-          publishDate: data.publishDate,
-          isPaywalled: data.isPaywalled,
-          wordCount: data.wordCount,
-          estimatedReadMinutes: data.estimatedReadMinutes,
-          trendingScore: data.trendingScore || 0,
-          qualityScore: data.qualityScore || 0.8,
-          cacheTimestamp: data.cacheTimestamp || now,
-          isSeed: data.isSeed ?? false,
-          rssStatus: data.rssStatus || 'current',
-        };
+    // Box 1: strictly active articles only, 50/50 fresh/old split
+    const boxCurrent = [...freshCurrent, ...oldCurrent];
 
-        if (article.rssStatus === 'archived') {
-          archivedArticles.push(article);
-        } else {
-          currentArticles.push(article);
-        }
-      }
-    });
-
-    const fourWeeksAgo = now - (4 * 7 * 24 * 60 * 60 * 1000);
-
-    // Build Box 1: Current Only (500 fresh + 500 old)
-    const currentFresh = currentArticles.filter(a => a.publishDate >= fourWeeksAgo);
-    const currentOld = currentArticles.filter(a => a.publishDate < fourWeeksAgo);
-    shuffleArray(currentFresh);
-    shuffleArray(currentOld);
-    const boxCurrent = [...currentFresh.slice(0, 500), ...currentOld.slice(0, 500)];
-
-    // Build Box 2: Mixed (500 current + 500 archived)
-    shuffleArray(currentArticles);
-    shuffleArray(archivedArticles);
-    const boxMixed = [...currentArticles.slice(0, 500), ...archivedArticles.slice(0, 500)];
+    // Box 2: any-status articles (active + archived naturally included), 50/50 fresh/old split
+    const boxMixed = [...freshMixed, ...oldMixed];
 
     await db.collection('system').doc('candidatePool_current').set({
       articles: boxCurrent,
@@ -220,7 +280,11 @@ export const cronUpdateCandidatePool = onSchedule('every 10 minutes', async () =
       generatedAt: now,
     });
 
-    console.log(`[Cron] Dual Universal Boxes written. Current Box: ${boxCurrent.length}, Mixed Box: ${boxMixed.length}`);
+    console.log(
+      `[Cron] Dual boxes written. ` +
+      `Current: ${boxCurrent.length} (${freshCurrent.length} fresh + ${oldCurrent.length} old), ` +
+      `Mixed: ${boxMixed.length} (${freshMixed.length} fresh + ${oldMixed.length} old)`
+    );
   } catch (error) {
     console.error('[Cron] Error generating candidate pools:', error);
   }
@@ -253,7 +317,10 @@ export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => 
       chunk.forEach(doc => {
         const current = doc.data().trendingScore as number;
         const newScore = Math.max(0, current * TRENDING_DECAY_RATE);
-        batch.update(doc.ref, { trendingScore: newScore });
+        // Refresh random_score on every daily decay pass at zero extra cost.
+        // This ensures cronUpdateCandidatePool always picks a genuinely fresh,
+        // non-repetitive random cross-section of the database on every run.
+        batch.update(doc.ref, { trendingScore: newScore, random_score: Math.random() });
         decayed++;
       });
       await batch.commit();
@@ -477,6 +544,89 @@ function assembleFeedWithTranches(
   return finalFeed;
 }
 
+/**
+ * Cron that runs every 3 days to delete old low-quality articles.
+ * Deletes the bottom 3% of articles older than 3 months,
+ * ranked by peakTrendingScore (ascending).
+ * This keeps the database bounded and within Firestore free tier.
+ * Saved articles are NOT protected — users have their own copy in
+ * users/{uid}/saved_articles/ subcollection.
+ */
+export const cronCleanupOldArticles = onSchedule('every 3 days', async () => {
+  console.log('[Cron] Starting old article cleanup...');
+  try {
+    // Step 1: Immediately delete ALL paywalled articles.
+    // Paywalled articles are never shown to users and never included in candidate pools.
+    // Purging them keeps the collection smaller and reduces query costs for all other crons.
+    try {
+      const paywallSnap = await db.collection('articles')
+        .where('isPaywalled', '==', true)
+        .get();
+
+      if (!paywallSnap.empty) {
+        const batchSize = 500;
+        let paywallDeleted = 0;
+        for (let i = 0; i < paywallSnap.docs.length; i += batchSize) {
+          const batch = db.batch();
+          paywallSnap.docs.slice(i, i + batchSize).forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          paywallDeleted += Math.min(batchSize, paywallSnap.docs.length - i);
+        }
+        console.log(`[Cron] Deleted ${paywallDeleted} paywalled articles.`);
+      } else {
+        console.log('[Cron] No paywalled articles to delete.');
+      }
+    } catch (paywallErr: any) {
+      console.warn('[Cron] Paywalled article cleanup failed (non-fatal):', paywallErr.message);
+    }
+
+    // Step 2: Delete low-quality old articles (bottom 3% by peakTrendingScore, older than 3 months).
+    const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+
+    const snapshot = await db.collection('articles')
+      .where('publishDate', '<', threeMonthsAgo)
+      .orderBy('publishDate', 'desc')
+      .get();
+
+    if (snapshot.empty) {
+      console.log('[Cron] No articles older than 3 months, nothing to clean.');
+      return;
+    }
+
+    const oldArticles: { id: string; ref: admin.firestore.DocumentReference; peakTrendingScore: number }[] = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.isPaywalled) return;
+      oldArticles.push({
+        id: doc.id,
+        ref: doc.ref,
+        peakTrendingScore: data.peakTrendingScore || data.trendingScore || 0,
+      });
+    });
+
+    oldArticles.sort((a, b) => a.peakTrendingScore - b.peakTrendingScore);
+
+    const deleteCount = Math.max(1, Math.floor(oldArticles.length * 0.03));
+    const toDelete = oldArticles.slice(0, deleteCount);
+
+    console.log(`[Cron] ${oldArticles.length} old articles found. Deleting bottom ${deleteCount}.`);
+
+    const batchSize = 500;
+    for (let i = 0; i < toDelete.length; i += batchSize) {
+      const batch = db.batch();
+      const chunk = toDelete.slice(i, i + batchSize);
+      chunk.forEach(({ ref }) => {
+        batch.delete(ref);
+      });
+      await batch.commit();
+    }
+
+    console.log(`[Cron] Deleted ${deleteCount} old low-quality articles.`);
+  } catch (error) {
+    console.error('[Cron] Error during old article cleanup:', error);
+  }
+});
+
 export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> => {
   // P0 Security: Always use the verified auth UID, never the client-supplied userId.
   if (!request.auth) {
@@ -517,7 +667,6 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
     const seenSet = new Set(seenArticleIds || []);
     const unseenArticles = pool.filter(article => !seenSet.has(article.id));
 
-    // Count how many articles from each publisher are in the unseen pool (for U diversity)
     const pubCounts: Record<string, number> = {};
     unseenArticles.forEach((a) => {
       pubCounts[a.publicationName] = (pubCounts[a.publicationName] || 0) + 1;
@@ -526,7 +675,6 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
     const scored = unseenArticles.map((article) => {
       const daysOld = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
 
-      // Look up weights — use categoryLengthWeights first (most specific), fall back to category weight
       const compKey = `${article.category}::${article.lengthStyle}`;
       const catWeight = categoryLengthWeights[compKey] ?? categoryWeights[article.category] ?? 1.0;
       const pubWeight = publisherWeights[article.publicationName] ?? 1.0;
@@ -534,7 +682,6 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
       const rawQuality = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
       const pubCount = pubCounts[article.publicationName] || 1;
 
-      // Normalize all components to [0, 1]
       const P = normalizeP(catWeight, pubWeight);
       const T = normalizeT(article.trendingScore || 0);
       const R = normalizeR(daysOld);
@@ -549,7 +696,6 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
 
     const finalFeed = assembleFeedWithTranches(scored, RETURN_FEED_SIZE, totalArticlesRead);
 
-    // Debug logging for top 5 scored articles
     console.log(`[getRankedFeed] --- Top 5 by personalized score ---`);
     [...scored].sort((a, b) => b.personalizedScore - a.personalizedScore).slice(0, 5).forEach((s, i) => {
       const daysOld = Math.max(0, (Date.now() - s.article.publishDate) / (1000 * 60 * 60 * 24));

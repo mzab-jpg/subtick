@@ -192,7 +192,9 @@ export async function updateWeights(userId: string): Promise<void> {
 
   for (const event of events) {
     // Accumulate total reading time for any valid read event
-    if (event.eventType !== 'quick_exit' && event.eventType !== 'swipe_next' && event.eventType !== 'swipe_not_interested') {
+    // Exclude toggle events (like/unlike/save/unsave) and non-reading swipes
+    if (event.eventType !== 'quick_exit' && event.eventType !== 'swipe_next' && event.eventType !== 'swipe_not_interested'
+        && event.eventType !== 'like' && event.eventType !== 'unlike' && event.eventType !== 'save' && event.eventType !== 'unsave') {
       newTotalReadTimeMs += event.sessionDuration;
       readTimeUpdated = true;
     }

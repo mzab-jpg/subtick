@@ -68,7 +68,9 @@ export const SCORE_WEIGHTS_MERIT = {
 // Higher values = faster personalization.
 export const FEEDBACK_DELTAS: Record<string, number> = {
   save: 0.55,
+  unsave: -0.55,
   like: 0.40,
+  unlike: -0.40,
   read_thorough: 0.30,
   read_skim: 0.10,
   read_shallow: 0.00,

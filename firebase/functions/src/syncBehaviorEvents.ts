@@ -17,7 +17,9 @@ const DEFAULT_PUBLISHER_QUALITY = 0.8;
 function getTrendingIncrement(eventType: string): number {
   switch (eventType) {
     case 'save': return 3.0;
+    case 'unsave': return -3.0;
     case 'like': return 2.0;
+    case 'unlike': return -2.0;
     case 'read_thorough': return 1.5;
     case 'read_skim': return 0.5;
     case 'read_shallow': return 0.2;
@@ -28,7 +30,9 @@ function getTrendingIncrement(eventType: string): number {
 function getPublisherQualityIncrement(eventType: string): number {
   switch (eventType) {
     case 'save': return 0.010;
+    case 'unsave': return -0.010;
     case 'like': return 0.005;
+    case 'unlike': return -0.005;
     case 'read_thorough': return 0.005;
     case 'read_skim': return 0.001;
     case 'swipe_not_interested': return -0.010;
@@ -60,8 +64,9 @@ export const syncBehaviorEvents = onCall(async (request) => {
   const userIds = new Set<string>();
   const articleIds = new Set<string>(events.map(e => e.articleId).filter(Boolean));
 
-  // 1. Fetch publication names for all affected articles in parallel (extremely fast)
+  // 1. Fetch publication names, current trendingScore, and peakTrendingScore for all affected articles
   const articleToPublisher: Record<string, string> = {};
+  const articleInitialScores: Record<string, { trendingScore: number; peakTrendingScore: number }> = {};
   try {
     if (articleIds.size > 0) {
       const articleRefs = Array.from(articleIds).map(id => db.collection('articles').doc(id));
@@ -69,14 +74,20 @@ export const syncBehaviorEvents = onCall(async (request) => {
       articleDocs.forEach(doc => {
         if (doc.exists) {
           const artData = doc.data();
-          if (artData && artData.publicationName) {
-            articleToPublisher[doc.id] = artData.publicationName;
+          if (artData) {
+            if (artData.publicationName) {
+              articleToPublisher[doc.id] = artData.publicationName;
+            }
+            articleInitialScores[doc.id] = {
+              trendingScore: artData.trendingScore || 0,
+              peakTrendingScore: artData.peakTrendingScore || 0,
+            };
           }
         }
       });
     }
   } catch (err: any) {
-    console.warn('[syncBehaviorEvents] Failed to fetch article publisher info:', err.message);
+    console.warn('[syncBehaviorEvents] Failed to fetch article publisher info and scores:', err.message);
   }
 
   // 1b. Fetch existing publisher documents so we know which ones already have a qualityScore.
@@ -90,6 +101,20 @@ export const syncBehaviorEvents = onCall(async (request) => {
     console.warn('[syncBehaviorEvents] Could not pre-fetch publisher list:', err.message);
   }
 
+  // 2. Per-user per-article dedup for like/save toggle events.
+  // Prevents spam: a user can only like/save an article once and unlike/unsave once.
+  // Tracks for the current batch which user+article pairs have already had their
+  // first like/save or unlike/unsave counted, so in-batch duplicates are also skipped.
+  const likeDedup = new Set<string>();   // "userId::articleId" set when first like/unlike is counted
+  const saveDedup = new Set<string>();   // "userId::articleId" set when first save/unsave is counted
+
+  // Track net trending deltas per article (after dedup)
+  const articleTrendingDeltas: Record<string, number> = {};
+
+  // Track aggregated publisher quality deltas per publisher
+  const publisherQualityDeltas: Record<string, number> = {};
+  const publisherNames: Record<string, string> = {};
+
   let synced = 0;
   let errors = 0;
   const batch = db.batch();
@@ -102,68 +127,68 @@ export const syncBehaviorEvents = onCall(async (request) => {
         continue;
       }
 
-      // Stage raw event log in subcollection: users/{userId}/behavior_events/{eventId}
-      // P0 Idempotency: Use the client-generated event.id as the document ID so that
-      // retries after a network timeout do not create duplicate events.
-      const eventDocRef = db
-        .collection('users')
-        .doc(event.userId)
-        .collection('behavior_events')
-        .doc(event.id || db.collection('users').doc().id);
+      const trendingDelta = event.articleId ? getTrendingIncrement(event.eventType) : 0;
+      const qualityDelta = event.articleId ? getPublisherQualityIncrement(event.eventType) : 0;
 
-      batch.set(eventDocRef, {
-        articleId: event.articleId,
-        userId: event.userId,
-        eventType: event.eventType,
-        timestamp: event.timestamp || Date.now(),
-        articleCategory: event.articleCategory,
-        lengthStyle: event.lengthStyle,
-        sessionDuration: event.sessionDuration,
-        scrollDepth: event.scrollDepth,
-        ...(event.publicationName && { publicationName: event.publicationName }),
-        ...(event.actualWordCount && event.actualWordCount > 0 && { actualWordCount: event.actualWordCount }),
-      });
+      // P0 Optimization 1: Skip saving zero-impact events to Firestore to reduce write costs.
+      // Zero-impact events (like swipe_next) have no trending increment, no publisher quality delta,
+      // and do not affect personalization weights (delta is 0 in FEEDBACK_DELTAS).
+      const isZeroImpact = trendingDelta === 0 && qualityDelta === 0 && event.eventType === 'swipe_next';
 
-      // Increment Article Trending Score atomically in real-time
+      if (!isZeroImpact) {
+        // Stage raw event log in subcollection: users/{userId}/behavior_events/{eventId}
+        // P0 Idempotency: Use the client-generated event.id as the document ID so that
+        // retries after a network timeout do not create duplicate events.
+        const eventDocRef = db
+          .collection('users')
+          .doc(event.userId)
+          .collection('behavior_events')
+          .doc(event.id || db.collection('users').doc().id);
+
+        batch.set(eventDocRef, {
+          articleId: event.articleId,
+          userId: event.userId,
+          eventType: event.eventType,
+          timestamp: event.timestamp || Date.now(),
+          articleCategory: event.articleCategory,
+          lengthStyle: event.lengthStyle,
+          sessionDuration: event.sessionDuration,
+          scrollDepth: event.scrollDepth,
+          ...(event.publicationName && { publicationName: event.publicationName }),
+          ...(event.actualWordCount && event.actualWordCount > 0 && { actualWordCount: event.actualWordCount }),
+        });
+      }
+
+      // Aggregate Article Trending Score deltas
       if (event.articleId) {
-        const trendingDelta = getTrendingIncrement(event.eventType);
-        if (trendingDelta > 0) {
-          const articleRef = db.collection('articles').doc(event.articleId);
-          batch.update(articleRef, {
-            trendingScore: admin.firestore.FieldValue.increment(trendingDelta)
-          });
+        // Per-user per-article dedup: only count the first like/unlike and first save/unsave.
+        let shouldApplyTrending = true;
+        if (event.eventType === 'like' || event.eventType === 'unlike') {
+          const dedupKey = `${event.userId}::${event.articleId}`;
+          if (likeDedup.has(dedupKey)) {
+            shouldApplyTrending = false;
+          } else {
+            likeDedup.add(dedupKey);
+          }
+        } else if (event.eventType === 'save' || event.eventType === 'unsave') {
+          const dedupKey = `${event.userId}::${event.articleId}`;
+          if (saveDedup.has(dedupKey)) {
+            shouldApplyTrending = false;
+          } else {
+            saveDedup.add(dedupKey);
+          }
         }
 
-        // Update Publisher Quality Score.
-        // Fix: FieldValue.increment on a missing field initializes it to 0, not DEFAULT_PUBLISHER_QUALITY.
-        // For NEW publishers (not yet in Firestore), we write the explicit default + delta as a
-        // concrete number. For EXISTING publishers, we use increment() which is atomic and correct.
-        const pubName = articleToPublisher[event.articleId];
-        if (pubName) {
-          const qualityDelta = getPublisherQualityIncrement(event.eventType);
-          if (qualityDelta !== 0) {
-            const sanitizedDocId = pubName.replace(/\//g, '-');
-            const publisherRef = db.collection('publishers').doc(sanitizedDocId);
+        if (trendingDelta !== 0 && shouldApplyTrending) {
+          articleTrendingDeltas[event.articleId] = (articleTrendingDeltas[event.articleId] || 0) + trendingDelta;
+        }
 
-            if (existingPublisherIds.has(sanitizedDocId)) {
-              // Existing publisher — safe to use atomic increment
-              batch.set(publisherRef, {
-                name: pubName,
-                qualityScore: admin.firestore.FieldValue.increment(qualityDelta),
-                lastUpdated: Date.now(),
-              }, { merge: true });
-            } else {
-              // New publisher — seed at DEFAULT_PUBLISHER_QUALITY + delta to avoid starting at 0
-              const initialScore = Math.max(0.2, Math.min(1.0, DEFAULT_PUBLISHER_QUALITY + qualityDelta));
-              batch.set(publisherRef, {
-                name: pubName,
-                qualityScore: initialScore,
-                lastUpdated: Date.now(),
-              });
-              // Mark as existing so subsequent events in this batch use increment
-              existingPublisherIds.add(sanitizedDocId);
-            }
-          }
+        // Aggregate Publisher Quality Score deltas
+        const pubName = articleToPublisher[event.articleId];
+        if (pubName && qualityDelta !== 0) {
+          const sanitizedDocId = pubName.replace(/\//g, '-');
+          publisherQualityDeltas[sanitizedDocId] = (publisherQualityDeltas[sanitizedDocId] || 0) + qualityDelta;
+          publisherNames[sanitizedDocId] = pubName;
         }
       }
 
@@ -175,6 +200,56 @@ export const syncBehaviorEvents = onCall(async (request) => {
     }
   }
 
+  // P0 Optimization 2 & 3: Commit aggregated updates in the main batch
+  
+  // Apply aggregated article updates (trendingScore and peakTrendingScore merged into ONE write)
+  for (const [artId, netDelta] of Object.entries(articleTrendingDeltas)) {
+    if (netDelta !== 0) {
+      const articleRef = db.collection('articles').doc(artId);
+      const initial = articleInitialScores[artId];
+      
+      const updateData: any = {
+        trendingScore: admin.firestore.FieldValue.increment(netDelta)
+      };
+
+      // Merge peakTrendingScore update into the main batch
+      if (initial) {
+        const estimatedNewTrending = initial.trendingScore + netDelta;
+        if (estimatedNewTrending > initial.peakTrendingScore) {
+          updateData.peakTrendingScore = estimatedNewTrending;
+        }
+      }
+
+      batch.update(articleRef, updateData);
+    }
+  }
+
+  // Apply aggregated publisher updates (ONE write per unique publisher instead of per event)
+  for (const [sanitizedDocId, netDelta] of Object.entries(publisherQualityDeltas)) {
+    if (netDelta !== 0) {
+      const pubName = publisherNames[sanitizedDocId];
+      const publisherRef = db.collection('publishers').doc(sanitizedDocId);
+
+      if (existingPublisherIds.has(sanitizedDocId)) {
+        // Existing publisher — safe to use atomic increment
+        batch.set(publisherRef, {
+          name: pubName,
+          qualityScore: admin.firestore.FieldValue.increment(netDelta),
+          lastUpdated: Date.now(),
+        }, { merge: true });
+      } else {
+        // New publisher — seed at DEFAULT_PUBLISHER_QUALITY + delta to avoid starting at 0
+        const initialScore = Math.max(0.2, Math.min(1.0, DEFAULT_PUBLISHER_QUALITY + netDelta));
+        batch.set(publisherRef, {
+          name: pubName,
+          qualityScore: initialScore,
+          lastUpdated: Date.now(),
+        });
+        existingPublisherIds.add(sanitizedDocId);
+      }
+    }
+  }
+
   try {
     await batch.commit();
     console.log(`[syncBehaviorEvents] Synced ${synced} events, updated trending and publisher quality scores in real-time`);
@@ -183,7 +258,7 @@ export const syncBehaviorEvents = onCall(async (request) => {
     throw error; // Rethrow to inform client sync failed so events remain in queue
   }
 
-  // 3. Trigger weight updates for affected users
+  // 4. Trigger weight updates for affected users
   for (const userId of userIds) {
     try {
       await updateWeights(userId);
