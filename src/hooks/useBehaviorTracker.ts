@@ -6,6 +6,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { BehaviorEventType } from '../types';
 import { queueBehaviorEvent } from '../services/behaviorSync';
+import { QUICK_EXIT_MAX_DURATION_MS, QUICK_EXIT_MAX_SCROLL } from '../utils/constants';
 
 interface UseBehaviorTrackerOptions {
   articleId: string;
@@ -49,16 +50,30 @@ export function useBehaviorTracker({
     };
   }
 
+  // B2 Fix: Use a ref to hold the per-article session snapshot so both the effect
+  // cleanup and concludeSession() share the same mutable object. Previously the
+  // snapshot was a plain value copy inside useEffect, so concludeSession() setting
+  // stateRef.current.concluded = true was invisible to the cleanup — it still saw
+  // concluded: false and fired a second quick_exit event.
+  //
+  // With a shared sessionSnapshotRef, concludeSession() writes
+  // sessionSnapshotRef.current.concluded = true which the cleanup reads correctly,
+  // preventing the double-fire without any extra complexity.
+  const sessionSnapshotRef = useRef<{
+    articleId: string;
+    articleCategory: string;
+    startTime: number;
+    maxDepth: number;
+    concluded: boolean;
+  } | null>(null);
+
   // Fallback cleanup to ensure quick_exit is recorded if they unmount the reader quickly.
-  // P1 Fix: Capture concluded, maxDepth, and startTime as plain values at effect-setup time,
-  // not as references to the shared stateRef. This prevents the cleanup from reading the
-  // reset state of the NEXT article (which has concluded=false) and double-firing quick_exit
-  // after a swipe_not_interested already concluded the session.
   useEffect(() => {
     if (!enabled) return;
 
-    // Snapshot all values at the moment this effect fires for THIS article.
-    const snapshot = {
+    // Build the session snapshot for THIS article and store in the shared ref.
+    // Both the cleanup below and concludeSession() will read/write this same object.
+    sessionSnapshotRef.current = {
       articleId,
       articleCategory,
       startTime: stateRef.current.startTime,
@@ -66,12 +81,15 @@ export function useBehaviorTracker({
       concluded: stateRef.current.concluded,
     };
 
+    const snapshot = sessionSnapshotRef.current;
+
     return () => {
-      // Read live concluded/maxDepth from the snapshot copy, not the shared ref.
-      // If concludeSession() was called before cleanup, snapshot.concluded is true.
+      // Read concluded from the shared snapshot — concludeSession() will have set
+      // snapshot.concluded = true if it already fired for this article.
       if (!snapshot.concluded) {
         const duration = Date.now() - snapshot.startTime;
-        if (duration < 15000 && snapshot.maxDepth < 0.2) {
+        // F5 Fix: Use named constants instead of magic numbers
+        if (duration < QUICK_EXIT_MAX_DURATION_MS && snapshot.maxDepth < QUICK_EXIT_MAX_SCROLL) {
           queueBehaviorEvent(
             snapshot.articleId,
             'quick_exit',
@@ -121,7 +139,8 @@ export function useBehaviorTracker({
       
       let eventType: BehaviorEventType = 'swipe_next';
 
-      if (depth < 0.2 && duration < 15000) {
+      // F5 Fix: Use named constants instead of magic numbers
+      if (depth < QUICK_EXIT_MAX_SCROLL && duration < QUICK_EXIT_MAX_DURATION_MS) {
         eventType = 'quick_exit';
       } else if (depth >= 0.8) {
         if (duration >= expectedReadTimeMs * 0.7) {
@@ -145,10 +164,11 @@ export function useBehaviorTracker({
       );
       
       stateRef.current.concluded = true;
-      // No need to update snapshot here — the cleanup effect has already captured
-      // its own copy of concluded=false at setup time and will correctly see
-      // concluded=true via the stateRef if the article hasn't changed.
-      // The snapshot approach above makes this safe without any additional logic.
+      // B2 Fix: Also mark the shared sessionSnapshotRef so the effect cleanup
+      // sees concluded=true and does not fire a redundant quick_exit event.
+      if (sessionSnapshotRef.current && sessionSnapshotRef.current.articleId === articleId) {
+        sessionSnapshotRef.current.concluded = true;
+      }
     },
     [enabled, articleId, articleCategory, lengthStyle, publicationName]
   );

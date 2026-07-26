@@ -14,8 +14,6 @@ export interface UserProfile {
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   totalArticlesRead: number;
-  totalArticlesSaved: number;
-  totalArticlesLiked: number;
   weeklyReadCount: number;
   currentStreakDays: number;
   lastReadDate: number; // ms timestamp
@@ -48,6 +46,7 @@ export interface Article {
   wordCount?: number;
   estimatedReadMinutes: number;
   trendingScore: number; // Daily calculated score
+  peakTrendingScore: number; // All-time high trendingScore — never decays, used for cleanup ranking
   qualityScore: number; // Baseline publisher score (0.0 to 1.0)
   isSeed: boolean; // Set to false for real fetched RSS items
   rssStatus?: 'current' | 'archived'; // Indicates if article is available in live RSS
@@ -76,7 +75,9 @@ export type BehaviorEventType =
   | 'swipe_next'
   | 'swipe_not_interested'
   | 'like'
+  | 'unlike'
   | 'save'
+  | 'unsave'
   | 'read_thorough'
   | 'read_skim'
   | 'read_shallow'

@@ -298,12 +298,15 @@ export const cronUpdateCandidatePool = onSchedule('every 6 hours', async () => {
 export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => {
   console.log('[Cron] Starting daily trendingScore decay...');
   try {
+    // C1 Fix: Raised threshold from 0.1 to 1.0.
+    // Articles with trendingScore < 1.0 are effectively zero-signal — decaying them
+    // does not meaningfully change rankings but wastes ~70% of the daily write budget.
     const snapshot = await db.collection('articles')
-      .where('trendingScore', '>', 0.1)
+      .where('trendingScore', '>', 1.0)
       .get();
 
     if (snapshot.empty) {
-      console.log('[Cron] No articles with trendingScore > 0.1, nothing to decay.');
+      console.log('[Cron] No articles with trendingScore > 1.0, nothing to decay.');
       return;
     }
 

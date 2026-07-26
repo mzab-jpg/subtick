@@ -56,6 +56,7 @@ export default function DeveloperOptionsScreen() {
       isPaywalled: false,
       estimatedReadMinutes: 5,
       trendingScore: 0,
+      peakTrendingScore: 0,
       qualityScore: 1,
       isSeed: false,
       rssStatus: 'archived',

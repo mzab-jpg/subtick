@@ -6,9 +6,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { functions, db, auth } from './firebase';
 import { httpsCallable } from 'firebase/functions';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { Article, RankedFeedResult } from '../types';
-import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, CANDIDATE_POOL_SIZE, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX } from '../utils/constants';
+import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX } from '../utils/constants';
 import { XMLParser } from 'fast-xml-parser';
 import xss from 'xss';
 
@@ -17,7 +17,7 @@ import xss from 'xss';
 // This prevents concurrent duplicate downloads and keeps RAM footprint minimal.
 interface CachedFeedItem {
   guid: string;
-  sanitizedHtml: string;
+  rawHtml: string; // C6 Fix: raw content stored, sanitized lazily after find()
 }
 const feedSessionCache = new Map<string, Promise<CachedFeedItem[]>>();
 
@@ -112,13 +112,16 @@ export async function fetchAndExtractArticle(feedUrl: string, guid: string): Pro
         let rawItems = channel?.item || channel?.entry || [];
         if (!Array.isArray(rawItems)) rawItems = [rawItems];
         
+        // C6 Fix: Lazy-sanitize — store raw content per item, only sanitize the matched
+        // article. Previously sanitizeClientHtml (6 regex passes + xss) ran on every item
+        // in the feed (~25-50) just to serve one article, blocking the JS thread.
         return rawItems.map((item: any) => {
           const itemGuid = extractGuid(item);
           const rawContent = item['content:encoded'] || item.content || item.description || '';
           const cdataContent = typeof rawContent === 'object' ? rawContent.__cdata || rawContent['#text'] : rawContent;
           return {
             guid: itemGuid,
-            sanitizedHtml: sanitizeClientHtml(cdataContent),
+            rawHtml: cdataContent, // store raw; sanitize only after find()
           };
         });
       })();
@@ -134,7 +137,8 @@ export async function fetchAndExtractArticle(feedUrl: string, guid: string): Pro
       throw new Error('Article not found in recent feed items.');
     }
 
-    return item.sanitizedHtml;
+    // C6 Fix: Sanitize only the matched item (lazy evaluation).
+    return sanitizeClientHtml(item.rawHtml);
   } catch (error) {
     console.error('[feedService] fetchAndExtractArticle error:', error);
     // If the network call or parsing failed, clear the cache entry so subsequent requests can retry
@@ -188,19 +192,23 @@ export async function getRankedFeed(seenArticleIds: string[]): Promise<RankedFee
 async function fallbackGetArticles(seenArticleIds: string[] = []): Promise<RankedFeedResult> {
   try {
     const articlesRef = collection(db, 'articles');
+    // C7 Fix: Push isPaywalled filter into the Firestore query so we fetch only
+    // non-paywalled articles. The isPaywalled+publishDate composite index covers this.
+    // Previously fetched 90 docs then dropped paywalled ones in memory.
     const q = query(
       articlesRef,
+      where('isPaywalled', '==', false),
       orderBy('publishDate', 'desc'),
-      limit(MAX_FEED_ARTICLES * 3) // Fetch extra to account for seen + paywall filtering
+      limit(MAX_FEED_ARTICLES * 3)
     );
     const snapshot = await getDocs(q);
 
     const seenSet = new Set(seenArticleIds);
 
-    // Filter out paywalled and already-seen articles
+    // Filter out already-seen articles (paywall filter is now handled by Firestore)
     const articles = snapshot.docs
       .map((doc) => ({ ...doc.data(), id: doc.id } as Article))
-      .filter((a) => !a.isPaywalled && !seenSet.has(a.id))
+      .filter((a) => !seenSet.has(a.id))
       .slice(0, MAX_FEED_ARTICLES);
 
     return {
@@ -348,20 +356,47 @@ export async function markArticleSaved(articleId: string, extractedHtml: string,
         await AsyncStorage.setItem(SAVED_ARTICLES_KEY, JSON.stringify(saved));
         // Save the personal copy of the HTML locally so it never hits the network or backend again
         await AsyncStorage.setItem(`@subtick_saved_html_${articleId}`, extractedHtml);
-      }
 
-      // Also cache metadata so SavedReads can render without Firestore (fully offline)
-      if (article) {
-        const metaRaw = await AsyncStorage.getItem(SAVED_ARTICLES_META_KEY);
-        const metas: Record<string, ArticleMeta> = metaRaw ? JSON.parse(metaRaw) : {};
-        metas[articleId] = {
-          id: articleId,
-          title: article.title,
-          publicationName: article.publicationName,
-          category: article.category,
-          estimatedReadMinutes: article.estimatedReadMinutes,
-        };
-        await AsyncStorage.setItem(SAVED_ARTICLES_META_KEY, JSON.stringify(metas));
+        // Also cache metadata so SavedReads can render without Firestore (fully offline)
+        if (article) {
+          const metaRaw = await AsyncStorage.getItem(SAVED_ARTICLES_META_KEY);
+          const metas: Record<string, ArticleMeta> = metaRaw ? JSON.parse(metaRaw) : {};
+          metas[articleId] = {
+            id: articleId,
+            title: article.title,
+            publicationName: article.publicationName,
+            category: article.category,
+            estimatedReadMinutes: article.estimatedReadMinutes,
+          };
+          await AsyncStorage.setItem(SAVED_ARTICLES_META_KEY, JSON.stringify(metas));
+
+          // C8 Fix: Firestore write is now inside the !saved.includes() guard so it only
+          // fires when the article isn't already saved. Previously ran unconditionally on
+          // every bookmark tap, even re-taps on already-saved articles.
+          try {
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+              await setDoc(doc(db, 'users', userId, 'saved_articles', articleId), {
+                id: articleId,
+                title: article.title,
+                author: article.author,
+                publicationName: article.publicationName,
+                publicationUrl: article.publicationUrl,
+                feedUrl: article.feedUrl,
+                category: article.category,
+                lengthStyle: article.lengthStyle,
+                description: article.description,
+                publishDate: article.publishDate,
+                wordCount: article.wordCount,
+                estimatedReadMinutes: article.estimatedReadMinutes,
+                savedAt: Date.now(),
+              });
+            }
+          } catch (firestoreErr) {
+            // Firestore write is best-effort — AsyncStorage is the primary store
+            console.warn('[FeedService] Failed to write saved article to Firestore:', firestoreErr);
+          }
+        }
       }
     } catch (error) {
       console.error('[FeedService] markArticleSaved error:', error);
@@ -413,6 +448,20 @@ export async function unmarkArticleSaved(articleId: string): Promise<void> {
           const metas: Record<string, ArticleMeta> = JSON.parse(metaRaw);
           delete metas[articleId];
           await AsyncStorage.setItem(SAVED_ARTICLES_META_KEY, JSON.stringify(metas));
+        }
+
+        // B4 Fix: Delete the Firestore server copy as well.
+        // Previously only AsyncStorage was cleaned up, leaving an orphaned
+        // document in users/{uid}/saved_articles/ forever.
+        // Security rules already allow owner-delete on this subcollection.
+        try {
+          const userId = auth.currentUser?.uid;
+          if (userId) {
+            await deleteDoc(doc(db, 'users', userId, 'saved_articles', articleId));
+          }
+        } catch (firestoreErr) {
+          // Best-effort — if the doc doesn't exist or the user is offline, ignore.
+          console.warn('[FeedService] Failed to delete saved article from Firestore:', firestoreErr);
         }
       }
     } catch (error) {

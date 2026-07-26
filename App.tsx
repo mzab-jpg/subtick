@@ -4,10 +4,7 @@
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, LogBox } from 'react-native';
-
-// Suppress deprecation warnings from third-party libraries
-LogBox.ignoreLogs(['InteractionManager has been deprecated']);
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';

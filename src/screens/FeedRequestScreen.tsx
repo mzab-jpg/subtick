@@ -45,7 +45,7 @@ export default function FeedRequestScreen() {
       const request: Omit<FeedRequest, 'id'> = {
         userId: auth.currentUser.uid,
         url: feedUrl.trim(),
-        description: feedDescription.trim() || undefined,
+        description: feedDescription.trim() || '',
         timestamp: Date.now(),
         status: 'pending',
       };

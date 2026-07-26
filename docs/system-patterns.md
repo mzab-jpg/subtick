@@ -1,6 +1,6 @@
-# SubTick — System Patterns
+# Tangent — System Patterns
 
-> **Last verified:** July 2026 against current codebase (post-bugfix session).
+> **Last verified:** July 2026 against current codebase (post-cost-optimisation + full audit/fix session).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -11,7 +11,7 @@
 | State | Provider | Consumers | Persistence |
 |---|---|---|---|
 | Theme (light/dark/system) + computed color palette | `ThemeContext.tsx: ThemeProvider` | All screens via `useTheme()` | `AsyncStorage[@subtick_theme_preference]` + Firestore `users/{uid}.themePreference` |
-| Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` | Recomputed on theme change, never persisted |
+| Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` (initial load only — updates pushed via `injectJavaScript`) | Recomputed on theme change, never persisted |
 
 ### Local Component State
 - `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount)
@@ -32,10 +32,10 @@
 | `@subtick_rss_failed_{articleId}` | `'1'` flag indicating this article's RSS feed has failed | One key per failed article |
 
 ### AsyncStorage Mutex (Concurrency Safety)
-All AsyncStorage operations in `feedService.ts` involving read-modify-write (seen/saved lists) are serialized through a **Promise chain mutex**:
+All AsyncStorage operations in `feedService.ts` and `behaviorSync.ts` involving read-modify-write are serialized through a **Promise chain mutex**. Each file maintains its own independent queue:
 
 ```typescript
-// feedService.ts
+// feedService.ts  /  behaviorSync.ts (identical pattern in both)
 let storageQueue = Promise.resolve();
 
 async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<T> {
@@ -45,7 +45,9 @@ async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<
 }
 ```
 
-Prevents rapid-swipe race conditions where two concurrent writes would both read the same stale array and overwrite each other. All `markArticleSeen`, `markArticleSaved`, `unmarkArticleSaved`, `getSeenArticleIds`, `getSavedArticleIds` calls go through this queue.
+`feedService.ts` uses this for: `markArticleSeen`, `markArticleSaved`, `unmarkArticleSaved`, `getSeenArticleIds`, `getSavedArticleIds`.
+
+`behaviorSync.ts` uses this for: `queueBehaviorEvent` (the queue append) and both the read-step and write-back-step of `flushBehaviorQueue`. The network upload itself runs *outside* the mutex so new events can be queued while an upload is in progress (B6 fix).
 
 ---
 
@@ -87,17 +89,23 @@ T = min(trendingScore, MAX_TRENDING_SCORE) / MAX_TRENDING_SCORE
 // MAX_TRENDING_SCORE = 50
 ```
 
-`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days via `cronDecayTrendingScores`).
+`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days). The decay cron only processes articles with `trendingScore > 1.0` (raised from 0.1 to reduce write costs — C1 fix).
 
 Trending increments (`syncBehaviorEvents.ts`):
 | Action | trendingScore increment |
 |---|---|
 | Save | +3.0 |
+| Unsave | -3.0 |
 | Like | +2.0 |
+| Unlike | -2.0 |
 | Read thoroughly | +1.5 |
 | Read skim | +0.5 |
 | Read shallow | +0.2 |
 | Swipe past / exit | +0.0 |
+
+**peakTrendingScore:** Each article also tracks `peakTrendingScore` — the all-time high value of `trendingScore`, which never decays. Updated in the **same batch** as the trendingScore increment in `syncBehaviorEvents.ts`. Used by `cronCleanupOldArticles` to rank which old articles to delete.
+
+**Per-user per-article dedup:** In-batch `likeDedup` and `saveDedup` Sets prevent a user from double-counting like/unlike or save/unsave on the same article within a single API call batch.
 
 ### 2d. R — Recency [0, 1]
 
@@ -163,13 +171,13 @@ U = (rawU - 0.4) / 0.6
 ```
 Score = 0.40×P + 0.15×T + 0.20×R + 0.15×Q + 0.10×U
 ```
-Weights defined in `SCORE_WEIGHTS` (constants.ts). Sum = 1.0. Output: [0, 1].
+Weights defined in `SCORE_WEIGHTS` in `firebase/functions/src/constants.ts`. Sum = 1.0. Output: [0, 1].
 
 **Low & Discovery tranches (merit-based):**
 ```
 Score = 0.40×R + 0.30×T + 0.30×Q
 ```
-Weights defined in `SCORE_WEIGHTS_MERIT` (constants.ts). Sum = 1.0. No personalization, no diversity penalty.
+Weights defined in `SCORE_WEIGHTS_MERIT` in `firebase/functions/src/constants.ts`. Sum = 1.0. No personalization, no diversity penalty.
 
 ### 2h. Tranche Assembly
 
@@ -184,7 +192,7 @@ Articles bucketed by normalized P value:
 | Low | P ≥ 0.10 | 4 | **Merit score DESC** | **Random shuffle** |
 | Discovery | P < 0.10 | 6 | **Merit score DESC** | **Random shuffle** |
 
-High/Mid are always shuffled randomly to provide variety within preferred categories. Low/Discovery are sorted by merit score (R+T+Q) for established users to surface the best objectively-good articles, but **randomized for new users with fewer than 30 total reads** to give them variety while they build personalization data. Overflow from underpopulated tranches cascades down. Final feed of 30 is shuffled before return.
+High/Mid are always shuffled randomly to provide variety within preferred categories. Low/Discovery are sorted by merit score (R+T+Q) for established users to surface the best objectively-good articles, but randomized for new users with fewer than 30 total reads. Overflow from underpopulated tranches cascades down. Final feed of 30 is shuffled before return.
 
 ---
 
@@ -265,8 +273,8 @@ After weight update, `selectedCategoryIds` and `notInterestedCategoryIds` are sy
 Source: `useBehaviorTracker.ts: concludeSession()`
 
 ```
-if (scrollDepth < 0.2 AND sessionDuration < 15s):
-    → 'quick_exit'
+if (scrollDepth < QUICK_EXIT_MAX_SCROLL AND sessionDuration < QUICK_EXIT_MAX_DURATION_MS):
+    → 'quick_exit'          // < 20% scroll AND < 15s
 else if (scrollDepth >= 0.8):
     if (sessionDuration >= expectedReadTime × 0.7):
         → 'read_thorough'
@@ -278,9 +286,11 @@ else:
     → 'swipe_next'
 ```
 
-Right-swipe always emits `'swipe_not_interested'`.
+`QUICK_EXIT_MAX_SCROLL = 0.2` and `QUICK_EXIT_MAX_DURATION_MS = 15_000` are named constants from `src/utils/constants.ts`.
 
-**Quick-exit double-fire prevention:** The `useEffect` cleanup snapshots `concluded`, `maxDepth`, and `startTime` as plain values at effect-setup time. If `concludeSession()` was already called (e.g., on swipe_not_interested), `snapshot.concluded = true` and the cleanup fires nothing. This prevents the old pattern where the shared ref was reset to the next article's state before cleanup could read it.
+Right-swipe always emits `'swipe_not_interested'` (fires immediately via `trackEvent`, not `concludeSession`).
+
+**Quick-exit double-fire prevention (B2 fix):** `useBehaviorTracker` now uses a shared `sessionSnapshotRef` object. When `concludeSession()` fires, it sets `sessionSnapshotRef.current.concluded = true`. The `useEffect` cleanup, which also closes over `sessionSnapshotRef.current`, reads the live `concluded` value — if it's `true`, the cleanup fires nothing. This replaced the old frozen-value snapshot pattern that always saw `concluded = false`.
 
 **Tracking disabled** in `'history'`, `'saved'`, and mock/sandbox modes.
 
@@ -294,12 +304,14 @@ Right-swipe always emits `'swipe_not_interested'`.
 | `parser.parseURL()` | 15s | Caught per-feed; other feeds continue |
 | `fetchOgMetadata()` | 6s | Returns empty `{}`; article written without image/description |
 | Feed batches | `Promise.allSettled()` | One feed failure never blocks others |
+| Article existence check | — | Single `db.getAll()` batch per feed (C3 fix) |
 
 ### Client RSS Fetch
 | Operation | Timeout | Failure |
 |---|---|---|
 | `fetch(feedUrl)` | 15s (AbortController) | Throws; `feedSessionCache.delete(feedUrl)` so next request retries |
-| Article not found | — | `markRssFailed(id)` in AsyncStorage; article renders as archived (raw URL) |
+| Article not found in feed | — | `markRssFailed(id)` in AsyncStorage; article renders as archived (raw URL) |
+| HTML sanitization | — | Runs only on the single matched article, not the whole feed (C6 fix) |
 
 ### getRankedFeed Cloud Function
 | Operation | Failure |
@@ -311,7 +323,7 @@ Right-swipe always emits `'swipe_not_interested'`.
 ### Client getRankedFeed Call
 | Failure | Fallback |
 |---|---|
-| Cloud Function call fails | `fallbackGetArticles()`: Firestore query `articles` ORDER BY `publishDate DESC` LIMIT 90, filter seen + paywalled |
+| Cloud Function call fails | `fallbackGetArticles()`: Firestore query `articles WHERE isPaywalled == false ORDER BY publishDate DESC LIMIT 90`, filter seen |
 
 ### Behavior Sync
 | Scenario | Behavior |
@@ -321,7 +333,9 @@ Right-swipe always emits `'swipe_not_interested'`.
 | Sync fails | 30s cooldown (`RETRY_COOLDOWN_MS`), then retry |
 | Concurrent flush | `isSyncing` guard prevents double-flush |
 | Queue overflow | 500 cap; oldest events dropped |
+| Server input cap | `syncBehaviorEvents` truncates to 50 events max per call (A4 fix) — prevents batch overflow and abuse |
 | Synced events cleanup | Events older than 5 min with `synced: true` pruned after flush |
+| Concurrent queue + flush | Both use the same `enqueueStorageOperation` mutex; network call is outside (B6 fix) |
 
 ### WebView Navigation Lock
 - **Sanitized HTML mode:** Any `http` link click → `Linking.openURL(url); return false`
@@ -336,7 +350,7 @@ Right-swipe always emits `'swipe_not_interested'`.
 
 ### Paywall Detection — `checkIsPaywalled()` (`rssCollector.ts`)
 Paywalled articles are excluded from all candidate pools and feed results. Three mechanisms:
-1. Keyword match against PAYWALL_KEYWORDS (24 phrases)
+1. Keyword match against PAYWALL_KEYWORDS (24 phrases) — defined in `firebase/functions/src/constants.ts`
 2. CSS class: `class="*paywall*"`, `class="*subscriber-only*"`, `class="*locked-content*"`
 3. Script pattern: body contains both `/paywall/i` and `<script`
 

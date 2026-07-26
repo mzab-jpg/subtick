@@ -36,12 +36,13 @@ export default function HistoryScreen() {
   const [articles, setArticles] = useState<ArticleMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Re-fetch when returning from Reader (in case new articles were read)
+  // B10 Fix: Use only the 'focus' listener for loading — it fires on both the
+  // initial mount and every subsequent return to this screen. Calling loadHistory()
+  // directly here as well caused a redundant double-load on first open.
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadHistory();
     });
-    loadHistory();
     return unsubscribe;
   }, [navigation]);
 
@@ -59,11 +60,15 @@ export default function HistoryScreen() {
   };
 
   const navigateToReader = (articleId: string) => {
-    // Mode 'history' prevents swiping and weight tracking
+    // Pass the full history list as the queue so users can swipe forward/backward
+    // through their entire reading history. Compute startIndex from the tapped
+    // article's position in the list.
+    const queueIds = articles.map(a => a.id);
+    const tapIndex = queueIds.indexOf(articleId);
     navigation.navigate('Reader', {
       articleId,
-      queueArticleIds: [articleId],
-      startIndex: 0,
+      queueArticleIds: queueIds,
+      startIndex: tapIndex >= 0 ? tapIndex : 0,
       mode: 'history',
     });
   };

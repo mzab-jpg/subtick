@@ -202,17 +202,34 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
 
           const activeGuids = new Set<string>();
 
-          for (const item of feedData.items) {
+          // C3 Fix: Batch-check article existence with a single getAll() call per feed
+          // instead of one individual read per item. Reduces latency from N round trips
+          // to 1 round trip (counted as N reads in billing, but far faster).
+          const itemMeta = feedData.items.map(item => {
+            const title = item.title || 'Untitled';
+            const link = item.link || '';
+            return {
+              item,
+              title,
+              link,
+              articleId: generateArticleId(link, title),
+              guid: extractGuid(item),
+            };
+          });
+
+          const articleRefs = itemMeta.map(m => db.collection('articles').doc(m.articleId));
+          const existingDocs = articleRefs.length > 0
+            ? await db.getAll(...articleRefs)
+            : [];
+          const existingIds = new Set(existingDocs.filter(d => d.exists).map(d => d.id));
+
+          for (const { item, title: rawTitle, link, articleId, guid } of itemMeta) {
             try {
-              let title = item.title || 'Untitled';
-              const link = item.link || '';
-              const articleId = generateArticleId(link, title);
-              const guid = extractGuid(item);
-              
+              let title = rawTitle;
+
               if (guid) activeGuids.add(guid);
 
-              const existing = await db.collection('articles').doc(articleId).get();
-              if (existing.exists) continue;
+              if (existingIds.has(articleId)) continue;
 
               const bodyHtml = item['content:encoded'] || item.content || item.description || '';
               let description = (item.contentSnippet || item.description || '').substring(0, 300);
@@ -296,34 +313,45 @@ export const rssCollector = onSchedule('every 3 hours', async () => {
             }
           }
 
-          // Post-processing: Tag older articles that fell off the RSS feed as 'archived', and fix legacy articles
+          // C4 Fix: Delta-driven archive update.
+          // Instead of scanning ALL articles for this feed (which grows unboundedly),
+          // only query articles currently marked 'current'. Any that are no longer in
+          // the live feed's activeGuids set need to be flipped to 'archived'.
+          // Uses the existing feedUrl+rssStatus composite index — cost is proportional
+          // only to the number of currently-active articles, not the full archive.
           try {
-            const allArticlesSnap = await db.collection('articles').where('feedUrl', '==', feed.url).get();
             const batch = db.batch();
             let archivedCount = 0;
-            let currentUpdateCount = 0;
 
-            allArticlesSnap.forEach((doc) => {
-              const data = doc.data() as Article;
-              
-              // Respect forced archived layout even during sync
-              const expectedStatus = (feed.forceArchived === true) ? 'archived' : 'current';
-
-              if (feed.forceArchived === true && data.rssStatus !== 'archived') {
+            if (feed.forceArchived === true) {
+              // Force-archived feed: flip all current articles to archived in one query.
+              const currentSnap = await db.collection('articles')
+                .where('feedUrl', '==', feed.url)
+                .where('rssStatus', '==', 'current')
+                .get();
+              currentSnap.forEach(doc => {
                 batch.update(doc.ref, { rssStatus: 'archived' });
                 archivedCount++;
-              } else if (data.guid && !activeGuids.has(data.guid) && data.rssStatus !== 'archived') {
-                batch.update(doc.ref, { rssStatus: 'archived' });
-                archivedCount++;
-              } else if (data.guid && activeGuids.has(data.guid) && feed.forceArchived !== true && data.rssStatus !== 'current') {
-                batch.update(doc.ref, { rssStatus: 'current' });
-                currentUpdateCount++;
-              }
-            });
+              });
+            } else {
+              // Normal feed: only look at currently-active articles.
+              // Any whose GUID is not in the live feed snapshot gets archived.
+              const currentSnap = await db.collection('articles')
+                .where('feedUrl', '==', feed.url)
+                .where('rssStatus', '==', 'current')
+                .get();
+              currentSnap.forEach(doc => {
+                const data = doc.data() as Article;
+                if (data.guid && !activeGuids.has(data.guid)) {
+                  batch.update(doc.ref, { rssStatus: 'archived' });
+                  archivedCount++;
+                }
+              });
+            }
 
-            if (archivedCount > 0 || currentUpdateCount > 0) {
+            if (archivedCount > 0) {
               await batch.commit();
-              console.log(`[rssCollector] Status sync for ${feed.publicationName}: ${archivedCount} archived, ${currentUpdateCount} updated to current.`);
+              console.log(`[rssCollector] Status sync for ${feed.publicationName}: ${archivedCount} archived.`);
             }
           } catch (archiveErr: any) {
             console.error(`[rssCollector] Archive sync error for ${feed.publicationName}:`, archiveErr.message);

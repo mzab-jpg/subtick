@@ -59,20 +59,13 @@ export const DEFAULT_SELECTED_WEIGHT = 1.5;
 export const DEFAULT_NOT_INTERESTED_WEIGHT = 0.2;
 export const DEFAULT_NEUTRAL_WEIGHT = 1.0;
 
-// --- Scoring Formula Weights ---
-export const SCORE_WEIGHTS = {
-  categoryBoost: 0.3,
-  trendingBoost: 0.2,
-  recencyBoost: 0.25,
-  qualityBoost: 0.15,
-  crossUserCollab: 0.1,
-};
-
 // --- Feedback Delta Multipliers (Δ) ---
 // Must stay in sync with firebase/functions/src/constants.ts
 export const FEEDBACK_DELTAS: Record<string, number> = {
   save: 0.55,
+  unsave: -0.55,
   like: 0.40,
+  unlike: -0.40,
   read_thorough: 0.30,
   read_skim: 0.10,
   read_shallow: 0.00,
@@ -93,13 +86,13 @@ export const DAILY_DECAY_RATE = 0.995; // 0.5% daily decay
 
 // --- Feed Configuration ---
 export const MAX_FEED_ARTICLES = 30;
-export const CANDIDATE_POOL_SIZE = 200;
-export const SURPRISE_ME_MIN_INDEX = 10;
+// A3 Fix: Skip only the 3 visible cards (hero + 2 rows), not 10 invisible positions.
+export const SURPRISE_ME_MIN_INDEX = 3;
 
-// --- Quick Exit Thresholds (15 seconds, <20% scroll) ---
-// These match the thresholds used in useBehaviorTracker.ts concludeSession()
-export const QUICK_EXIT_MAX_DURATION_MS = 15_000;
-export const QUICK_EXIT_MAX_SCROLL = 0.2;
+// --- Quick Exit Thresholds ---
+// Named constants matching the thresholds in useBehaviorTracker.ts concludeSession()
+export const QUICK_EXIT_MAX_DURATION_MS = 15_000; // 15 seconds
+export const QUICK_EXIT_MAX_SCROLL = 0.2;         // 20% scroll depth
 
 // --- Dwell Threshold ---
 export const DWELL_THRESHOLD_MS = 5 * 60_000; // 5 minutes

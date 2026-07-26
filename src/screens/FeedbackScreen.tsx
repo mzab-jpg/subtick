@@ -43,7 +43,6 @@ export default function FeedbackScreen() {
         userId: auth.currentUser.uid,
         message: trimmed,
         timestamp: Date.now(),
-        status: 'pending',
       });
       Alert.alert('Thank you!', 'Your feedback has been received.', [
         { text: 'OK', onPress: () => navigation.goBack() },

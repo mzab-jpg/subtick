@@ -6,17 +6,69 @@ service cloud.firestore {
     // --- Users: only the owning user can read/write their own profile & nested data ---
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'userId',
+          'themePreference',
+          'dashboardMetricIds',
+          'isOnboarded',
+          'selectedCategoryIds',
+          'notInterestedCategoryIds',
+          'includeArchivedArticles',
+          'lastUpdated'
+        ]);
+
+      // S2 Fix: Restrict client updates to only the fields the client legitimately needs
+      // to write. Stats fields (totalArticlesRead, categoryWeights, currentStreakDays, etc.)
+      // are managed exclusively by Cloud Functions via Admin SDK and must not be
+      // writable by the client to prevent score/streak forgery.
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'themePreference',
+          'dashboardMetricIds',
+          'isOnboarded',
+          'selectedCategoryIds',
+          'notInterestedCategoryIds',
+          'includeArchivedArticles',
+          'lastUpdated'
+        ]);
+
       allow delete: if false; // Never allow deletion
 
       // --- Nested Behavior Events Subcollection ---
       // Only the owning user can read and write (create) their own behavior logs.
+      // S5 Fix: Also verify the userId field inside the document matches the authenticated
+      // user — prevents a user from creating events with someone else's userId in the body.
       match /behavior_events/{eventId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        allow create: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.userId == userId
+          && request.resource.data.keys().hasOnly([
+            'articleId', 'userId', 'eventType', 'timestamp',
+            'articleCategory', 'lengthStyle', 'sessionDuration',
+            'scrollDepth', 'publicationName', 'actualWordCount'
+          ])
+          && request.resource.data.eventType in [
+            'swipe_next', 'swipe_not_interested', 'like', 'unlike',
+            'save', 'unsave', 'read_thorough', 'read_skim',
+            'read_shallow', 'quick_exit'
+          ]
+          && request.resource.size() < 2000;
         allow update: if false;
         allow delete: if false;
+      }
+
+      // --- Nested Saved Articles Subcollection ---
+      // Users can save articles to their own profile. These persist even if the
+      // global article is deleted by the cleanup cron.
+      match /saved_articles/{articleId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow update: if false;
       }
     }
 
@@ -29,16 +81,27 @@ service cloud.firestore {
     }
 
     // --- Feed Requests: any authenticated user can create/read their own ---
+    // S3 Fix: Validate schema, enforce userId matches caller, and cap document size
+    // to prevent spam flooding and impersonation.
     match /feed_requests/{requestId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.url is string
+        && request.resource.data.url.size() > 0
+        && request.resource.data.url.size() <= 500
+        && request.resource.data.keys().hasOnly(['userId', 'url', 'description', 'timestamp', 'status'])
+        && request.resource.size() < 2000;
       allow update: if false;
       allow delete: if false;
     }
 
     // --- Feedback: any authenticated user can create; no reads from client ---
+    // S4 Fix: Add schema validation and size cap to prevent unbounded writes.
     match /feedback/{feedbackId} {
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['userId', 'message', 'type', 'timestamp', 'appVersion'])
+        && request.resource.size() < 5000;
       allow read: if false;   // Admin only — no client reads needed
       allow update: if false;
       allow delete: if false;

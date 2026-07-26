@@ -13,8 +13,6 @@ export interface UserProfile {
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   totalArticlesRead: number;
-  totalArticlesSaved: number;
-  totalArticlesLiked: number;
   weeklyReadCount: number;
   currentStreakDays: number;
   lastReadDate: number;

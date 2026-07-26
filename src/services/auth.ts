@@ -70,8 +70,6 @@ export async function ensureUserProfile(user: User): Promise<UserProfile> {
     themePreference: 'system',
     linkedGoogleAccount: false,
     totalArticlesRead: 0,
-    totalArticlesSaved: 0,
-    totalArticlesLiked: 0,
     weeklyReadCount: 0,
     currentStreakDays: 0,
     lastReadDate: 0,

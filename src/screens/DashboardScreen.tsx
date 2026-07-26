@@ -74,12 +74,28 @@ export default function DashboardScreen() {
       // Instantly remove any seen articles from the displayed list (local AsyncStorage)
       getSeenArticleIds().then(seenIds => {
         if (seenIds.length > 0) {
-          setFeedArticles(prev => prev.filter(a => !seenIds.includes(a.id)));
+          setFeedArticles(prev => {
+            const filtered = prev.filter(a => !seenIds.includes(a.id));
+            // If all articles were seen, trigger a refetch
+            if (filtered.length === 0 && prev.length > 0) {
+              loadData(true);
+            }
+            return filtered;
+          });
         }
       }).catch(() => {});
 
-      // Perf fix: removed 800ms artificial delay. Flush in background then refresh profile.
-      flushBehaviorQueue().catch(() => {}).finally(() => loadData(true));
+      // Flush behavior events in background, then refresh profile stats only.
+      // Don't call loadData here — that would replace the articles with a new random batch.
+      // Only refetch if the feed was emptied by the seen filter above.
+      flushBehaviorQueue().catch(() => {});
+      // Silently refresh profile stats without touching the article list
+      const user = auth.currentUser;
+      if (user) {
+        fetchUserProfile(user.uid).then(profile => {
+          if (profile) setUserProfile(profile);
+        }).catch(() => {});
+      }
     });
 
     loadData(false);
@@ -138,8 +154,6 @@ export default function DashboardScreen() {
       const allExcluded = Array.from(new Set([...seenIds, ...sessionShownIds.current]));
       const result = await getRankedFeed(allExcluded);
       const articles = result.articles.slice(0, MAX_FEED_ARTICLES);
-      // Register every returned article so subsequent fetches exclude them too.
-      articles.forEach(a => sessionShownIds.current.add(a.id));
       setFeedArticles(articles);
     } catch (error) {
       console.error('[Dashboard] loadFeedArticles error:', error);
@@ -216,13 +230,24 @@ export default function DashboardScreen() {
   };
 
   // Instantly remove tapped card before navigating — no focus listener lag
+  // B3 Fix: Capture the filtered list into a local const first so queueArticleIds
+  // reflects the actual post-removal state. Previously setFeedArticles (async state
+  // update) was not yet applied when feedArticles.map(...) read the stale array,
+  // meaning the queue always included the article being opened.
   const navigateToReader = (articleId: string, index: number) => {
     if (index < 0 || index >= feedArticles.length) return;
-    setFeedArticles(prev => prev.filter(a => a.id !== articleId));
+    const remainingArticles = feedArticles.filter(a => a.id !== articleId);
+    setFeedArticles(remainingArticles);
+    // Shuffle the queue so the 2 untapped Dashboard cards aren't
+    // necessarily the next articles the user sees — they're scattered
+    // randomly among the full feed of ~29 articles.
+    const shuffledQueue = [...remainingArticles]
+      .sort(() => Math.random() - 0.5)
+      .map(a => a.id);
     navigation.navigate('Reader', {
       articleId,
-      queueArticleIds: feedArticles.map(a => a.id),
-      startIndex: index,
+      queueArticleIds: shuffledQueue,
+      startIndex: 0, // The reader starts at position 0 of the shuffled queue
       userWpm: userProfile?.averageWpm || 250,
       mode: 'feed',
     });

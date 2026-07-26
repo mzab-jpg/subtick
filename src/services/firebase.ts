@@ -11,13 +11,18 @@ import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/func
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { FIREBASE_EMULATOR_CONFIG } from '../utils/constants';
 
+// S6: Firebase web config values are public identifiers — not secrets.
+// Security is enforced by Firestore security rules, not by keeping these private.
+// They are hardcoded here as defaults (acceptable for Firebase web apps) and can
+// be overridden via EXPO_PUBLIC_FIREBASE_* env vars for dev/staging environments.
+// See .env.example for documentation.
 const firebaseConfig = {
-  apiKey: 'AIzaSyAggNiBGQIbYTAv5vqGtWhmyhrIPDoipXk',
-  authDomain: 'subtick-bbd55.firebaseapp.com',
-  projectId: 'subtick-bbd55',
-  storageBucket: 'subtick-bbd55.firebasestorage.app',
-  messagingSenderId: '859600771798',
-  appId: '1:859600771798:web:c9898a4501148c4caa0777',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? 'AIzaSyAggNiBGQIbYTAv5vqGtWhmyhrIPDoipXk',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? 'subtick-bbd55.firebaseapp.com',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? 'subtick-bbd55',
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? 'subtick-bbd55.firebasestorage.app',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '859600771798',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '1:859600771798:web:c9898a4501148c4caa0777',
   measurementId: 'G-4B3N8C8MR3',
 };
 

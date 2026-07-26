@@ -14,6 +14,31 @@ const db = admin.firestore();
 // --- Configuration ---
 const DEFAULT_PUBLISHER_QUALITY = 0.8;
 
+// C5 Fix: Module-level publisher cache with 10-minute TTL.
+// The publishers collection (35 docs) was being read in full on every single
+// behavior sync call — the hottest code path in the app. Since Cloud Function
+// containers stay warm across many invocations, this cache eliminates nearly
+// all redundant publisher reads after the first call in each container.
+const PUBLISHER_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+let publisherIdCache: Set<string> = new Set();
+let publisherCacheTimestamp = 0;
+
+async function getExistingPublisherIds(): Promise<Set<string>> {
+  const now = Date.now();
+  if (publisherIdCache.size > 0 && (now - publisherCacheTimestamp) < PUBLISHER_CACHE_TTL_MS) {
+    return publisherIdCache;
+  }
+  try {
+    const snap = await db.collection('publishers').get();
+    publisherIdCache = new Set(snap.docs.map(d => d.id));
+    publisherCacheTimestamp = now;
+  } catch (err: any) {
+    console.warn('[syncBehaviorEvents] Could not refresh publisher cache:', err.message);
+    // Return stale cache rather than failing the entire batch
+  }
+  return publisherIdCache;
+}
+
 function getTrendingIncrement(eventType: string): number {
   switch (eventType) {
     case 'save': return 3.0;
@@ -49,11 +74,18 @@ export const syncBehaviorEvents = onCall(async (request) => {
   const authenticatedUserId = request.auth.uid;
 
   const data = request.data as { events: BehaviorEvent[] };
-  const events = (data.events || []).map(e => ({
+  let events = (data.events || []).map(e => ({
     ...e,
     // Overwrite any client-supplied userId with the verified auth UID
     userId: authenticatedUserId,
   }));
+
+  // Input size cap: prevent batch overflow (Firestore limits batches to 500 ops)
+  // and rate-limit abuse. Client normally sends ≤20 events per flush.
+  if (events.length > 50) {
+    console.warn(`[syncBehaviorEvents] Truncating ${events.length} events to 50 (possible abuse or oversized flush)`);
+    events = events.slice(0, 50);
+  }
 
   if (!events.length) {
     return { synced: 0, errors: 0 };
@@ -90,16 +122,9 @@ export const syncBehaviorEvents = onCall(async (request) => {
     console.warn('[syncBehaviorEvents] Failed to fetch article publisher info and scores:', err.message);
   }
 
-  // 1b. Fetch existing publisher documents so we know which ones already have a qualityScore.
-  // This lets us use increment() for existing publishers and set the default for new ones.
-  // Publishers are few (35 feeds) so this read is cheap.
-  const existingPublisherIds = new Set<string>();
-  try {
-    const publisherSnap = await db.collection('publishers').get();
-    publisherSnap.forEach(doc => existingPublisherIds.add(doc.id));
-  } catch (err: any) {
-    console.warn('[syncBehaviorEvents] Could not pre-fetch publisher list:', err.message);
-  }
+  // 1b. Load existing publisher IDs from module-level TTL cache (C5 fix).
+  // Avoids a full publishers collection scan on every behavior sync call.
+  const existingPublisherIds = await getExistingPublisherIds();
 
   // 2. Per-user per-article dedup for like/save toggle events.
   // Prevents spam: a user can only like/save an article once and unlike/unsave once.

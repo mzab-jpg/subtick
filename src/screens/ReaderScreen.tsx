@@ -124,6 +124,8 @@ export default function ReaderScreen() {
   });
 
   // --- Load article ---
+  // B8 Fix: Add isMockMode and mockArticle to the dependency array — they were
+  // previously missing even though the function closes over them.
   const loadArticle = useCallback(async (id: string) => {
     try {
       setLoading(true);
@@ -200,7 +202,7 @@ export default function ReaderScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isSavedMode]);
+  }, [isSavedMode, isMockMode, mockArticle, mockHtml]);
 
   // --- Background Sliding Prefetcher (Definite Future Reads sliding-window) ---
   const prefetchArticles = useCallback(async (upcomingIds: string[]) => {
@@ -432,7 +434,10 @@ export default function ReaderScreen() {
             }
             goToNext();
           } else if (dx > SWIPE_THRESHOLD) {
-            if (isSavedMode) {
+            // B5 Fix: Allow right-swipe to navigate backwards in both saved and history modes.
+            // Previously only isSavedMode was handled; isHistoryMode fell through to !isRestrictedMode
+            // which is false for history, creating a dead-zone right swipe.
+            if (isSavedMode || isHistoryMode) {
               goToPrev();
             } else if (!isRestrictedMode) {
               behaviorTracker.trackEvent('swipe_not_interested');
@@ -468,14 +473,38 @@ export default function ReaderScreen() {
   // article.title, publicationName, and author come from RSS and must not be trusted as safe HTML.
   const escapeHtml = (str: string): string => {
     return str
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   };
 
+  // B9 Fix: Inject CSS updates dynamically when the theme changes instead of rebuilding
+  // the entire HTML string. Previously, colors/webViewCSS were in the articleHTML memo
+  // deps, so every theme toggle caused a full WebView reload (losing scroll position).
+  // Now articleHTML only rebuilds when the article content changes. Theme updates are
+  // pushed into the already-loaded WebView via injectJavaScript.
+  useEffect(() => {
+    if (!webViewRef.current || !article) return;
+    // Inject a <style> tag update into the existing WebView page without reloading it.
+    const cssUpdateScript = `
+      (function() {
+        var existing = document.getElementById('__tangent_theme__');
+        if (existing) existing.remove();
+        var s = document.createElement('style');
+        s.id = '__tangent_theme__';
+        s.innerHTML = ${JSON.stringify(webViewCSS.replace(/<\/?style>/g, ''))};
+        document.head.appendChild(s);
+      })();
+      true;
+    `;
+    webViewRef.current.injectJavaScript(cssUpdateScript);
+  }, [colors, webViewCSS]);
+
   // --- Pre-compiled HTML for WebView ---
+  // B9 Fix: colors and webViewCSS removed from deps — theme changes are handled by
+  // the CSS injection effect above without triggering a full page reload.
   const articleHTML = useMemo(() => {
     if (!article) return '';
     const readMinutes = Math.max(1, Math.ceil((article.wordCount || 0) / currentWpm));
@@ -541,7 +570,8 @@ export default function ReaderScreen() {
                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
                 lastScrollTop = scrollTop;
               } else if (scrollTop <= 0) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: false }));
+                // At the very top — don't show HUD. It should only appear when
+                // the user actively scrolls up, not on initial page load.
                 lastScrollTop = scrollTop;
               }
               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
@@ -561,7 +591,8 @@ export default function ReaderScreen() {
       </body>
       </html>
     `;
-  }, [article, resolvedHtml, colors, webViewCSS, currentWpm]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article, resolvedHtml, currentWpm]);
 
   const rawWebpageInjectedScript = useMemo(() => {
     const frontendRules = article?.frontendRules;
@@ -617,7 +648,8 @@ export default function ReaderScreen() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
             lastScrollTop = scrollTop;
           } else if (scrollTop <= 0) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: false }));
+            // At the very top — don't show HUD. It should only appear when
+            // the user actively scrolls up, not on initial page load.
             lastScrollTop = scrollTop;
           }
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
@@ -719,8 +751,8 @@ export default function ReaderScreen() {
               <X size={24} color={colors.text} />
             </TouchableOpacity>
 
-            <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1}>
-              {article?.publicationName || 'Reading'}
+            <Text style={[styles.hudTitle, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
+              {article?.title || 'Reading'}
             </Text>
 
             <View style={styles.hudActions}>
@@ -728,7 +760,13 @@ export default function ReaderScreen() {
                 onPress={() => {
                   const newVal = !isLiked;
                   setIsLiked(newVal);
-                  if (newVal) behaviorTracker.trackEvent('like');
+                  if (article && !isRestrictedMode) {
+                    if (newVal) {
+                      behaviorTracker.trackEvent('like');
+                    } else {
+                      behaviorTracker.trackEvent('unlike');
+                    }
+                  }
                 }}
                 style={styles.hudIconButton}
               >
@@ -749,6 +787,7 @@ export default function ReaderScreen() {
                       if (!isRestrictedMode) behaviorTracker.trackEvent('save');
                     } else {
                       unmarkArticleSaved(article.id);
+                      if (!isRestrictedMode) behaviorTracker.trackEvent('unsave');
                     }
                   }
                 }}

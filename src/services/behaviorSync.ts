@@ -93,43 +93,55 @@ export async function queueBehaviorEvent(
  * Flush queued events to the syncBehaviorEvents Cloud Function.
  * The Cloud Function saves events to Firestore AND triggers weight updates.
  * Returns number of successfully synced events.
+ *
+ * B6 Fix: Wrap the read-modify-write in the same enqueueStorageOperation mutex
+ * as queueBehaviorEvent. Previously a concurrent swipe could interleave between
+ * the read and the final write here, silently clobbering the newly-added event.
+ * The network call (syncFn) is deliberately kept outside the mutex so it doesn't
+ * block new events from being queued while the upload is in-flight.
  */
 export async function flushBehaviorQueue(): Promise<number> {
   try {
-    const raw = await AsyncStorage.getItem(BEHAVIOR_QUEUE_KEY);
-    if (!raw) return 0;
+    // Step 1: Read and extract the batch to send — serialized via mutex.
+    const { batch, queueSnapshot } = await enqueueStorageOperation(async () => {
+      const raw = await AsyncStorage.getItem(BEHAVIOR_QUEUE_KEY);
+      if (!raw) return { batch: [], queueSnapshot: [] };
+      const queue: PendingBehaviorEvent[] = JSON.parse(raw);
+      const unsynced = queue.filter((e) => !e.synced);
+      if (unsynced.length === 0) return { batch: [], queueSnapshot: queue };
+      return { batch: unsynced.slice(0, SYNC_BATCH_SIZE), queueSnapshot: queue };
+    });
 
-    const queue: PendingBehaviorEvent[] = JSON.parse(raw);
-    if (queue.length === 0) return 0;
+    if (batch.length === 0) return 0;
 
-    const unsynced = queue.filter((e) => !e.synced);
-    if (unsynced.length === 0) return 0;
-
-    // Send batch to syncBehaviorEvents Cloud Function (handles save + weight update)
-    const batch = unsynced.slice(0, SYNC_BATCH_SIZE);
+    // Step 2: Network call — outside mutex so new events can queue in parallel.
     const syncFn = httpsCallable<{ events: PendingBehaviorEvent[] }, { synced: number; errors: number }>(
       functions,
       'syncBehaviorEvents'
     );
-
     const result = await syncFn({ events: batch });
     const syncedCount = result.data.synced ?? batch.length;
-
     console.log(`[BehaviorSync] Cloud Function synced ${syncedCount}/${batch.length} events`);
 
-    // Mark synced events
-    const syncedIds = new Set(batch.slice(0, syncedCount).map((e) => e.id));
-    const updatedQueue = queue.map((e) =>
-      syncedIds.has(e.id) ? { ...e, synced: true } : e
-    );
+    // Step 3: Write back the updated queue — serialized via mutex.
+    await enqueueStorageOperation(async () => {
+      const raw = await AsyncStorage.getItem(BEHAVIOR_QUEUE_KEY);
+      const currentQueue: PendingBehaviorEvent[] = raw ? JSON.parse(raw) : queueSnapshot;
 
-    // Remove fully synced events older than 5 minutes to keep queue small
-    const fiveMinAgo = Date.now() - 5 * 60 * 1000;
-    const cleaned = updatedQueue.filter(
-      (e) => !e.synced || e.timestamp > fiveMinAgo
-    );
+      const syncedIds = new Set(batch.slice(0, syncedCount).map((e) => e.id));
+      const updatedQueue = currentQueue.map((e) =>
+        syncedIds.has(e.id) ? { ...e, synced: true } : e
+      );
 
-    await AsyncStorage.setItem(BEHAVIOR_QUEUE_KEY, JSON.stringify(cleaned));
+      // Remove fully synced events older than 5 minutes to keep queue small
+      const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+      const cleaned = updatedQueue.filter(
+        (e) => !e.synced || e.timestamp > fiveMinAgo
+      );
+
+      await AsyncStorage.setItem(BEHAVIOR_QUEUE_KEY, JSON.stringify(cleaned));
+    });
+
     return syncedCount;
   } catch (error) {
     console.error('[BehaviorSync] flushBehaviorQueue error:', error);
