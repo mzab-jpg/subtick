@@ -57,7 +57,7 @@
 - ✅ **Theme changes no longer reload the article** — CSS updates are injected into the existing WebView via `injectJavaScript()` instead of rebuilding the full HTML and forcing a page reload (B9 fix).
 - ✅ **Real-time preloader** — When 5 articles remain, fires flush (non-blocking) + fetches next batch in parallel. No swipe stutter.
 - ✅ **Background prefetcher** — 10-article look-ahead window.
-- ✅ **HUD with auto-hide** — Frosted-glass BlurView, 2.5s auto-hide. Like/Bookmark in HUD.
+- ✅ **HUD with auto-hide** — Frosted-glass BlurView, 2.5s auto-hide. Like/Bookmark in HUD. Shows article title (not publication name) with `ellipsizeMode="tail"` so long titles truncate instead of expanding the bar (A5 fix). Never visible on initial page load — only appears when user actively scrolls up (A5 fix).
 - ✅ **Edge-zone PanResponder swipes** — 45px zones, 40px threshold.
 - ✅ **Right-swipe navigation in history mode** — Right-swipe now correctly calls `goToPrev()` in both saved-reads and history modes (B5 fix).
 - ✅ **WebView navigation lock** — External links open in OS browser; archived mode allows same-domain redirects.
@@ -72,7 +72,7 @@
 - ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding if not onboarded.
 
 ### Screens & Navigation
-- ✅ **Dashboard** — Hero + 2-row layout, stats pill (3 configurable metrics). Queue passed to Reader no longer includes the opened article (B3 fix). Discover button jumps past the 3 visible cards only (SURPRISE_ME_MIN_INDEX = 3, A3 fix).
+- ✅ **Dashboard** — Hero + 2-row layout, stats pill (3 configurable metrics). Queue passed to Reader no longer includes the opened article (B3 fix). Discover button jumps past the 3 visible cards only (SURPRISE_ME_MIN_INDEX = 3, A3 fix). Focus listener no longer refetches articles on every navigation back — only refetches if all articles were read (A5 fix). Reader queue is shuffled so untapped Dashboard cards are scattered randomly among the full feed (A5 fix).
 - ✅ **Settings** — Now scrollable (`<ScrollView>`). Developer Options section hidden in production (`__DEV__` gate). Sections: Account, Library, Preferences, Support & Feedback.
 - ✅ **History screen** — Fully offline. Zero Firestore reads. Loads once via focus listener only, no double-load on mount (B10 fix). Passes full history ID array as Reader queue, enabling swipe navigation through all history articles (A4 fix).
 - ✅ **Saved Reads screen** — `loadSaved()` called on both mount AND focus.

@@ -14,7 +14,7 @@
 | Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` (initial load only — updates pushed via `injectJavaScript`) | Recomputed on theme change, never persisted |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount)
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Focus listener no longer triggers a full refetch on every navigation back — only when all articles have been read (A5 fix). Reader queue is shuffled on tap so untapped cards are scattered randomly (A5 fix).
 - `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`
 - `OnboardingScreen.tsx`: `chipStates: Record<string, 'selected'|'not_interested'|'neutral'>` — pure local, never synced until Continue is pressed
 - `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes
@@ -338,6 +338,8 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately via `trackE
 | Concurrent queue + flush | Both use the same `enqueueStorageOperation` mutex; network call is outside (B6 fix) |
 
 ### WebView Navigation Lock
+**HUD Visibility:** HUD starts hidden (`useState(false)`). It appears only when the user actively scrolls up (the WebView injected JS sends a `hud:visible=true` message when `scrollTop < lastScrollTop - 15`). The `scrollTop <= 0` case (which previously showed the HUD on initial page load) has been removed (A5 fix). HUD shows article title with `ellipsizeMode="tail"` truncation instead of publication name (A5 fix). Tap anywhere on the article body toggles it; it auto-hides after 2.5s.
+
 - **Sanitized HTML mode:** Any `http` link click → `Linking.openURL(url); return false`
 - **Raw URI (archived) mode:** Same-domain navigations allowed (redirects); cross-domain → OS browser. Initial load fully allowed.
 - HTTP errors (≥400) or load errors → error UI with "Open in Browser" button.

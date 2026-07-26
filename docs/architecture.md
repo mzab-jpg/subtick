@@ -117,11 +117,14 @@
     │                                #   uses named constants for thresholds (F5 fix)
     └── screens/
         ├── OnboardingScreen.tsx     # Category chip grid (3-state toggle), writes selections to Dashboard on Continue
-        ├── DashboardScreen.tsx      # Hero+row feed layout, stats pill bar, triggers getRankedFeed on mount and focus;
-        │                            #   navigateToReader no longer includes current article in queue (B3 fix)
+        ├── DashboardScreen.tsx      # Hero+row feed layout, stats pill bar, triggers getRankedFeed on mount;
+        │                            #   focus listener only refetches if all articles were read (A5 fix);
+        │                            #   navigateToReader shuffles queue so untapped cards are scattered (A5 fix);
+        │                            #   no longer includes current article in queue (B3 fix)
         ├── ReaderScreen.tsx         # WebView shell + PanResponder edge swipes + HUD + real-time preloader (trigger at 5 remaining);
         │                            #   theme CSS injected dynamically (B9 fix); right-swipe in history mode (B5 fix);
-        │                            #   escapeHtml XSS fix (S1 fix)
+        │                            #   escapeHtml XSS fix (S1 fix);
+        │                            #   HUD shows article title with truncation, never visible on initial load (A5 fix)
         ├── SettingsScreen.tsx       # ScrollView layout; category prefs, stats, theme, Google link; Dev Options in __DEV__ only
         ├── HistoryScreen.tsx        # Offline list from AsyncStorage metadata; loads once via focus listener (B10 fix);
         │                            #   passes full history array as Reader queue for swipe navigation (A4 fix)
@@ -298,6 +301,10 @@ ReaderScreen → behaviorTracker.concludeSession() → queueBehaviorEvent()
 - **`HistoryScreen` queue (A4 fix)** — Passes full history array as Reader queue so users can swipe through history.
 - **`FeedbackScreen` payload (A4 fix)** — Removed `status` field that was denied by rules.
 - **`FeedRequestScreen` payload (A4 fix)** — Sends empty string instead of `undefined` for blank descriptions.
+- **`DashboardScreen` focus refetch (A5 fix)** — Focus listener no longer calls `loadData` on every navigation back; only refetches if the seen filter emptied the feed. Prevents articles from changing when navigating Home→Settings→Home.
+- **`DashboardScreen` queue shuffle (A5 fix)** — Reader queue is shuffled so the 2 untapped Dashboard cards are scattered randomly among the full feed instead of being the next articles the user sees.
+- **`ReaderScreen` HUD title (A5 fix)** — HUD shows article title (not publication name) with `ellipsizeMode="tail"` for truncation.
+- **`ReaderScreen` HUD initial visibility (A5 fix)** — Removed `scrollTop <= 0` case from injected JS so HUD never appears on initial page load; only appears when user actively scrolls up.
 
 ---
 
