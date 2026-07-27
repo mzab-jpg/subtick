@@ -51,7 +51,7 @@
 ├── assets/                         # Static app icons and splash screens
 │
 ├── firebase/
-│   ├── feeds.json                  # Master list of 35 Substack feed URLs with qualityScores
+│   ├── feeds.json                  # Master list of 42 verified full-RSS Substack feed URLs with qualityScores
 │   ├── firebase.json               # Firebase project config — now includes "indexes" pointer (C2 fix)
 │   ├── .firebaserc                 # Firebase project alias (default → subtick-bbd55)
 │   ├── firestore.rules             # Security rules: field whitelists + schema validation (S2–S5 fixes)

@@ -101,6 +101,15 @@ function sanitizeBodyHtml(html) {
   return cleaned;
 }
 
+// Shared GUID extractor (mirrors rssCollector.ts for consistency)
+function extractGuid(item) {
+  if (!item) return '';
+  if (typeof item.guid === 'object' && item.guid !== null) {
+    return item.guid['#text'] || item.guid['_'] || item.guid.value || '';
+  }
+  return item.guid || item.link || '';
+}
+
 async function seed() {
   console.log(`[Seed] Starting seed process for ${SUBSTACK_FEEDS.length} feeds...`);
   console.log('============================================');
@@ -143,6 +152,7 @@ async function seed() {
           const publishDate = item.pubDate ? new Date(item.pubDate).getTime() : Date.now();
           const author = item.creator || item['dc:creator'] || feed.publicationName;
           const headerImageUrl = extractFirstImage(rawHtml);
+          const guid = extractGuid(item);
 
           const wordCount = calculateWordCount(bodyHtml);
           let lengthStyle = 'medium';
@@ -154,10 +164,15 @@ async function seed() {
             title,
             author,
             publicationName: feed.publicationName,
-            publicationUrl: feedData.link || feed.url,
+            // Fix: Use item.link || guid instead of feedData.link || feed.url.
+            // Matches the rssCollector fix (commit c1fe7e7) — the old code
+            // fell back to the publisher's homepage, causing archived articles
+            // to load the publisher's entire home feed instead of the specific article.
+            publicationUrl: link || guid,
             feedUrl: feed.url,
             category: feed.category,
             lengthStyle,
+            guid,
             description,
             publishDate,
             cacheTimestamp: Date.now(),

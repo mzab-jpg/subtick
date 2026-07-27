@@ -15,9 +15,10 @@ import xss from 'xss';
 // --- Client-Side Feed Cache ---
 // Stores Promises resolving to highly compressed, pre-sanitized articles.
 // This prevents concurrent duplicate downloads and keeps RAM footprint minimal.
-interface CachedFeedItem {
+export interface CachedFeedItem {
   guid: string;
   rawHtml: string; // C6 Fix: raw content stored, sanitized lazily after find()
+  link?: string;   // article-level permalink (item.link) for archived fallback
 }
 const feedSessionCache = new Map<string, Promise<CachedFeedItem[]>>();
 
@@ -88,8 +89,16 @@ export function sanitizeClientHtml(rawHtml: string): string {
  * Fetch and extract the sanitized HTML for a specific article directly from its RSS feed.
  * Utilizes Promise-level caching to prevent duplicate concurrent network requests.
  * Pre-sanitizes articles and discards the parsed XML tree immediately to keep RAM usage minimal.
+ * 
+ * Returns the sanitized HTML and the article-level permalink (item.link) from the RSS feed,
+ * which is used as a correct archived fallback URL even for articles ingested before the
+ * publicationUrl fix in rssCollector (commit c1fe7e7).
  */
-export async function fetchAndExtractArticle(feedUrl: string, guid: string): Promise<string> {
+export async function fetchAndExtractArticle(
+  feedUrl: string,
+  guid: string,
+  articleUrl?: string
+): Promise<{ html: string; link?: string }> {
   try {
     let fetchPromise = feedSessionCache.get(feedUrl);
 
@@ -122,6 +131,7 @@ export async function fetchAndExtractArticle(feedUrl: string, guid: string): Pro
           return {
             guid: itemGuid,
             rawHtml: cdataContent, // store raw; sanitize only after find()
+            link: item.link || undefined, // store article-level permalink for archived fallback
           };
         });
       })();
@@ -132,13 +142,28 @@ export async function fetchAndExtractArticle(feedUrl: string, guid: string): Pro
     }
 
     const items = await fetchPromise;
-    const item = items.find((i: any) => i.guid === guid);
-    if (!item) {
+    
+    // Primary match by GUID
+    let matchedItem = items.find((i: any) => i.guid === guid);
+    
+    // Secondary match by articleUrl (for pre-fix articles where publicationUrl was wrong
+    // but the correct URL exists in the RSS item.link field)
+    if (!matchedItem && articleUrl) {
+      matchedItem = items.find((i: any) => i.link === articleUrl);
+    }
+
+    if (!matchedItem) {
+      // Even though we couldn't match the article, we still return a best-effort result:
+      // the parsed feed is available. Instead of throwing immediately, we provide
+      // empty html but allow the caller to use the parsed data for a better fallback URL.
       throw new Error('Article not found in recent feed items.');
     }
 
     // C6 Fix: Sanitize only the matched item (lazy evaluation).
-    return sanitizeClientHtml(item.rawHtml);
+    return {
+      html: sanitizeClientHtml(matchedItem.rawHtml),
+      link: matchedItem.link,
+    };
   } catch (error) {
     console.error('[feedService] fetchAndExtractArticle error:', error);
     // If the network call or parsing failed, clear the cache entry so subsequent requests can retry

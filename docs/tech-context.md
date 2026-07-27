@@ -66,7 +66,7 @@ From `firebase/functions/src/index.ts`:
 
 | Export | Type | Trigger | Description |
 |---|---|---|---|
-| `rssCollector` | Scheduled | Every 3 hours | Fetches 35 RSS feeds, batch-checks article existence, writes new articles to Firestore |
+| `rssCollector` | Scheduled | Every 3 hours | Fetches 42 RSS feeds, batch-checks article existence, writes new articles to Firestore |
 | `cronUpdateCandidatePool` | Scheduled | Every 6 hours | Builds `system/candidatePool_current` and `candidatePool_mixed` |
 | `cronDecayTrendingScores` | Scheduled | Every 24 hours | Applies `trendingScore × 0.9057` to all articles with score **> 1.0** (raised from 0.1 — C1 fix) |
 | `cronCleanupOldArticles` | Scheduled | Every 3 days | Deletes bottom 3% of articles older than 3 months by peakTrendingScore |
@@ -120,7 +120,7 @@ From `firebase/functions/src/index.ts`:
 | `userId` | `string` | Owning user (overwritten server-side from `request.auth.uid`; validated by security rule to match path userId — S5 + A4 fix) |
 | `eventType` | `BehaviorEventType` | One of 10 types (also validated by rules against enum — A4 fix) |
 | `timestamp` | `number` | Unix ms |
-| `articleCategory` | `string` | e.g. `"Technology & Innovation"` |
+| `articleCategory` | `string` | e.g. `"Politics"` |
 | `lengthStyle` | `string` | `'short'|'medium'|'long'` |
 | `sessionDuration` | `number` | Ms spent in article |
 | `scrollDepth` | `number` | Max scroll 0.0–1.0 |
@@ -331,11 +331,12 @@ Moved to `firebase/scripts/oneoff/` (D6 fix). See `firebase/scripts/oneoff/READM
 | Script (in `firebase/`) | What it does |
 |---|---|
 | `seedFirestore.js` | Fetches up to 10 articles per feed, writes to `articles` collection |
-| `seedFeeds.js` | Writes 35 `FeedSource` documents to `feeds` collection |
+| `seedFeeds.js` | Writes 42 `FeedSource` documents to `feeds` collection |
 | `cleanFeeds.js` | Deletes legacy hash-ID feed documents |
 
 | Script (in `firebase/scripts/oneoff/`) | What it does |
 |---|---|
+| `cleanupOldCategories.js` | **July 2026.** Deletes all articles with old category strings, strips deprecated weights from user profiles, cleans candidate pools, removes stale publishers. Run once after category migration deployment. |
 | `backfillRandomScore.js` | Assigns `random_score: Math.random()` to all existing articles that lack the field. Run once after deploying cost-optimisation changes. Safe to re-run. |
 | `cleanupArticles.js` | One-time cleanup of malformed/duplicate articles — **SPENT** |
 | `resetAndFetch.js` | ⚠️ Uses a truncated feed list (9 vs 35) — **update before any re-use** |

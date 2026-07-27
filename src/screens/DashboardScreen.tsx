@@ -201,8 +201,7 @@ export default function DashboardScreen() {
         topWeight = w; topCat = cat;
       }
     });
-    return topCat.charAt(0).toUpperCase() + topCat.slice(1)
-      .replace('Philosophy & Human Behavior', 'Philosophy & Human');
+    return topCat;
   };
 
   // Shuffle: discard the top 3 cards, accumulate their IDs into the session exclusion set,

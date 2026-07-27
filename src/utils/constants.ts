@@ -14,43 +14,61 @@ export const TEXT_2XL  = 28;  // Hero article headline
 
 import { CategoryDefinition } from '../types';
 
-// --- Category Definitions ---
+// --- Category Definitions (9 categories) ---
 export const CATEGORIES: CategoryDefinition[] = [
   {
-    id: 'Technology & Innovation',
-    name: 'Tech & Innovation',
-    emoji: '💻',
-    description: 'Software, startups, AI, and the future of computing',
-  },
-  {
-    id: 'Business & Finance',
-    name: 'Business & Finance',
-    emoji: '📈',
-    description: 'Markets, investing, economics, and business strategy',
-  },
-  {
-    id: 'Politics & Global Affairs',
-    name: 'Politics & Global Affairs',
+    id: 'Politics',
+    name: 'Politics',
     emoji: '🏛️',
-    description: 'Policy, governance, and current affairs analysis',
+    description: 'U.S. politics, world affairs, policy, and international relations',
   },
   {
-    id: 'Arts & Culture',
-    name: 'Arts & Culture',
-    emoji: '🎭',
-    description: 'Media, internet culture, arts, and social commentary',
+    id: 'Business',
+    name: 'Business',
+    emoji: '💼',
+    description: 'Business strategy, entrepreneurship, and economics',
   },
   {
-    id: 'Science & Health',
-    name: 'Science & Health',
+    id: 'Finance',
+    name: 'Finance',
+    emoji: '📈',
+    description: 'Investing, markets, crypto, and financial analysis',
+  },
+  {
+    id: 'Technology',
+    name: 'Technology',
+    emoji: '💻',
+    description: 'Software, AI, programming, and tech industry analysis',
+  },
+  {
+    id: 'Science',
+    name: 'Science',
     emoji: '🔬',
-    description: 'Public health, rationality, and scientific discovery',
+    description: 'Scientific discovery, climate, medicine, and rationality',
   },
   {
-    id: 'Philosophy & Human Behavior',
-    name: 'Philosophy & Human Behavior',
-    emoji: '🧠',
-    description: 'Deep thinking, psychology, and cognitive science',
+    id: 'History',
+    name: 'History',
+    emoji: '📜',
+    description: 'History, archaeology, and long-form historical essays',
+  },
+  {
+    id: 'Culture',
+    name: 'Culture',
+    emoji: '🎨',
+    description: 'Literature, philosophy, arts, religion, and design',
+  },
+  {
+    id: 'Lifestyle',
+    name: 'Lifestyle',
+    emoji: '🌿',
+    description: 'Health, wellness, food, travel, home, and fashion',
+  },
+  {
+    id: 'Entertainment',
+    name: 'Entertainment',
+    emoji: '🎬',
+    description: 'Film, TV, music, fiction, comics, and humor',
   },
 ];
 

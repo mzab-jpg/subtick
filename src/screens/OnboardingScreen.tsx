@@ -11,7 +11,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import {
@@ -22,26 +21,31 @@ import {
   TEXT_LG,
   TEXT_2XL,
 } from '../utils/constants';
-import { validateOnboardingSelection } from '../utils/validation';
 import {
-  Cpu,
-  TrendingUp,
-  Globe,
-  Palette,
-  FlaskConical,
-  Brain,
+  Landmark,          // Politics
+  Briefcase,         // Business
+  TrendingUp,        // Finance
+  Cpu,               // Technology
+  FlaskConical,      // Science
+  BookOpen,          // History
+  Palette,           // Culture
+  Leaf,              // Lifestyle
+  Clapperboard,      // Entertainment
 } from 'lucide-react-native';
 import { LucideIcon } from 'lucide-react-native';
 
 type ChipState = 'selected' | 'not_interested' | 'neutral';
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  'Technology & Innovation': Cpu,
-  'Business & Finance': TrendingUp,
-  'Politics & Global Affairs': Globe,
-  'Arts & Culture': Palette,
-  'Science & Health': FlaskConical,
-  'Philosophy & Human Behavior': Brain,
+  Politics: Landmark,
+  Business: Briefcase,
+  Finance: TrendingUp,
+  Technology: Cpu,
+  Science: FlaskConical,
+  History: BookOpen,
+  Culture: Palette,
+  Lifestyle: Leaf,
+  Entertainment: Clapperboard,
 };
 
 export default function OnboardingScreen({ navigation }: any) {
@@ -69,12 +73,9 @@ export default function OnboardingScreen({ navigation }: any) {
     .filter(([_, state]) => state === 'not_interested')
     .map(([id]) => id);
 
+  const hasMadeSelection = selectedIds.length > 0 || notInterestedIds.length > 0;
+
   const handleContinue = () => {
-    const validation = validateOnboardingSelection(selectedIds);
-    if (!validation.isValid) {
-      Alert.alert('Almost there!', validation.errorMessage);
-      return;
-    }
     navigation.replace('Dashboard', {
       onboardingSelections: {
         selectedCategoryIds: selectedIds,
@@ -82,8 +83,6 @@ export default function OnboardingScreen({ navigation }: any) {
       },
     });
   };
-
-  const progress = Math.min(selectedIds.length / 3, 1);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -94,24 +93,7 @@ export default function OnboardingScreen({ navigation }: any) {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>Welcome to Tangent</Text>
-        </View>
-
-        {/* Progress bar */}
-        <View style={styles.progressRow}>
-          <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
-            {selectedIds.length} / 3 minimum selected
-          </Text>
-          <View style={[styles.progressBarBg, { backgroundColor: colors.progressBarBackground }]}>
-            <View
-              style={[
-                styles.progressBarFill,
-                {
-                  backgroundColor: selectedIds.length >= 3 ? colors.success : colors.primary,
-                  width: `${Math.min(progress * 100, 100)}%`,
-                },
-              ]}
-            />
-          </View>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>Begin personalisation</Text>
         </View>
 
         {/* Category list — single grouped container matching CategoryPreferencesScreen */}
@@ -179,7 +161,7 @@ export default function OnboardingScreen({ navigation }: any) {
         <TouchableOpacity
           style={[
             styles.continueButton,
-            { backgroundColor: selectedIds.length >= 3 ? colors.primary : colors.surfaceSecondary },
+            { backgroundColor: hasMadeSelection ? colors.primary : colors.surfaceSecondary },
           ]}
           onPress={handleContinue}
           activeOpacity={0.8}
@@ -187,12 +169,10 @@ export default function OnboardingScreen({ navigation }: any) {
           <Text
             style={[
               styles.continueText,
-              { color: selectedIds.length >= 3 ? colors.background : colors.textMuted },
+              { color: hasMadeSelection ? colors.background : colors.textMuted },
             ]}
           >
-            {selectedIds.length >= 3
-              ? 'Start Reading →'
-              : `Select ${3 - selectedIds.length} more categor${3 - selectedIds.length === 1 ? 'y' : 'ies'}`}
+            {hasMadeSelection ? 'Start Reading →' : 'Skip selection'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -205,10 +185,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 28, paddingBottom: 48 },
   header: { marginTop: 64, marginBottom: 24 },
   title: { fontSize: TEXT_2XL, fontWeight: '800', letterSpacing: -0.5 },
-  progressRow: { marginBottom: 24 },
-  progressLabel: { fontSize: TEXT_SM, fontWeight: '600', marginBottom: 8 },
-  progressBarBg: { height: 4, borderRadius: 2, overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: 2 },
+  subtitle: { fontSize: TEXT_SM, marginTop: 4 },
 
   group: {
     borderWidth: 1,

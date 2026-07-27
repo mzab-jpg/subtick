@@ -107,6 +107,12 @@ export default function ReaderScreen() {
   // Swipe pause detection — if finger stops moving for 200ms, the swipe is cancelled
   const swipeLastMoveTimeRef = useRef<number>(0);
   const SWIPE_PAUSE_THRESHOLD_MS = 200;
+  // Stores the article-level permalink extracted from the RSS feed during
+  // fetchAndExtractArticle. Used as the correct archived fallback URL when
+  // the RSS fetch fails, fixing the bug where pre-fix articles (with incorrect
+  // publicationUrl set to the publisher homepage) would load the publisher's
+  // entire home feed instead of the specific article.
+  const rssResolvedLinkRef = useRef<string>('');
 
   // Reset webview initial load guard whenever article changes
   useEffect(() => {
@@ -131,6 +137,12 @@ export default function ReaderScreen() {
       setLoading(true);
       setFetchError(false);
       setWebViewLoadError(false);
+      // Reset the RSS-resolved link at the start of every article load.
+      // This prevents carry-over from a previous article (e.g. when navigating
+      // from a successfully-resolved article to an archived one, or when swiping
+      // to an article whose RSS fetch fails). Without this reset, archivedArticleUrl
+      // would incorrectly use the previous article's link.
+      rssResolvedLinkRef.current = '';
 
       if (isMockMode && mockArticle && id === mockArticle.id) {
         setArticle(mockArticle);
@@ -169,7 +181,15 @@ export default function ReaderScreen() {
             needsFallback = true;
           } else {
             try {
-              contentHtml = await fetchAndExtractArticle(data.feedUrl, data.guid);
+              const result = await fetchAndExtractArticle(data.feedUrl, data.guid, data.publicationUrl);
+              contentHtml = result.html;
+              // Capture the article-level permalink from the RSS feed item for correct
+              // archived fallback. This fixes the bug where pre-fix articles (with incorrect
+              // publicationUrl set to the publisher homepage) would load the publisher's
+              // entire home feed instead of the specific article.
+              if (result.link) {
+                rssResolvedLinkRef.current = result.link;
+              }
             } catch (rssError) {
               console.warn(`[Reader] RSS fetch failed for ${data.guid}, falling back to raw URI.`);
               needsFallback = true;
@@ -514,9 +534,14 @@ export default function ReaderScreen() {
     const safePublicationName = escapeHtml(article.publicationName);
     const safeAuthor = escapeHtml(article.author);
 
+    const publishDate = article.publishDate ? new Date(article.publishDate) : null;
+    const formattedDate = publishDate
+      ? `${String(publishDate.getDate()).padStart(2, '0')}/${String(publishDate.getMonth() + 1).padStart(2, '0')}`
+      : '';
+
     const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${safeTitle}</h1>`;
     const authorBlock = `<p style="color:${colors.textSecondary}; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid ${colors.border}; display:inline-block; padding-bottom:4px;">${safePublicationName}</p>`;
-    const metaBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:32px;">By ${safeAuthor} · ${readMinutes} min read</p>`;
+    const metaBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:32px;">${formattedDate} · ${readMinutes} min read</p>`;
 
     return `
       <!DOCTYPE html>
@@ -675,8 +700,13 @@ export default function ReaderScreen() {
   // Bug #1/#2 Fix: Use the article's own URL (publicationUrl = item.link from RSS) as the source.
   // For legacy articles where publicationUrl was incorrectly stored as the feed homepage,
   // fall back to the guid (which holds the article-level URL).
+  //
+  // Publication URL Fix: prefer the RSS-resolved article link (captured during a successful
+  // fetchAndExtractArticle call) over the Firestore-stored publicationUrl. This ensures that
+  // even articles ingested before the rssCollector fix (commit c1fe7e7) get the correct
+  // article-level URL rather than the publisher's homepage when falling back to archived mode.
   const archivedArticleUrl = article
-    ? (article.publicationUrl || article.guid || '')
+    ? (rssResolvedLinkRef.current || article.publicationUrl || article.guid || '')
     : '';
 
   // --- Prevent WebView Escape (Lock Navigation) ---

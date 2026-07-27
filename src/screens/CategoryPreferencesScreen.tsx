@@ -32,24 +32,30 @@ import {
 } from '../utils/constants';
 import {
   ChevronLeft,
-  Cpu,
-  TrendingUp,
-  Globe,
-  Palette,
-  FlaskConical,
-  Brain,
+  Landmark,          // Politics
+  Briefcase,         // Business
+  TrendingUp,        // Finance
+  Cpu,               // Technology
+  FlaskConical,      // Science
+  BookOpen,          // History
+  Palette,           // Culture
+  Leaf,              // Lifestyle
+  Clapperboard,      // Entertainment
 } from 'lucide-react-native';
 import { LucideIcon } from 'lucide-react-native';
 
 type CategoryState = 'selected' | 'not_interested' | 'neutral';
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  'Technology & Innovation': Cpu,
-  'Business & Finance': TrendingUp,
-  'Politics & Global Affairs': Globe,
-  'Arts & Culture': Palette,
-  'Science & Health': FlaskConical,
-  'Philosophy & Human Behavior': Brain,
+  Politics: Landmark,
+  Business: Briefcase,
+  Finance: TrendingUp,
+  Technology: Cpu,
+  Science: FlaskConical,
+  History: BookOpen,
+  Culture: Palette,
+  Lifestyle: Leaf,
+  Entertainment: Clapperboard,
 };
 
 export default function CategoryPreferencesScreen() {

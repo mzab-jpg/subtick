@@ -81,6 +81,13 @@
 - ✅ **Theme system** — Light/dark/system. Pre-compiled WebView CSS. Persisted to AsyncStorage + Firestore.
 - ✅ **CategoryPreferences, DashboardStats, Feedback, FeedRequest** sub-screens all implemented.
 
+### Category Reorganisation
+- ✅ **6 legacy categories → 9 new categories** — "Technology & Innovation", "Business & Finance", "Politics & Global Affairs", "Arts & Culture", "Science & Health", "Philosophy & Human Behavior" replaced by: Politics, Business, Finance, Technology, Science, History, Culture, Lifestyle, Entertainment.
+- ✅ **42 verified full-RSS feeds** — Each feed was validated via stealth curl (bypassing Cloudflare) comparing free-article RSS body against the actual webpage. Feeds with paywalled top articles are skipped in favour of the next free article. Only feeds that provide ≥70% full-article text in RSS are included.
+- ✅ **Icon maps updated** — OnboardingScreen, CategoryPreferencesScreen, DeveloperOptionsScreen, and DashboardScreen all use new 9-category icon mappings.
+- ✅ **Cleanup script created** — `firebase/scripts/oneoff/cleanupOldCategories.js` deletes old-category articles, strips deprecated weights from user profiles, cleans candidate pools, and removes stale publisher entries.
+- ✅ **Backward data cleanup** — Old category strings purged from all src/ files. Firestore cleanup must be run manually (node scripts/oneoff/cleanupOldCategories.js + node seedFeeds.js).
+
 ### Build & Foundation
 - ✅ **babel.config.js and metro.config.js** — Standard Expo SDK 57 build configuration files present.
 - ✅ **Functions tsconfig** — No longer incorrectly extends `expo/tsconfig.base`; standalone Node.js config.

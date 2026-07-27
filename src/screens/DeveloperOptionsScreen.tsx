@@ -49,7 +49,7 @@ export default function DeveloperOptionsScreen() {
       publicationUrl: url,
       feedUrl: '',
       guid: url,
-      category: 'Technology & Innovation',
+      category: 'Technology',
       lengthStyle: 'medium',
       publishDate: Date.now(),
       cacheTimestamp: Date.now(),
