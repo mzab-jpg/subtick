@@ -15,6 +15,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { UserProfile } from '../types';
 import { auth } from '../services/firebase';
@@ -46,6 +47,7 @@ import {
 
 export default function AccountScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -196,7 +198,7 @@ export default function AccountScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
@@ -313,7 +315,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 52,
     paddingBottom: 20,
     borderBottomWidth: 1,
     marginBottom: 20,

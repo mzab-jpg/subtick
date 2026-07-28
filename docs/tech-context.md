@@ -290,6 +290,7 @@ From `firebase/firestore.rules` (updated with S2–S5 fixes):
 ### EAS Build (`eas.json`)
 | Profile | Platform | Output |
 |---|---|---|
+| `development` | Android | APK (`developmentClient: true, distribution: internal`) |
 | `preview` | Android | APK (`buildType: "apk"`) |
 | `production` | All | Default (AAB for Android, IPA for iOS) |
 

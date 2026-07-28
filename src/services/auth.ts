@@ -11,6 +11,7 @@ import {
   linkWithCredential,
   GoogleAuthProvider,
   unlink,
+  deleteUser,
   User,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -133,12 +134,30 @@ export async function linkGoogleAccount(): Promise<User> {
     } catch (linkError: any) {
       if (linkError.code === 'auth/credential-already-in-use') {
         console.log('[Auth] Credential already in use — signing in as existing Google-linked user');
+        // Save the orphan anonymous UID before signing out so we can clean it up
+        const oldAnonymousUid = auth.currentUser?.uid;
         // Sign out of current anonymous, sign in as the Google-linked user
         await signOut(auth);
         result = await signInWithCredential(auth, credential);
         console.log('[Auth] signInWithCredential succeeded. uid:', result.user.uid);
         // Ensure Firestore profile exists for the recovered account (preserves all data)
         await ensureUserProfile(result.user);
+        // Clean up the orphan anonymous account — delete the now-stale
+        // Firestore profile that was created by ensureUserProfile for the
+        // anonymous session. The anonymous auth account will be auto-cleaned
+        // by Firebase after 30 days of inactivity.
+        if (oldAnonymousUid && oldAnonymousUid !== result.user.uid) {
+          try {
+            const deleteOrphanFn = httpsCallable<{ orphanUid: string }, { success: boolean }>(
+              functions,
+              'deleteOrphanProfile'
+            );
+            await deleteOrphanFn({ orphanUid: oldAnonymousUid });
+            console.log('[Auth] Deleted orphan Firestore profile:', oldAnonymousUid);
+          } catch (cleanupErr) {
+            console.warn('[Auth] Could not delete orphan Firestore profile:', cleanupErr);
+          }
+        }
       } else {
         throw linkError;
       }
@@ -197,9 +216,15 @@ export async function unlinkGoogleAccount(): Promise<void> {
 
 // --- Sign Out ---
 export async function signOutUser(): Promise<void> {
+  // Wipe all local AsyncStorage data (seen articles, saved HTML, behavior queue)
+  // before signing out so stale data from the old UID doesn't persist.
+  await clearAllLocalData();
   await signOut(auth);
   // After sign-out, immediately sign in anonymously again
-  await signInAnonymouslyIfNeeded();
+  const newUser = await signInAnonymouslyIfNeeded();
+  // Create a fresh Firestore profile for the new anonymous UID,
+  // ensuring Dashboard has a valid profile to render immediately.
+  await ensureUserProfile(newUser);
 }
 
 // --- Get Current User ---

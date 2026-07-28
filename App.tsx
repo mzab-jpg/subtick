@@ -15,6 +15,7 @@ import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/aut
 import { startOfflineManager, stopOfflineManager } from './src/services/offlineManager';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { auth } from './src/services/firebase';
 
 // Unique key to remount the entire navigation tree when the auth
@@ -144,9 +145,11 @@ function AppContent() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

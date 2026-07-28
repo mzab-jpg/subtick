@@ -35,6 +35,7 @@ import { Linking } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
 import { X, Bookmark, Compass, AlertCircle, Heart } from 'lucide-react-native';
 import { TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_2XL } from '../utils/constants';
@@ -45,6 +46,7 @@ const SWIPE_THRESHOLD = 40; // px — minimum horizontal swipe to trigger action
 
 export default function ReaderScreen() {
   const { colors, webViewCSS, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const route = useRoute<RouteProp<RootStackParamList, 'Reader'>>();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
@@ -789,7 +791,7 @@ export default function ReaderScreen() {
         <BlurView
           intensity={isDark ? 40 : 80}
           tint={isDark ? 'dark' : 'light'}
-          style={styles.hudBlur}
+          style={[styles.hudBlur, { paddingTop: insets.top + 8 }]}
         >
           <View style={styles.hudTopRow}>
             {/* Back/Close Button */}
@@ -851,19 +853,16 @@ export default function ReaderScreen() {
       </Animated.View>
 
       {/* Progress Bar at Bottom */}
-      <View style={styles.bottomProgressBarContainer}>
+      <View style={[styles.bottomProgressBarContainer, { bottom: insets.bottom }]}>
         <Animated.View
           style={[
             styles.bottomProgressBarFill,
             {
               backgroundColor: colors.accent,
-              shadowColor: colors.accent,
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 0.5,
-              shadowRadius: 8,
               width: scrollProgress.interpolate({
                 inputRange: [0, 1],
-                outputRange: ['0%', '100%'],
+                outputRange: [0, SCREEN_WIDTH],
+                extrapolate: 'clamp',
               }),
             },
           ]}
@@ -1062,16 +1061,14 @@ const styles = StyleSheet.create({
     height: 3,
     width: '100%',
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     zIndex: 100,
+    borderRadius: 3,
     backgroundColor: 'transparent',
   },
   bottomProgressBarFill: {
     height: '100%',
-    borderTopRightRadius: 3,
-    borderBottomRightRadius: 3,
   },
   edgeHintLeft: {
     position: 'absolute',

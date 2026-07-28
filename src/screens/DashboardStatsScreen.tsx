@@ -15,6 +15,7 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { UserProfile } from '../types';
 import { auth, db } from '../services/firebase';
@@ -43,6 +44,7 @@ const getMetricIcon = (id: string, color: string) => {
 
 export default function DashboardStatsScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -220,7 +222,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 64,
     paddingBottom: 20,
     paddingHorizontal: 24,
     borderBottomWidth: 1,

@@ -95,13 +95,17 @@
 - ✅ **Firebase config env-var support** — `firebase.ts` reads config from `EXPO_PUBLIC_FIREBASE_*` with hardcoded production values as fallback.
 
 ### Account Management
-- ✅ **Native Google Sign-In (code complete)** — `auth.ts` uses `@react-native-google-signin/google-signin` with `GoogleSignin.signIn()` + `linkWithCredential()`. Preserves anonymous UID so all data survives account creation. Stores `userEmail` on the profile. UI in Settings → Account → Link Google Account. Requires OAuth client IDs configured before use.
+- ✅ **Native Google Sign-In** — Fully tested and working on Android dev client. `auth.ts` uses `@react-native-google-signin/google-signin` with `GoogleSignin.signIn()` + `linkWithCredential()`. Preserves anonymous UID so all data survives account creation. Stores `userEmail` on the profile. Debug SHA-1 fingerprint registered in `google-services.json` alongside release SHA-1. Web Client ID configured in `App.tsx` (hardcoded fallback + env var `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID`).
+- ✅ **Google Sign-In in Expo Go** — Static `GoogleSignin` import replaced with lazy `require()` inside try/catch in `App.tsx`. Expo Go will log a message and skip configuration — no crash. Full Google Sign-In requires a dev client build (install `expo-dev-client`, build debug APK once, then `npx expo start --dev-client`).
 - ✅ **Cross-device seen article dedup** — `markArticleSeen()` writes article ID to both AsyncStorage and Firestore profile `seenArticleIds` array via `arrayUnion` (atomic, idempotent, ~$0.05/month per 1K users). `getSeenArticleIds()` merges local + server IDs on startup so seen history follows the user across devices.
 - ✅ **Sign Out** — `signOutUser()` calls Firebase `signOut()` then immediately re-signs in anonymously. UI in Settings → Account → Sign Out with confirmation Alert.
 - ✅ **Reset Account** — `resetAccount` Cloud Function (Admin SDK): deletes all `behavior_events` and `saved_articles` subcollections, resets profile stats and category weights to defaults, sets `isOnboarded: false` (forces re-onboarding). Client calls function then clears all `@subtick_*` AsyncStorage keys.
 - ✅ **Delete Account** — `deleteAccount` Cloud Function (Admin SDK): requires `confirmation: 'DELETE'`, deletes subcollections + profile document + Firebase Auth account (`admin.auth().deleteUser(uid)`). Client clears AsyncStorage and re-signs in anonymously after deletion.
 - ✅ **`isActive` soft-delete field** — `UserProfile` now has `isActive: boolean` (default `true`). Can be set to `false` in Firestore console to administratively disable a user without deleting data.
 - ✅ **Firestore create rule corrected** — `create` rule now whitelists all 18 fields written by `ensureUserProfile()`, including `categoryWeights`, `linkedGoogleAccount`, stats fields. The previous 11-field whitelist would have silently rejected new user profile creation.
+- ✅ **Credential recovery after sign-out** — `linkGoogleAccount()` catches `auth/credential-already-in-use` and falls back to `signInWithCredential()`, recovering the original Google-linked account with all data intact. Calls `ensureUserProfile()` after recovery to sync Firestore profile.
+- ✅ **Mid-session UID change remount** — `App.tsx` uses an `onAuthStateChanged` listener to detect UID changes (e.g. Google account recovery) mid-session. When detected, bumps a React `key` on `RootNavigator`, forcing React to destroy and recreate the entire navigation tree with fresh Firestore listeners attached to the correct UID.
+- ✅ **Account sub-screen** — `AccountScreen.tsx` shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons (Sign Out, Reset, Delete). Settings now has a single "Account" navigation row (like Category Preferences).
 
 ---
 

@@ -14,10 +14,12 @@
 | Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` (initial load only — updates pushed via `injectJavaScript`) | Recomputed on theme change, never persisted |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Focus listener no longer triggers a full refetch on every navigation back — only when all articles have been read (A5 fix). Reader queue is shuffled on tap so untapped cards are scattered randomly (A5 fix).
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Focus listener no longer triggers a full refetch on every navigation back — only when all articles have been read (A5 fix). Reader queue is shuffled on tap so untapped cards are scattered randomly (A5 fix). `getTopCategory()` uses `userProfile.categoryWeights || {}` to guard against missing schema fields.
 - `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`
 - `OnboardingScreen.tsx`: `chipStates: Record<string, 'selected'|'not_interested'|'neutral'>` — pure local, never synced until Continue is pressed
-- `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes
+- `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes. Account section now delegates to `AccountScreen.tsx` sub-screen (single navigation row with email/Anonymous subtitle).
+- `AccountScreen.tsx`: `profile: UserProfile | null` — fetched on mount. Shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons.
+- `CategoryPreferencesScreen.tsx`: `profile: UserProfile | null`, `selectedIds`, `notInterestedIds`. `handleTap` uses `...(profile.categoryWeights || {})` for null-safety.
 
 ### On-Device State (AsyncStorage — primary store)
 **Note:** `@subtick_seen_articles` IDs are now also written to Firestore `users/{uid}.seenArticleIds` (via `arrayUnion`) for cross-device dedup. AsyncStorage remains the primary/instant store; Firestore is the sync layer.

@@ -108,3 +108,38 @@ export const deleteAccount = onCall(async (request) => {
 
   return { success: true, message: 'Account has been permanently deleted.' };
 });
+
+// ============================================================
+// deleteOrphanProfile — Deletes an orphan anonymous Firestore
+// profile after the user signs in with a Google-linked account.
+// Security rules forbid client-side deletes, so we use the
+// Admin SDK to bypass rules and clean up stale documents.
+// ============================================================
+export const deleteOrphanProfile = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+
+  const { orphanUid } = request.data;
+  if (!orphanUid || typeof orphanUid !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing or invalid orphanUid.');
+  }
+
+  // Safety: never allow deleting the caller's own profile
+  if (orphanUid === request.auth.uid) {
+    throw new HttpsError('invalid-argument', 'Cannot delete your own profile.');
+  }
+
+  try {
+    await db.doc(`users/${orphanUid}`).delete();
+    console.log(`[deleteOrphanProfile] Deleted orphan profile: ${orphanUid}`);
+    return { success: true, deleted: orphanUid };
+  } catch (error: any) {
+    console.error(`[deleteOrphanProfile] Failed to delete ${orphanUid}:`, error);
+    // If the doc doesn't exist, that's fine — treat as success
+    if (error.code === 5) {
+      return { success: true, deleted: orphanUid, alreadyGone: true };
+    }
+    throw new HttpsError('internal', 'Failed to delete orphan profile.');
+  }
+});

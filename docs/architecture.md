@@ -45,7 +45,8 @@
 ├── tsconfig.json                   # Client TypeScript config
 ├── babel.config.js                 # Babel config: babel-preset-expo (F2 fix — was missing)
 ├── metro.config.js                 # Metro bundler config: expo/metro-config (F2 fix — was missing)
-├── .env.example                    # Documents EXPO_PUBLIC_USE_EMULATORS and EXPO_PUBLIC_FIREBASE_* vars (F4 fix)
+├── .env.example                    # Documents EXPO_PUBLIC_USE_EMULATORS, EXPO_PUBLIC_FIREBASE_*, and
+│                                   #   EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID vars (F4 fix)
 ├── AGENTS.md                       # Developer instruction file
 │
 ├── assets/                         # Static app icons and splash screens
