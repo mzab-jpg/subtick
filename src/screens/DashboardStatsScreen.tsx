@@ -77,7 +77,7 @@ export default function DashboardStatsScreen() {
       case 'topCategory': {
         let topCat = '—';
         let topWeight = 0;
-        Object.entries(profile.categoryWeights).forEach(([cat, w]) => {
+        Object.entries(profile.categoryWeights || {}).forEach(([cat, w]) => {
           if (!cat.includes('::') && !cat.startsWith('pub::') && w > topWeight) {
             topWeight = w;
             topCat = cat;

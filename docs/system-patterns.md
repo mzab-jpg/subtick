@@ -19,10 +19,12 @@
 - `OnboardingScreen.tsx`: `chipStates: Record<string, 'selected'|'not_interested'|'neutral'>` — pure local, never synced until Continue is pressed
 - `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes
 
-### On-Device-Only State (AsyncStorage — never sent to server)
+### On-Device State (AsyncStorage — primary store)
+**Note:** `@subtick_seen_articles` IDs are now also written to Firestore `users/{uid}.seenArticleIds` (via `arrayUnion`) for cross-device dedup. AsyncStorage remains the primary/instant store; Firestore is the sync layer.
+
 | Key | Content | Max Size |
 |---|---|---|
-| `@subtick_seen_articles` | `string[]` of article IDs | 1000 entries (oldest dropped) |
+| `@subtick_seen_articles` | `string[]` of article IDs (also synced to Firestore `seenArticleIds`) | 1000 entries (oldest dropped) |
 | `@subtick_seen_articles_meta` | `Record<string, {id,title,publicationName,category,estimatedReadMinutes}>` | Unbounded |
 | `@subtick_saved_articles` | `string[]` of saved article IDs | Unbounded |
 | `@subtick_saved_articles_meta` | `Record<string, ArticleMeta>` | Unbounded |

@@ -32,6 +32,14 @@
         "projectId": "4bc8bbff-9b89-4baa-8353-7bf95bd36693"
       }
     },
+    "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.YOUR_IOS_CLIENT_ID"
+        }
+      ]
+    ],
     "owner": "tangent_mb123"
   }
 }

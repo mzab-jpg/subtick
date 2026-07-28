@@ -6,7 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { functions, db, auth } from './firebase';
 import { httpsCallable } from 'firebase/functions';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { Article, RankedFeedResult } from '../types';
 import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX } from '../utils/constants';
 import { XMLParser } from 'fast-xml-parser';
@@ -266,14 +266,42 @@ export async function getArticleById(articleId: string): Promise<Article | null>
 }
 
 /**
- * Get locally stored seen article IDs from AsyncStorage.
- * Uses the serialization queue to avoid reading mid-write.
+ * Get seen article IDs, merging local AsyncStorage with Firestore profile.
+ * This enables cross-device dedup: a user who links Google on a new device
+ * will see their full seen history from the server.
+ * Local IDs take precedence (faster, always available offline).
+ * Firestore IDs are merged in for any the local device hasn't seen yet.
  */
 export async function getSeenArticleIds(): Promise<string[]> {
   return enqueueStorageOperation(async () => {
     try {
+      // 1. Read local AsyncStorage (instant, works offline)
       const raw = await AsyncStorage.getItem(SEEN_ARTICLES_KEY);
-      return raw ? JSON.parse(raw) : [];
+      const localIds: string[] = raw ? JSON.parse(raw) : [];
+
+      // 2. Merge with Firestore profile seenArticleIds (cross-device sync)
+      try {
+        const userId = auth.currentUser?.uid;
+        if (userId) {
+          const userRef = doc(db, 'users', userId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const serverIds: string[] = userSnap.data()?.seenArticleIds || [];
+            if (serverIds.length > 0) {
+              // Merge: combine local + server, deduplicate, cap at 1000
+              const merged = Array.from(new Set([...localIds, ...serverIds]));
+              if (merged.length > 1000) {
+                return merged.slice(merged.length - 1000);
+              }
+              return merged;
+            }
+          }
+        }
+      } catch {
+        // Firestore read is best-effort — fall back to local only
+      }
+
+      return localIds;
     } catch {
       return [];
     }
@@ -307,6 +335,24 @@ export async function markArticleSeen(articleId: string, article?: Article): Pro
           seen.splice(0, seen.length - 1000);
         }
         await AsyncStorage.setItem(SEEN_ARTICLES_KEY, JSON.stringify(seen));
+
+        // Firestore sync: write article ID to the user profile's seenArticleIds array
+        // This enables cross-device dedup when a user links their Google account.
+        // Uses arrayUnion which is atomic and idempotent (no duplicates).
+        // Fire-and-forget — never blocks the UI.
+        try {
+          const userId = auth.currentUser?.uid;
+          if (userId) {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+              seenArticleIds: arrayUnion(articleId),
+              lastUpdated: Date.now(),
+            });
+          }
+        } catch (firestoreErr) {
+          // Firestore write is best-effort — AsyncStorage is the primary store
+          console.warn('[FeedService] Failed to sync seen article to Firestore:', firestoreErr);
+        }
       }
 
       // Also cache metadata so History can render without Firestore

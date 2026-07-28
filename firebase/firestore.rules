@@ -13,10 +13,20 @@ service cloud.firestore {
           'themePreference',
           'dashboardMetricIds',
           'isOnboarded',
+          'isActive',
           'selectedCategoryIds',
           'notInterestedCategoryIds',
           'includeArchivedArticles',
-          'lastUpdated'
+          'seenArticleIds',
+          'userEmail',
+          'lastUpdated',
+          'categoryWeights',
+          'linkedGoogleAccount',
+          'totalArticlesRead',
+          'weeklyReadCount',
+          'currentStreakDays',
+          'lastReadDate',
+          'averageWpm'
         ]);
 
       // S2 Fix: Restrict client updates to only the fields the client legitimately needs
@@ -29,9 +39,12 @@ service cloud.firestore {
           'themePreference',
           'dashboardMetricIds',
           'isOnboarded',
+          'isActive',
           'selectedCategoryIds',
           'notInterestedCategoryIds',
           'includeArchivedArticles',
+          'seenArticleIds',
+          'userEmail',
           'lastUpdated'
         ]);
 

@@ -30,6 +30,7 @@
 | `react-native-screens` | `4.25.2` | Native screen primitives |
 | `react-native-svg` | `15.15.4` | SVG rendering (required by lucide) |
 | `lucide-react-native` | `^1.25.0` | Icon set |
+| `@react-native-google-signin/google-signin` | `^16.x` | Native Google Sign-In for iOS/Android (used by `linkGoogleAccount()`) |
 
 **Removed (D7 fix):** `rss-parser` was client-side dead weight — RSS parsing on the client uses `fast-xml-parser`. Removed from `package.json`.
 
@@ -72,6 +73,8 @@ From `firebase/functions/src/index.ts`:
 | `cronCleanupOldArticles` | Scheduled | Every 3 days | Deletes bottom 3% of articles older than 3 months by peakTrendingScore |
 | `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user |
 | `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). |
+| `resetAccount` | HTTPS Callable | On demand | Deletes behavior_events + saved_articles subcollections; resets profile stats, weights, and category selections to defaults; sets `isOnboarded: false` |
+| `deleteAccount` | HTTPS Callable | On demand | Requires `confirmation: 'DELETE'`; deletes all subcollections + profile document + Firebase Auth account. Permanent. |
 
 ---
 
@@ -86,6 +89,7 @@ From `firebase/functions/src/index.ts`:
 |---|---|---|
 | `userId` | `string` | Matches document ID |
 | `isOnboarded` | `boolean` | False until `completeOnboarding()` called |
+| `isActive` | `boolean?` | Defaults `true`; soft-delete flag — set to `false` in Firestore console to disable without deleting data |
 | `selectedCategoryIds` | `string[]` | Categories user selected as interested |
 | `notInterestedCategoryIds` | `string[]` | Categories user marked not interested |
 | `categoryWeights` | `Record<string, number>` | Learned per-category weights [0.1, 5.0] — server-only write |
@@ -93,7 +97,9 @@ From `firebase/functions/src/index.ts`:
 | `publisherWeights` | `Record<string, number>` | Learned per-publisher weights — server-only write |
 | `weightUpdatedAt` | `number?` | Unix ms watermark — last event timestamp processed by `updateWeights()` |
 | `themePreference` | `'system'|'light'|'dark'` | User theme choice |
-| `linkedGoogleAccount` | `boolean` | Google provider linked (always false on mobile currently) |
+| `linkedGoogleAccount` | `boolean` | True after `linkGoogleAccount()` completes successfully |
+| `userEmail` | `string?` | Email from linked Google account; written by `linkGoogleAccount()` |
+| `seenArticleIds` | `string[]?` | Cross-device seen article dedup array (capped at 1000); written via `arrayUnion` in `markArticleSeen()` |
 | `totalArticlesRead` | `number` | Incremented by `weightUpdater.ts` on qualifying reads — server-only write |
 | `weeklyReadCount` | `number` | read_thorough/skim events in last 7 days — server-only write |
 | `currentStreakDays` | `number` | Consecutive days with at least one read — server-only write |
@@ -106,7 +112,9 @@ From `firebase/functions/src/index.ts`:
 
 **Note:** `totalArticlesSaved` and `totalArticlesLiked` fields have been removed — they were initialized to 0 but never incremented anywhere in the codebase (A2 fix).
 
-**Security:** Owner-only read. Client update restricted to 7 whitelisted fields (S2 fix). Delete disabled.
+**Client-writable fields (create):** All 18 initial profile fields written by `ensureUserProfile()`.
+**Client-writable fields (update, S2 fix):** `themePreference`, `dashboardMetricIds`, `isOnboarded`, `isActive`, `selectedCategoryIds`, `notInterestedCategoryIds`, `includeArchivedArticles`, `seenArticleIds`, `userEmail`, `lastUpdated`. Stats and weights are server-only.
+**Security:** Owner-only read. Delete disabled.
 
 ---
 
@@ -267,7 +275,7 @@ From `firebase/firestore.rules` (updated with S2–S5 fixes):
 
 | Collection | Read | Write | Notes |
 |---|---|---|---|
-| `users/{userId}` | Owner only | Owner only — 7 whitelisted fields (update), 8 whitelisted fields (create) (S2 + A4 fix) | Delete disabled. Create rule tightened to match update rule. |
+| `users/{userId}` | Owner only | Owner only — 10 whitelisted fields (update: themePreference, dashboardMetricIds, isOnboarded, isActive, selectedCategoryIds, notInterestedCategoryIds, includeArchivedArticles, seenArticleIds, userEmail, lastUpdated); 18 fields (create: all initial profile fields) | Delete disabled. |
 | `users/{userId}/behavior_events` | Owner only | Create only (owner + body userId must match + eventType validated + field whitelist + 2KB cap — S5 + A4 fix) | Update/delete disabled |
 | `users/{userId}/saved_articles` | Owner only | Create/delete (owner) | Update disabled; persists even if global article is deleted |
 | `articles/{articleId}` | Any authenticated user | Never (Admin SDK only) | Client cannot update articles |

@@ -120,7 +120,7 @@ export default function CategoryPreferencesScreen() {
       : state === 'selected' ? 'not_interested'
       : 'neutral';
 
-    const newWeights = { ...profile.categoryWeights };
+    const newWeights = { ...(profile.categoryWeights || {}) };
     newWeights[categoryId] =
       nextState === 'selected' ? DEFAULT_SELECTED_WEIGHT
       : nextState === 'not_interested' ? DEFAULT_NOT_INTERESTED_WEIGHT

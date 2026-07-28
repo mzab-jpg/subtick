@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   Switch,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
@@ -20,14 +19,8 @@ import { useNavigation } from '@react-navigation/native';
 import { UserProfile, ThemeMode } from '../types';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { fetchUserProfile } from '../services/auth';
 import {
-  fetchUserProfile,
-  linkGoogleAccount,
-  unlinkGoogleAccount,
-} from '../services/auth';
-import {
-  CATEGORIES,
-  DASHBOARD_METRIC_DEFS,
   TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
@@ -36,7 +29,6 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  Link,
   Smartphone,
   Sun,
   Moon,
@@ -47,6 +39,7 @@ import {
   TerminalSquare,
   History,
   Bookmark,
+  UserCircle,
 } from 'lucide-react-native';
 
 // ── Helper: count selected categories ───────────────────────
@@ -102,34 +95,6 @@ export default function SettingsScreen() {
     }
   };
 
-  // --- Google Account Linking ---
-  const handleGoogleLink = async () => {
-    try {
-      if (profile?.linkedGoogleAccount) {
-        await unlinkGoogleAccount();
-        Alert.alert('Unlinked', 'Google account has been unlinked.');
-        await loadProfile();
-      } else {
-        await linkGoogleAccount();
-        Alert.alert('Linked', 'Google account linked successfully!');
-        await loadProfile();
-      }
-    } catch (error: any) {
-      const isUnsupportedEnv =
-        error.code === 'auth/operation-not-supported-in-this-environment' ||
-        error.message?.includes('not-supported');
-
-      if (isUnsupportedEnv) {
-        Alert.alert(
-          'Not Available on Mobile',
-          'Google account linking requires a web browser sign-in flow that is not yet supported in the mobile app. This feature is coming soon.'
-        );
-      } else {
-        Alert.alert('Error', error.message || 'Something went wrong. Please try again.');
-      }
-    }
-  };
-
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -140,6 +105,7 @@ export default function SettingsScreen() {
 
   const selectedCategoryCount = getSelectedCategoryCount(profile);
   const activeMetricCount = getActiveMetricCount(profile);
+  const isLinked = !!profile?.linkedGoogleAccount;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -162,18 +128,21 @@ export default function SettingsScreen() {
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <TouchableOpacity
           style={styles.row}
-          onPress={handleGoogleLink}
+          onPress={() => navigation.navigate('Account')}
           activeOpacity={0.7}
         >
           <View style={styles.rowLeft}>
             <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
-              <Link size={16} color={colors.text} />
+              <UserCircle size={16} color={colors.text} />
             </View>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Link Google Account</Text>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Account</Text>
           </View>
-          <Text style={[styles.rowValue, { color: colors.textMuted }]}>
-            {profile?.linkedGoogleAccount ? 'Connected' : 'Not Connected'}
-          </Text>
+          <View style={styles.rowRight}>
+            <Text style={[styles.rowValue, { color: colors.textMuted }]}>
+              {isLinked ? profile?.userEmail || 'Connected' : 'Anonymous'}
+            </Text>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </View>
         </TouchableOpacity>
       </View>
 

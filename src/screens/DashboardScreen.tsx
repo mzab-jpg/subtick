@@ -194,7 +194,7 @@ export default function DashboardScreen() {
 
   const getTopCategory = (): string => {
     if (!userProfile) return '—';
-    const weights = userProfile.categoryWeights;
+    const weights = userProfile.categoryWeights || {};
     let topCat = '—'; let topWeight = 0;
     Object.entries(weights).forEach(([cat, w]) => {
       if (!cat.includes('::') && !cat.startsWith('pub::') && w > topWeight) {

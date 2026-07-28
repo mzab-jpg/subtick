@@ -3,28 +3,71 @@
 // Initializes auth, user profile, theme, and navigation.
 // ============================================================
 
+// expo-dev-client must be imported first — enables the dev client launcher
+// when running via `npx expo start --dev-client`
+import 'expo-dev-client';
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';
 import { startOfflineManager, stopOfflineManager } from './src/services/offlineManager';
-import { User } from 'firebase/auth';
+import { User, onAuthStateChanged } from 'firebase/auth';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { auth } from './src/services/firebase';
+
+// Unique key to remount the entire navigation tree when the auth
+// user changes mid-session (e.g. Google account recovery swaps
+// the anonymous UID for a Google-linked UID). This ensures all
+// Firestore listeners re-attach with the correct UID.
+let navKey = 0;
+let lastUserId = '';
 
 function AppContent() {
   const { colors } = useTheme();
   const [initializing, setInitializing] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  // Used as React key on RootNavigator; changing this destroys
+  // and recreates the entire navigation tree with fresh subscriptions.
+  const [navigationKey, setNavigationKey] = useState(0);
 
   useEffect(() => {
     initializeApp();
+
+    // Listen for auth state changes. If the UID changes mid-session
+    // (e.g. Google account recovery), bump the navigation key to force
+    // React to destroy/recreate the entire navigation tree with fresh
+    // Firestore listeners attached to the correct UID.
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && lastUserId && user.uid !== lastUserId) {
+        console.log('[SubTick] UID changed mid-session, remounting navigation');
+        navKey += 1;
+        setNavigationKey(navKey);
+        lastUserId = user.uid;
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const initializeApp = async () => {
     try {
       setInitializing(true);
       setAuthError(null);
+
+      // 0. Configure Google Sign-In (needed for Settings → Link Google Account)
+      // Using require() instead of a static import so the app doesn't crash in
+      // Expo Go (which lacks the native RNGoogleSignin module). The dev client
+      // build includes the native module and will configure it normally.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+        GoogleSignin.configure({
+          webClientId: process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID || '859600771798-bco64ngenl3l5b349mcgr29pp868chjn.apps.googleusercontent.com',
+        });
+      } catch {
+        console.log('[SubTick] Google Sign-In native module not available (Expo Go — use dev client to test Google Sign-In)');
+      }
 
       // 1. Sign in anonymously (or re-use existing session)
       const user: User = await signInAnonymouslyIfNeeded();
@@ -33,6 +76,15 @@ function AppContent() {
       await ensureUserProfile(user);
 
       console.log('[SubTick] Auth initialized, userId:', user.uid);
+
+      // If the UID changed mid-session (e.g. Google account recovery),
+      // bump the navigation key to force a clean remount of all screens.
+      if (lastUserId && lastUserId !== user.uid) {
+        console.log('[SubTick] UID changed, remounting navigation');
+        navKey += 1;
+        setNavigationKey(navKey);
+      }
+      lastUserId = user.uid;
 
       // Start background sync for behavior events
       startOfflineManager();
@@ -84,8 +136,9 @@ function AppContent() {
     );
   }
 
-  // Ready — render navigation (RootNavigator handles Onboarding → Dashboard routing internally)
-  return <RootNavigator />;
+  // Ready — render navigation with a key that changes on UID switch,
+  // forcing clean remount of all screens with fresh Firestore listeners.
+  return <RootNavigator key={navigationKey} />;
 }
 
 export default function App() {

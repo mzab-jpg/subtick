@@ -20,6 +20,7 @@ import DashboardStatsScreen from '../screens/DashboardStatsScreen';
 import DeveloperOptionsScreen from '../screens/DeveloperOptionsScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
 import FeedRequestScreen from '../screens/FeedRequestScreen';
+import AccountScreen from '../screens/AccountScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -131,6 +132,11 @@ export default function RootNavigator() {
             gestureEnabled: true,
             gestureDirection: 'vertical',
           }}
+        />
+        <Stack.Screen
+          name="Account"
+          component={AccountScreen}
+          options={{ gestureEnabled: true }}
         />
       </Stack.Navigator>
     </NavigationContainer>

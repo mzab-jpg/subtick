@@ -72,7 +72,8 @@
 │       ├── tsconfig.json           # Functions TS config: NodeNext, ES2022 (no longer extends expo base — F3 fix)
 │       └── src/
 │           ├── index.ts            # Cloud Functions entry: exports rssCollector, getRankedFeed, cronUpdateCandidatePool,
-│           │                       #   cronDecayTrendingScores, cronCleanupOldArticles, syncBehaviorEvents
+│           │                       #   cronDecayTrendingScores, cronCleanupOldArticles, syncBehaviorEvents,
+│           │                       #   resetAccount, deleteAccount
 │           ├── types.ts            # Shared TypeScript interfaces: UserProfile, Article (with peakTrendingScore),
 │           │                       #   BehaviorEvent (with unlike/unsave), FeedSource, RankedFeedResult
 │           │                       #   (totalArticlesSaved/Liked removed — A2 fix)

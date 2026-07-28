@@ -33,6 +33,9 @@ import { markArticleSeen, getRankedFeed, getSeenArticleIds, markArticleSaved, un
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { Linking } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
+import { Platform } from 'react-native';
 import { X, Bookmark, Compass, AlertCircle, Heart } from 'lucide-react-native';
 import { TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_2XL } from '../utils/constants';
 
@@ -540,7 +543,7 @@ export default function ReaderScreen() {
       : '';
 
     const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${safeTitle}</h1>`;
-    const authorBlock = `<p style="color:${colors.textSecondary}; font-size:16px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid ${colors.border}; display:inline-block; padding-bottom:4px;">${safePublicationName}</p>`;
+    const authorBlock = `<p style="color:${colors.textSecondary}; font-size:18px; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; border-bottom:1px solid ${colors.border}; display:inline-block; padding-bottom:4px;">${safePublicationName}</p>`;
     const metaBlock = `<p style="color:${colors.textMuted}; font-size:14px; margin-bottom:32px;">${formattedDate} · ${readMinutes} min read</p>`;
 
     return `
@@ -746,6 +749,18 @@ export default function ReaderScreen() {
     }
   };
 
+  // --- Immersive mode: hide system UI bars while reading ---
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+    }
+    return () => {
+      if (Platform.OS === 'android') {
+        NavigationBar.setVisibilityAsync('visible').catch(() => {});
+      }
+    };
+  }, []);
+
   // --- Flush pending behavior events when leaving the Reader ---
   useEffect(() => {
     return () => {
@@ -767,6 +782,7 @@ export default function ReaderScreen() {
   // --- Render ---
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
+      <StatusBar hidden={true} />
 
       {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
       <Animated.View style={[styles.hudContainer, { opacity: hudOpacity, transform: [{ translateY: hudTranslateY }] }]}>

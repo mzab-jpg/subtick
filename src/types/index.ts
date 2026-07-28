@@ -6,6 +6,7 @@
 export interface UserProfile {
   userId: string;
   isOnboarded: boolean;
+  isActive?: boolean; // Default true; soft-delete flag for admin safety
   selectedCategoryIds: string[];
   notInterestedCategoryIds: string[];
   categoryWeights: Record<string, number>;
@@ -13,6 +14,8 @@ export interface UserProfile {
   publisherWeights?: Record<string, number>;
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
+  userEmail?: string; // Email from linked Google account
+  seenArticleIds?: string[]; // Cross-device seen article dedup (capped at 1000)
   totalArticlesRead: number;
   weeklyReadCount: number;
   currentStreakDays: number;
@@ -175,4 +178,5 @@ export type RootStackParamList = {
   DeveloperOptions: undefined;
   Feedback: undefined;
   FeedRequest: undefined;
+  Account: undefined;
 };

@@ -94,15 +94,18 @@
 - ✅ **.env.example** — Documents `EXPO_PUBLIC_USE_EMULATORS` and optional `EXPO_PUBLIC_FIREBASE_*` override variables.
 - ✅ **Firebase config env-var support** — `firebase.ts` reads config from `EXPO_PUBLIC_FIREBASE_*` with hardcoded production values as fallback.
 
+### Account Management
+- ✅ **Native Google Sign-In (code complete)** — `auth.ts` uses `@react-native-google-signin/google-signin` with `GoogleSignin.signIn()` + `linkWithCredential()`. Preserves anonymous UID so all data survives account creation. Stores `userEmail` on the profile. UI in Settings → Account → Link Google Account. Requires OAuth client IDs configured before use.
+- ✅ **Cross-device seen article dedup** — `markArticleSeen()` writes article ID to both AsyncStorage and Firestore profile `seenArticleIds` array via `arrayUnion` (atomic, idempotent, ~$0.05/month per 1K users). `getSeenArticleIds()` merges local + server IDs on startup so seen history follows the user across devices.
+- ✅ **Sign Out** — `signOutUser()` calls Firebase `signOut()` then immediately re-signs in anonymously. UI in Settings → Account → Sign Out with confirmation Alert.
+- ✅ **Reset Account** — `resetAccount` Cloud Function (Admin SDK): deletes all `behavior_events` and `saved_articles` subcollections, resets profile stats and category weights to defaults, sets `isOnboarded: false` (forces re-onboarding). Client calls function then clears all `@subtick_*` AsyncStorage keys.
+- ✅ **Delete Account** — `deleteAccount` Cloud Function (Admin SDK): requires `confirmation: 'DELETE'`, deletes subcollections + profile document + Firebase Auth account (`admin.auth().deleteUser(uid)`). Client clears AsyncStorage and re-signs in anonymously after deletion.
+- ✅ **`isActive` soft-delete field** — `UserProfile` now has `isActive: boolean` (default `true`). Can be set to `false` in Firestore console to administratively disable a user without deleting data.
+- ✅ **Firestore create rule corrected** — `create` rule now whitelists all 18 fields written by `ensureUserProfile()`, including `categoryWeights`, `linkedGoogleAccount`, stats fields. The previous 11-field whitelist would have silently rejected new user profile creation.
+
 ---
 
 ## 2. Designed / Partially Built — Incomplete
-
-### Google Account Linking (Broken on Mobile)
-- **Status:** UI present, non-functional on iOS/Android.
-- **Evidence:** `auth.ts` uses `linkWithPopup()` which is web-only. `SettingsScreen.tsx` catches `auth/operation-not-supported-in-this-environment` and shows an alert.
-- **What's missing:** `expo-auth-session` or `@react-native-google-signin/google-signin`.
-- **Impact:** `linkedGoogleAccount` always `false` on mobile. No cross-device account persistence.
 
 ### Feed Request Review Workflow (Admin Side Only)
 - **Status:** Submission complete. Review/approval not implemented. Requests accumulate as `status: 'pending'` indefinitely.
@@ -114,7 +117,7 @@
 - **No automated tests** — No jest/vitest/testing-library anywhere.
 - **No push notifications** — No `expo-notifications` or FCM.
 - **No analytics / error tracking** — Console logging only.
-- **No cross-device sync** — Seen/saved state is device-local by design.
+- **No cross-device saved HTML sync** — Saved article metadata syncs to Firestore, but full HTML for offline reading is device-local by design.
 - **No content moderation** — Articles ingested automatically, paywall detection only.
 - **No rate limiting on `syncBehaviorEvents`** — Per-user per-article dedup prevents in-batch abuse, but a user sending many separate batches could still inflate trendingScore. Decay mitigates long-term impact.
 - **No pull-to-refresh** — Feed refresh is triggered by navigation focus and queue depletion only.
@@ -124,7 +127,7 @@
 
 ## 4. Known Future Work
 
-1. **Implement native Google Sign-In** — Replace `linkWithPopup` with `expo-auth-session`. Unblocks cross-device persistence.
+1. **Configure Google Sign-In client IDs** — Native Google Sign-In is implemented (`@react-native-google-signin/google-signin`). Requires OAuth client IDs from Google Cloud Console (Web Client ID in `App.tsx` + iOS Client ID in `app.json`) before it will function.
 2. **Add trending score rate limiting** — Per-user per-article dedup already in `syncBehaviorEvents.ts` for a single batch; add cross-session dedup.
 3. **Build feed request admin workflow** — Cloud Function trigger or admin UI to process approved requests.
 4. **Add automated tests** — Scoring formula, weight update math, behavior classification, paywall detection.
