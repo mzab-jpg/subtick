@@ -20,7 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { UserProfile } from '../types';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { fetchUserProfile } from '../services/auth';
+import { useUser } from '../contexts/UserContext';
 import {
   DASHBOARD_METRIC_DEFS,
   TEXT_XS,
@@ -45,30 +45,15 @@ const getMetricIcon = (id: string, color: string) => {
 export default function DashboardStatsScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
+  const { profile, loading } = useUser();
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>([]);
 
   useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const p = await fetchUserProfile(user.uid);
-      setProfile(p);
-      if (p) {
-        setSelectedMetricIds(p.dashboardMetricIds || []);
-      }
-    } catch (error) {
-      console.error('[DashboardStats] loadProfile error:', error);
-    } finally {
-      setLoading(false);
+    if (profile) {
+      setSelectedMetricIds(profile.dashboardMetricIds || []);
     }
-  };
+  }, [profile]);
 
   const getMetricValue = (metricId: string): string | number => {
     if (!profile) return 0;

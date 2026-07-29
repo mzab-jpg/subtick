@@ -10,6 +10,7 @@ import 'expo-dev-client';
 import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { UserProvider } from './src/contexts/UserContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';
@@ -150,7 +151,9 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <AppContent />
+        <UserProvider>
+          <AppContent />
+        </UserProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );

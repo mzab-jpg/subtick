@@ -16,12 +16,13 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
-import { UserProfile } from '../types';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../types';
 import { auth } from '../services/firebase';
 import {
-  fetchUserProfile,
   updateCategoryWeights,
 } from '../services/auth';
+import { useUser } from '../contexts/UserContext';
 import {
   CATEGORIES,
   DEFAULT_SELECTED_WEIGHT,
@@ -31,75 +32,39 @@ import {
   TEXT_BASE,
   TEXT_LG,
 } from '../utils/constants';
-import {
-  ChevronLeft,
-  Landmark,          // Politics
-  Briefcase,         // Business
-  TrendingUp,        // Finance
-  Cpu,               // Technology
-  FlaskConical,      // Science
-  BookOpen,          // History
-  Palette,           // Culture
-  Leaf,              // Lifestyle
-  Clapperboard,      // Entertainment
-} from 'lucide-react-native';
-import { LucideIcon } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
+import { CategoryChipGrid, type ChipState } from '../components/CategoryChipGrid';
 
-type CategoryState = 'selected' | 'not_interested' | 'neutral';
-
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  Politics: Landmark,
-  Business: Briefcase,
-  Finance: TrendingUp,
-  Technology: Cpu,
-  Science: FlaskConical,
-  History: BookOpen,
-  Culture: Palette,
-  Lifestyle: Leaf,
-  Entertainment: Clapperboard,
-};
+type CatPrefNavProp = StackNavigationProp<RootStackParamList, 'CategoryPreferences'>;
 
 export default function CategoryPreferencesScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<CatPrefNavProp>();
+  const { profile, loading, refreshProfile } = useUser();
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [notInterestedIds, setNotInterestedIds] = useState<string[]>([]);
 
   useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const p = await fetchUserProfile(user.uid);
-      setProfile(p);
-      if (p) {
-        setSelectedIds([...p.selectedCategoryIds]);
-        setNotInterestedIds([...p.notInterestedCategoryIds]);
-      }
-    } catch (error) {
-      console.error('[CategoryPreferences] loadProfile error:', error);
-    } finally {
-      setLoading(false);
+    if (profile) {
+      setSelectedIds([...profile.selectedCategoryIds]);
+      setNotInterestedIds([...profile.notInterestedCategoryIds]);
     }
-  };
+  }, [profile]);
 
-  const getCategoryState = (catId: string): CategoryState => {
-    if (selectedIds.includes(catId)) return 'selected';
-    if (notInterestedIds.includes(catId)) return 'not_interested';
-    return 'neutral';
-  };
+  const chipStates: Record<string, ChipState> = {};
+  for (const cat of CATEGORIES) {
+    chipStates[cat.id] = selectedIds.includes(cat.id)
+      ? 'selected'
+      : notInterestedIds.includes(cat.id)
+        ? 'not_interested'
+        : 'neutral';
+  }
 
-  const handleTap = async (categoryId: string) => {
+  const handleToggle = async (categoryId: string) => {
     if (!profile || !auth.currentUser) return;
 
-    const state = getCategoryState(categoryId);
-
+    const state = chipStates[categoryId];
     const newSelected = selectedIds.filter((id) => id !== categoryId);
     const newNotInterested = notInterestedIds.filter((id) => id !== categoryId);
 
@@ -111,12 +76,11 @@ export default function CategoryPreferencesScreen() {
 
     const prevSelected = selectedIds;
     const prevNotInterested = notInterestedIds;
-    const prevProfile = profile;
 
     setSelectedIds(newSelected);
     setNotInterestedIds(newNotInterested);
 
-    const nextState: CategoryState =
+    const nextState: ChipState =
       state === 'neutral' ? 'selected'
       : state === 'selected' ? 'not_interested'
       : 'neutral';
@@ -127,13 +91,6 @@ export default function CategoryPreferencesScreen() {
       : nextState === 'not_interested' ? DEFAULT_NOT_INTERESTED_WEIGHT
       : DEFAULT_NEUTRAL_WEIGHT;
 
-    setProfile({
-      ...profile,
-      categoryWeights: newWeights,
-      selectedCategoryIds: newSelected,
-      notInterestedCategoryIds: newNotInterested,
-    });
-
     try {
       await updateCategoryWeights(
         auth.currentUser.uid,
@@ -141,11 +98,11 @@ export default function CategoryPreferencesScreen() {
         newSelected,
         newNotInterested
       );
+      refreshProfile();
     } catch (error) {
       console.error('[CategoryPreferences] auto-save error:', error);
       setSelectedIds(prevSelected);
       setNotInterestedIds(prevNotInterested);
-      setProfile(prevProfile);
       Alert.alert('Save Failed', 'Could not save your preference. Please check your connection and try again.');
     }
   };
@@ -173,62 +130,8 @@ export default function CategoryPreferencesScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Single grouped container — rows separated by dividers */}
-        <View style={[styles.group, { borderColor: colors.border }]}>
-          {CATEGORIES.map((cat, index) => {
-            const state = getCategoryState(cat.id);
-            const isLast = index === CATEGORIES.length - 1;
-
-            const bgColor =
-              state === 'selected'
-                ? colors.chipSelectedBg
-                : state === 'not_interested'
-                  ? colors.chipNotInterestedBg
-                  : colors.background;
-
-            const textColor =
-              state === 'selected'
-                ? colors.chipSelectedText
-                : state === 'not_interested'
-                  ? colors.chipNotInterestedText
-                  : colors.text;
-
-            const mutedColor =
-              state === 'selected'
-                ? colors.chipSelectedText
-                : state === 'not_interested'
-                  ? colors.chipNotInterestedText
-                  : colors.textMuted;
-
-            const stateLabel =
-              state === 'selected' ? 'Interested'
-              : state === 'not_interested' ? 'Not Interested'
-              : 'Neutral';
-
-            const CategoryIcon = CATEGORY_ICONS[cat.id];
-
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                style={[
-                  styles.row,
-                  { backgroundColor: bgColor },
-                  !isLast && { borderBottomWidth: 1, borderBottomColor: colors.border },
-                ]}
-                onPress={() => handleTap(cat.id)}
-                activeOpacity={0.7}
-              >
-                {CategoryIcon && (
-                  <CategoryIcon size={20} color={mutedColor} style={styles.rowIcon} />
-                )}
-                <View style={styles.rowContent}>
-                  <Text style={[styles.catName, { color: textColor }]}>{cat.name}</Text>
-                  <Text style={[styles.catState, { color: mutedColor }]}>{stateLabel}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* Shared category chip grid */}
+        <CategoryChipGrid colors={colors} chipStates={chipStates} onToggle={handleToggle} />
 
         <View style={{ height: 48 }} />
       </ScrollView>
@@ -250,21 +153,4 @@ const styles = StyleSheet.create({
   backButton: { width: 40, alignItems: 'flex-start' },
   headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   scrollContent: { paddingHorizontal: 28, paddingTop: 28 },
-
-  // Single container wrapping all rows
-  group: {
-    borderWidth: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-  },
-  rowIcon: { marginRight: 14 },
-  rowContent: { flex: 1 },
-  catName: { fontSize: TEXT_BASE, fontWeight: '600' },
-  catState: { fontSize: TEXT_SM, marginTop: 3 },
 });

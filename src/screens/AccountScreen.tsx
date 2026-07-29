@@ -17,16 +17,15 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
-import { UserProfile } from '../types';
 import { auth } from '../services/firebase';
 import {
-  fetchUserProfile,
   linkGoogleAccount,
   unlinkGoogleAccount,
   signOutUser,
   resetAccount,
   deleteAccount,
 } from '../services/auth';
+import { useUser } from '../contexts/UserContext';
 import {
   TEXT_XS,
   TEXT_SM,
@@ -48,33 +47,14 @@ import {
 export default function AccountScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
-
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const p = await fetchUserProfile(user.uid);
-      setProfile(p);
-    } catch (error) {
-      console.error('[Account] loadProfile error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { profile, loading, refreshProfile } = useUser();
 
   // ── Google Link / Unlink ──────────────────────────────────
   const handleGoogleLink = async () => {
     try {
       await linkGoogleAccount();
       Alert.alert('Linked', 'Google account linked successfully!');
-      await loadProfile();
+      await refreshProfile();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Could not link Google account.');
     }
@@ -93,7 +73,7 @@ export default function AccountScreen() {
             try {
               await unlinkGoogleAccount();
               Alert.alert('Unlinked', 'Google account has been removed.');
-              await loadProfile();
+              await refreshProfile();
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Could not unlink.');
             }
@@ -117,7 +97,7 @@ export default function AccountScreen() {
             try {
               await signOutUser();
               Alert.alert('Signed Out', 'You are now signed in anonymously.');
-              await loadProfile();
+              await refreshProfile();
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to sign out.');
             }
@@ -148,7 +128,7 @@ export default function AccountScreen() {
             try {
               await resetAccount();
               Alert.alert('Reset Complete', 'Your account data has been reset.');
-              await loadProfile();
+              await refreshProfile();
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to reset account.');
             }
@@ -172,7 +152,7 @@ export default function AccountScreen() {
             try {
               await deleteAccount();
               Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
-              await loadProfile();
+              await refreshProfile();
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to delete account.');
             }

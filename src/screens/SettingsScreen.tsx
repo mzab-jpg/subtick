@@ -20,7 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { UserProfile, ThemeMode } from '../types';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { fetchUserProfile } from '../services/auth';
+import { useUser } from '../contexts/UserContext';
 import {
   TEXT_XS,
   TEXT_SM,
@@ -58,34 +58,15 @@ const getActiveMetricCount = (profile: UserProfile | null): number => {
 export default function SettingsScreen() {
   const { colors, mode, setThemeMode } = useTheme();
   const navigation = useNavigation<any>();
-
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  const { profile, loading, refreshProfile } = useUser();
 
   // Re-load profile when returning from a sub-screen so counts update
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      if (!loading) loadProfile();
+      if (!loading && profile) refreshProfile();
     });
     return unsubscribe;
-  }, [navigation, loading]);
-
-  const loadProfile = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      const p = await fetchUserProfile(user.uid);
-      setProfile(p);
-    } catch (error) {
-      console.error('[Settings] loadProfile error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [navigation, loading, profile, refreshProfile]);
 
   // --- Theme Selection ---
   const handleThemeChange = (newMode: ThemeMode) => {
@@ -278,10 +259,10 @@ export default function SettingsScreen() {
           <Switch
             value={profile?.includeArchivedArticles || false}
             onValueChange={async (value) => {
-              if (!profile || !auth.currentUser) return;
-              setProfile({ ...profile, includeArchivedArticles: value });
+              if (!auth.currentUser) return;
               const userRef = doc(db, 'users', auth.currentUser.uid);
               await setDoc(userRef, { includeArchivedArticles: value, lastUpdated: Date.now() }, { merge: true });
+              refreshProfile();
             }}
             trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
             thumbColor={profile?.includeArchivedArticles ? colors.primary : colors.textMuted}
