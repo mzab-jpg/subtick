@@ -5,7 +5,7 @@
 
 // expo-dev-client must be imported first — enables the dev client launcher
 // when running via `npx expo start --dev-client`
-import 'expo-dev-client';
+// import 'expo-dev-client';
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';

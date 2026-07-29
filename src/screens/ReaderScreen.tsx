@@ -18,7 +18,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
-  Animated,
   PanResponder,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -103,7 +102,7 @@ export default function ReaderScreen() {
   // Guard references
   const preloadingRef = useRef(false);
   const cacheRef = useRef<Record<string, Article>>({});
-  const panX = useRef(new Animated.Value(0)).current;
+  const panX = useRef(0);
   // Fabric-safe: plain React state for progress bar width.
   // Animated.View with non-native-driver `width` crashes Fabric on RN 0.86.
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -441,7 +440,7 @@ export default function ReaderScreen() {
           return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         },
         onPanResponderMove: (evt, gestureState) => {
-          panX.setValue(gestureState.dx);
+          panX.current = gestureState.dx;
           // Track the last time the finger moved significantly
           if (Math.abs(gestureState.dx) > 5) {
             swipeLastMoveTimeRef.current = Date.now();
@@ -449,7 +448,7 @@ export default function ReaderScreen() {
         },
         onPanResponderRelease: (evt, gestureState) => {
           const dx = gestureState.dx;
-          Animated.spring(panX, { toValue: 0, useNativeDriver: true }).start();
+          panX.current = 0;
 
           // If the user paused mid-swipe (finger stopped moving for 200ms+), cancel the swipe
           const timeSinceLastMove = Date.now() - swipeLastMoveTimeRef.current;
@@ -481,25 +480,6 @@ export default function ReaderScreen() {
       }),
     [goToNext, goToPrev, behaviorTracker, panX, article, isRestrictedMode, isSavedMode, isHistoryMode]
   );
-
-  // --- HUD Fade Animation (useNativeDriver: true — Fabric-safe) ---
-  const hudAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.timing(hudAnim, {
-      toValue: hudVisible ? 1 : 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  }, [hudVisible, hudAnim]);
-
-  const hudOpacity = hudAnim;
-
-  const hudTranslateY = hudAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-100, 0],
-    extrapolate: 'clamp',
-  });
 
   // P1-D Fix: Escape HTML special characters in metadata fields before inserting into WebView HTML.
   // article.title, publicationName, and author come from RSS and must not be trusted as safe HTML.
@@ -793,8 +773,9 @@ export default function ReaderScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
       <StatusBar hidden={true} />
 
-      {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) — fade restored */}
-      <Animated.View style={[styles.hudContainer, { opacity: hudOpacity, transform: [{ translateY: hudTranslateY }] }]}>
+      {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
+      {hudVisible && (
+      <View style={styles.hudContainer}>
         <BlurView
           intensity={isDark ? 40 : 80}
           tint={isDark ? 'dark' : 'light'}
@@ -857,7 +838,8 @@ export default function ReaderScreen() {
             </View>
           </View>
         </BlurView>
-      </Animated.View>
+      </View>
+      )}
 
       {/* Progress Bar at Bottom — Fabric-safe: plain View with percentage width */}
       <View style={[styles.bottomProgressBarContainer, { bottom: bottomInset }]}>
