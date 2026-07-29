@@ -1,6 +1,6 @@
 # Tangent — Architecture
 
-> **Last verified:** July 2026 against current codebase (post-cost-optimisation + full audit/fix session).
+> **Last verified:** July 2026 against current codebase (post-sign-out-fix + orphan-cleanup + safe-area + fabric-crash-fix).
 > Every claim below is traced to a specific file and function. If a claim cannot be traced, it is explicitly flagged as unknown.
 
 ---
@@ -15,8 +15,9 @@
 | React | React 19 + React Native 0.86 | `19.2.3` / `0.86.0` | `package.json` |
 | Navigation | React Navigation Stack | `^7.10.11` | `package.json` |
 | Backend/DB | Firebase Firestore | JS SDK `^12.16.0` | `package.json` |
-| Serverless | Firebase Cloud Functions v2 | (firebase-functions in functions pkg) | `firebase/functions/src/index.ts` |
+| Serverless | Firebase Cloud Functions v2 | (firebase-functions in functions pkg) — 9 exported functions | `firebase/functions/src/index.ts` |
 | Auth | Firebase Anonymous Auth + optional Google link | — | `src/services/auth.ts` |
+| Safe area | `react-native-safe-area-context` | `~5.7.0` | `App.tsx` (SafeAreaProvider) |
 | In-app browser | `react-native-webview` | `13.16.1` | `package.json` |
 | Offline storage | `@react-native-async-storage/async-storage` | `2.2.0` | `package.json` |
 | RSS parsing (server) | `rss-parser` | `^3.13.0` | `firebase/functions/src/rssCollector.ts` |
@@ -38,7 +39,8 @@
 ```
 2SubTick/
 ├── index.ts                        # Expo entry point — calls registerRootComponent(App)
-├── App.tsx                         # Root component: init auth → ensureUserProfile → startOfflineManager → render
+├── App.tsx                         # Root component: init auth → ensureUserProfile → startOfflineManager → render;
+│                                   #   wraps everything in SafeAreaProvider; lazy-requires GoogleSignin
 ├── app.json                        # Expo config (name: Tangent, package: com.tangent.app)
 ├── eas.json                        # EAS Build profiles (preview APK + production)
 ├── package.json                    # Client-side dependencies
@@ -74,7 +76,7 @@
 │       └── src/
 │           ├── index.ts            # Cloud Functions entry: exports rssCollector, getRankedFeed, cronUpdateCandidatePool,
 │           │                       #   cronDecayTrendingScores, cronCleanupOldArticles, syncBehaviorEvents,
-│           │                       #   resetAccount, deleteAccount
+│           │                       #   resetAccount, deleteAccount, deleteOrphanProfile
 │           ├── types.ts            # Shared TypeScript interfaces: UserProfile, Article (with peakTrendingScore),
 │           │                       #   BehaviorEvent (with unlike/unsave), FeedSource, RankedFeedResult
 │           │                       #   (totalArticlesSaved/Liked removed — A2 fix)
@@ -106,7 +108,8 @@
     │   └── RootNavigator.tsx        # React Navigation Stack: Dashboard → Onboarding → Reader → Settings → History → SavedReads
     ├── services/
     │   ├── firebase.ts              # Firebase client SDK init; reads config from EXPO_PUBLIC_FIREBASE_* env vars (S6 fix)
-    │   ├── auth.ts                  # Firebase anonymous sign-in, ensureUserProfile, completeOnboarding, linkGoogleAccount
+    │   ├── auth.ts                  # Firebase anonymous sign-in, ensureUserProfile, completeOnboarding, linkGoogleAccount,
+    │   │                            #   signOutUser (clears local data + re-creates profile), deleteOrphanProfile CF call
     │   ├── feedService.ts           # getRankedFeed callable, fetchAndExtractArticle (lazy-sanitize — C6 fix),
     │   │                            #   seen/saved AsyncStorage management, markRssFailed/isRssFailed,
     │   │                            #   unmarkArticleSaved now deletes Firestore copy (B4 fix)
@@ -118,26 +121,35 @@
     │                                #   shared sessionSnapshotRef prevents double quick_exit (B2 fix);
     │                                #   uses named constants for thresholds (F5 fix)
     └── screens/
+        ├── AccountScreen.tsx        # Google link/unlink, sign out, reset data, delete account. Uses safe area insets.
         ├── OnboardingScreen.tsx     # Category chip grid (3-state toggle), writes selections to Dashboard on Continue
         ├── DashboardScreen.tsx      # Hero+row feed layout, stats pill bar, triggers getRankedFeed on mount;
         │                            #   focus listener only refetches if all articles were read (A5 fix);
         │                            #   navigateToReader shuffles queue so untapped cards are scattered (A5 fix);
-        │                            #   no longer includes current article in queue (B3 fix)
+        │                            #   no longer includes current article in queue (B3 fix);
+        │                            #   uses safe area insets for header padding
         ├── ReaderScreen.tsx         # WebView shell + PanResponder edge swipes + HUD + real-time preloader (trigger at 5 remaining);
         │                            #   theme CSS injected dynamically (B9 fix); right-swipe in history mode (B5 fix);
         │                            #   escapeHtml XSS fix (S1 fix);
-        │                            #   HUD shows article title with truncation, never visible on initial load (A5 fix)
-        ├── SettingsScreen.tsx       # ScrollView layout; category prefs, stats, theme, Google link; Dev Options in __DEV__ only
+        │                            #   HUD shows article title with truncation, never visible on initial load (A5 fix);
+        │                            #   progress bar uses pixel values (SCREEN_WIDTH) not % strings (Fabric crash fix);
+        │                            #   safe area insets for HUD + progress bar positioning
+        ├── SettingsScreen.tsx       # ScrollView layout; category prefs, stats, theme, Google link; Dev Options in __DEV__ only;
+        │                            #   uses safe area insets for header padding
         ├── HistoryScreen.tsx        # Offline list from AsyncStorage metadata; loads once via focus listener (B10 fix);
-        │                            #   passes full history array as Reader queue for swipe navigation (A4 fix)
-        ├── SavedReadsScreen.tsx     # Offline list from AsyncStorage metadata; loads on mount + focus
-        ├── CategoryPreferencesScreen.tsx  # 3-state category preference editor
-        ├── DashboardStatsScreen.tsx # Select up to 3 stats to show on Dashboard pill bar
-        ├── DeveloperOptionsScreen.tsx  # Dev-only: sandbox reader, data reset; hidden in production (__DEV__ gate)
+        │                            #   passes full history array as Reader queue for swipe navigation (A4 fix);
+        │                            #   uses safe area insets for header padding
+        ├── SavedReadsScreen.tsx     # Offline list from AsyncStorage metadata; loads on mount + focus;
+        │                            #   uses safe area insets for header padding
+        ├── CategoryPreferencesScreen.tsx  # 3-state category preference editor; uses safe area insets
+        ├── DashboardStatsScreen.tsx # Select up to 3 stats to show on Dashboard pill bar; uses safe area insets
+        ├── DeveloperOptionsScreen.tsx  # Dev-only: sandbox reader, data reset; hidden in production (__DEV__ gate);
+        │                            #   uses safe area insets
         ├── FeedbackScreen.tsx       # Submit feedback to feedback collection (validated by S4 rules fix);
-        │                            #   no longer sends `status` field (A4 fix)
+        │                            #   no longer sends `status` field (A4 fix); uses safe area insets
         └── FeedRequestScreen.tsx    # Submit new feed URL for admin review (validated by S3 rules fix);
-                                     #   sends empty string instead of undefined for blank descriptions (A4 fix)
+                                     #   sends empty string instead of undefined for blank descriptions (A4 fix);
+                                     #   uses safe area insets
 ```
 
 ---
@@ -286,6 +298,34 @@ ReaderScreen → behaviorTracker.concludeSession() → queueBehaviorEvent()
                     └── Syncs selectedCategoryIds / notInterestedCategoryIds arrays
 ```
 
+### 3f. Sign-Out Flow
+
+```
+AccountScreen → signOutUser()
+  └── auth.ts: signOutUser()
+        ├── clearAllLocalData() — wipes @subtick_* AsyncStorage keys
+        ├── signOut(auth) — signs out anonymous Firebase session
+        ├── signInAnonymouslyIfNeeded() — creates new anonymous UID
+        └── ensureUserProfile(newUser) — creates fresh Firestore profile for new UID
+```
+
+### 3g. Google Account Recovery + Orphan Cleanup
+
+```
+AccountScreen → linkGoogleAccount()
+  └── auth.ts: linkGoogleAccount()
+        ├── GoogleSignin.signIn() → idToken
+        ├── linkWithCredential(auth.currentUser, credential)
+        │     If credential-already-in-use:
+        │       ├── Save oldAnonymousUid
+        │       ├── signOut(auth) — leave the anonymous session
+        │       ├── signInWithCredential(auth, credential) — sign in as the existing Google-linked user
+        │       ├── ensureUserProfile(result.user) — sync Firestore profile
+        │       └── deleteOrphanProfile Cloud Function — delete stale users/{oldAnonymousUid}
+        │           (Uses Admin SDK to bypass security rules)
+        └── setDoc(userRef, { linkedGoogleAccount: true, userEmail })
+```
+
 ---
 
 ## 4. Security Architecture
@@ -293,6 +333,7 @@ ReaderScreen → behaviorTracker.concludeSession() → queueBehaviorEvent()
 ### Security Fixes Applied
 - **`getRankedFeed` and `syncBehaviorEvents`** — `request.auth.uid` enforced. Client-supplied `userId` ignored. Unauthenticated calls throw immediately.
 - **Behavior event document IDs** — Client-generated `event.id` used as Firestore document ID (idempotent retries).
+- **`deleteOrphanProfile` Cloud Function** — Admin SDK deletes stale `users/{oldUid}` documents that client-side `deleteDoc()` cannot (security rules forbid `delete` on `users/{userId}`).
 - **`users/{userId}` create rule (A4 fix)** — Same 8-field whitelist as update rule; prevents profile forgery at account creation.
 - **`users/{userId}` update rule (S2)** — Client can only write 7 whitelisted fields. Stats and weights are server-only.
 - **`behavior_events` create rule (S5 + A4 fix)** — Body `userId` must match path `userId`; `eventType` validated against 10 allowed values; field whitelist enforced; 2KB document size cap.
@@ -315,7 +356,7 @@ ReaderScreen → behaviorTracker.concludeSession() → queueBehaviorEvent()
 | What | Where it actually lives |
 |---|---|
 | Full article body HTML | Client-fetched live from RSS at read time |
-| Seen article IDs | `AsyncStorage[@subtick_seen_articles]` — capped at 1000 |
+| Seen article IDs | `AsyncStorage[@subtick_seen_articles]` — capped at 1000; also synced to Firestore `seenArticleIds` |
 | Seen article metadata | `AsyncStorage[@subtick_seen_articles_meta]` |
 | Saved article IDs | `AsyncStorage[@subtick_saved_articles]` |
 | Saved article HTML | `AsyncStorage[@subtick_saved_html_{id}]` |

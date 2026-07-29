@@ -13,10 +13,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
+import { topInset } from '../utils/safeArea';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, UserProfile, DashboardMetric, RootStackParamList } from '../types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User, BarChart3, Clock, Flame, BookOpen, CalendarDays, Gauge, BookCheck, BookHeart, Inbox, Shuffle } from 'lucide-react-native';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_XL, TEXT_2XL } from '../utils/constants';
 import { auth, db } from '../services/firebase';
@@ -29,7 +29,6 @@ const PRELOAD_THRESHOLD = 5;
 
 export default function DashboardScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'Dashboard'>>();
 
@@ -273,7 +272,7 @@ export default function DashboardScreen() {
   return (
     // Full-screen flex column — no ScrollView, never scrollable
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.inner, { paddingTop: insets.top + 16 }]}>
+      <View style={[styles.inner, { paddingTop: topInset + 16 }]}>
 
         {/* ── Header ── */}
         <View style={styles.headerRow}>

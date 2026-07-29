@@ -15,7 +15,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { UserProfile, ThemeMode } from '../types';
 import { auth, db } from '../services/firebase';
@@ -57,7 +57,6 @@ const getActiveMetricCount = (profile: UserProfile | null): number => {
 
 export default function SettingsScreen() {
   const { colors, mode, setThemeMode } = useTheme();
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -112,7 +111,7 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── Page Header (fixed, outside ScrollView) ───── */}
-      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: insets.top + 8 }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: topInset + 8 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>

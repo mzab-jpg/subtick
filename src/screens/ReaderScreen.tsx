@@ -35,7 +35,7 @@ import { Linking } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { topInset, bottomInset } from '../utils/safeArea';
 import { Platform } from 'react-native';
 import { X, Bookmark, Compass, AlertCircle, Heart } from 'lucide-react-native';
 import { TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_2XL } from '../utils/constants';
@@ -46,7 +46,6 @@ const SWIPE_THRESHOLD = 40; // px — minimum horizontal swipe to trigger action
 
 export default function ReaderScreen() {
   const { colors, webViewCSS, isDark } = useTheme();
-  const insets = useSafeAreaInsets();
   const route = useRoute<RouteProp<RootStackParamList, 'Reader'>>();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
@@ -105,7 +104,10 @@ export default function ReaderScreen() {
   const preloadingRef = useRef(false);
   const cacheRef = useRef<Record<string, Article>>({});
   const panX = useRef(new Animated.Value(0)).current;
-  const scrollProgress = useRef(new Animated.Value(0)).current;
+  // Fabric-safe: plain React state for progress bar width.
+  // Animated.View with non-native-driver `width` crashes Fabric on RN 0.86.
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const lastScrollProgressRef = useRef(0);
   const actualWordCountRef = useRef<number>(0);
   const webViewInitialLoadRef = useRef<boolean>(true);
   const webViewRef = useRef<WebView>(null);
@@ -386,7 +388,12 @@ export default function ReaderScreen() {
 
           if (typeof data.currentDepth === 'number') {
             const current = Math.min(1, Math.max(0, data.currentDepth));
-            scrollProgress.setValue(current);
+            // Throttle to 1% steps — prevents 50-100 re-renders per article
+            const rounded = Math.round(current * 100) / 100;
+            if (rounded !== lastScrollProgressRef.current) {
+              lastScrollProgressRef.current = rounded;
+              setScrollProgress(rounded);
+            }
           }
         } else if (data.type === 'wordCount' && typeof data.count === 'number') {
           actualWordCountRef.current = data.count;
@@ -475,7 +482,7 @@ export default function ReaderScreen() {
     [goToNext, goToPrev, behaviorTracker, panX, article, isRestrictedMode, isSavedMode, isHistoryMode]
   );
 
-  // --- HUD Fade Animation ---
+  // --- HUD Fade Animation (useNativeDriver: true — Fabric-safe) ---
   const hudAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -786,12 +793,12 @@ export default function ReaderScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
       <StatusBar hidden={true} />
 
-      {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) */}
+      {/* HUD Overlay (Frosted Glass Panel Actions via expo-blur) — fade restored */}
       <Animated.View style={[styles.hudContainer, { opacity: hudOpacity, transform: [{ translateY: hudTranslateY }] }]}>
         <BlurView
           intensity={isDark ? 40 : 80}
           tint={isDark ? 'dark' : 'light'}
-          style={[styles.hudBlur, { paddingTop: insets.top + 8 }]}
+          style={[styles.hudBlur, { paddingTop: topInset + 8 }]}
         >
           <View style={styles.hudTopRow}>
             {/* Back/Close Button */}
@@ -852,18 +859,14 @@ export default function ReaderScreen() {
         </BlurView>
       </Animated.View>
 
-      {/* Progress Bar at Bottom */}
-      <View style={[styles.bottomProgressBarContainer, { bottom: insets.bottom }]}>
-        <Animated.View
+      {/* Progress Bar at Bottom — Fabric-safe: plain View with percentage width */}
+      <View style={[styles.bottomProgressBarContainer, { bottom: bottomInset }]}>
+        <View
           style={[
             styles.bottomProgressBarFill,
             {
               backgroundColor: colors.accent,
-              width: scrollProgress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, SCREEN_WIDTH],
-                extrapolate: 'clamp',
-              }),
+              width: `${Math.round(scrollProgress * 100)}%`,
             },
           ]}
         />

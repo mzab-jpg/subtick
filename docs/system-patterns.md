@@ -1,6 +1,6 @@
 # Tangent — System Patterns
 
-> **Last verified:** July 2026 against current codebase (post-cost-optimisation + full audit/fix session).
+> **Last verified:** July 2026 (post-sign-out-fix + orphan-cleanup + safe-area + fabric-crash-fix).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -12,14 +12,15 @@
 |---|---|---|---|
 | Theme (light/dark/system) + computed color palette | `ThemeContext.tsx: ThemeProvider` | All screens via `useTheme()` | `AsyncStorage[@subtick_theme_preference]` + Firestore `users/{uid}.themePreference` |
 | Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` (initial load only — updates pushed via `injectJavaScript`) | Recomputed on theme change, never persisted |
+| Safe area insets (top/bottom/left/right) | `App.tsx: SafeAreaProvider` | All 11 screens via `useSafeAreaInsets()` | Native OS values — dynamic per device |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Focus listener no longer triggers a full refetch on every navigation back — only when all articles have been read (A5 fix). Reader queue is shuffled on tap so untapped cards are scattered randomly (A5 fix). `getTopCategory()` uses `userProfile.categoryWeights || {}` to guard against missing schema fields.
-- `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Focus listener no longer triggers a full refetch on every navigation back — only when all articles have been read (A5 fix). Reader queue is shuffled on tap so untapped cards are scattered randomly (A5 fix). `getTopCategory()` uses `userProfile.categoryWeights || {}` to guard against missing schema fields. Uses `insets.top` for dynamic header padding.
+- `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`. Uses `insets.top` for HUD padding, `insets.bottom` for progress bar positioning. Progress bar uses `Animated.View` with numeric pixel values (`SCREEN_WIDTH`) via `scrollProgress.interpolate()` — not percentage strings (Fabric crash fix for RN 0.86).
 - `OnboardingScreen.tsx`: `chipStates: Record<string, 'selected'|'not_interested'|'neutral'>` — pure local, never synced until Continue is pressed
-- `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes. Account section now delegates to `AccountScreen.tsx` sub-screen (single navigation row with email/Anonymous subtitle).
-- `AccountScreen.tsx`: `profile: UserProfile | null` — fetched on mount. Shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons.
-- `CategoryPreferencesScreen.tsx`: `profile: UserProfile | null`, `selectedIds`, `notInterestedIds`. `handleTap` uses `...(profile.categoryWeights || {})` for null-safety.
+- `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes. Account section now delegates to `AccountScreen.tsx` sub-screen (single navigation row with email/Anonymous subtitle). Uses safe area insets.
+- `AccountScreen.tsx`: `profile: UserProfile | null` — fetched on mount. Shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons. Uses safe area insets.
+- `CategoryPreferencesScreen.tsx`: `profile: UserProfile | null`, `selectedIds`, `notInterestedIds`. `handleTap` uses `...(profile.categoryWeights || {})` for null-safety. Uses safe area insets.
 
 ### On-Device State (AsyncStorage — primary store)
 **Note:** `@subtick_seen_articles` IDs are now also written to Firestore `users/{uid}.seenArticleIds` (via `arrayUnion`) for cross-device dedup. AsyncStorage remains the primary/instant store; Firestore is the sync layer.
@@ -341,12 +342,35 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately via `trackE
 | Synced events cleanup | Events older than 5 min with `synced: true` pruned after flush |
 | Concurrent queue + flush | Both use the same `enqueueStorageOperation` mutex; network call is outside (B6 fix) |
 
+### Sign-Out / Fresh Session
+| Scenario | Behavior |
+|---|---|
+| User taps Sign Out | `clearAllLocalData()` wipes all `@subtick_*` AsyncStorage keys |
+| Old Firebase session destroyed | `signOut(auth)` clears auth state |
+| New anonymous session | `signInAnonymouslyIfNeeded()` creates new UID |
+| Fresh Firestore profile | `ensureUserProfile(newUser)` writes full default profile |
+| Stale profile not found | Dashboard's `loadData()` detects null profile → redirects to Onboarding |
+
+### Orphan Profile Cleanup
+| Scenario | Behavior |
+|---|---|
+| Google credential-already-in-use | `deleteOrphanProfile` Cloud Function called with `oldAnonymousUid` |
+| Cloud Function unavailable | Error caught + logged; orphan doc remains but is harmless |
+| Orphan doc already deleted | Cloud Function returns `{ alreadyGone: true }` — treated as success |
+
 ### WebView Navigation Lock
 **HUD Visibility:** HUD starts hidden (`useState(false)`). It appears only when the user actively scrolls up (the WebView injected JS sends a `hud:visible=true` message when `scrollTop < lastScrollTop - 15`). The `scrollTop <= 0` case (which previously showed the HUD on initial page load) has been removed (A5 fix). HUD shows article title with `ellipsizeMode="tail"` truncation instead of publication name (A5 fix). Tap anywhere on the article body toggles it; it auto-hides after 2.5s.
 
 - **Sanitized HTML mode:** Any `http` link click → `Linking.openURL(url); return false`
 - **Raw URI (archived) mode:** Same-domain navigations allowed (redirects); cross-domain → OS browser. Initial load fully allowed.
 - HTTP errors (≥400) or load errors → error UI with "Open in Browser" button.
+
+### Progress Bar (Fabric-Safe)
+The bottom progress bar uses `Animated.View` with:
+- `width: scrollProgress.interpolate({ outputRange: [0, SCREEN_WIDTH], extrapolate: 'clamp' })` — numeric pixel values instead of percentage strings (required by Fabric on RN 0.86+)
+- No shadow props (`shadowColor`, `shadowOffset`, `shadowOpacity`, `shadowRadius`) — these are iOS-only and crash Fabric on Android
+- Container has `borderRadius: 3` for rounded corners; no `overflow: 'hidden'` needed since fill matches container height
+- Position: `bottom: insets.bottom` (safe area-adjusted)
 
 ---
 
@@ -377,3 +401,13 @@ Sole deduplication mechanism. Format must remain stable across deployments.
 - `'current'`: Reader fetches live RSS content
 - `'archived'`: Reader loads `publicationUrl` directly as a full webpage
 - Client sets `@subtick_rss_failed_{id}` in AsyncStorage when live RSS fetch fails (replaces the previously-broken Firestore write, which was blocked by security rules)
+
+### `deleteOrphanProfile` Cloud Function (`firebase/functions/src/index.ts`)
+```typescript
+export const deleteOrphanProfile = onCall(async (request) => {
+  // Validates: caller authenticated, orphanUid provided, orphanUid ≠ caller's own UID
+  // Uses Admin SDK db.doc(`users/${orphanUid}`).delete() to bypass rules
+  // Returns { success: true, deleted: orphanUid } or { alreadyGone: true }
+});
+```
+This function exists because Firestore security rules have `allow delete: if false` on `users/{userId}`. Client-side `deleteDoc()` is blocked. The function validates the caller is authenticated for rate-limiting but does **not** require the caller to own the orphan document (since by definition, they no longer do). This is the intended design — orphans are only created when the old anonymous UID ≠ the Google-linked UID a user just signed into.

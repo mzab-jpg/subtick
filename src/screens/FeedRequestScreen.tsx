@@ -16,7 +16,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { auth, db } from '../services/firebase';
 import { collection, addDoc } from 'firebase/firestore';
@@ -27,7 +27,6 @@ import { ChevronLeft, Rss } from 'lucide-react-native';
 
 export default function FeedRequestScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
   const [feedUrl, setFeedUrl] = useState('');

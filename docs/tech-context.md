@@ -1,6 +1,6 @@
 # Tangent — Technical Context
 
-> **Last verified:** July 2026 against current codebase (post-cost-optimisation + full audit/fix session).
+> **Last verified:** July 2026 (post-sign-out-fix + orphan-cleanup + safe-area + fabric-crash-fix).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -26,7 +26,7 @@
 | `expo-status-bar` | `~57.0.1` | Status bar control |
 | `expo-modules-autolinking` | `^57.0.8` | Expo native module linking |
 | `react-native-gesture-handler` | `~2.32.0` | Touch gesture system (required by React Navigation) |
-| `react-native-safe-area-context` | `~5.7.0` | Safe area insets |
+| `react-native-safe-area-context` | `~5.7.0` | Safe area insets — wrapped by `SafeAreaProvider` in `App.tsx`, consumed by all 11 screens via `useSafeAreaInsets()` |
 | `react-native-screens` | `4.25.2` | Native screen primitives |
 | `react-native-svg` | `15.15.4` | SVG rendering (required by lucide) |
 | `lucide-react-native` | `^1.25.0` | Icon set |
@@ -53,7 +53,6 @@
 |---|---|
 | `firebase-admin` | `index.ts:6` — `import * as admin from 'firebase-admin'` |
 | `firebase-functions` | `rssCollector.ts` — `import { onSchedule } from 'firebase-functions/v2/scheduler'`; `getRankedFeed.ts` — `import { onCall } from 'firebase-functions/v2/https'` |
-| `rss-parser` | `rssCollector.ts` — `import Parser from 'rss-parser'` |
 
 **Removed (D7 fix):** `sanitize-html` and `uuid` were listed but had zero imports in the functions codebase.
 
@@ -75,6 +74,7 @@ From `firebase/functions/src/index.ts`:
 | `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). |
 | `resetAccount` | HTTPS Callable | On demand | Deletes behavior_events + saved_articles subcollections; resets profile stats, weights, and category selections to defaults; sets `isOnboarded: false` |
 | `deleteAccount` | HTTPS Callable | On demand | Requires `confirmation: 'DELETE'`; deletes all subcollections + profile document + Firebase Auth account. Permanent. |
+| `deleteOrphanProfile` | HTTPS Callable | On demand | Deletes a stale anonymous `users/{orphanUid}` Firestore document after Google credential recovery. Uses Admin SDK to bypass `allow delete: if false` security rule. Validates caller is authenticated and orphanUid ≠ caller's own UID. |
 
 ---
 
@@ -82,7 +82,7 @@ From `firebase/functions/src/index.ts`:
 
 ### Collection: `users`
 **Document ID:** Firebase `auth.currentUser.uid`
-**Written by:** `auth.ts` (create/onboarding), `weightUpdater.ts` (weight updates), `SettingsScreen.tsx` (prefs/theme)
+**Written by:** `auth.ts` (create/onboarding/sign-out), `weightUpdater.ts` (weight updates), `SettingsScreen.tsx` (prefs/theme)
 **Client-writable fields (S2 fix):** `themePreference`, `dashboardMetricIds`, `isOnboarded`, `selectedCategoryIds`, `notInterestedCategoryIds`, `includeArchivedArticles`, `lastUpdated` — all other fields are server-only writes enforced by Firestore rules.
 
 | Field | Type | Description |
@@ -114,7 +114,7 @@ From `firebase/functions/src/index.ts`:
 
 **Client-writable fields (create):** All 18 initial profile fields written by `ensureUserProfile()`.
 **Client-writable fields (update, S2 fix):** `themePreference`, `dashboardMetricIds`, `isOnboarded`, `isActive`, `selectedCategoryIds`, `notInterestedCategoryIds`, `includeArchivedArticles`, `seenArticleIds`, `userEmail`, `lastUpdated`. Stats and weights are server-only.
-**Security:** Owner-only read. Delete disabled.
+**Security:** Owner-only read. Delete disabled (`allow delete: if false`). Orphan profile cleanup must use the `deleteOrphanProfile` Cloud Function (Admin SDK bypass).
 
 ---
 
@@ -275,7 +275,7 @@ From `firebase/firestore.rules` (updated with S2–S5 fixes):
 
 | Collection | Read | Write | Notes |
 |---|---|---|---|
-| `users/{userId}` | Owner only | Owner only — 10 whitelisted fields (update: themePreference, dashboardMetricIds, isOnboarded, isActive, selectedCategoryIds, notInterestedCategoryIds, includeArchivedArticles, seenArticleIds, userEmail, lastUpdated); 18 fields (create: all initial profile fields) | Delete disabled. |
+| `users/{userId}` | Owner only | Owner only — 10 whitelisted fields (update: themePreference, dashboardMetricIds, isOnboarded, isActive, selectedCategoryIds, notInterestedCategoryIds, includeArchivedArticles, seenArticleIds, userEmail, lastUpdated); 18 fields (create: all initial profile fields) | Delete disabled (`allow delete: if false`). Orphan cleanup via `deleteOrphanProfile` Cloud Function (Admin SDK). |
 | `users/{userId}/behavior_events` | Owner only | Create only (owner + body userId must match + eventType validated + field whitelist + 2KB cap — S5 + A4 fix) | Update/delete disabled |
 | `users/{userId}/saved_articles` | Owner only | Create/delete (owner) | Update disabled; persists even if global article is deleted |
 | `articles/{articleId}` | Any authenticated user | Never (Admin SDK only) | Client cannot update articles |

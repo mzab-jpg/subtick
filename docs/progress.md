@@ -1,6 +1,6 @@
 # Tangent — Progress & Status
 
-> **Last verified:** July 2026 against current codebase (post-cost-optimisation + full audit/fix session).
+> **Last verified:** July 2026 (post-sign-out-fix + orphan-cleanup + safe-area + fabric-crash-fix).
 > All status claims are based on reading the actual code. "Working" means the code path is complete end-to-end. "Incomplete" means the code exists but a specific branch or feature is verifiably broken or missing.
 
 ---
@@ -61,7 +61,7 @@
 - ✅ **Edge-zone PanResponder swipes** — 45px zones, 40px threshold.
 - ✅ **Right-swipe navigation in history mode** — Right-swipe now correctly calls `goToPrev()` in both saved-reads and history modes (B5 fix).
 - ✅ **WebView navigation lock** — External links open in OS browser; archived mode allows same-domain redirects.
-- ✅ **Scroll progress bar** — Animated bottom bar.
+- ✅ **Scroll progress bar** — Animated bottom bar using pixel values (`SCREEN_WIDTH`, not percentage strings) for Fabric compatibility. Uses safe area insets for bottom positioning.
 - ✅ **Per-publisher frontend rules** — `frontendRules.removeCss` and `injectCss` in both rendering modes.
 - ✅ **Mock/Sandbox mode** — Reader accepts `mockArticle` + `mockHtml` for developer testing.
 
@@ -70,16 +70,18 @@
 - ✅ **User profile bootstrap** — `ensureUserProfile()` creates default profile with neutral weights (1.0).
 - ✅ **Onboarding flow** — 3-state chip grid. Minimum 3 selected. `completeOnboarding()` properly awaited before Dashboard reloads.
 - ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding if not onboarded.
+- ✅ **Sign-out preserves app stability** — `signOutUser()` clears all `@subtick_*` AsyncStorage data before signing out, then creates a fresh anonymous session + Firestore profile. Dashboard detects null profile and redirects new users to Onboarding instead of crashing.
 
 ### Screens & Navigation
-- ✅ **Dashboard** — Hero + 2-row layout, stats pill (3 configurable metrics). Queue passed to Reader no longer includes the opened article (B3 fix). Discover button jumps past the 3 visible cards only (SURPRISE_ME_MIN_INDEX = 3, A3 fix). Focus listener no longer refetches articles on every navigation back — only refetches if all articles were read (A5 fix). Reader queue is shuffled so untapped Dashboard cards are scattered randomly among the full feed (A5 fix).
-- ✅ **Settings** — Now scrollable (`<ScrollView>`). Developer Options section hidden in production (`__DEV__` gate). Sections: Account, Library, Preferences, Support & Feedback.
-- ✅ **History screen** — Fully offline. Zero Firestore reads. Loads once via focus listener only, no double-load on mount (B10 fix). Passes full history ID array as Reader queue, enabling swipe navigation through all history articles (A4 fix).
-- ✅ **Saved Reads screen** — `loadSaved()` called on both mount AND focus.
+- ✅ **Dashboard** — Hero + 2-row layout, stats pill (3 configurable metrics). Queue passed to Reader no longer includes the opened article (B3 fix). Discover button jumps past the 3 visible cards only (SURPRISE_ME_MIN_INDEX = 3, A3 fix). Focus listener no longer refetches articles on every navigation back — only refetches if all articles were read (A5 fix). Reader queue is shuffled so untapped Dashboard cards are scattered randomly among the full feed (A5 fix). Uses safe area insets.
+- ✅ **Settings** — Now scrollable (`<ScrollView>`). Developer Options section hidden in production (`__DEV__` gate). Sections: Account, Library, Preferences, Support & Feedback. Uses safe area insets.
+- ✅ **History screen** — Fully offline. Zero Firestore reads. Loads once via focus listener only, no double-load on mount (B10 fix). Passes full history ID array as Reader queue, enabling swipe navigation through all history articles (A4 fix). Uses safe area insets.
+- ✅ **Saved Reads screen** — `loadSaved()` called on both mount AND focus. Uses safe area insets.
 - ✅ **Saved articles Firestore sync** — `unmarkArticleSaved()` now correctly deletes the server copy in addition to local storage (B4 fix). `markArticleSaved()` only writes to Firestore if the article isn't already saved (C8 fix).
-- ✅ **Dashboard Stats screen** — "Hours Read" correctly displays `totalReadTimeMs`.
+- ✅ **Dashboard Stats screen** — "Hours Read" correctly displays `totalReadTimeMs`. Uses safe area insets.
 - ✅ **Theme system** — Light/dark/system. Pre-compiled WebView CSS. Persisted to AsyncStorage + Firestore.
-- ✅ **CategoryPreferences, DashboardStats, Feedback, FeedRequest** sub-screens all implemented.
+- ✅ **CategoryPreferences, DashboardStats, Feedback, FeedRequest** sub-screens all implemented. All use safe area insets.
+- ✅ **Safe area insets** — All 11 screens use `useSafeAreaInsets()` with `SafeAreaProvider` in `App.tsx`, replacing hardcoded `paddingTop` values (52–64px) with dynamic insets that adapt to notches, Dynamic Island, and rounded corners on all devices.
 
 ### Category Reorganisation
 - ✅ **6 legacy categories → 9 new categories** — "Technology & Innovation", "Business & Finance", "Politics & Global Affairs", "Arts & Culture", "Science & Health", "Philosophy & Human Behavior" replaced by: Politics, Business, Finance, Technology, Science, History, Culture, Lifestyle, Entertainment.
@@ -93,12 +95,13 @@
 - ✅ **Functions tsconfig** — No longer incorrectly extends `expo/tsconfig.base`; standalone Node.js config.
 - ✅ **.env.example** — Documents `EXPO_PUBLIC_USE_EMULATORS` and optional `EXPO_PUBLIC_FIREBASE_*` override variables.
 - ✅ **Firebase config env-var support** — `firebase.ts` reads config from `EXPO_PUBLIC_FIREBASE_*` with hardcoded production values as fallback.
+- ✅ **SafeAreaProvider** — Wraps the entire app tree in `App.tsx`, enabling `useSafeAreaInsets()` in all screens.
 
 ### Account Management
 - ✅ **Native Google Sign-In** — Fully tested and working on Android dev client. `auth.ts` uses `@react-native-google-signin/google-signin` with `GoogleSignin.signIn()` + `linkWithCredential()`. Preserves anonymous UID so all data survives account creation. Stores `userEmail` on the profile. Debug SHA-1 fingerprint registered in `google-services.json` alongside release SHA-1. Web Client ID configured in `App.tsx` (hardcoded fallback + env var `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID`).
 - ✅ **Google Sign-In in Expo Go** — Static `GoogleSignin` import replaced with lazy `require()` inside try/catch in `App.tsx`. Expo Go will log a message and skip configuration — no crash. Full Google Sign-In requires a dev client build (install `expo-dev-client`, build debug APK once, then `npx expo start --dev-client`).
 - ✅ **Cross-device seen article dedup** — `markArticleSeen()` writes article ID to both AsyncStorage and Firestore profile `seenArticleIds` array via `arrayUnion` (atomic, idempotent, ~$0.05/month per 1K users). `getSeenArticleIds()` merges local + server IDs on startup so seen history follows the user across devices.
-- ✅ **Sign Out** — `signOutUser()` calls Firebase `signOut()` then immediately re-signs in anonymously. UI in Settings → Account → Sign Out with confirmation Alert.
+- ✅ **Sign Out** — `signOutUser()` clears all `@subtick_*` local data, calls Firebase `signOut()`, re-authenticates anonymously, then creates a fresh Firestore profile via `ensureUserProfile()`. Dashboard gracefully redirects brand-new users (null profile) to Onboarding. UI in Settings → Account → Sign Out with confirmation Alert.
 - ✅ **Reset Account** — `resetAccount` Cloud Function (Admin SDK): deletes all `behavior_events` and `saved_articles` subcollections, resets profile stats and category weights to defaults, sets `isOnboarded: false` (forces re-onboarding). Client calls function then clears all `@subtick_*` AsyncStorage keys.
 - ✅ **Delete Account** — `deleteAccount` Cloud Function (Admin SDK): requires `confirmation: 'DELETE'`, deletes subcollections + profile document + Firebase Auth account (`admin.auth().deleteUser(uid)`). Client clears AsyncStorage and re-signs in anonymously after deletion.
 - ✅ **`isActive` soft-delete field** — `UserProfile` now has `isActive: boolean` (default `true`). Can be set to `false` in Firestore console to administratively disable a user without deleting data.
@@ -106,6 +109,8 @@
 - ✅ **Credential recovery after sign-out** — `linkGoogleAccount()` catches `auth/credential-already-in-use` and falls back to `signInWithCredential()`, recovering the original Google-linked account with all data intact. Calls `ensureUserProfile()` after recovery to sync Firestore profile.
 - ✅ **Mid-session UID change remount** — `App.tsx` uses an `onAuthStateChanged` listener to detect UID changes (e.g. Google account recovery) mid-session. When detected, bumps a React `key` on `RootNavigator`, forcing React to destroy and recreate the entire navigation tree with fresh Firestore listeners attached to the correct UID.
 - ✅ **Account sub-screen** — `AccountScreen.tsx` shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons (Sign Out, Reset, Delete). Settings now has a single "Account" navigation row (like Category Preferences).
+- ✅ **Orphan anonymous profile cleanup** — `linkGoogleAccount()` calls the `deleteOrphanProfile` Cloud Function (9th function, uses Admin SDK to bypass security rules) to delete stale `users/{oldAnonymousUid}` documents after `credential-already-in-use` recovery. Previously the `deleteDoc()` call silently failed due to `allow delete: if false` in Firestore rules.
+- ✅ **Fabric crash fix** — Scroll progress bar in ReaderScreen changed from percentage strings (`'0%'`/`'100%'`) to numeric pixel values (`0`/`SCREEN_WIDTH`) with `extrapolate: 'clamp'`. Removed iOS-only shadow props (`shadowColor`, `shadowOffset`, `shadowOpacity`, `shadowRadius`) and `overflow: 'hidden'` that caused `java.lang.AssertionError` in `SurfaceMountingManager.overridePropsReadableMap` on Android Fabric (RN 0.86).
 
 ---
 

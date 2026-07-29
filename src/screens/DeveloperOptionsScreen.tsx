@@ -17,7 +17,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { Article } from '../types';
 import {
@@ -30,7 +30,6 @@ import { ChevronLeft, TerminalSquare, Trash2 } from 'lucide-react-native';
 
 export default function DeveloperOptionsScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
   const [devSandboxUrl, setDevSandboxUrl] = useState('');
