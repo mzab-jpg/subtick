@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';
 import { startOfflineManager, stopOfflineManager } from './src/services/offlineManager';
 import { User, onAuthStateChanged } from 'firebase/auth';
@@ -138,7 +139,11 @@ function AppContent() {
 
   // Ready — render navigation with a key that changes on UID switch,
   // forcing clean remount of all screens with fresh Firestore listeners.
-  return <RootNavigator key={navigationKey} />;
+  return (
+    <ErrorBoundary>
+      <RootNavigator key={navigationKey} />
+    </ErrorBoundary>
+  );
 }
 
 export default function App() {

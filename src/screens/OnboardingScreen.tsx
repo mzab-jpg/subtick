@@ -12,6 +12,9 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import {
   CATEGORIES,
@@ -48,7 +51,10 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Entertainment: Clapperboard,
 };
 
-export default function OnboardingScreen({ navigation }: any) {
+type OnboardingNavProp = StackNavigationProp<RootStackParamList, 'Onboarding'>;
+
+export default function OnboardingScreen() {
+  const navigation = useNavigation<OnboardingNavProp>();
   const { colors } = useTheme();
   const [chipStates, setChipStates] = useState<Record<string, ChipState>>({});
 

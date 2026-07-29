@@ -10,18 +10,9 @@ import { functions } from './firebase';
 import { PendingBehaviorEvent, BehaviorEventType } from '../types';
 import { BEHAVIOR_QUEUE_KEY, SYNC_BATCH_SIZE, MAX_QUEUE_SIZE } from '../utils/constants';
 import { auth } from './firebase';
+import { createStorageMutex } from './asyncStorageMutex';
 
-// --- AsyncStorage Concurrency Mutex Queue ---
-// Since AsyncStorage is asynchronous, rapid swiping can cause concurrent
-// queue operations to collide and overwrite each other.
-// This queue chains all storage operations in a single-file line (mutex).
-let storageQueue = Promise.resolve();
-
-async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<T> {
-  const nextInLine = storageQueue.then(operation);
-  storageQueue = nextInLine.then(() => {}).catch(() => {});
-  return nextInLine;
-}
+const storageMutex = createStorageMutex();
 
 /**
  * Generate a simple UUID for event IDs.
@@ -43,7 +34,7 @@ export async function queueBehaviorEvent(
   scrollDepth: number,
   actualWordCount?: number
 ): Promise<void> {
-  return enqueueStorageOperation(async () => {
+  return storageMutex.enqueue(async () => {
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) return;
@@ -103,7 +94,7 @@ export async function queueBehaviorEvent(
 export async function flushBehaviorQueue(): Promise<number> {
   try {
     // Step 1: Read and extract the batch to send — serialized via mutex.
-    const { batch, queueSnapshot } = await enqueueStorageOperation(async () => {
+    const { batch, queueSnapshot } = await storageMutex.enqueue(async () => {
       const raw = await AsyncStorage.getItem(BEHAVIOR_QUEUE_KEY);
       if (!raw) return { batch: [], queueSnapshot: [] };
       const queue: PendingBehaviorEvent[] = JSON.parse(raw);
@@ -124,7 +115,7 @@ export async function flushBehaviorQueue(): Promise<number> {
     console.log(`[BehaviorSync] Cloud Function synced ${syncedCount}/${batch.length} events`);
 
     // Step 3: Write back the updated queue — serialized via mutex.
-    await enqueueStorageOperation(async () => {
+    await storageMutex.enqueue(async () => {
       const raw = await AsyncStorage.getItem(BEHAVIOR_QUEUE_KEY);
       const currentQueue: PendingBehaviorEvent[] = raw ? JSON.parse(raw) : queueSnapshot;
 

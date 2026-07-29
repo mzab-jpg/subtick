@@ -11,6 +11,7 @@ import { Article, RankedFeedResult } from '../types';
 import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX } from '../utils/constants';
 import { XMLParser } from 'fast-xml-parser';
 import xss from 'xss';
+import { createStorageMutex } from './asyncStorageMutex';
 
 // --- Client-Side Feed Cache ---
 // Stores Promises resolving to highly compressed, pre-sanitized articles.
@@ -35,17 +36,7 @@ export function pruneFeedSessionCache(keepFeedUrls: string[]) {
   }
 }
 
-// --- AsyncStorage Concurrency Mutex Queue ---
-// Since AsyncStorage is asynchronous, rapid swiping can cause concurrent
-// read-modify-write actions to collide and overwrite each other.
-// This queue chains all storage operations in a single-file line (mutex).
-let storageQueue = Promise.resolve();
-
-async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<T> {
-  const nextInLine = storageQueue.then(operation);
-  storageQueue = nextInLine.then(() => {}).catch(() => {});
-  return nextInLine;
-}
+const storageMutex = createStorageMutex();
 
 // --- Shared Guid Extractor ---
 export function extractGuid(item: any): string {
@@ -273,7 +264,7 @@ export async function getArticleById(articleId: string): Promise<Article | null>
  * Firestore IDs are merged in for any the local device hasn't seen yet.
  */
 export async function getSeenArticleIds(): Promise<string[]> {
-  return enqueueStorageOperation(async () => {
+  return storageMutex.enqueue(async () => {
     try {
       // 1. Read local AsyncStorage (instant, works offline)
       const raw = await AsyncStorage.getItem(SEEN_ARTICLES_KEY);
@@ -322,7 +313,7 @@ interface ArticleMeta {
  * Serialized in storageQueue to prevent rapid swiping race conditions.
  */
 export async function markArticleSeen(articleId: string, article?: Article): Promise<void> {
-  return enqueueStorageOperation(async () => {
+  return storageMutex.enqueue(async () => {
     try {
       const raw = await AsyncStorage.getItem(SEEN_ARTICLES_KEY);
       const seen: string[] = raw ? JSON.parse(raw) : [];
@@ -402,7 +393,7 @@ export async function getSeenArticleMetas(limit = 30): Promise<ArticleMeta[]> {
  * Uses the serialization queue to avoid reading mid-write.
  */
 export async function getSavedArticleIds(): Promise<string[]> {
-  return enqueueStorageOperation(async () => {
+  return storageMutex.enqueue(async () => {
     try {
       const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
       return raw ? JSON.parse(raw) : [];
@@ -417,7 +408,7 @@ export async function getSavedArticleIds(): Promise<string[]> {
  * Serialized in storageQueue to prevent concurrent write collisions.
  */
 export async function markArticleSaved(articleId: string, extractedHtml: string, article?: Article): Promise<void> {
-  return enqueueStorageOperation(async () => {
+  return storageMutex.enqueue(async () => {
     try {
       const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
       const saved: string[] = raw ? JSON.parse(raw) : [];
@@ -503,7 +494,7 @@ export async function getSavedArticleMetas(): Promise<ArticleMeta[]> {
  * Serialized in storageQueue to prevent concurrent write collisions.
  */
 export async function unmarkArticleSaved(articleId: string): Promise<void> {
-  return enqueueStorageOperation(async () => {
+  return storageMutex.enqueue(async () => {
     try {
       const raw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
       const saved: string[] = raw ? JSON.parse(raw) : [];
