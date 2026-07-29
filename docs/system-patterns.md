@@ -1,6 +1,6 @@
 # Tangent — System Patterns
 
-> **Last verified:** July 2026 (post-sign-out-fix + orphan-cleanup + safe-area + fabric-crash-fix).
+> **Last verified:** 30 July 2026 (post-refactoring Batches 1–3).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -12,18 +12,21 @@
 |---|---|---|---|
 | Theme (light/dark/system) + computed color palette | `ThemeContext.tsx: ThemeProvider` | All screens via `useTheme()` | `AsyncStorage[@subtick_theme_preference]` + Firestore `users/{uid}.themePreference` |
 | Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` (initial load only — updates pushed via `injectJavaScript`) | Recomputed on theme change, never persisted |
+| User profile (UserProfile \| null) | `UserContext.tsx: UserProvider` → `useUser()` | SettingsScreen, AccountScreen, DashboardStatsScreen, CategoryPreferencesScreen (all via `useUser()`) | Fetched once from Firestore on auth; re-fetched via `refreshProfile()` on demand |
 | Safe area insets (top/bottom/left/right) | `App.tsx: SafeAreaProvider` | All 11 screens via `useSafeAreaInsets()` | Native OS values — dynamic per device |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Focus listener no longer triggers a full refetch on every navigation back — only when all articles have been read (A5 fix). Reader queue is shuffled on tap so untapped cards are scattered randomly (A5 fix). `getTopCategory()` uses `userProfile.categoryWeights || {}` to guard against missing schema fields. Uses `insets.top` for dynamic header padding.
-- `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`. Uses `insets.top` for HUD padding, `insets.bottom` for progress bar positioning. Progress bar uses plain React state (`setScrollProgress`) with percentage-string `width` — Fabric-safe (see Progress Bar section in §5).
-- `OnboardingScreen.tsx`: `chipStates: Record<string, 'selected'|'not_interested'|'neutral'>` — pure local, never synced until Continue is pressed
-- `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes. Account section now delegates to `AccountScreen.tsx` sub-screen (single navigation row with email/Anonymous subtitle). Uses safe area insets.
-- `AccountScreen.tsx`: `profile: UserProfile | null` — fetched on mount. Shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons. Uses safe area insets.
-- `CategoryPreferencesScreen.tsx`: `profile: UserProfile | null`, `selectedIds`, `notInterestedIds`. `handleTap` uses `...(profile.categoryWeights || {})` for null-safety. Uses safe area insets.
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Uses `onSnapshot` listener for real-time stat updates (not `useUser()` — needs live sync). Focus listener only refetches when feed depleted (A5). Reader queue shuffled on tap (A5). Uses `insets.top` for header padding.
+- `ReaderScreen.tsx` (orchestrator): Delegates state to feature hooks — `useArticleLoader` (article, resolvedHtml, fetchError, loading), `useNavigationQueue` (currentIndex, activeQueueIds, goToNext/Prev), `useReaderHUD` (hudVisible, isLiked, isSaved). Retains own `scrollProgress` state and PanResponder refs. Uses `insets.top` for HUD, `insets.bottom` for progress bar.
+- `OnboardingScreen.tsx`: `chipStates: Record<string, ChipState>` — pure local, never synced until Continue is pressed. Uses shared `CategoryChipGrid`.
+- `SettingsScreen.tsx`: Profile from `useUser()`. Refreshes on focus. Optimistically updates on changes.
+- `AccountScreen.tsx`: Profile from `useUser()`. Covers Google link/unlink, sign out, reset, delete.
+- `CategoryPreferencesScreen.tsx`: `selectedIds`, `notInterestedIds` derived from profile via `useUser()`. Auto-saves on tap via `updateCategoryWeights()` + `refreshProfile()`.
+- `DashboardStatsScreen.tsx`: `selectedMetricIds` from profile via `useUser()`. Optimistic toggle + `setDoc` merge.
+- `HistoryScreen.tsx` / `SavedReadsScreen.tsx`: 24-line wrappers — delegate all state to `ArticleListScreen`.
 
 ### On-Device State (AsyncStorage — primary store)
-**Note:** `@subtick_seen_articles` IDs are now also written to Firestore `users/{uid}.seenArticleIds` (via `arrayUnion`) for cross-device dedup. AsyncStorage remains the primary/instant store; Firestore is the sync layer.
+**Note:** `@subtick_seen_articles` IDs are also written to Firestore `users/{uid}.seenArticleIds` (via `arrayUnion`) for cross-device dedup.
 
 | Key | Content | Max Size |
 |---|---|---|
@@ -37,18 +40,17 @@
 | `@subtick_rss_failed_{articleId}` | `'1'` flag indicating this article's RSS feed has failed | One key per failed article |
 
 ### AsyncStorage Mutex (Concurrency Safety)
-All AsyncStorage operations in `feedService.ts` and `behaviorSync.ts` involving read-modify-write are serialized through a **Promise chain mutex**. Each file maintains its own independent queue:
+All AsyncStorage operations in `feedService.ts` and `behaviorSync.ts` involving read-modify-write are serialized through a **Promise chain mutex**, created via the shared factory in `src/services/asyncStorageMutex.ts`:
 
 ```typescript
-// feedService.ts  /  behaviorSync.ts (identical pattern in both)
-let storageQueue = Promise.resolve();
+// src/services/asyncStorageMutex.ts
+import { createStorageMutex } from './asyncStorageMutex';
+const storageMutex = createStorageMutex();
 
-async function enqueueStorageOperation<T>(operation: () => Promise<T>): Promise<T> {
-  const nextInLine = storageQueue.then(operation);
-  storageQueue = nextInLine.then(() => {}).catch(() => {});
-  return nextInLine;
-}
+// Usage: storageMutex.enqueue(async () => { ... })
 ```
+
+Each service creates its own independent queue — they intentionally do NOT share a queue because feeds and behavior events are separate domains and one slow domain should not block the other.
 
 `feedService.ts` uses this for: `markArticleSeen`, `markArticleSaved`, `unmarkArticleSaved`, `getSeenArticleIds`, `getSavedArticleIds`.
 
@@ -94,7 +96,7 @@ T = min(trendingScore, MAX_TRENDING_SCORE) / MAX_TRENDING_SCORE
 // MAX_TRENDING_SCORE = 50
 ```
 
-`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days). The decay cron only processes articles with `trendingScore > 1.0` (raised from 0.1 to reduce write costs — C1 fix).
+`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days). The decay cron only processes articles with `trendingScore > 1.0` (raise from 0.1 to reduce write costs — C1 fix).
 
 Trending increments (`syncBehaviorEvents.ts`):
 | Action | trendingScore increment |
@@ -108,21 +110,20 @@ Trending increments (`syncBehaviorEvents.ts`):
 | Read shallow | +0.2 |
 | Swipe past / exit | +0.0 |
 
-**peakTrendingScore:** Each article also tracks `peakTrendingScore` — the all-time high value of `trendingScore`, which never decays. Updated in the **same batch** as the trendingScore increment in `syncBehaviorEvents.ts`. Used by `cronCleanupOldArticles` to rank which old articles to delete.
+**peakTrendingScore:** All-time high, never decays. Updated in the same batch as trendingScore. Used by `cronCleanupOldArticles` for deletion ranking.
 
-**Per-user per-article dedup:** In-batch `likeDedup` and `saveDedup` Sets prevent a user from double-counting like/unlike or save/unsave on the same article within a single API call batch.
+**Per-user per-article dedup:** In-batch `likeDedup` and `saveDedup` Sets.
 
 ### 2d. R — Recency [0, 1]
 
 Source: `getRankedFeed.ts: normalizeR()`
 
-**Two-phase decay** — stays high for the first 7 days, then falls more steeply:
-
+Two-phase decay:
 ```typescript
 if (daysOld <= 7):
-    R = 1.0 - (daysOld / 7) × 0.2      // Linear: 1.0 → 0.8
+    R = 1.0 - (daysOld / 7) × 0.2      // 1.0 → 0.8
 else:
-    R = 0.8 × (7 / daysOld)^1.5         // Power-law: steep after day 7
+    R = 0.8 × (7 / daysOld)^1.5         // Power-law after day 7
 ```
 
 | Age | R value |
@@ -140,7 +141,7 @@ Source: `getRankedFeed.ts: normalizeQ()`
 
 ```typescript
 Q = (publisherQualityScore - 0.2) / 0.8
-// Crowd-sourced qualityScore is clamped to [0.20, 1.00]
+// qualityScore clamped to [0.20, 1.00]
 ```
 
 | Raw quality | Q |
@@ -149,15 +150,13 @@ Q = (publisherQualityScore - 0.2) / 0.8
 | 0.80 (default new) | 0.75 |
 | 1.00 (best) | 1.00 |
 
-Publisher quality increments (`syncBehaviorEvents.ts`):
+Quality increments (`syncBehaviorEvents.ts`):
 ```
 save: +0.010 / like: +0.005 / read_thorough: +0.005 / read_skim: +0.001
 swipe_not_interested: -0.010 / quick_exit: -0.005
 ```
 
 ### 2f. U — Diversity [0, 1]
-
-Source: `getRankedFeed.ts: normalizeU()`
 
 ```typescript
 rawU = 1.0 - (min(1.0, (articlesInSamePub - 1) / 15) × 0.6)
@@ -166,9 +165,9 @@ U = (rawU - 0.4) / 0.6
 
 | Articles from same publisher | U |
 |---|---|
-| 1 | 1.00 (no penalty) |
+| 1 | 1.00 |
 | 8 | 0.53 |
-| 16+ | 0.00 (maximum penalty) |
+| 16+ | 0.00 |
 
 ### 2g. Scoring Formulas by Tranche
 
@@ -176,28 +175,24 @@ U = (rawU - 0.4) / 0.6
 ```
 Score = 0.40×P + 0.15×T + 0.20×R + 0.15×Q + 0.10×U
 ```
-Weights defined in `SCORE_WEIGHTS` in `firebase/functions/src/constants.ts`. Sum = 1.0. Output: [0, 1].
 
 **Low & Discovery tranches (merit-based):**
 ```
 Score = 0.40×R + 0.30×T + 0.30×Q
 ```
-Weights defined in `SCORE_WEIGHTS_MERIT` in `firebase/functions/src/constants.ts`. Sum = 1.0. No personalization, no diversity penalty.
+
+Weights in `firebase/functions/src/constants.ts` (`SCORE_WEIGHTS` / `SCORE_WEIGHTS_MERIT`). Sum = 1.0. Output: [0, 1].
 
 ### 2h. Tranche Assembly
 
-Source: `getRankedFeed.ts: assembleFeedWithTranches()`
-
-Articles bucketed by normalized P value:
-
-| Tranche | P threshold | Target | Selection (established users) | Selection (new users, <30 reads) |
+| Tranche | P threshold | Target | Selection (est.) | Selection (new, <30 reads) |
 |---|---|---|---|---|
-| High | P ≥ 0.40 | 12 | **Random shuffle** | **Random shuffle** |
-| Mid | P ≥ 0.20 | 8 | **Random shuffle** | **Random shuffle** |
-| Low | P ≥ 0.10 | 4 | **Merit score DESC** | **Random shuffle** |
-| Discovery | P < 0.10 | 6 | **Merit score DESC** | **Random shuffle** |
+| High | P ≥ 0.40 | 12 | Random shuffle | Random shuffle |
+| Mid | P ≥ 0.20 | 8 | Random shuffle | Random shuffle |
+| Low | P ≥ 0.10 | 4 | Merit score DESC | Random shuffle |
+| Discovery | P < 0.10 | 6 | Merit score DESC | Random shuffle |
 
-High/Mid are always shuffled randomly to provide variety within preferred categories. Low/Discovery are sorted by merit score (R+T+Q) for established users to surface the best objectively-good articles, but randomized for new users with fewer than 30 total reads. Overflow from underpopulated tranches cascades down. Final feed of 30 is shuffled before return.
+Overflow cascades down. Final feed of 30 shuffled before return.
 
 ---
 
@@ -208,67 +203,37 @@ High/Mid are always shuffled randomly to provide variety within preferred catego
 Source: `firebase/functions/src/constants.ts` (server) and `src/utils/constants.ts` (client — identical values)
 
 ```typescript
-export const FEEDBACK_DELTAS = {
-  save:                +0.55,
-  like:                +0.40,
-  read_thorough:       +0.30,
-  read_skim:           +0.10,
-  read_shallow:        +0.00,
-  swipe_next:          +0.00,
-  quick_exit:          -0.20,
-  swipe_not_interested: -0.40,
-};
+save: +0.55 / like: +0.40 / read_thorough: +0.30 / read_skim: +0.10
+read_shallow: 0.00 / swipe_next: 0.00
+quick_exit: -0.20 / swipe_not_interested: -0.40
 ```
 
 ### 3b. Dimension-Specific Learning Rates
 
-Source: `weightUpdater.ts`
-
 ```typescript
-const categoryL  = LEARNING_RATE × 1.0;  // 0.08
-const lengthL    = LEARNING_RATE × 1.5;  // 0.12
-const publisherL = LEARNING_RATE × 2.0;  // 0.16
+categoryL  = 0.08  // LEARNING_RATE × 1.0
+lengthL    = 0.12  // LEARNING_RATE × 1.5
+publisherL = 0.16  // LEARNING_RATE × 2.0
 ```
 
-`LEARNING_RATE = 0.08`
-
-Each behavior event updates three dimensions:
-```
-categoryWeight[category]          += Δ × 0.08
-categoryLengthWeights[cat::style] += Δ × 0.12
-publisherWeights[publisher]       += Δ × 0.16
-```
+Each event updates three dimensions: `category += Δ × 0.08`, `length += Δ × 0.12`, `publisher += Δ × 0.16`.
 
 ### 3c. Watermark-Based Event Processing
 
-Source: `weightUpdater.ts`
-
-`updateWeights()` stores `weightUpdatedAt` (Unix ms timestamp) on the user profile. On each call:
-1. Queries only events with `timestamp > weightUpdatedAt` (new events only — no replay)
-2. Processes those events
-3. Updates `weightUpdatedAt` to the latest processed event's timestamp
-4. Applies daily decay only if `now - watermark >= 23 hours`
+`updateWeights()` uses `weightUpdatedAt` watermark to process only new events. No replay. Daily decay applied if ≥23h since last update.
 
 ### 3d. Clamping
 
-```
-weight = max(0.1, min(5.0, weight))
-```
+`weight = max(0.1, min(5.0, weight))`
 
 ### 3e. Daily Decay
 
-```typescript
-decayed[cat] = 1.0 + (weight - 1.0) × DAILY_DECAY_RATE
-// DAILY_DECAY_RATE = 0.995 (0.5% per day)
-```
-
-Weights drift back toward 1.0 (neutral) if unused. Applied at most once per 23-hour window.
+`decayed[cat] = 1.0 + (weight - 1.0) × 0.995` — weights drift toward neutral (1.0) at 0.5% per day.
 
 ### 3f. UI Sync Thresholds
 
-After weight update, `selectedCategoryIds` and `notInterestedCategoryIds` are synced:
-- `weight <= 0.2` → add to `notInterestedCategoryIds`, remove from `selectedCategoryIds`
-- `weight >= 1.5` → add to `selectedCategoryIds`, remove from `notInterestedCategoryIds`
+- `weight <= 0.2` → add to `notInterestedCategoryIds`
+- `weight >= 1.5` → add to `selectedCategoryIds`
 - `0.2 < weight < 1.5` (if was notInterested) → remove from `notInterestedCategoryIds`
 
 ---
@@ -278,24 +243,17 @@ After weight update, `selectedCategoryIds` and `notInterestedCategoryIds` are sy
 Source: `useBehaviorTracker.ts: concludeSession()`
 
 ```
-if (scrollDepth < QUICK_EXIT_MAX_SCROLL AND sessionDuration < QUICK_EXIT_MAX_DURATION_MS):
-    → 'quick_exit'          // < 20% scroll AND < 15s
+if (scrollDepth < 0.2 AND sessionDuration < 15s) → 'quick_exit'
 else if (scrollDepth >= 0.8):
-    if (sessionDuration >= expectedReadTime × 0.7):
-        → 'read_thorough'
-    else:
-        → 'read_skim'
-else if (scrollDepth >= 0.4):
-    → 'read_shallow'
-else:
-    → 'swipe_next'
+    if (sessionDuration >= expectedReadTime × 0.7) → 'read_thorough'
+    else → 'read_skim'
+else if (scrollDepth >= 0.4) → 'read_shallow'
+else → 'swipe_next'
 ```
 
-`QUICK_EXIT_MAX_SCROLL = 0.2` and `QUICK_EXIT_MAX_DURATION_MS = 15_000` are named constants from `src/utils/constants.ts`.
+Right-swipe always emits `'swipe_not_interested'` (fires immediately, not via `concludeSession`).
 
-Right-swipe always emits `'swipe_not_interested'` (fires immediately via `trackEvent`, not `concludeSession`).
-
-**Quick-exit double-fire prevention (B2 fix):** `useBehaviorTracker` now uses a shared `sessionSnapshotRef` object. When `concludeSession()` fires, it sets `sessionSnapshotRef.current.concluded = true`. The `useEffect` cleanup, which also closes over `sessionSnapshotRef.current`, reads the live `concluded` value — if it's `true`, the cleanup fires nothing. This replaced the old frozen-value snapshot pattern that always saw `concluded = false`.
+**Quick-exit double-fire prevention (B2 fix):** Shared `sessionSnapshotRef` — `concludeSession()` sets `concluded = true`; cleanup reads live value.
 
 **Tracking disabled** in `'history'`, `'saved'`, and mock/sandbox modes.
 
@@ -307,28 +265,27 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately via `trackE
 | Operation | Timeout | Failure |
 |---|---|---|
 | `parser.parseURL()` | 15s | Caught per-feed; other feeds continue |
-| `fetchOgMetadata()` | 6s | Returns empty `{}`; article written without image/description |
+| `fetchOgMetadata()` | 6s | Returns `{}`; article written without image/description |
 | Feed batches | `Promise.allSettled()` | One feed failure never blocks others |
-| Article existence check | — | Single `db.getAll()` batch per feed (C3 fix) |
+| Article existence check | — | Single `db.getAll()` batch per feed (C3) |
 
 ### Client RSS Fetch
 | Operation | Timeout | Failure |
 |---|---|---|
-| `fetch(feedUrl)` | 15s (AbortController) | Throws; `feedSessionCache.delete(feedUrl)` so next request retries |
-| Article not found in feed | — | `markRssFailed(id)` in AsyncStorage; article renders as archived (raw URL) |
-| HTML sanitization | — | Runs only on the single matched article, not the whole feed (C6 fix) |
+| `fetch(feedUrl)` | 15s (AbortController) | Throws; `feedSessionCache.delete(feedUrl)` for retry |
+| Article not found in feed | — | `markRssFailed(id)` in AsyncStorage; renders as archived |
+| HTML sanitization | — | Only the matched article (C6 — lazy sanitize) |
 
 ### getRankedFeed Cloud Function
 | Operation | Failure |
 |---|---|
 | `system/candidatePool` read | Falls back to on-the-fly stratified query |
-| On-the-fly query | Returns expired in-memory cache if available; throws if empty |
-| Publisher quality fetch | Returns expired/empty cache; articles fall back to `article.qualityScore` |
+| Publisher quality fetch | Returns expired/empty cache; falls back to `article.qualityScore` |
 
 ### Client getRankedFeed Call
 | Failure | Fallback |
 |---|---|
-| Cloud Function call fails | `fallbackGetArticles()`: Firestore query `articles WHERE isPaywalled == false ORDER BY publishDate DESC LIMIT 90`, filter seen |
+| Cloud Function call fails | `fallbackGetArticles()`: Firestore `WHERE isPaywalled == false ORDER BY publishDate DESC LIMIT 90` |
 
 ### Behavior Sync
 | Scenario | Behavior |
@@ -338,44 +295,33 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately via `trackE
 | Sync fails | 30s cooldown (`RETRY_COOLDOWN_MS`), then retry |
 | Concurrent flush | `isSyncing` guard prevents double-flush |
 | Queue overflow | 500 cap; oldest events dropped |
-| Server input cap | `syncBehaviorEvents` truncates to 50 events max per call (A4 fix) — prevents batch overflow and abuse |
-| Synced events cleanup | Events older than 5 min with `synced: true` pruned after flush |
-| Concurrent queue + flush | Both use the same `enqueueStorageOperation` mutex; network call is outside (B6 fix) |
+| Server input cap | 50 events max per call (A4 fix) |
+| Synced events cleanup | Pruned after 5 min if `synced: true` |
+| Concurrent queue + flush | Both use `enqueueStorageOperation` mutex; network outside mutex (B6) |
 
 ### Sign-Out / Fresh Session
 | Scenario | Behavior |
 |---|---|
-| User taps Sign Out | `clearAllLocalData()` wipes all `@subtick_*` AsyncStorage keys |
-| Old Firebase session destroyed | `signOut(auth)` clears auth state |
-| New anonymous session | `signInAnonymouslyIfNeeded()` creates new UID |
-| Fresh Firestore profile | `ensureUserProfile(newUser)` writes full default profile |
-| Stale profile not found | Dashboard's `loadData()` detects null profile → redirects to Onboarding |
-
-### Orphan Profile Cleanup
-| Scenario | Behavior |
-|---|---|
-| Google credential-already-in-use | `deleteOrphanProfile` Cloud Function called with `oldAnonymousUid` |
-| Cloud Function unavailable | Error caught + logged; orphan doc remains but is harmless |
-| Orphan doc already deleted | Cloud Function returns `{ alreadyGone: true }` — treated as success |
+| Sign Out | `clearAllLocalData()` → `signOut(auth)` → `signInAnonymouslyIfNeeded()` → `ensureUserProfile()` |
+| Stale profile not found | Dashboard's `loadData()` detects null → redirects to Onboarding |
 
 ### WebView Navigation Lock
-**HUD Visibility:** HUD starts hidden (`useState(false)`). It appears only when the user actively scrolls up (the WebView injected JS sends a `hud:visible=true` message when `scrollTop < lastScrollTop - 15`). The `scrollTop <= 0` case (which previously showed the HUD on initial page load) has been removed (A5 fix). HUD shows article title with `ellipsizeMode="tail"` truncation instead of publication name (A5 fix). Tap anywhere on the article body toggles it; it auto-hides after 2.5s.
+**HUD Visibility:** HUD starts hidden (`useState(false)`). Appears only on scroll-up (`scrollTop < lastScrollTop - 15` in injected JS). Title shown with `ellipsizeMode="tail"` truncation (A5). Hidden on initial page load. Tap toggles; auto-hides after 2.5s.
 
 - **Sanitized HTML mode:** Any `http` link click → `Linking.openURL(url); return false`
-- **Raw URI (archived) mode:** Same-domain navigations allowed (redirects); cross-domain → OS browser. Initial load fully allowed.
+- **Raw URI (archived) mode:** Same-domain navigations allowed; cross-domain → OS browser.
 - HTTP errors (≥400) or load errors → error UI with "Open in Browser" button.
 
 ### Progress Bar
-The bottom progress bar uses plain React state (`useState(scrollProgress)`) with a `View` (not `Animated.View`):
-- `width: \`${Math.round(scrollProgress * 100)}%\`` — percentage string set via React state, not via `Animated.interpolate()`, so Fabric's `overridePropsReadableMap` never sees an `AnimatedInterpolation` object
-- Uses `colors.accent` for the fill color; container has `borderRadius: 3` for rounded corners
-- Position: `bottom: insets.bottom` (safe area-adjusted)
-- The WebView's injected JS pushes scroll percentage updates via `postMessage`, which ReaderScreen handles in `onMessage` by calling `setScrollProgress()`
+Plain React state (`useState(scrollProgress)`) with a `View` (not `Animated.View`):
+- `width: \`${Math.round(scrollProgress * 100)}%\`` — Fabric-safe (no `AnimatedInterpolation`)
+- Uses `colors.accent` fill; `borderRadius: 3`; positioned at `bottom: insets.bottom`
+- Driven by WebView `postMessage` → `setScrollProgress()` in `onMessage`
 
 ### Fabric Crash Fix — `cardStyleInterpolator` → `presentation: 'modal'`
 Source: `RootNavigator.tsx`
 
-Fabric's debug-mode `overridePropsReadableMap` assertion gate validates every prop before passing it to native views. `AnimatedInterpolation` objects (produced by `interpolate()`) are valid at runtime but fail this strict type check in debug builds. The fix replaces JS-driven transition animations with native-presentation transitions that bypass Fabric's prop validation entirely.
+Fabric's debug-mode `overridePropsReadableMap` assertion gate rejects `AnimatedInterpolation` objects passed as props. The fix replaces JS-driven transition animations with native `presentation: 'modal'` transitions that bypass Fabric's prop validation entirely.
 
 **Before (crashing in debug):**
 ```tsx
@@ -405,16 +351,13 @@ Release builds strip Fabric's assertion gates, so the crash never occurred in pr
 > ⚠️ **Do not modify these without understanding the implications.**
 
 ### Paywall Detection — `checkIsPaywalled()` (`rssCollector.ts`)
-Paywalled articles are excluded from all candidate pools and feed results. Three mechanisms:
-1. Keyword match against PAYWALL_KEYWORDS (24 phrases) — defined in `firebase/functions/src/constants.ts`
-2. CSS class: `class="*paywall*"`, `class="*subscriber-only*"`, `class="*locked-content*"`
-3. Script pattern: body contains both `/paywall/i` and `<script`
+Three mechanisms: keyword match (24 phrases), CSS class patterns, script patterns. Paywalled articles excluded from all candidate pools.
 
 ### `isTruncatedFeed` Flag (`rssCollector.ts`)
 ```typescript
 const isTruncatedFeed = bodyHtml.length > 0 && (description.length / bodyHtml.length) > 0.9;
 ```
-Used in `weightUpdater.ts` to skip WPM calibration for articles where the RSS body is truncated. Removing this guard corrupts users' `averageWpm`.
+Used in `weightUpdater.ts` to skip WPM calibration for truncated feeds. Removing this guard corrupts `averageWpm`.
 
 ### Article ID Generation — `generateArticleId()` (`rssCollector.ts`)
 ```typescript
@@ -426,7 +369,7 @@ Sole deduplication mechanism. Format must remain stable across deployments.
 ### `rssStatus` Lifecycle
 - `'current'`: Reader fetches live RSS content
 - `'archived'`: Reader loads `publicationUrl` directly as a full webpage
-- Client sets `@subtick_rss_failed_{id}` in AsyncStorage when live RSS fetch fails (replaces the previously-broken Firestore write, which was blocked by security rules)
+- Client sets `@subtick_rss_failed_{id}` in AsyncStorage when live RSS fetch fails
 
 ### `deleteOrphanProfile` Cloud Function (`firebase/functions/src/index.ts`)
 ```typescript
@@ -436,4 +379,4 @@ export const deleteOrphanProfile = onCall(async (request) => {
   // Returns { success: true, deleted: orphanUid } or { alreadyGone: true }
 });
 ```
-This function exists because Firestore security rules have `allow delete: if false` on `users/{userId}`. Client-side `deleteDoc()` is blocked. The function validates the caller is authenticated for rate-limiting but does **not** require the caller to own the orphan document (since by definition, they no longer do). This is the intended design — orphans are only created when the old anonymous UID ≠ the Google-linked UID a user just signed into.
+Exists because Firestore rules have `allow delete: if false` on `users/{userId}`. Client-side `deleteDoc()` is blocked. The function validates caller authentication for rate-limiting but does NOT require ownership of the orphan document.

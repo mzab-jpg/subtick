@@ -1,6 +1,6 @@
 # Tangent — Technical Context
 
-> **Last verified:** July 2026 (post-sign-out-fix + orphan-cleanup + safe-area + fabric-crash-fix).
+> **Last verified:** 30 July 2026 (post-refactoring Batches 1–3).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -42,8 +42,18 @@
 | `typescript` | `~6.0.3` | TypeScript compiler |
 
 ### Build Config Files
-- `babel.config.js` — Standard `babel-preset-expo` config (F2 fix — was missing)
-- `metro.config.js` — Standard `expo/metro-config` config (F2 fix — was missing)
+- `babel.config.js` — Standard `babel-preset-expo` config
+- `metro.config.js` — Standard `expo/metro-config` config
+
+### Client Directory Structure Changes (post-refactoring)
+- `src/contexts/` — Now includes `UserContext.tsx` alongside `ThemeContext.tsx`
+- `src/components/` — Shared components: `ErrorBoundary.tsx`, `CategoryChipGrid.tsx`, `ArticleListScreen.tsx`
+- `src/features/reader/` — ReaderScreen decomposition: `useArticleLoader.ts`, `useNavigationQueue.ts`, `useReaderHUD.ts`, `ReaderHUD.tsx`, `ReaderProgressBar.tsx`
+- `src/services/asyncStorageMutex.ts` — Shared AsyncStorage concurrency mutex factory
+- Screens now use `useUser()` from `UserContext` instead of independent `fetchUserProfile()` calls (except DashboardScreen which retains `onSnapshot`)
+- `HistoryScreen.tsx` and `SavedReadsScreen.tsx` are 24-line wrappers over `ArticleListScreen`
+- `OnboardingScreen.tsx` uses shared `CategoryChipGrid` component
+- `ReaderScreen.tsx` is a 430-line orchestrator delegating to 3 hooks + 2 components
 
 ---
 

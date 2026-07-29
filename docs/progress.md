@@ -1,148 +1,151 @@
 # Tangent — Progress & Status
 
-> **Last verified:** July 2026 (post-sign-out-fix + orphan-cleanup + safe-area + fabric-crash-fix).
-> All status claims are based on reading the actual code. "Working" means the code path is complete end-to-end. "Incomplete" means the code exists but a specific branch or feature is verifiably broken or missing.
+> **Last verified:** 30 July 2026 (post-refactoring Batches 1–3).
+> All status claims are based on reading the actual code.
 
 ---
 
 ## 1. Fully Implemented & Working
 
 ### Security
-- ✅ **XSS prevention in Reader** — `escapeHtml()` correctly escapes `&`, `<`, `>`, `"`, `'` before inserting RSS-sourced title/author/publicationName into the WebView HTML template.
-- ✅ **User profile field whitelist (create + update)** — Firestore rules restrict both `create` and `update` on `users/{uid}` to the same 8 safe fields (A4 fix). Stats and weight fields are server-only writes.
-- ✅ **User profile create rule tightened** — `create` rule now whitelists the same fields as `update`, preventing profile forgery at account creation (A4 fix).
-- ✅ **feed_requests schema validation** — Create rule enforces `userId == auth.uid`, URL length cap, field whitelist, and 2KB document size cap.
-- ✅ **feedback schema validation** — Create rule enforces field whitelist and 5KB document size cap.
-- ✅ **behavior_events full validation** — Create rule verifies `request.resource.data.userId == userId` (path match), `eventType` is one of 10 valid values, field whitelist enforced, and 2KB document size cap (S5 + A4 fix).
-- ✅ **Firestore indexes deployed** — `firebase.json` now has `"indexes": "firestore.indexes.json"` pointer; indexes are deployed on every `firebase deploy`.
-- ✅ **syncBehaviorEvents input cap** — Server-side 50-event limit prevents batch overflow and rate-limit abuse (A4 fix).
-- ✅ **FeedRequestScreen description** — Sends empty string instead of `undefined`, preventing Firestore write failures on blank descriptions (A4 fix).
-- ✅ **FeedbackScreen payload** — `status` field removed, matching the rules field whitelist and preventing silent write failures (A4 fix).
+- ✅ **XSS prevention in Reader** — `escapeHtml()` in ReaderScreen correctly escapes RSS metadata
+- ✅ **User profile field whitelist (create + update)** — Firestore rules restrict both to safe fields (A4 + S2)
+- ✅ **feed_requests / feedback schema validation** (S3/S4) — URL format, field schema, size caps
+- ✅ **behavior_events full validation** (S5 + A4) — Path match, eventType enum, field whitelist, 2KB cap
+- ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json`
+- ✅ **syncBehaviorEvents input cap** — Server-side 50-event limit prevents overflow (A4)
+- ✅ **ErrorBoundary** (Batch 1) — Render crash safety net wrapping RootNavigator
+- ✅ **Google Sign-In security** — `request.auth.uid` enforced; client userId ignored; lazy import in Expo Go
 
 ### Core Feed Pipeline
-- ✅ **RSS ingestion** — `rssCollector.ts` fires every 3 hours, reads `feeds` collection, batch-checks article existence with `db.getAll()` (C3 fix), writes new articles.
-- ✅ **Delta-driven archive update** — Post-sync archive pass now queries only `rssStatus == 'current'` articles per feed (using `feedUrl+rssStatus` composite index), not the full historical archive (C4 fix).
-- ✅ **OG metadata fallback scraper** — `fetchOgMetadata()` extracts `og:image`, `og:description`, `meta[name=author]` via regex when RSS item is missing them. (6s timeout)
-- ✅ **Paywall detection** — Three-layer check: keyword list, CSS class patterns, script patterns. Paywalled articles excluded from all candidate pools.
-- ✅ **Dual candidate pool cron** — `cronUpdateCandidatePool` runs every 6 hours. Uses `random_score` field with circular wrap-around queries — 4 capped queries of max 500 docs each (~2,000 reads/run regardless of DB size). Box 1 (`candidatePool_current`): 500 fresh active + 500 old active. Box 2 (`candidatePool_mixed`): 500 fresh any-status + 500 old any-status (archived included proportionally by chance).
-- ✅ **random_score field** — Every article has a `random_score: Math.random()` field assigned on ingestion and refreshed daily by `cronDecayTrendingScores` at zero extra cost. Enables truly random, non-repetitive pool sampling without full collection scans.
-- ✅ **Trending score decay cron** — `cronDecayTrendingScores` runs daily, applies `trendingScore × 0.9057` (halves every 7 days) to all articles with `trendingScore > 1.0` (raised from 0.1 — C1 fix, ~70% write reduction). Also refreshes `random_score` on every touched article.
-- ✅ **Old article cleanup cron** — `cronCleanupOldArticles` runs every 3 days. Step 1: immediately deletes ALL paywalled articles (never shown, pure waste). Step 2: deletes bottom 3% of articles older than 3 months ranked by `peakTrendingScore`. Keeps database bounded. Saved articles are protected via user profile copies.
-- ✅ **peakTrendingScore tracking** — Each article has a `peakTrendingScore` field (all-time high, never decays). Updated in the **same batch** as the trendingScore increment in `syncBehaviorEvents`. Used by cleanup cron for deletion ranking.
-- ✅ **Like/Unlike and Save/Unsave toggle** — Unlike and unsave events fire negative trendingScore increments (-2.0, -3.0) and negative personalization deltas (-0.40, -0.55). Per-user per-article dedup prevents double-counting in a single batch.
-- ✅ **Normalized 5-component ranked feed** — `getRankedFeed` implements fully normalized scoring. All 5 components output [0,1] so formula weights are honest. Two formulas: personalized (High/Mid tranches) and merit-based (Low/Discovery tranches).
-- ✅ **Tranche-based feed assembly** — 4-bucket tranche system using normalized P thresholds: High (P≥0.40): 12 random, Mid (P≥0.20): 8 random, Low (P≥0.10): 4 random if <30 reads else merit-sorted, Discovery (<0.10): 6 random if <30 reads else merit-sorted.
-- ✅ **Dynamic crowd-sourced publisher quality** — `publishers` collection. New publishers seeded at DEFAULT_PUBLISHER_QUALITY (0.8) + delta; existing publishers use atomic increment. Publisher list cached in-memory with 10-min TTL in `syncBehaviorEvents` (C5 fix).
-- ✅ **Firestore fallback** — If Cloud Function unavailable, client falls back to direct Firestore query with `isPaywalled == false` filter pushed to the query (C7 fix).
-- ✅ **P0 Security** — Both `getRankedFeed` and `syncBehaviorEvents` enforce `request.auth.uid`. Client-supplied `userId` is ignored. Unauthenticated calls throw immediately.
-- ✅ **Idempotent event sync** — `event.id` (client-generated) used as Firestore document ID. Retries after network timeout never create duplicate events.
-- ✅ **Firestore write optimizations** — `syncBehaviorEvents` now: (1) skips saving zero-impact `swipe_next` events entirely, (2) merges `peakTrendingScore` update into the main batch, (3) aggregates publisher quality deltas to one write per unique publisher per batch, (4) caches publisher list with 10-min TTL. Reduces writes by ~34–52% per user session.
+- ✅ **RSS ingestion** — `rssCollector.ts` every 3h, batch-checks existence with `db.getAll()` (C3)
+- ✅ **Delta-driven archive update** — Queries only `rssStatus == 'current'` per feed (C4)
+- ✅ **OG metadata fallback scraper** — `fetchOgMetadata()` extracts og:image/description/author (6s timeout)
+- ✅ **Paywall detection** — Three-layer: keywords, CSS class patterns, script patterns
+- ✅ **Dual candidate pool cron** — Random threshold R, 4 capped queries (~2,000 reads/run). Box 1 (current) + Box 2 (mixed)
+- ✅ **random_score field** — Assigned on ingestion, refreshed daily at zero extra cost
+- ✅ **Trending score decay cron** — Daily ×0.9057 for scores > 1.0 (C1, ~70% write reduction)
+- ✅ **Old article cleanup cron** — Every 3 days: delete paywalled + bottom 3% by peakTrendingScore
+- ✅ **peakTrendingScore tracking** — All-time high, never decays, same batch as trendingScore update
+- ✅ **Like/Unlike and Save/Unsave toggle** — Negative increments + per-user per-article dedup
+- ✅ **Normalized 5-component ranked feed** — All components [0,1]; two formulas (personalized + merit)
+- ✅ **Tranche-based feed assembly** — 4 buckets: High/Mid random, Low/Discovery conditional
+- ✅ **Dynamic publisher quality** — `publishers` collection, 10-min TTL cache (C5), atomic increments
+- ✅ **Firestore fallback** — Client falls back to direct query with `isPaywalled == false` filter (C7)
+- ✅ **Idempotent event sync** — `event.id` as Firestore doc ID
+- ✅ **Firestore write optimizations** — Skip swipe_next, batch peakTrendingScore, aggregate publisher writes (~34–52% reduction)
 
 ### Personalization & Learning
-- ✅ **Behavior event classification** — `useBehaviorTracker.ts` classifies exits as one of 8 event types based on scroll depth + session duration. Uses named constants `QUICK_EXIT_MAX_DURATION_MS` / `QUICK_EXIT_MAX_SCROLL` from `constants.ts`.
-- ✅ **Quick-exit double-fire fix** — Shared `sessionSnapshotRef` object used by both `concludeSession()` and the `useEffect` cleanup. `concludeSession()` sets `sessionSnapshotRef.current.concluded = true`; cleanup reads this live value. Prevents swipe_not_interested + quick_exit double-recording (B2 fix).
-- ✅ **AsyncStorage behavior queue** — 500-item cap, mutex-serialized. Events queue locally and flush to Cloud Function.
-- ✅ **Flush race condition fixed** — `flushBehaviorQueue` now uses the same mutex as `queueBehaviorEvent` for its read and write-back steps. Network call stays outside the mutex. Prevents concurrent swipe from being silently clobbered by a flush write-back (B6 fix).
-- ✅ **Offline sync with retry** — `offlineManager.ts` listens for network reconnect, flushes queue with 30s cooldown on failure.
-- ✅ **Watermark-based weight update** — `updateWeights()` uses `weightUpdatedAt` watermark to process only new events. No event replay across syncs. Daily decay applies only once per 23+ hours.
-- ✅ **Faster personalization** — FEEDBACK_DELTAS: save=0.55, like=0.40, read_thorough=0.30, read_skim=0.10. Noticeable personalization within 1-2 sessions.
-- ✅ **WPM calibration** — Rolling 80/20 average; bounds-checked [150, 750 wpm]; skipped for truncated feeds.
-- ✅ **Reading streak & weekly count** — `updateReadStats()` maintains `currentStreakDays` and `weeklyReadCount`.
+- ✅ **Behavior event classification** — 8 types based on scroll depth + session duration with named constants
+- ✅ **Quick-exit double-fire fix** — Shared `sessionSnapshotRef` (B2)
+- ✅ **AsyncStorage behavior queue** — 500-item cap, mutex-serialized (via shared `asyncStorageMutex`) (B6)
+- ✅ **Flush race condition fixed** — Same mutex for read/write; network outside mutex (B6)
+- ✅ **Offline sync with retry** — `offlineManager.ts`, 30s cooldown
+- ✅ **Watermark-based weight update** — `weightUpdatedAt`, no replay, daily decay at ≥23h intervals
+- ✅ **Faster personalization** — FEEDBACK_DELTAS up to 0.55; noticeable within 1–2 sessions
+- ✅ **WPM calibration** — Rolling 80/20 average [150, 750]; skipped for truncated feeds
+- ✅ **Reading streak & weekly count** — `updateReadStats()` in weightUpdater
 
 ### Reader Experience
-- ✅ **Live RSS article fetching** — `fetchAndExtractArticle()` with 15s timeout; Promise-level session cache prevents duplicate downloads. Lazy sanitization: only the matched article is sanitized, not the whole feed (C6 fix).
-- ✅ **Two-mode rendering** — Clean (sanitized HTML) vs Raw (archived articles load URL directly). Automatic based on `rssStatus`.
-- ✅ **RSS failure persistence** — Failed RSS fetches write `@subtick_rss_failed_{id}` to AsyncStorage. Future loads skip immediately.
-- ✅ **HTML injection prevention** — `escapeHtml()` correctly applied to `article.title`, `publicationName`, and `author` before inserting into WebView HTML template (S1 fix).
-- ✅ **Theme changes no longer reload the article** — CSS updates are injected into the existing WebView via `injectJavaScript()` instead of rebuilding the full HTML and forcing a page reload (B9 fix).
-- ✅ **Real-time preloader** — When 5 articles remain, fires flush (non-blocking) + fetches next batch in parallel. No swipe stutter.
-- ✅ **Background prefetcher** — 10-article look-ahead window.
-- ✅ **HUD with auto-hide** — Frosted-glass BlurView, 2.5s auto-hide. Like/Bookmark in HUD. Shows article title (not publication name) with `ellipsizeMode="tail"` so long titles truncate instead of expanding the bar (A5 fix). Never visible on initial page load — only appears when user actively scrolls up (A5 fix).
-- ✅ **Edge-zone PanResponder swipes** — 45px zones, 40px threshold.
-- ✅ **Right-swipe navigation in history mode** — Right-swipe now correctly calls `goToPrev()` in both saved-reads and history modes (B5 fix).
-- ✅ **WebView navigation lock** — External links open in OS browser; archived mode allows same-domain redirects.
-- ✅ **Scroll progress bar** — Plain React state (`useState(scrollProgress)`) with percentage strings (`${Math.round(scrollProgress * 100)}%`) — avoids Fabric's `AnimatedInterpolation` prop validation entirely. Uses safe area insets for bottom positioning.
-- ✅ **Per-publisher frontend rules** — `frontendRules.removeCss` and `injectCss` in both rendering modes.
-- ✅ **Mock/Sandbox mode** — Reader accepts `mockArticle` + `mockHtml` for developer testing.
+- ✅ **Live RSS article fetching** — `fetchAndExtractArticle()` with 15s timeout + Promise-level session cache
+- ✅ **Two-mode rendering** — Clean (sanitized HTML) vs Raw (archived URL). Automatic based on `rssStatus`
+- ✅ **RSS failure persistence** — AsyncStorage flag; future loads skip immediately
+- ✅ **HTML injection prevention** — `escapeHtml()` on title, publicationName, author (S1)
+- ✅ **Theme changes no reload** — CSS injected via `injectJavaScript()` (B9)
+- ✅ **Real-time preloader** — Triggers at 5 remaining; non-blocking flush + parallel fetch
+- ✅ **Background prefetcher** — 10-article sliding look-ahead window
+- ✅ **HUD with auto-hide** — BlurView, 2.5s auto-hide, article title with `ellipsizeMode="tail"`, hidden on initial load (A5)
+- ✅ **Edge-zone PanResponder swipes** — 45px zones, 40px threshold, 200ms pause detection
+- ✅ **Right-swipe in history/saved modes** — Correctly calls `goToPrev()` (B5)
+- ✅ **WebView navigation lock** — External links → OS browser; archived mode allows same-domain
+- ✅ **Scroll progress bar** — Plain React state with percentage strings (Fabric-safe)
+- ✅ **Per-publisher frontend rules** — `removeCss` + `injectCss` in both modes
+- ✅ **Mock/Sandbox mode** — Reader accepts `mockArticle` + `mockHtml`
 
 ### Auth & Onboarding
-- ✅ **Anonymous auth** — `signInAnonymouslyIfNeeded()` reuses existing session.
-- ✅ **User profile bootstrap** — `ensureUserProfile()` creates default profile with neutral weights (1.0).
-- ✅ **Onboarding flow** — 3-state chip grid. Minimum 3 selected. `completeOnboarding()` properly awaited before Dashboard reloads.
-- ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding if not onboarded.
-- ✅ **Sign-out preserves app stability** — `signOutUser()` clears all `@subtick_*` AsyncStorage data before signing out, then creates a fresh anonymous session + Firestore profile. Dashboard detects null profile and redirects new users to Onboarding instead of crashing.
+- ✅ **Anonymous auth** — Reuses existing session
+- ✅ **User profile bootstrap** — `ensureUserProfile()` creates default profile with neutral weights
+- ✅ **Onboarding flow** — 3-state chip grid (uses shared `CategoryChipGrid`). Min 3 selected
+- ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding
+- ✅ **Sign-out preserves stability** — Clears AsyncStorage → new anonymous session → fresh profile
 
 ### Screens & Navigation
-- ✅ **Dashboard** — Hero + 2-row layout, stats pill (3 configurable metrics). Queue passed to Reader no longer includes the opened article (B3 fix). Discover button jumps past the 3 visible cards only (SURPRISE_ME_MIN_INDEX = 3, A3 fix). Focus listener no longer refetches articles on every navigation back — only refetches if all articles were read (A5 fix). Reader queue is shuffled so untapped Dashboard cards are scattered randomly among the full feed (A5 fix). Uses safe area insets.
-- ✅ **Settings** — Now scrollable (`<ScrollView>`). Developer Options section hidden in production (`__DEV__` gate). Sections: Account, Library, Preferences, Support & Feedback. Uses safe area insets.
-- ✅ **History screen** — Fully offline. Zero Firestore reads. Loads once via focus listener only, no double-load on mount (B10 fix). Passes full history ID array as Reader queue, enabling swipe navigation through all history articles (A4 fix). Uses safe area insets.
-- ✅ **Saved Reads screen** — `loadSaved()` called on both mount AND focus. Uses safe area insets.
-- ✅ **Saved articles Firestore sync** — `unmarkArticleSaved()` now correctly deletes the server copy in addition to local storage (B4 fix). `markArticleSaved()` only writes to Firestore if the article isn't already saved (C8 fix).
-- ✅ **Dashboard Stats screen** — "Hours Read" correctly displays `totalReadTimeMs`. Uses safe area insets.
-- ✅ **Theme system** — Light/dark/system. Pre-compiled WebView CSS. Persisted to AsyncStorage + Firestore.
-- ✅ **CategoryPreferences, DashboardStats, Feedback, FeedRequest** sub-screens all implemented. All use safe area insets.
-- ✅ **Safe area insets** — All 11 screens use `useSafeAreaInsets()` with `SafeAreaProvider` in `App.tsx`, replacing hardcoded `paddingTop` values (52–64px) with dynamic insets that adapt to notches, Dynamic Island, and rounded corners on all devices.
+- ✅ **Dashboard** — Hero+row layout, stats pill, focus refetch guard (A5), queue shuffle (A5), `onSnapshot` listener
+- ✅ **Settings** — ScrollView, __DEV__ gate for Developer Options, sections: Account / Library / Preferences / Support
+- ✅ **History screen** — 24-line wrapper over `ArticleListScreen` + `getSeenArticleMetas(30)`
+- ✅ **Saved Reads screen** — 24-line wrapper over `ArticleListScreen` + `getSavedArticleMetas`
+- ✅ **CategoryPreferences** — Uses `CategoryChipGrid` + `useUser()`; auto-saves on tap
+- ✅ **DashboardStats** — Select ≤3 stats for dashboard pill; uses `useUser()`
+- ✅ **AccountScreen** — Google link/unlink, sign out, reset, delete; uses `useUser()`
+- ✅ **Theme system** — Light/dark/system; pre-compiled WebView CSS; AsyncStorage + Firestore dual persistence
+- ✅ **All 11 screens use safe area insets** — Dynamic `useSafeAreaInsets()` via `SafeAreaProvider`
 
 ### Category Reorganisation
-- ✅ **6 legacy categories → 9 new categories** — "Technology & Innovation", "Business & Finance", "Politics & Global Affairs", "Arts & Culture", "Science & Health", "Philosophy & Human Behavior" replaced by: Politics, Business, Finance, Technology, Science, History, Culture, Lifestyle, Entertainment.
-- ✅ **42 verified full-RSS feeds** — Each feed was validated via stealth curl (bypassing Cloudflare) comparing free-article RSS body against the actual webpage. Feeds with paywalled top articles are skipped in favour of the next free article. Only feeds that provide ≥70% full-article text in RSS are included.
-- ✅ **Icon maps updated** — OnboardingScreen, CategoryPreferencesScreen, DeveloperOptionsScreen, and DashboardScreen all use new 9-category icon mappings.
-- ✅ **Cleanup script created** — `firebase/scripts/oneoff/cleanupOldCategories.js` deletes old-category articles, strips deprecated weights from user profiles, cleans candidate pools, and removes stale publisher entries.
-- ✅ **Backward data cleanup** — Old category strings purged from all src/ files. Firestore cleanup must be run manually (node scripts/oneoff/cleanupOldCategories.js + node seedFeeds.js).
+- ✅ **6 legacy → 9 new categories** — Politics, Business, Finance, Technology, Science, History, Culture, Lifestyle, Entertainment
+- ✅ **42 verified full-RSS feeds** — Stealth curl-validated, ≥70% full-article text
+- ✅ **Cleanup script** — `firebase/scripts/oneoff/cleanupOldCategories.js`
 
 ### Build & Foundation
-- ✅ **babel.config.js and metro.config.js** — Standard Expo SDK 57 build configuration files present.
-- ✅ **Functions tsconfig** — No longer incorrectly extends `expo/tsconfig.base`; standalone Node.js config.
-- ✅ **.env.example** — Documents `EXPO_PUBLIC_USE_EMULATORS` and optional `EXPO_PUBLIC_FIREBASE_*` override variables.
-- ✅ **Firebase config env-var support** — `firebase.ts` reads config from `EXPO_PUBLIC_FIREBASE_*` with hardcoded production values as fallback.
-- ✅ **SafeAreaProvider** — Wraps the entire app tree in `App.tsx`, enabling `useSafeAreaInsets()` in all screens.
+- ✅ **babel.config.js + metro.config.js** — Standard Expo SDK 57 configs
+- ✅ **Functions tsconfig** — Standalone Node.js config (not extending expo base — F3)
+- ✅ **.env.example** — Documents all `EXPO_PUBLIC_*` vars
+- ✅ **Firebase config env-var support** — `firebase.ts` reads from env with hardcoded production fallback
+- ✅ **SafeAreaProvider** — Wraps entire app tree
 
 ### Account Management
-- ✅ **Native Google Sign-In** — Fully tested and working on Android dev client. `auth.ts` uses `@react-native-google-signin/google-signin` with `GoogleSignin.signIn()` + `linkWithCredential()`. Preserves anonymous UID so all data survives account creation. Stores `userEmail` on the profile. Debug SHA-1 fingerprint registered in `google-services.json` alongside release SHA-1. Web Client ID configured in `App.tsx` (hardcoded fallback + env var `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID`).
-- ✅ **Google Sign-In in Expo Go** — Static `GoogleSignin` import replaced with lazy `require()` inside try/catch in `App.tsx`. Expo Go will log a message and skip configuration — no crash. Full Google Sign-In requires a dev client build (install `expo-dev-client`, build debug APK once, then `npx expo start --dev-client`).
-- ✅ **Cross-device seen article dedup** — `markArticleSeen()` writes article ID to both AsyncStorage and Firestore profile `seenArticleIds` array via `arrayUnion` (atomic, idempotent, ~$0.05/month per 1K users). `getSeenArticleIds()` merges local + server IDs on startup so seen history follows the user across devices.
-- ✅ **Sign Out** — `signOutUser()` clears all `@subtick_*` local data, calls Firebase `signOut()`, re-authenticates anonymously, then creates a fresh Firestore profile via `ensureUserProfile()`. Dashboard gracefully redirects brand-new users (null profile) to Onboarding. UI in Settings → Account → Sign Out with confirmation Alert.
-- ✅ **Reset Account** — `resetAccount` Cloud Function (Admin SDK): deletes all `behavior_events` and `saved_articles` subcollections, resets profile stats and category weights to defaults, sets `isOnboarded: false` (forces re-onboarding). Client calls function then clears all `@subtick_*` AsyncStorage keys.
-- ✅ **Delete Account** — `deleteAccount` Cloud Function (Admin SDK): requires `confirmation: 'DELETE'`, deletes subcollections + profile document + Firebase Auth account (`admin.auth().deleteUser(uid)`). Client clears AsyncStorage and re-signs in anonymously after deletion.
-- ✅ **`isActive` soft-delete field** — `UserProfile` now has `isActive: boolean` (default `true`). Can be set to `false` in Firestore console to administratively disable a user without deleting data.
-- ✅ **Firestore create rule corrected** — `create` rule now whitelists all 18 fields written by `ensureUserProfile()`, including `categoryWeights`, `linkedGoogleAccount`, stats fields. The previous 11-field whitelist would have silently rejected new user profile creation.
-- ✅ **Credential recovery after sign-out** — `linkGoogleAccount()` catches `auth/credential-already-in-use` and falls back to `signInWithCredential()`, recovering the original Google-linked account with all data intact. Calls `ensureUserProfile()` after recovery to sync Firestore profile.
-- ✅ **Mid-session UID change remount** — `App.tsx` uses an `onAuthStateChanged` listener to detect UID changes (e.g. Google account recovery) mid-session. When detected, bumps a React `key` on `RootNavigator`, forcing React to destroy and recreate the entire navigation tree with fresh Firestore listeners attached to the correct UID.
-- ✅ **Account sub-screen** — `AccountScreen.tsx` shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons (Sign Out, Reset, Delete). Settings now has a single "Account" navigation row (like Category Preferences).
-- ✅ **Orphan anonymous profile cleanup** — `linkGoogleAccount()` calls the `deleteOrphanProfile` Cloud Function (9th function, uses Admin SDK to bypass security rules) to delete stale `users/{oldAnonymousUid}` documents after `credential-already-in-use` recovery. Previously the `deleteDoc()` call silently failed due to `allow delete: if false` in Firestore rules.
-- ✅ **Fabric crash fix** — Replaced custom `cardStyleInterpolator` (which used `current.progress.interpolate()` producing an `AnimatedInterpolation` object passed as `transform` prop) with `presentation: 'modal'` on the Reader screen in `RootNavigator.tsx`. Fabric's debug-mode `overridePropsReadableMap` assertion in RN 0.86 rejected the `AnimatedInterpolation` prop type, causing `java.lang.AssertionError`. The `presentation: 'modal'` native transition bypasses Fabric's JS prop validation entirely. Release builds were unaffected (assertions stripped). Only two files changed from `c999a93`: `App.tsx` (uncommented `import 'expo-dev-client'`) and `RootNavigator.tsx` (removed `cardStyleInterpolator`, added `presentation: 'modal'`). The progress bar in ReaderScreen is Fabric-safe using React state with percentage strings (not Animated).
+- ✅ **Native Google Sign-In** — `@react-native-google-signin/google-signin` with lazy import (Expo Go safe)
+- ✅ **Cross-device seen article dedup** — AsyncStorage primary + Firestore `arrayUnion`
+- ✅ **Sign Out** — Clears `@subtick_*` → signOut → anonymous → fresh profile
+- ✅ **Reset Account** — `resetAccount` CF: deletes subcollections, resets profile, forces re-onboarding
+- ✅ **Delete Account** — `deleteAccount` CF: requires `confirmation: 'DELETE'`, permanent
+- ✅ **`isActive` soft-delete** — Default true; set false in Firestore console to disable
+- ✅ **Credential recovery after sign-out** — Catches `auth/credential-already-in-use`, falls back to `signInWithCredential`
+- ✅ **Mid-session UID change remount** — React key bump on RootNavigator
+- ✅ **Orphan cleanup** — `deleteOrphanProfile` CF uses Admin SDK to bypass `allow delete: if false`
+
+### Refactoring (Batches 1–3)
+- ✅ **Fabric crash fix** — `cardStyleInterpolator` → `presentation: 'modal'` in RootNavigator (debug-only crash)
+- ✅ **Shared AsyncStorage mutex** — `createStorageMutex()` factory in `asyncStorageMutex.ts`; used by behaviorSync + feedService
+- ✅ **ErrorBoundary** — Class component wrapping RootNavigator; "Something went wrong" + Try Again
+- ✅ **OnboardingScreen type fix** — Removed `any` navigation prop; uses typed `useNavigation`
+- ✅ **DashboardStatsScreen header fix** — Added `paddingTop: topInset`
+- ✅ **CategoryChipGrid** — Shared 3-state selector; used by Onboarding + CategoryPreferences
+- ✅ **ArticleListScreen** — Shared offline list; used by History + SavedReads (24 lines each)
+- ✅ **UserContext** — `useUser()` hook replaces per-screen `fetchUserProfile()` in Settings, Account, DashboardStats, CategoryPreferences
+- ✅ **ReaderScreen decomposition** — 1,098 → 430 lines as orchestrator; 5 feature hooks/components under `src/features/reader/`
 
 ---
 
 ## 2. Designed / Partially Built — Incomplete
 
 ### Feed Request Review Workflow (Admin Side Only)
-- **Status:** Submission complete. Review/approval not implemented. Requests accumulate as `status: 'pending'` indefinitely.
+- **Status:** Submission complete. Review/approval not implemented. Requests accumulate as `status: 'pending'`.
 
 ---
 
 ## 3. Confirmed Absent (Gaps)
 
-- **No automated tests** — No jest/vitest/testing-library anywhere.
-- **No push notifications** — No `expo-notifications` or FCM.
-- **No analytics / error tracking** — Console logging only.
-- **No cross-device saved HTML sync** — Saved article metadata syncs to Firestore, but full HTML for offline reading is device-local by design.
-- **No content moderation** — Articles ingested automatically, paywall detection only.
-- **No rate limiting on `syncBehaviorEvents`** — Per-user per-article dedup prevents in-batch abuse, but a user sending many separate batches could still inflate trendingScore. Decay mitigates long-term impact.
-- **No pull-to-refresh** — Feed refresh is triggered by navigation focus and queue depletion only.
-- **No ErrorBoundary** — A render crash anywhere in the component tree shows a red screen.
+- **No automated tests** — No jest/vitest/testing-library
+- **No push notifications** — No `expo-notifications` or FCM
+- **No analytics / error tracking** — Console logging only
+- **No cross-device saved HTML sync** — Saved article metadata syncs to Firestore, full HTML is device-local
+- **No content moderation** — Paywall detection only
+- **No rate limiting on `syncBehaviorEvents`** — Per-user per-article dedup only within single batch
+- **No pull-to-refresh** — Feed refresh by navigation focus + queue depletion only
 
 ---
 
 ## 4. Known Future Work
 
-1. **Configure Google Sign-In client IDs** — Native Google Sign-In is implemented (`@react-native-google-signin/google-signin`). Requires OAuth client IDs from Google Cloud Console (Web Client ID in `App.tsx` + iOS Client ID in `app.json`) before it will function.
-2. **Add trending score rate limiting** — Per-user per-article dedup already in `syncBehaviorEvents.ts` for a single batch; add cross-session dedup.
-3. **Build feed request admin workflow** — Cloud Function trigger or admin UI to process approved requests.
-4. **Add automated tests** — Scoring formula, weight update math, behavior classification, paywall detection.
-5. **Candidate pool document size limit** — At ~1,250 articles, the `system/candidatePool_current` document will approach Firestore's 1 MB limit. Strip pool articles to scoring-essential fields only, or migrate to a subcollection.
-6. **Dashboard infinite scroll** — Only 3 of 30 fetched articles shown; remaining accessible only via Discover button.
-7. **Run `backfillRandomScore.js` once** — `firebase/scripts/oneoff/backfillRandomScore.js` must be run once against production to assign `random_score` to all pre-existing articles. Until then, `cronUpdateCandidatePool` will only sample articles ingested after the deployment.
-8. **Shared component extraction** — `OnboardingScreen` and `CategoryPreferencesScreen` share ~80% code. `HistoryScreen` and `SavedReadsScreen` are near-identical. Extract shared components to reduce duplication.
-9. **UserContext** — Each screen independently fetches the user profile from Firestore. A shared React Context would eliminate redundant reads.
-10. **Theme preference cross-device sync** — `themePreference` is written to Firestore but ThemeContext only reads from AsyncStorage. Fresh installs on new devices ignore the cloud preference.
+1. **Configure Google Sign-In client IDs** — Native Google Sign-In is implemented. Needs OAuth client IDs from Google Cloud Console.
+2. **Add trending score rate limiting** — Cross-session dedup for `syncBehaviorEvents`
+3. **Build feed request admin workflow** — Cloud Function trigger or admin UI
+4. **Add automated tests** — Scoring formula, weight update math, behavior classification, paywall detection
+5. **Candidate pool document size limit** — At ~1,250 articles, `system/candidatePool_current` approaches 1 MB. Strip to essential fields or migrate to subcollection.
+6. **Dashboard infinite scroll** — Only 3 of 30 fetched articles shown; rest via Discover button
+7. **Run `backfillRandomScore.js` once** — Assign `random_score` to all pre-existing articles
+8. **ReaderScreen decomposition** — ✅ Done (Batch 3)
+9. **Shared component extraction** — ✅ Done (Batch 2: CategoryChipGrid, ArticleListScreen)
+10. **UserContext** — ✅ Done (Batch 2)
+11. **Service file splits** — Deferred (high risk, low benefit currently)
+12. **Theme preference cross-device sync** — `themePreference` written to Firestore but ThemeContext only reads from AsyncStorage
