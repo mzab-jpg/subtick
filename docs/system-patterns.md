@@ -16,7 +16,7 @@
 
 ### Local Component State
 - `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Focus listener no longer triggers a full refetch on every navigation back — only when all articles have been read (A5 fix). Reader queue is shuffled on tap so untapped cards are scattered randomly (A5 fix). `getTopCategory()` uses `userProfile.categoryWeights || {}` to guard against missing schema fields. Uses `insets.top` for dynamic header padding.
-- `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`. Uses `insets.top` for HUD padding, `insets.bottom` for progress bar positioning. Progress bar uses `Animated.View` with numeric pixel values (`SCREEN_WIDTH`) via `scrollProgress.interpolate()` — not percentage strings (Fabric crash fix for RN 0.86).
+- `ReaderScreen.tsx`: `article`, `resolvedHtml`, `currentIndex`, `activeQueueIds`, `articleCache` (in-memory sliding window), `isLiked`, `isSaved`, `hudVisible`, `queueExhausted`, `preloading`. Uses `insets.top` for HUD padding, `insets.bottom` for progress bar positioning. Progress bar uses plain React state (`setScrollProgress`) with percentage-string `width` — Fabric-safe (see Progress Bar section in §5).
 - `OnboardingScreen.tsx`: `chipStates: Record<string, 'selected'|'not_interested'|'neutral'>` — pure local, never synced until Continue is pressed
 - `SettingsScreen.tsx`: `profile: UserProfile | null` — fetched on mount + focus, optimistically updated on changes. Account section now delegates to `AccountScreen.tsx` sub-screen (single navigation row with email/Anonymous subtitle). Uses safe area insets.
 - `AccountScreen.tsx`: `profile: UserProfile | null` — fetched on mount. Shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons. Uses safe area insets.
@@ -365,12 +365,38 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately via `trackE
 - **Raw URI (archived) mode:** Same-domain navigations allowed (redirects); cross-domain → OS browser. Initial load fully allowed.
 - HTTP errors (≥400) or load errors → error UI with "Open in Browser" button.
 
-### Progress Bar (Fabric-Safe)
-The bottom progress bar uses `Animated.View` with:
-- `width: scrollProgress.interpolate({ outputRange: [0, SCREEN_WIDTH], extrapolate: 'clamp' })` — numeric pixel values instead of percentage strings (required by Fabric on RN 0.86+)
-- No shadow props (`shadowColor`, `shadowOffset`, `shadowOpacity`, `shadowRadius`) — these are iOS-only and crash Fabric on Android
-- Container has `borderRadius: 3` for rounded corners; no `overflow: 'hidden'` needed since fill matches container height
+### Progress Bar
+The bottom progress bar uses plain React state (`useState(scrollProgress)`) with a `View` (not `Animated.View`):
+- `width: \`${Math.round(scrollProgress * 100)}%\`` — percentage string set via React state, not via `Animated.interpolate()`, so Fabric's `overridePropsReadableMap` never sees an `AnimatedInterpolation` object
+- Uses `colors.accent` for the fill color; container has `borderRadius: 3` for rounded corners
 - Position: `bottom: insets.bottom` (safe area-adjusted)
+- The WebView's injected JS pushes scroll percentage updates via `postMessage`, which ReaderScreen handles in `onMessage` by calling `setScrollProgress()`
+
+### Fabric Crash Fix — `cardStyleInterpolator` → `presentation: 'modal'`
+Source: `RootNavigator.tsx`
+
+Fabric's debug-mode `overridePropsReadableMap` assertion gate validates every prop before passing it to native views. `AnimatedInterpolation` objects (produced by `interpolate()`) are valid at runtime but fail this strict type check in debug builds. The fix replaces JS-driven transition animations with native-presentation transitions that bypass Fabric's prop validation entirely.
+
+**Before (crashing in debug):**
+```tsx
+cardStyleInterpolator: ({ current, layouts }) => ({
+  cardStyle: {
+    transform: [{
+      translateY: current.progress.interpolate({
+        inputRange: [0, 1],
+        outputRange: [layouts.screen.height, 0],
+      }),
+    }],
+  },
+}),
+```
+
+**After (fixed):**
+```tsx
+presentation: 'modal',
+```
+
+Release builds strip Fabric's assertion gates, so the crash never occurred in production APKs. Only debug-mode dev clients and Expo Go were affected.
 
 ---
 

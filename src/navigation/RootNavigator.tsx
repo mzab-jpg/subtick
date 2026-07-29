@@ -67,18 +67,7 @@ export default function RootNavigator() {
           component={ReaderScreen}
           options={{
             gestureEnabled: false,
-            cardStyleInterpolator: ({ current, layouts }) => ({
-              cardStyle: {
-                transform: [
-                  {
-                    translateY: current.progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [layouts.screen.height, 0],
-                    }),
-                  },
-                ],
-              },
-            }),
+            presentation: 'modal',
           }}
         />
         <Stack.Screen

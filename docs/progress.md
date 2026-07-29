@@ -61,7 +61,7 @@
 - ✅ **Edge-zone PanResponder swipes** — 45px zones, 40px threshold.
 - ✅ **Right-swipe navigation in history mode** — Right-swipe now correctly calls `goToPrev()` in both saved-reads and history modes (B5 fix).
 - ✅ **WebView navigation lock** — External links open in OS browser; archived mode allows same-domain redirects.
-- ✅ **Scroll progress bar** — Animated bottom bar using pixel values (`SCREEN_WIDTH`, not percentage strings) for Fabric compatibility. Uses safe area insets for bottom positioning.
+- ✅ **Scroll progress bar** — Plain React state (`useState(scrollProgress)`) with percentage strings (`${Math.round(scrollProgress * 100)}%`) — avoids Fabric's `AnimatedInterpolation` prop validation entirely. Uses safe area insets for bottom positioning.
 - ✅ **Per-publisher frontend rules** — `frontendRules.removeCss` and `injectCss` in both rendering modes.
 - ✅ **Mock/Sandbox mode** — Reader accepts `mockArticle` + `mockHtml` for developer testing.
 
@@ -110,7 +110,7 @@
 - ✅ **Mid-session UID change remount** — `App.tsx` uses an `onAuthStateChanged` listener to detect UID changes (e.g. Google account recovery) mid-session. When detected, bumps a React `key` on `RootNavigator`, forcing React to destroy and recreate the entire navigation tree with fresh Firestore listeners attached to the correct UID.
 - ✅ **Account sub-screen** — `AccountScreen.tsx` shows account status card (email or "Anonymous"), link/unlink Google toggle, and action buttons (Sign Out, Reset, Delete). Settings now has a single "Account" navigation row (like Category Preferences).
 - ✅ **Orphan anonymous profile cleanup** — `linkGoogleAccount()` calls the `deleteOrphanProfile` Cloud Function (9th function, uses Admin SDK to bypass security rules) to delete stale `users/{oldAnonymousUid}` documents after `credential-already-in-use` recovery. Previously the `deleteDoc()` call silently failed due to `allow delete: if false` in Firestore rules.
-- ✅ **Fabric crash fix** — Scroll progress bar in ReaderScreen changed from percentage strings (`'0%'`/`'100%'`) to numeric pixel values (`0`/`SCREEN_WIDTH`) with `extrapolate: 'clamp'`. Removed iOS-only shadow props (`shadowColor`, `shadowOffset`, `shadowOpacity`, `shadowRadius`) and `overflow: 'hidden'` that caused `java.lang.AssertionError` in `SurfaceMountingManager.overridePropsReadableMap` on Android Fabric (RN 0.86).
+- ✅ **Fabric crash fix** — Replaced custom `cardStyleInterpolator` (which used `current.progress.interpolate()` producing an `AnimatedInterpolation` object passed as `transform` prop) with `presentation: 'modal'` on the Reader screen in `RootNavigator.tsx`. Fabric's debug-mode `overridePropsReadableMap` assertion in RN 0.86 rejected the `AnimatedInterpolation` prop type, causing `java.lang.AssertionError`. The `presentation: 'modal'` native transition bypasses Fabric's JS prop validation entirely. Release builds were unaffected (assertions stripped). Only two files changed from `c999a93`: `App.tsx` (uncommented `import 'expo-dev-client'`) and `RootNavigator.tsx` (removed `cardStyleInterpolator`, added `presentation: 'modal'`). The progress bar in ReaderScreen is Fabric-safe using React state with percentage strings (not Animated).
 
 ---
 

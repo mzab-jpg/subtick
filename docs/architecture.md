@@ -132,7 +132,7 @@
         │                            #   theme CSS injected dynamically (B9 fix); right-swipe in history mode (B5 fix);
         │                            #   escapeHtml XSS fix (S1 fix);
         │                            #   HUD shows article title with truncation, never visible on initial load (A5 fix);
-        │                            #   progress bar uses pixel values (SCREEN_WIDTH) not % strings (Fabric crash fix);
+        │                            #   progress bar uses percentage strings via React state (Fabric-safe since not Animated);
         │                            #   safe area insets for HUD + progress bar positioning
         ├── SettingsScreen.tsx       # ScrollView layout; category prefs, stats, theme, Google link; Dev Options in __DEV__ only;
         │                            #   uses safe area insets for header padding
