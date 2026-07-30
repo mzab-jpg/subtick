@@ -252,14 +252,20 @@ export async function updateWeights(userId: string): Promise<void> {
     lastUpdated: now,
   });
 
-  console.log(
-    `[weightUpdater] Updated weights for ${userId}. ` +
-    `Deltas: ${Object.entries(deltasByCategory).map(([k, v]) => `${k}${v >= 0 ? '+' : ''}${v.toFixed(3)}`).join(', ')}. ` +
-    `Result: ${Object.entries(decayedWeights).slice(0, 5).map(([k, v]) => `${k}=${v.toFixed(3)}`).join(', ')}`
-  );
+  // B2 Fix: Gate detailed weight logging behind the emulator flag so production
+  // doesn't ship per-user category deltas to billable logs.
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    console.log(
+      `[weightUpdater] Updated weights for ${userId}. ` +
+      `Deltas: ${Object.entries(deltasByCategory).map(([k, v]) => `${k}${v >= 0 ? '+' : ''}${v.toFixed(3)}`).join(', ')}. ` +
+      `Result: ${Object.entries(decayedWeights).slice(0, 5).map(([k, v]) => `${k}=${v.toFixed(3)}`).join(', ')}`
+    );
+  }
 
   // 8. Update weekly read count and streak
-  await updateReadStats(userId, profile);
+  // B3 Fix: Pass the already-fetched events into updateReadStats instead of
+  // having it run a second Firestore query on the same subcollection.
+  await updateReadStats(userId, profile, events);
 }
 
 /**
@@ -278,31 +284,32 @@ function applyDecay(weights: Record<string, number>): Record<string, number> {
 
 /**
  * Update reading stats: weekly count, streak, and last read date.
+ *
+ * B3 Fix: Accepts the already-fetched events from updateWeights instead of
+ * running a second Firestore query. The existing profile.weeklyReadCount was
+ * correct as of the last sync; we add the new reads from this batch to get
+ * the updated weekly total. This eliminates one Firestore read per sync.
  */
 async function updateReadStats(
   userId: string,
-  profile: UserProfile
+  profile: UserProfile,
+  newEvents: BehaviorEvent[]
 ): Promise<void> {
   const now = Date.now();
   const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-  // Fetch only events from the past 7 days, filtered by Firestore — not in memory.
-  // This prevents downloading the user's entire interaction history just to count one week.
-  const weeklySnap = await db
-    .collection('users')
-    .doc(userId)
-    .collection('behavior_events')
-    .where('timestamp', '>=', oneWeekAgo)
-    .get();
-
-  // Count "reads" this week (all returned events are already within the 7-day window)
-  let weeklyReadCount = 0;
-  weeklySnap.forEach((doc) => {
-    const event = doc.data() as BehaviorEvent;
-    if (event.eventType === 'read_thorough' || event.eventType === 'read_skim') {
-      weeklyReadCount++;
+  // Count new reads from the already-fetched events that fall within the 7-day window.
+  // The existing profile.weeklyReadCount was correct as of the last sync.
+  let newReadsThisWeek = 0;
+  for (const event of newEvents) {
+    if (
+      event.timestamp >= oneWeekAgo &&
+      (event.eventType === 'read_thorough' || event.eventType === 'read_skim')
+    ) {
+      newReadsThisWeek++;
     }
-  });
+  }
+  const weeklyReadCount = (profile.weeklyReadCount || 0) + newReadsThisWeek;
 
   // Streak logic
   let streak = profile.currentStreakDays || 0;

@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../contexts/ThemeContext';
+import { useUser } from '../contexts/UserContext';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, RootStackParamList } from '../types';
@@ -59,6 +60,12 @@ export default function ReaderScreen() {
   const isMockMode = !!mockArticle;
   const isRestrictedMode = isHistoryMode || isSavedMode || isMockMode;
 
+  // B1 Fix: Use the shared profile from UserContext to get server-side seen article IDs.
+  // This lets the preloader call getSeenArticleIdsLocally() instead of getSeenArticleIds(),
+  // avoiding a redundant Firestore getDoc on every preload batch.
+  const { profile: contextProfile } = useUser();
+  const serverSeenIds = contextProfile?.seenArticleIds;
+
   // --- Feature hooks ---
   const {
     article, resolvedHtml, fetchError, loading,
@@ -77,7 +84,7 @@ export default function ReaderScreen() {
     queueExhausted, preloading, setQueueExhausted, goToNext, goToPrev,
   } = useNavigationQueue({
     queueArticleIds: queueArticleIds || [], startIndex: startIndex ?? 0, isRestrictedMode,
-    loadArticle, setIsSaved, setIsLiked,
+    loadArticle, setIsSaved, setIsLiked, serverSeenIds,
   });
 
   // --- Scroll progress (Fabric-safe plain state) ---

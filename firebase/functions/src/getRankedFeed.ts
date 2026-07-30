@@ -699,25 +699,29 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
 
     const finalFeed = assembleFeedWithTranches(scored, RETURN_FEED_SIZE, totalArticlesRead);
 
-    console.log(`[getRankedFeed] --- Top 5 by personalized score ---`);
-    [...scored].sort((a, b) => b.personalizedScore - a.personalizedScore).slice(0, 5).forEach((s, i) => {
-      const daysOld = Math.max(0, (Date.now() - s.article.publishDate) / (1000 * 60 * 60 * 24));
-      const compKey = `${s.article.category}::${s.article.lengthStyle}`;
-      const catWeight = categoryLengthWeights[compKey] ?? categoryWeights[s.article.category] ?? 1.0;
-      const pubWeight = publisherWeights[s.article.publicationName] ?? 1.0;
-      const rawQuality = publisherQualities[s.article.publicationName] ?? s.article.qualityScore ?? 0.8;
-      const pubCount = pubCounts[s.article.publicationName] || 1;
-      const P = normalizeP(catWeight, pubWeight);
-      const T = normalizeT(s.article.trendingScore || 0);
-      const R = normalizeR(daysOld);
-      const Q = normalizeQ(rawQuality);
-      const U = normalizeU(pubCount);
-      console.log(
-        `  #${i + 1} "${s.article.title.substring(0, 50)}..." ` +
-        `pScore=${s.personalizedScore.toFixed(3)} mScore=${s.meritScore.toFixed(3)} ` +
-        `P=${P.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${Q.toFixed(2)} U=${U.toFixed(2)}`
-      );
-    });
+    // B2 Fix: Gate detailed score logging behind the emulator flag so production
+    // doesn't ship article titles (PII) and score breakdowns to billable logs.
+    if (process.env.FUNCTIONS_EMULATOR === 'true') {
+      console.log(`[getRankedFeed] --- Top 5 by personalized score ---`);
+      [...scored].sort((a, b) => b.personalizedScore - a.personalizedScore).slice(0, 5).forEach((s, i) => {
+        const daysOld = Math.max(0, (Date.now() - s.article.publishDate) / (1000 * 60 * 60 * 24));
+        const compKey = `${s.article.category}::${s.article.lengthStyle}`;
+        const catWeight = categoryLengthWeights[compKey] ?? categoryWeights[s.article.category] ?? 1.0;
+        const pubWeight = publisherWeights[s.article.publicationName] ?? 1.0;
+        const rawQuality = publisherQualities[s.article.publicationName] ?? s.article.qualityScore ?? 0.8;
+        const pubCount = pubCounts[s.article.publicationName] || 1;
+        const P = normalizeP(catWeight, pubWeight);
+        const T = normalizeT(s.article.trendingScore || 0);
+        const R = normalizeR(daysOld);
+        const Q = normalizeQ(rawQuality);
+        const U = normalizeU(pubCount);
+        console.log(
+          `  #${i + 1} "${s.article.title.substring(0, 50)}..." ` +
+          `pScore=${s.personalizedScore.toFixed(3)} mScore=${s.meritScore.toFixed(3)} ` +
+          `P=${P.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${Q.toFixed(2)} U=${U.toFixed(2)}`
+        );
+      });
+    }
 
     console.log(`[getRankedFeed] Returning ${finalFeed.length} articles to client (pool size: ${pool.length})`);
     return {

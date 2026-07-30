@@ -6,7 +6,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushBehaviorQueue } from '../../services/behaviorSync';
-import { getRankedFeed, getSeenArticleIds, getSavedArticleIds } from '../../services/feedService';
+import { getRankedFeed, getSeenArticleIdsLocally, getSavedArticleIds } from '../../services/feedService';
 
 interface UseNavigationQueueParams {
   queueArticleIds: string[];
@@ -15,6 +15,8 @@ interface UseNavigationQueueParams {
   loadArticle: (id: string) => Promise<void>;
   setIsSaved: (saved: boolean) => void;
   setIsLiked: (liked: boolean) => void;
+  /** Server-side seen article IDs from the user profile (avoids a redundant Firestore read). */
+  serverSeenIds?: string[];
 }
 
 interface UseNavigationQueueResult {
@@ -36,6 +38,7 @@ export function useNavigationQueue({
   loadArticle,
   setIsSaved,
   setIsLiked,
+  serverSeenIds,
 }: UseNavigationQueueParams): UseNavigationQueueResult {
   const [activeQueueIds, setQueueIds] = useState<string[]>(queueArticleIds || []);
   const [currentIndex, setCurrentIndex] = useState(startIndex ?? 0);
@@ -55,7 +58,7 @@ export function useNavigationQueue({
     try {
       flushBehaviorQueue().catch((e) => console.warn('[Preloader] Flush failed silently:', e));
 
-      const historicalSeen = await getSeenArticleIds();
+      const historicalSeen = await getSeenArticleIdsLocally(serverSeenIds);
       const combinedSeenIds = Array.from(new Set([...historicalSeen, ...activeQueueIds]));
       const result = await getRankedFeed(combinedSeenIds);
 
@@ -69,7 +72,7 @@ export function useNavigationQueue({
       preloadingRef.current = false;
       setPreloading(false);
     }
-  }, [activeQueueIds]);
+  }, [activeQueueIds, serverSeenIds]);
 
   const goToNext = useCallback(() => {
     if (!hasNext) {
