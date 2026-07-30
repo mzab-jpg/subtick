@@ -18,16 +18,18 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { auth, db } from '../services/firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import { FeedRequest } from '../types';
+import { FeedRequest, RootStackParamList } from '../types';
 import { validateFeedRequest } from '../utils/validation';
 import { TEXT_SM, TEXT_BASE, TEXT_LG } from '../utils/constants';
-import { ChevronLeft, Rss } from 'lucide-react-native';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { Rss } from 'lucide-react-native';
 
 export default function FeedRequestScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   const [feedUrl, setFeedUrl] = useState('');
   const [feedDescription, setFeedDescription] = useState('');
@@ -69,14 +71,7 @@ export default function FeedRequestScreen() {
       style={{ flex: 1 }}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ChevronLeft size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Request a Feed</Text>
-          <View style={styles.backButton} />
-        </View>
+        <ScreenHeader title="Request a Feed" onBack={() => navigation.goBack()} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -144,16 +139,6 @@ export default function FeedRequestScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-  },
-  backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   scrollContent: { paddingHorizontal: 28, paddingTop: 28 },
   subtitle: { fontSize: TEXT_SM, lineHeight: 20, marginBottom: 24 },
   fieldLabel: { fontSize: TEXT_SM, fontWeight: '600', marginBottom: 8 },

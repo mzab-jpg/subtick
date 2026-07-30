@@ -17,7 +17,10 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../types';
 import { auth } from '../services/firebase';
+import { ScreenHeader } from '../components/ScreenHeader';
 import {
   linkGoogleAccount,
   unlinkGoogleAccount,
@@ -34,7 +37,6 @@ import {
   TEXT_XL,
 } from '../utils/constants';
 import {
-  ChevronLeft,
   Link,
   Unlink,
   LogOut,
@@ -46,7 +48,7 @@ import {
 
 export default function AccountScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { profile, loading, refreshProfile } = useUser();
 
   // ── Google Link / Unlink ──────────────────────────────────
@@ -176,14 +178,7 @@ export default function AccountScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: topInset + 8 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ChevronLeft size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Account</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader title="Account" onBack={() => navigation.goBack()} />
 
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner} showsVerticalScrollIndicator={false}>
 
@@ -290,17 +285,6 @@ const styles = StyleSheet.create({
   scrollInner: { paddingHorizontal: 28 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    marginBottom: 20,
-    paddingHorizontal: 28,
-  },
-  backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
 
   sectionLabel: {
     fontSize: TEXT_XS,

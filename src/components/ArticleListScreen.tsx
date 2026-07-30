@@ -19,7 +19,8 @@ import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
-import { ChevronLeft, AlertTriangle } from 'lucide-react-native';
+import { ScreenHeader } from './ScreenHeader';
+import { AlertTriangle } from 'lucide-react-native';
 import { LucideIcon } from 'lucide-react-native';
 import { TEXT_XS, TEXT_SM, TEXT_LG } from '../utils/constants';
 
@@ -106,13 +107,7 @@ export function ArticleListScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: topInset + 12 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ChevronLeft size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
       {loadError ? (
         <View style={styles.emptyState}>
@@ -171,16 +166,6 @@ export function ArticleListScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 24,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-  },
-  backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   listContent: { paddingHorizontal: 24, paddingBottom: 48 },
   rowCard: {
     flexDirection: 'row',

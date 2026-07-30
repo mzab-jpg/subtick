@@ -19,18 +19,20 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
-import { Article } from '../types';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { Article, RootStackParamList } from '../types';
 import {
   TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
   TEXT_LG,
 } from '../utils/constants';
-import { ChevronLeft, TerminalSquare, Trash2 } from 'lucide-react-native';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { TerminalSquare, Trash2 } from 'lucide-react-native';
 
 export default function DeveloperOptionsScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   const [devSandboxUrl, setDevSandboxUrl] = useState('');
   const [testingDevSandbox, setTestingDevSandbox] = useState(false);
@@ -95,14 +97,7 @@ export default function DeveloperOptionsScreen() {
       style={{ flex: 1 }}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ChevronLeft size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Developer Options</Text>
-          <View style={styles.backButton} />
-        </View>
+        <ScreenHeader title="Developer Options" onBack={() => navigation.goBack()} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -178,16 +173,6 @@ export default function DeveloperOptionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-  },
-  backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   scrollContent: { paddingHorizontal: 28, paddingTop: 28 },
   warningBanner: {
     padding: 14,

@@ -18,14 +18,17 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../types';
 import { auth, db } from '../services/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { TEXT_SM, TEXT_BASE, TEXT_LG } from '../utils/constants';
-import { ChevronLeft, Send } from 'lucide-react-native';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { Send } from 'lucide-react-native';
 
 export default function FeedbackScreen() {
   const { colors } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -62,14 +65,7 @@ export default function FeedbackScreen() {
       style={{ flex: 1 }}
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <ChevronLeft size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Send Feedback</Text>
-          <View style={styles.backButton} />
-        </View>
+        <ScreenHeader title="Send Feedback" onBack={() => navigation.goBack()} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -120,16 +116,6 @@ export default function FeedbackScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-  },
-  backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   scrollContent: { paddingHorizontal: 28, paddingTop: 28 },
   subtitle: { fontSize: TEXT_SM, lineHeight: 20, marginBottom: 20 },
   textArea: {

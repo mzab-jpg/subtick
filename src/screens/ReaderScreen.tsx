@@ -48,6 +48,64 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 45;
 const SWIPE_THRESHOLD = 40;
 
+// B3 Fix: Extract shared WebView reader script (scroll tracking, HUD toggling,
+// word counting, click handling) into a single constant. Previously duplicated
+// in both articleHTML and rawWebpageInjectedScript.
+function makeReaderScript(frontendRules?: { removeCss?: string[]; injectCss?: string }) {
+  return `
+    (function() {
+      try {
+        var rules = ${JSON.stringify(frontendRules?.removeCss || [])};
+        if (rules && rules.length > 0) {
+          rules.forEach(function(selector) {
+            var els = document.querySelectorAll(selector);
+            for (var i = 0; i < els.length; i++) {
+              els[i].style.display = 'none';
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('SubTick Rule Error: ' + e);
+      }
+
+      var text = document.body.innerText || document.body.textContent || '';
+      var wordCount = text.trim().split(/\\s+/).length;
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
+
+      var maxDepth = 0;
+      var lastScrollTop = 0;
+      function reportScroll() {
+        var scrollTop = window.scrollY || document.documentElement.scrollTop;
+        var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        if (docHeight <= 0) return;
+        var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
+        if (depth > maxDepth) { maxDepth = depth; }
+
+        if (scrollTop > lastScrollTop + 15) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
+          lastScrollTop = scrollTop;
+        } else if (scrollTop < lastScrollTop - 15) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
+          lastScrollTop = scrollTop;
+        } else if (scrollTop <= 0) {
+          lastScrollTop = scrollTop;
+        }
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
+      }
+      window.addEventListener('scroll', reportScroll, { passive: true });
+
+      document.body.addEventListener('click', function(e) {
+        if (e.target.tagName !== 'A') {
+          var scrollTop = window.scrollY || document.documentElement.scrollTop;
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
+        }
+      });
+
+      setTimeout(reportScroll, 100);
+    })();
+  `;
+}
+
 export default function ReaderScreen() {
   const { colors, webViewCSS, isDark } = useTheme();
   const route = useRoute<RouteProp<RootStackParamList, 'Reader'>>();
@@ -288,58 +346,7 @@ export default function ReaderScreen() {
         ${titleBlock}
         ${metaBlock}
         ${resolvedHtml}
-        <script>
-          (function() {
-            try {
-              var rules = ${JSON.stringify(frontendRules?.removeCss || [])};
-              if (rules && rules.length > 0) {
-                rules.forEach(function(selector) {
-                  var els = document.querySelectorAll(selector);
-                  for (var i = 0; i < els.length; i++) {
-                    els[i].style.display = 'none';
-                  }
-                });
-              }
-            } catch (e) {
-              console.warn('SubTick Rule Error: ' + e);
-            }
-
-            var text = document.body.innerText || document.body.textContent || '';
-            var wordCount = text.trim().split(/\\s+/).length;
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
-
-            var maxDepth = 0;
-            var lastScrollTop = 0;
-            function reportScroll() {
-              var scrollTop = window.scrollY || document.documentElement.scrollTop;
-              var docHeight = document.documentElement.scrollHeight - window.innerHeight;
-              if (docHeight <= 0) return;
-              var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
-              if (depth > maxDepth) { maxDepth = depth; }
-
-              if (scrollTop > lastScrollTop + 15) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
-                lastScrollTop = scrollTop;
-              } else if (scrollTop < lastScrollTop - 15) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
-                lastScrollTop = scrollTop;
-              } else if (scrollTop <= 0) {
-                lastScrollTop = scrollTop;
-              }
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
-            }
-            window.addEventListener('scroll', reportScroll, { passive: true });
-
-            document.body.addEventListener('click', function(e) {
-              if (e.target.tagName !== 'A') {
-                var scrollTop = window.scrollY || document.documentElement.scrollTop;
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
-              }
-            });
-
-            setTimeout(reportScroll, 100);
-          })();
-        </script>
+        <script>${makeReaderScript(frontendRules)}</script>
       </body>
       </html>
     `;
@@ -347,22 +354,10 @@ export default function ReaderScreen() {
 
   const rawWebpageInjectedScript = useMemo(() => {
     const frontendRules = article?.frontendRules;
+    // Combine the shared reader script with the archived-webpage-specific
+    // CSS injection and viewport meta tag setup.
     return `
       (function() {
-        try {
-          var rules = ${JSON.stringify(frontendRules?.removeCss || [])};
-          if (rules && rules.length > 0) {
-            rules.forEach(function(selector) {
-              var els = document.querySelectorAll(selector);
-              for (var i = 0; i < els.length; i++) {
-                els[i].style.display = 'none';
-              }
-            });
-          }
-        } catch (e) {
-          console.warn('SubTick Rule Error: ' + e);
-        }
-
         try {
           var css = ${JSON.stringify(frontendRules?.injectCss || '')};
           if (css) {
@@ -378,44 +373,9 @@ export default function ReaderScreen() {
         meta.name = 'viewport';
         meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
         document.getElementsByTagName('head')[0].appendChild(meta);
-
-        var text = document.body.innerText || document.body.textContent || '';
-        var wordCount = text.trim().split(/\\s+/).length;
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
-
-        var maxDepth = 0;
-        var lastScrollTop = 0;
-        function reportScroll() {
-          var scrollTop = window.scrollY || document.documentElement.scrollTop;
-          var docHeight = document.documentElement.scrollHeight - window.innerHeight;
-          if (docHeight <= 0) return;
-          var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
-          if (depth > maxDepth) { maxDepth = depth; }
-
-          if (scrollTop > lastScrollTop + 15) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: false, autoHide: false }));
-            lastScrollTop = scrollTop;
-          } else if (scrollTop < lastScrollTop - 15) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hud', visible: true, autoHide: scrollTop > 50 }));
-            lastScrollTop = scrollTop;
-          } else if (scrollTop <= 0) {
-            lastScrollTop = scrollTop;
-          }
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
-        }
-        window.addEventListener('scroll', reportScroll, { passive: true });
-
-        document.body.addEventListener('click', function(e) {
-          if (e.target.tagName !== 'A') {
-            var scrollTop = window.scrollY || document.documentElement.scrollTop;
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
-          }
-        });
-
-        setTimeout(reportScroll, 100);
       })();
       true;
-    `;
+    ` + makeReaderScript(frontendRules);
   }, [article]);
 
   const useDirectUri = article && (article.rssStatus === 'archived' || (isSavedMode && !resolvedHtml));

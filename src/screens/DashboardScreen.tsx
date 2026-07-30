@@ -18,13 +18,14 @@ import { topInset } from '../utils/safeArea';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, UserProfile, DashboardMetric, RootStackParamList } from '../types';
-import { User, BarChart3, Clock, Flame, BookOpen, CalendarDays, Gauge, BookCheck, BookHeart, Inbox, Shuffle, AlertTriangle } from 'lucide-react-native';
+import { User, Inbox, Shuffle, AlertTriangle } from 'lucide-react-native';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_XL, TEXT_2XL } from '../utils/constants';
 import { auth, db } from '../services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { completeOnboarding } from '../services/auth';
 import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
+import { getMetricIcon, getTopCategory } from '../utils/dashboardMetrics';
 
 const PRELOAD_THRESHOLD = 5;
 
@@ -181,7 +182,7 @@ export default function DashboardScreen() {
     const values: Record<string, string | number> = {
       streak: profile.currentStreakDays || 0,
       weeklyReads: profile.weeklyReadCount || 0,
-      topCategory: getTopCategory(),
+      topCategory: getTopCategory(profile),
       totalRead: profile.totalArticlesRead || 0,
       avgWpm: profile.averageWpm || 250,
       totalReadTime: profile.totalReadTimeMs
@@ -194,30 +195,6 @@ export default function DashboardScreen() {
     });
   };
 
-  const getMetricIcon = (id: string, color: string) => {
-    switch (id) {
-      case 'streak': return <Flame size={16} color={color} />;
-      case 'weeklyReads': return <CalendarDays size={16} color={color} />;
-      case 'totalReadTime': return <Clock size={16} color={color} />;
-      case 'avgWpm': return <Gauge size={16} color={color} />;
-      case 'totalRead': return <BookCheck size={16} color={color} />;
-      case 'topCategory': return <BookHeart size={16} color={color} />;
-      default: return <BarChart3 size={16} color={color} />;
-    }
-  };
-
-  const getTopCategory = (): string => {
-    const profile = effectiveProfile;
-    if (!profile) return '—';
-    const weights = profile.categoryWeights || {};
-    let topCat = '—'; let topWeight = 0;
-    Object.entries(weights).forEach(([cat, w]) => {
-      if (!cat.includes('::') && !cat.startsWith('pub::') && w > topWeight) {
-        topWeight = w; topCat = cat;
-      }
-    });
-    return topCat;
-  };
 
   const handleShuffle = () => {
     setFeedArticles(prev => {

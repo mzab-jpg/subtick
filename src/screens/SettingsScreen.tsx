@@ -17,10 +17,12 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
-import { UserProfile, ThemeMode } from '../types';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { UserProfile, ThemeMode, RootStackParamList } from '../types';
 import { auth, db } from '../services/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useUser } from '../contexts/UserContext';
+import { ScreenHeader } from '../components/ScreenHeader';
 import {
   TEXT_XS,
   TEXT_SM,
@@ -28,7 +30,6 @@ import {
   TEXT_LG,
 } from '../utils/constants';
 import {
-  ChevronLeft,
   ChevronRight,
   Smartphone,
   Sun,
@@ -57,7 +58,7 @@ const getActiveMetricCount = (profile: UserProfile | null): number => {
 
 export default function SettingsScreen() {
   const { colors, mode, setThemeMode } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { profile, loading, refreshProfile } = useUser();
 
   // Re-load profile when returning from a sub-screen so counts update
@@ -91,14 +92,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* ── Page Header (fixed, outside ScrollView) ───── */}
-      <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: topInset + 8 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ChevronLeft size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader title="Settings" onBack={() => navigation.goBack()} />
 
       {/* ── Scrollable content below the fixed header ── */}
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner} showsVerticalScrollIndicator={false}>
@@ -349,18 +343,6 @@ const styles = StyleSheet.create({
   scrollContent: { flex: 1 },
   scrollInner: { paddingHorizontal: 28, paddingTop: 0 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    marginBottom: 20,
-    paddingHorizontal: 28,
-  },
-  backButton: { width: 40, alignItems: 'flex-start' },
-  headerTitle: { fontSize: TEXT_LG, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
 
   // Section label above each card group
   sectionLabel: {
