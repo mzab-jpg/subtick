@@ -3,26 +3,6 @@
 // ============================================================
 
 /**
- * Validates that the user has selected at least 3 categories as "Selected" (interested).
- * Required to proceed past onboarding.
- */
-export function validateOnboardingSelection(
-  selectedCategoryIds: string[],
-  minRequired: number = 3
-): {
-  isValid: boolean;
-  errorMessage?: string;
-} {
-  if (selectedCategoryIds.length < minRequired) {
-    return {
-      isValid: false,
-      errorMessage: `Please select at least ${minRequired} categories to continue. You've selected ${selectedCategoryIds.length}.`,
-    };
-  }
-  return { isValid: true };
-}
-
-/**
  * Basic URL validation for feed request submissions.
  */
 export function isValidUrl(url: string): boolean {

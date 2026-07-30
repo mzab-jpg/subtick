@@ -8,7 +8,7 @@ import { initializeAuth, getAuth, connectAuthEmulator, Auth } from 'firebase/aut
 import { getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions';
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { FIREBASE_EMULATOR_CONFIG } from '../utils/constants';
 
 // S6: Firebase web config values are public identifiers — not secrets.
@@ -23,7 +23,6 @@ const firebaseConfig = {
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? 'subtick-bbd55.firebasestorage.app',
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '859600771798',
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '1:859600771798:web:c9898a4501148c4caa0777',
-  measurementId: 'G-4B3N8C8MR3',
 };
 
 let app: FirebaseApp;
@@ -34,9 +33,28 @@ let functions: Functions;
 // Initialize Firebase (singleton — prevents double-init on hot reload)
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
-  // Use AsyncStorage persistence so auth tokens survive app restarts
+  // Use expo-secure-store persistence so auth tokens survive app restarts
+  // and are stored encrypted on-device (iOS Keychain / Android Keystore).
+  // Firebase uses key names like "firebase:authUser:AIzaSy...:[default]"
+  // which contain characters SecureStore rejects (:, [, ]). Sanitize them.
+  const sanitizeKey = (key: string) => key.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const secureStorePersistence = {
+    getItem: async (key: string) => {
+      try {
+        return await SecureStore.getItemAsync(sanitizeKey(key));
+      } catch {
+        return null;
+      }
+    },
+    setItem: async (key: string, value: string) => {
+      await SecureStore.setItemAsync(sanitizeKey(key), value);
+    },
+    removeItem: async (key: string) => {
+      await SecureStore.deleteItemAsync(sanitizeKey(key));
+    },
+  };
   auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    persistence: getReactNativePersistence(secureStorePersistence),
   });
 } else {
   app = getApps()[0];

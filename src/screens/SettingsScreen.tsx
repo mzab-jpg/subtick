@@ -318,7 +318,7 @@ export default function SettingsScreen() {
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <TouchableOpacity
               style={[styles.row, styles.rowNoBorder]}
-              onPress={() => navigation.navigate('DeveloperOptions')}
+              onPress={() => __DEV__ ? navigation.navigate('DeveloperOptions') : null}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>

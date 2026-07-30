@@ -14,7 +14,7 @@ import { UserProvider } from './src/contexts/UserContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';
-import { startOfflineManager, stopOfflineManager } from './src/services/offlineManager';
+import { startOfflineManager } from './src/services/offlineManager';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { auth } from './src/services/firebase';
@@ -168,7 +168,6 @@ const styles = StyleSheet.create({
   },
   splashEmoji: { fontSize: 64, marginBottom: 16 },
   splashTitle: { fontSize: 36, fontWeight: '800', marginBottom: 8 },
-  splashSubtitle: { fontSize: 16, fontWeight: '500' },
   splashHint: { marginTop: 12, fontSize: 13 },
   errorText: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginTop: 12, marginBottom: 24 },
   retryLink: { fontSize: 17, fontWeight: '700' },

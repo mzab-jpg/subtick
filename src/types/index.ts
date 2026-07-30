@@ -155,8 +155,6 @@ export interface ThemeColors {
   hudBackground: string;
   progressBar: string;
   progressBarBackground: string;
-  skeleton: string;
-  skeletonHighlight: string;
   chipSelectedBg: string;
   chipNotInterestedBg: string;
   chipNeutralBg: string;

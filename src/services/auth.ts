@@ -112,7 +112,6 @@ export async function linkGoogleAccount(): Promise<User> {
 
     const { idToken, user: googleUser } = signInResult.data;
     console.log('[Auth] idToken received:', !!idToken, 'length:', idToken?.length);
-    console.log('[Auth] googleUser email:', googleUser?.email);
 
     if (!idToken) {
       throw new Error('No idToken returned from Google Sign-In');
@@ -173,14 +172,12 @@ export async function linkGoogleAccount(): Promise<User> {
       { merge: true }
     );
 
-    console.log('[Auth] Google account linked successfully. Email:', result.user.email);
     return result.user;
   } catch (error: any) {
     console.error('[Auth] Google Sign-In FAILED');
     console.error('[Auth] Error name:', error?.name);
     console.error('[Auth] Error code:', error?.code);
     console.error('[Auth] Error message:', error?.message);
-    console.error('[Auth] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     throw error;
   }
 }
@@ -223,16 +220,6 @@ export async function signOutUser(): Promise<void> {
   // Create a fresh Firestore profile for the new anonymous UID,
   // ensuring Dashboard has a valid profile to render immediately.
   await ensureUserProfile(newUser);
-}
-
-// --- Get Current User ---
-export function getCurrentUser(): User | null {
-  return auth.currentUser;
-}
-
-// --- Auth State Observer ---
-export function onAuthChange(callback: (user: User | null) => void): () => void {
-  return onAuthStateChanged(auth, callback);
 }
 
 // --- Update Onboarding Status ---

@@ -21,8 +21,6 @@ interface UseBehaviorTrackerReturn {
   trackEvent: (eventType: BehaviorEventType, extraScrollDepth?: number, actualWordCount?: number) => void;
   concludeSession: (expectedReadTimeMs: number, actualWordCount?: number) => void;
   sessionStartTime: number;
-  getMaxScrollDepth: () => number;
-  getSessionDuration: () => number;
 }
 
 export function useBehaviorTracker({
@@ -173,15 +171,10 @@ export function useBehaviorTracker({
     [enabled, articleId, articleCategory, lengthStyle, publicationName]
   );
 
-  const getMaxScrollDepth = useCallback(() => stateRef.current.maxDepth, []);
-  const getSessionDuration = useCallback(() => Date.now() - stateRef.current.startTime, []);
-
   return {
     trackScrollDepth,
     trackEvent,
     concludeSession,
     sessionStartTime: stateRef.current.startTime,
-    getMaxScrollDepth,
-    getSessionDuration,
   };
 }

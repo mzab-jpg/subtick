@@ -34,16 +34,6 @@ export function startOfflineManager(): void {
 }
 
 /**
- * Stop the offline manager.
- */
-export function stopOfflineManager(): void {
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
-}
-
-/**
  * Attempt to flush the behavior queue.
  * Prevents concurrent syncs and enforces a cooldown after failures
  * to avoid hammering the server on a spotty connection.
@@ -75,11 +65,3 @@ async function attemptFlush(): Promise<void> {
   }
 }
 
-/**
- * Manually trigger a flush (useful for pull-to-refresh or explicit sync buttons).
- * Bypasses the cooldown since this is user-initiated.
- */
-export async function manualFlush(): Promise<number> {
-  lastFailureTime = 0; // User-initiated — bypass cooldown
-  return flushBehaviorQueue();
-}

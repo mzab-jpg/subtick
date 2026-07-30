@@ -154,13 +154,3 @@ export async function getPendingEventCount(): Promise<number> {
   }
 }
 
-/**
- * Clear all behavior queue data (e.g., on logout).
- */
-export async function clearBehaviorQueue(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(BEHAVIOR_QUEUE_KEY);
-  } catch (error) {
-    console.error('[BehaviorSync] clearBehaviorQueue error:', error);
-  }
-}

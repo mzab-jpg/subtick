@@ -38,7 +38,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.YOUR_IOS_CLIENT_ID"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "owner": "tangent_mb123"
   }
