@@ -2,7 +2,7 @@
 // SubTick — Article List Screen (shared)
 // Reusable offline-first article list used by HistoryScreen
 // and SavedReadsScreen. Renders FlatList with publication name,
-// title, and read time. Includes empty state.
+// title, and read time. Includes empty and error states.
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
@@ -19,7 +19,7 @@ import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, AlertTriangle } from 'lucide-react-native';
 import { LucideIcon } from 'lucide-react-native';
 import { TEXT_XS, TEXT_SM, TEXT_LG } from '../utils/constants';
 
@@ -56,14 +56,17 @@ export function ArticleListScreen({
 
   const [articles, setArticles] = useState<ArticleMeta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const metas = await loadFunction();
       setArticles(metas);
     } catch (error) {
       console.error(`[ArticleListScreen:${title}] load error:`, error);
+      setLoadError('Could not load your articles. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -111,7 +114,22 @@ export function ArticleListScreen({
         <View style={styles.backButton} />
       </View>
 
-      {articles.length === 0 ? (
+      {loadError ? (
+        <View style={styles.emptyState}>
+          <AlertTriangle size={48} color={colors.error} style={styles.emptyIcon} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Something went wrong</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+            {loadError}
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { borderColor: colors.primary }]}
+            onPress={() => load()}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.retryText, { color: colors.primary }]}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : articles.length === 0 ? (
         <View style={styles.emptyState}>
           <EmptyIcon size={48} color={colors.textMuted} style={styles.emptyIcon} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>{emptyTitle}</Text>
@@ -201,4 +219,6 @@ const styles = StyleSheet.create({
   emptyIcon: { marginBottom: 16 },
   emptyTitle: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 8 },
   emptySubtitle: { fontSize: TEXT_SM, textAlign: 'center', lineHeight: 20 },
+  retryButton: { marginTop: 24, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5 },
+  retryText: { fontSize: TEXT_SM, fontWeight: '700' },
 });

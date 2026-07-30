@@ -54,9 +54,7 @@ export async function ensureUserProfile(user: User): Promise<UserProfile> {
 
   if (snap.exists()) {
     const existing = snap.data() as UserProfile;
-    // Update last seen timestamp
-    await setDoc(userRef, { lastUpdated: Date.now() }, { merge: true });
-    return { ...existing, lastUpdated: Date.now() };
+    return existing;
   }
 
   // New user — create default profile with neutral weights for all categories

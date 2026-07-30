@@ -299,6 +299,33 @@ export async function getSeenArticleIds(): Promise<string[]> {
   });
 }
 
+/**
+ * Get seen article IDs from local AsyncStorage, optionally merging with
+ * already-known server-side IDs. This avoids a redundant Firestore read
+ * when the caller already has the user profile (e.g. via onSnapshot or
+ * UserContext) and can pass in the server-side seenArticleIds directly.
+ */
+export async function getSeenArticleIdsLocally(serverSeenIds?: string[]): Promise<string[]> {
+  return storageMutex.enqueue(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(SEEN_ARTICLES_KEY);
+      const localIds: string[] = raw ? JSON.parse(raw) : [];
+
+      if (serverSeenIds && serverSeenIds.length > 0) {
+        const merged = Array.from(new Set([...localIds, ...serverSeenIds]));
+        if (merged.length > 1000) {
+          return merged.slice(merged.length - 1000);
+        }
+        return merged;
+      }
+
+      return localIds;
+    } catch {
+      return [];
+    }
+  });
+}
+
 // --- Lightweight Article Metadata (for offline list rendering) ---
 interface ArticleMeta {
   id: string;
