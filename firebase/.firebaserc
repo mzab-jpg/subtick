@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "subtick-bbd55"
-  }
+    "default": "subtick-bbd55",
+    "tangent": "subtick-bbd55"
+  },
+  "targets": {},
+  "etags": {}
 }

@@ -8,6 +8,7 @@ import { onCall } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { BehaviorEvent } from './types.js';
 import { updateWeights } from './weightUpdater.js';
+import { gaApiSecret, sendGAEvents } from './analytics.js';
 
 const db = admin.firestore();
 
@@ -66,14 +67,18 @@ function getPublisherQualityIncrement(eventType: string): number {
   }
 }
 
-export const syncBehaviorEvents = onCall(async (request) => {
+export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (request) => {
   // P0 Security: Verify the caller is authenticated. Never trust client-supplied userId.
   if (!request.auth) {
     throw new Error('unauthenticated');
   }
   const authenticatedUserId = request.auth.uid;
 
-  const data = request.data as { events: BehaviorEvent[] };
+  const data = request.data as { events: BehaviorEvent[]; client_id?: string };
+  // GA4 web-stream client_id (32-hex UUID generated client-side). Forwarded to
+  // updateWeights so its analytics calls use the same id. Never fall back to the
+  // Auth UID — analytics.ts will mint a random id if this is missing.
+  const clientId = data.client_id || '';
   let events = (data.events || []).map(e => ({
     ...e,
     // Overwrite any client-supplied userId with the verified auth UID
@@ -283,10 +288,33 @@ export const syncBehaviorEvents = onCall(async (request) => {
     throw error; // Rethrow to inform client sync failed so events remain in queue
   }
 
-  // 4. Trigger weight updates for affected users
+  // --- Analytics: user action events ---
+  const userActionEvents: Array<{ name: string; params: Record<string, any> }> = [];
+  for (const event of events) {
+    const pubName = event.articleId ? articleToPublisher[event.articleId] : undefined;
+    userActionEvents.push({
+      name: event.eventType,
+      params: {
+        user_id: event.userId,
+        article_id: event.articleId,
+        publisher_id: pubName || '',
+        category_id: event.articleCategory || '',
+        read_duration_seconds: event.sessionDuration ? Math.round(event.sessionDuration / 1000) : 0,
+        scroll_depth: event.scrollDepth || 0,
+      },
+    });
+  }
+
+  // Fire-and-forget — analytics events don't block the response
+  if (userActionEvents.length > 0) {
+    sendGAEvents(clientId, userActionEvents).catch(() => {});
+  }
+
+  // 4. Trigger weight updates for affected users.
+  // Forward the GA4 client_id so the weight events share the same id.
   for (const userId of userIds) {
     try {
-      await updateWeights(userId);
+      await updateWeights(userId, clientId);
     } catch (error: any) {
       console.error(`[syncBehaviorEvents] Weight update failed for ${userId}:`, error.message);
     }

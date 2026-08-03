@@ -159,7 +159,7 @@ function chunkArray<T>(array: T[], size: number): T[][] {
   return chunks;
 }
 
-export const rssCollector = onSchedule('every 3 hours', async () => {
+export const rssCollector = onSchedule({ schedule: 'every 3 hours', memory: '512MiB' }, async () => {
   console.log('[rssCollector] Starting RSS collection...');
   let totalNew = 0;
   let totalErrors = 0;

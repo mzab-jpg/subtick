@@ -22,7 +22,6 @@
       "fields": [
         { "fieldPath": "isPaywalled", "order": "ASCENDING" },
         { "fieldPath": "rssStatus", "order": "ASCENDING" },
-        { "fieldPath": "publishDate", "order": "ASCENDING" },
         { "fieldPath": "random_score", "order": "ASCENDING" }
       ]
     },
@@ -31,7 +30,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "isPaywalled", "order": "ASCENDING" },
-        { "fieldPath": "publishDate", "order": "ASCENDING" },
         { "fieldPath": "random_score", "order": "ASCENDING" }
       ]
     }

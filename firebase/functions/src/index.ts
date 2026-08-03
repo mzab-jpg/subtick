@@ -1,6 +1,6 @@
 // ============================================================
 // SubTick - Cloud Functions Entry Point
-// Initializes Firebase Admin SDK and exports all 9 functions.
+// Initializes Firebase Admin SDK and exports all 10 functions.
 // ============================================================
 
 import * as admin from 'firebase-admin';
@@ -10,6 +10,8 @@ admin.initializeApp();
 
 const db = admin.firestore();
 const auth = admin.auth();
+
+import { gaApiSecret, sendGAEvents } from './analytics.js';
 
 // --- Export all Cloud Functions ---
 export { rssCollector } from './rssCollector.js';
@@ -142,4 +144,60 @@ export const deleteOrphanProfile = onCall(async (request) => {
     }
     throw new HttpsError('internal', 'Failed to delete orphan profile.');
   }
+});
+
+// ============================================================
+// updateScoringConfig — Updates system/scoringConfig and logs
+// a config_changed analytics event so before/after algorithm
+// changes are always comparable.
+// ============================================================
+export const updateScoringConfig = onCall({ secrets: [gaApiSecret] }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+
+  const adminUserId = request.auth.uid;
+  const { field, old_value, new_value, client_id } = request.data as {
+    field: string;
+    old_value: number | string;
+    new_value: number | string;
+    client_id?: string;
+  };
+  // GA4 web-stream client_id (32-hex UUID from device). Never the Auth UID.
+  const clientId = client_id || '';
+
+  if (!field || typeof field !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing or invalid field.');
+  }
+  if (typeof old_value !== 'number' && typeof old_value !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing or invalid old_value.');
+  }
+  if (typeof new_value !== 'number' && typeof new_value !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing or invalid new_value.');
+  }
+
+  // Write the updated field to system/scoringConfig
+  await db.collection('system').doc('scoringConfig').set(
+    { [field]: new_value, lastUpdated: Date.now(), lastUpdatedBy: adminUserId },
+    { merge: true }
+  );
+
+  // Log config_changed event
+  sendGAEvents(clientId, [
+    {
+      name: 'config_changed',
+      params: {
+        user_id: adminUserId,
+        field,
+        old_value: old_value.toString(),
+        new_value: new_value.toString(),
+      },
+    },
+  ]).catch(() => {});
+
+  console.log(
+    `[updateScoringConfig] ${adminUserId} changed ${field}: ${old_value} → ${new_value}`
+  );
+
+  return { success: true, field, old_value: old_value.toString(), new_value: new_value.toString() };
 });

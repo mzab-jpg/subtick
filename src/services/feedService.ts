@@ -4,7 +4,7 @@
 // ============================================================
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { functions, db, auth } from './firebase';
+import { functions, db, auth, getClientId } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { Article, RankedFeedResult } from '../types';
@@ -169,7 +169,8 @@ export async function fetchAndExtractArticle(
  */
 export async function getRankedFeed(seenArticleIds: string[]): Promise<RankedFeedResult> {
   try {
-    const getRankedFeedFn = httpsCallable<{ userId: string; seenArticleIds: string[] }, RankedFeedResult>(
+    const clientId = await getClientId();
+    const getRankedFeedFn = httpsCallable<{ userId: string; seenArticleIds: string[]; client_id: string }, RankedFeedResult>(
       functions,
       'getRankedFeed'
     );
@@ -179,6 +180,7 @@ export async function getRankedFeed(seenArticleIds: string[]): Promise<RankedFee
     const result = await getRankedFeedFn({
       userId: auth.currentUser?.uid || 'anonymous',
       seenArticleIds: seenArticleIds,
+      client_id: clientId,
     });
 
     const returnedFeed = result.data;

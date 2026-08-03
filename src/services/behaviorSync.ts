@@ -6,7 +6,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from './firebase';
+import { functions, getClientId } from './firebase';
 import { PendingBehaviorEvent, BehaviorEventType } from '../types';
 import { BEHAVIOR_QUEUE_KEY, SYNC_BATCH_SIZE, MAX_QUEUE_SIZE } from '../utils/constants';
 import { auth } from './firebase';
@@ -106,11 +106,12 @@ export async function flushBehaviorQueue(): Promise<number> {
     if (batch.length === 0) return 0;
 
     // Step 2: Network call — outside mutex so new events can queue in parallel.
-    const syncFn = httpsCallable<{ events: PendingBehaviorEvent[] }, { synced: number; errors: number }>(
+    const clientId = await getClientId();
+    const syncFn = httpsCallable<{ events: PendingBehaviorEvent[]; client_id: string }, { synced: number; errors: number }>(
       functions,
       'syncBehaviorEvents'
     );
-    const result = await syncFn({ events: batch });
+    const result = await syncFn({ events: batch, client_id: clientId });
     const syncedCount = result.data.synced ?? batch.length;
     console.log(`[BehaviorSync] Cloud Function synced ${syncedCount}/${batch.length} events`);
 
@@ -153,4 +154,3 @@ export async function getPendingEventCount(): Promise<number> {
     return 0;
   }
 }
-

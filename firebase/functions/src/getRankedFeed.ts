@@ -1,4 +1,3 @@
- // ============================================================
 // SubTick — getRankedFeed (HTTPS Callable)
 // Normalized 5-component scoring formula, cached, time-stratified,
 // with per-tranche formulas and daily trending score decay.
@@ -14,6 +13,7 @@ import {
   TRENDING_DECAY_RATE,
   MAX_TRENDING_SCORE,
 } from './constants.js';
+import { gaApiSecret, sendGAEvents } from './analytics.js';
 
 const db = admin.firestore();
 
@@ -174,11 +174,16 @@ async function queryRandomSample(
   const fourWeeksAgo = now - 4 * 7 * 24 * 60 * 60 * 1000;
   const results: Article[] = [];
 
+  // Firestore limitation: cannot have range filters on multiple fields.
+  // We query by random_score only (single range filter), then filter
+  // publishDate (fresh vs old) in memory. Fetch 3x the limit to ensure
+  // enough articles survive the in-memory publishDate filter.
+  const fetchCap = limit * 3;
+
   const runQuery = async (scoreMin: number, scoreMax: number | null, cap: number) => {
     try {
       let q = db.collection('articles')
         .where('isPaywalled', '==', false)
-        .where('publishDate', fresh ? '>=' : '<', fourWeeksAgo)
         .where('random_score', '>=', scoreMin);
       if (scoreMax !== null) {
         q = (q as any).where('random_score', '<', scoreMax);
@@ -189,6 +194,9 @@ async function queryRandomSample(
       const snap = await (q as any).orderBy('random_score', 'asc').limit(cap).get();
       snap.forEach((doc: any) => {
         const data = doc.data() as Article;
+        // In-memory publishDate filter (fresh vs old)
+        const isFresh = data.publishDate >= fourWeeksAgo;
+        if (fresh !== isFresh) return;
         if (data.wordCount === undefined || data.wordCount >= 150) {
           results.push({ ...data, id: doc.id });
         }
@@ -199,17 +207,16 @@ async function queryRandomSample(
   };
 
   // First pass: random_score from threshold up to 1.0
-  await runQuery(threshold, null, limit);
+  await runQuery(threshold, null, fetchCap);
 
   // Circular wrap-around: if we still need more, query from 0.0 up to threshold
   if (results.length < limit) {
     const existingIds = new Set(results.map(a => a.id));
-    const remaining = limit - results.length;
+    const remaining = (limit - results.length) * 3;
     const wrapResults: Article[] = [];
     try {
       let q = db.collection('articles')
         .where('isPaywalled', '==', false)
-        .where('publishDate', fresh ? '>=' : '<', fourWeeksAgo)
         .where('random_score', '>=', 0)
         .where('random_score', '<', threshold);
       if (currentOnly) {
@@ -219,6 +226,8 @@ async function queryRandomSample(
       wrapSnap.forEach((doc: any) => {
         if (!existingIds.has(doc.id)) {
           const data = doc.data() as Article;
+          const isFresh = data.publishDate >= fourWeeksAgo;
+          if (fresh !== isFresh) return;
           if (data.wordCount === undefined || data.wordCount >= 150) {
             wrapResults.push({ ...data, id: doc.id });
           }
@@ -230,7 +239,8 @@ async function queryRandomSample(
     results.push(...wrapResults);
   }
 
-  return results;
+  // Trim to requested limit (we may have fetched more than needed)
+  return results.slice(0, limit);
 }
 
 /**
@@ -554,8 +564,11 @@ function assembleFeedWithTranches(
  * This keeps the database bounded and within Firestore free tier.
  * Saved articles are NOT protected — users have their own copy in
  * users/{uid}/saved_articles/ subcollection.
+ *
+ * Note: Cloud Scheduler requires an explicit unit. "every 3 days" is rejected
+ * at deploy time; "every 72 hours" is the valid equivalent.
  */
-export const cronCleanupOldArticles = onSchedule('every 3 days', async () => {
+export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
   console.log('[Cron] Starting old article cleanup...');
   try {
     // Step 1: Immediately delete ALL paywalled articles.
@@ -630,13 +643,16 @@ export const cronCleanupOldArticles = onSchedule('every 3 days', async () => {
   }
 });
 
-export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> => {
+export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request): Promise<RankedFeedResult> => {
   // P0 Security: Always use the verified auth UID, never the client-supplied userId.
   if (!request.auth) {
     throw new Error('unauthenticated');
   }
   const userId = request.auth.uid;
-  const { seenArticleIds } = request.data as { userId?: string; seenArticleIds: string[] };
+  const { seenArticleIds, client_id } = request.data as { userId?: string; seenArticleIds: string[]; client_id?: string };
+  // GA4 web-stream client_id (32-hex UUID generated client-side). Never fall back
+  // to the Auth UID — analytics.ts will mint a random id if this is missing.
+  const clientId = client_id || '';
   console.log(`[getRankedFeed] userId: ${userId}, seen limit: ${(seenArticleIds || []).length}`);
 
   let categoryWeights: Record<string, number> = {};
@@ -722,6 +738,98 @@ export const getRankedFeed = onCall(async (request): Promise<RankedFeedResult> =
         );
       });
     }
+
+    // --- Analytics: article_shown + feed_generated events ---
+    // Build a lookup from article ID to its scored entry (includes all component scores).
+    const scoredById = new Map<string, (typeof scored)[number]>();
+    for (const s of scored) {
+      scoredById.set(s.article.id, s);
+    }
+
+    // Determine tranche per article in the final feed.
+    const feedArticleShownEvents: Array<{ name: string; params: Record<string, any> }> = [];
+    const distinctPublishers = new Set<string>();
+    const distinctCategories = new Set<string>();
+
+    finalFeed.forEach((article, index) => {
+      const s = scoredById.get(article.id);
+      if (!s) return;
+
+      distinctPublishers.add(article.publicationName);
+      distinctCategories.add(article.category);
+
+      const tranche =
+        s.pNorm >= 0.40 ? 'high' :
+        s.pNorm >= 0.20 ? 'mid' :
+        s.pNorm >= 0.10 ? 'low' : 'discovery';
+
+      // Dominant component: which of the 5 contributes most to personalized score.
+      const dayCheck = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
+      const compP = normalizeP(
+        categoryLengthWeights[`${article.category}::${article.lengthStyle}`] ?? categoryWeights[article.category] ?? 1.0,
+        publisherWeights[article.publicationName] ?? 1.0
+      );
+      const compT = normalizeT(article.trendingScore || 0);
+      const compR = normalizeR(dayCheck);
+      const compQ = normalizeQ(publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8);
+      const compU = normalizeU(pubCounts[article.publicationName] || 1);
+      const contributions: [string, number][] = [
+        ['P', SCORE_WEIGHTS.personalization * compP],
+        ['T', SCORE_WEIGHTS.trending * compT],
+        ['R', SCORE_WEIGHTS.recency * compR],
+        ['Q', SCORE_WEIGHTS.quality * compQ],
+        ['U', SCORE_WEIGHTS.diversity * compU],
+      ];
+      const dominantComponent = contributions.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+
+      feedArticleShownEvents.push({
+        name: 'article_shown',
+        params: {
+          user_id: userId,
+          article_id: article.id,
+          publisher_id: article.publicationName,
+          category_id: article.category,
+          tranche,
+          dominant_component: dominantComponent,
+          score_p: s.pNorm,
+          score_t: compT,
+          score_r: compR,
+          score_q: compQ,
+          score_u: compU,
+          final_score: s.personalizedScore,
+          position: index,
+        },
+      });
+    });
+
+    // feed_generated — one event per feed load
+    feedArticleShownEvents.unshift({
+      name: 'feed_generated',
+      params: {
+        user_id: userId,
+        tranche_high_count: finalFeed.filter((_, i) => {
+          const s = scoredById.get(finalFeed[i].id);
+          return s && s.pNorm >= 0.40;
+        }).length,
+        tranche_mid_count: finalFeed.filter((_, i) => {
+          const s = scoredById.get(finalFeed[i].id);
+          return s && s.pNorm >= 0.20 && s.pNorm < 0.40;
+        }).length,
+        tranche_low_count: finalFeed.filter((_, i) => {
+          const s = scoredById.get(finalFeed[i].id);
+          return s && s.pNorm >= 0.10 && s.pNorm < 0.20;
+        }).length,
+        tranche_discovery_count: finalFeed.filter((_, i) => {
+          const s = scoredById.get(finalFeed[i].id);
+          return s && s.pNorm < 0.10;
+        }).length,
+        distinct_publisher_count: distinctPublishers.size,
+        distinct_category_count: distinctCategories.size,
+      },
+    });
+
+    // Fire-and-forget — analytics events don't block the response
+    sendGAEvents(clientId, feedArticleShownEvents).catch(() => {});
 
     console.log(`[getRankedFeed] Returning ${finalFeed.length} articles to client (pool size: ${pool.length})`);
     return {

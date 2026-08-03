@@ -1,6 +1,6 @@
 # Tangent — Progress & Status
 
-> **Last verified:** 30 July 2026 (post-refactoring Batches 1–3).
+> **Last verified:** 3 August 2026 (post-analytics logging implementation).
 > All status claims are based on reading the actual code.
 
 ---
@@ -85,6 +85,18 @@
 - ✅ **42 verified full-RSS feeds** — Stealth curl-validated, ≥70% full-article text
 - ✅ **Cleanup script** — `firebase/scripts/oneoff/cleanupOldCategories.js`
 
+### Analytics Logging (GA4 via Measurement Protocol)
+- ✅ **`firebase/functions/src/analytics.ts`** — `sendGAEvents()` + `sendGAUserProperties()` helpers targeting GA4 Web stream (`measurement_id` URL param, `client_id` body field). Auto-chunks at 25 events/request. `GA_DEBUG` mode hits `/debug/mp/collect` and logs `validationMessages`.
+- ✅ **`article_shown` event** — Logged per article in `getRankedFeed.ts`: tranche, dominant_component, all 5 component scores, final_score, position.
+- ✅ **`feed_generated` event** — Logged once per feed call: tranche counts, distinct publisher + category counts.
+- ✅ **`weight_updated` event** — Logged per weight change in `weightUpdater.ts`: entity_type, entity_id, old_value, new_value, trigger.
+- ✅ **`config_changed` event** — Logged in `updateScoringConfig` every time `system/scoringConfig` is written.
+- ✅ **User behavior events** — `read_thorough`, `quick_exit`, `swipe_not_interested`, `save` logged in `syncBehaviorEvents.ts`.
+- ✅ **User properties** — `concentration_score`, `top_cat_weight`, `cats_at_ceiling` set after each weight update via Measurement Protocol.
+- ✅ **`getClientId()`** (`src/services/firebase.ts`) — Generates/caches stable 32-hex UUID per device install in AsyncStorage at `@subtick_app_instance_id`; passed as `client_id` in all callable payloads.
+- ✅ **Payload validated** — All chunks confirmed `validated OK (no issues)` via GA4 debug endpoint before production deploy.
+- ✅ **Secrets management** — `GA_API_SECRET` in Google Cloud Secret Manager; `GA_MEASUREMENT_ID` in `firebase/functions/.env`. Neither hardcoded.
+
 ### Build & Foundation
 - ✅ **babel.config.js + metro.config.js** — Standard Expo SDK 57 configs
 - ✅ **Functions tsconfig** — Standalone Node.js config (not extending expo base — F3)
@@ -127,7 +139,7 @@
 
 - **No automated tests** — No jest/vitest/testing-library
 - **No push notifications** — No `expo-notifications` or FCM
-- **No analytics / error tracking** — Console logging only
+- ~~**No analytics / error tracking**~~ — ✅ GA4 analytics implemented via Measurement Protocol (see Analytics Logging section)
 - **No cross-device saved HTML sync** — Saved article metadata syncs to Firestore, full HTML is device-local
 - **No content moderation** — Paywall detection only
 - **No rate limiting on `syncBehaviorEvents`** — Per-user per-article dedup only within single batch

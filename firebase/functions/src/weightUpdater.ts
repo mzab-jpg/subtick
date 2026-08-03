@@ -16,6 +16,7 @@ import {
   DEFAULT_SELECTED_WEIGHT,
   DEFAULT_NOT_INTERESTED_WEIGHT,
 } from './constants.js';
+import { sendGAEvents, sendGAUserProperties } from './analytics.js';
 
 const db = admin.firestore();
 
@@ -26,7 +27,10 @@ const db = admin.firestore();
  * NOTE: Reads directly from users/{userId}/behavior_events subcollection
  * which is inherently partitioned by user. Filters by timestamp in memory.
  */
-export async function updateWeights(userId: string): Promise<void> {
+export async function updateWeights(userId: string, clientId?: string): Promise<void> {
+  // GA4 web-stream client_id passed through from syncBehaviorEvents. Falls back
+  // to '' if missing — analytics.ts will mint a random id. Never the Auth UID.
+  const effectiveClientId = clientId || '';
   // 1. Fetch user profile
   const userRef = db.collection('users').doc(userId);
   const userDoc = await userRef.get();
@@ -261,6 +265,63 @@ export async function updateWeights(userId: string): Promise<void> {
       `Result: ${Object.entries(decayedWeights).slice(0, 5).map(([k, v]) => `${k}=${v.toFixed(3)}`).join(', ')}`
     );
   }
+
+  // --- Analytics: weight_updated events ---
+  const weightUpdatedEvents: Array<{ name: string; params: Record<string, any> }> = [];
+  const triggerEventType = events.length > 0 ? events[events.length - 1].eventType : 'decay';
+
+  for (const [key, val] of Object.entries(decayedWeights)) {
+    const previousVal = currentWeights[key] ?? 1.0;
+    if (Math.abs(val - previousVal) < 0.001) continue; // skip unchanged weights
+
+    let entityType: string;
+    let entityId: string;
+    if (key.startsWith('pub::')) {
+      entityType = 'publisher';
+      entityId = key.replace('pub::', '');
+    } else if (key.includes('::')) {
+      entityType = 'category_length';
+      entityId = key;
+    } else {
+      entityType = 'category';
+      entityId = key;
+    }
+
+    weightUpdatedEvents.push({
+      name: 'weight_updated',
+      params: {
+        user_id: userId,
+        entity_type: entityType,
+        entity_id: entityId,
+        old_value: previousVal,
+        new_value: val,
+        trigger: triggerEventType,
+      },
+    });
+  }
+
+  // --- Analytics: user properties ---
+  const categoryWeightsEntries = Object.entries(newCategoryWeights);
+  const sortedByWeight = [...categoryWeightsEntries].sort((a, b) => b[1] - a[1]);
+  const topCategoryWeight = sortedByWeight.length > 0 ? sortedByWeight[0][1] : 1.0;
+  const categoriesAtCeiling = categoryWeightsEntries.filter(([, w]) => w >= MAX_CATEGORY_WEIGHT).length;
+
+  // Concentration score: Herfindahl-like metric — sum of squared fractions of total weight mass.
+  const totalWeight = categoryWeightsEntries.reduce((sum, [, w]) => sum + w, 0);
+  let concentrationScore = 0;
+  if (totalWeight > 0) {
+    concentrationScore = categoryWeightsEntries.reduce((sum, [, w]) => sum + Math.pow(w / totalWeight, 2), 0);
+  }
+
+  const userProps: Record<string, string> = {
+    concentration_score: concentrationScore.toFixed(2),
+    top_cat_weight: topCategoryWeight.toFixed(2),
+    cats_at_ceiling: categoriesAtCeiling.toString(),
+  };
+
+  // Fire-and-forget — analytics events don't block weight updates
+  sendGAEvents(effectiveClientId, weightUpdatedEvents).catch(() => {});
+  sendGAUserProperties(effectiveClientId, userProps).catch(() => {});
 
   // 8. Update weekly read count and streak
   // B3 Fix: Pass the already-fetched events into updateReadStats instead of

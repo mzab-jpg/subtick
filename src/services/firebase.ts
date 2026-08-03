@@ -8,6 +8,7 @@ import { initializeAuth, getAuth, connectAuthEmulator, Auth } from 'firebase/aut
 import { getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { FIREBASE_EMULATOR_CONFIG } from '../utils/constants';
 
@@ -78,6 +79,64 @@ if (USE_EMULATORS) {
   console.log('[SubTick] ✅ Firebase Emulators connected');
 } else {
   console.log('[SubTick] ☁️ Using production Firebase (project: subtick-bbd55)');
+}
+
+// --- Analytics Client ID (GA4 Measurement Protocol, web stream) ---
+// The GA4 web-stream Measurement Protocol requires a stable per-install
+// `client_id` (commonly a UUID). We generate one once per app install and
+// persist it in AsyncStorage, then send it to the Cloud Functions which forward
+// it to GA4. This is NOT the Firebase Analytics SDK's internal ID — it's a
+// stable UUID we control.
+//
+// The storage key is intentionally left as @subtick_app_instance_id for
+// backwards compatibility, so existing installs keep their id after this
+// rename.
+const CLIENT_ID_KEY = '@subtick_app_instance_id';
+
+let cachedClientId: string | null = null;
+
+/**
+ * Generate a GA4-compatible client_id in the standard dotted format:
+ *   XXXXXXXXXX.XXXXXXXXXX  (two random 10-digit numbers separated by a dot)
+ * This matches the format of the `_ga` cookie that the gtag.js library sets,
+ * which GA4's Measurement Protocol pipeline is designed to accept.
+ */
+function generateGAClientId(): string {
+  const rand10 = () => Math.floor(Math.random() * 9_000_000_000 + 1_000_000_000).toString();
+  return `${rand10()}.${rand10()}`;
+}
+
+/**
+ * Get the stable client_id for GA4 Measurement Protocol (web stream).
+ * Generates a dotted GA4-format id on first call and caches it in AsyncStorage.
+ * Accepts both the new dotted format and the legacy 32-hex format so existing
+ * installs keep their id after this change.
+ */
+export async function getClientId(): Promise<string> {
+  if (cachedClientId) return cachedClientId;
+
+  try {
+    const stored = await AsyncStorage.getItem(CLIENT_ID_KEY);
+    // Accept both new dotted format and legacy 32-hex format
+    if (stored && (/^\d{10}\.\d{10}$/.test(stored) || /^[0-9a-f]{32}$/i.test(stored))) {
+      cachedClientId = stored;
+      return stored;
+    }
+  } catch {
+    // Fall through to generate a new one
+  }
+
+  // Generate a GA4-standard dotted client_id
+  const clientId = generateGAClientId();
+  cachedClientId = clientId;
+
+  try {
+    await AsyncStorage.setItem(CLIENT_ID_KEY, clientId);
+  } catch {
+    // Non-fatal — will regenerate next launch
+  }
+
+  return clientId;
 }
 
 export { app, auth, db, functions };
