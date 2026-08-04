@@ -1,6 +1,6 @@
 # Tangent — Progress & Status
 
-> **Last verified:** 4 August 2026 (post-analytics logging implementation).
+> **Last verified:** 4 August 2026 (post-gap-fix round).
 > All status claims are based on reading the actual code.
 
 ---
@@ -12,10 +12,11 @@
 - ✅ **User profile field whitelist (create + update)** — Firestore rules restrict both to safe fields (A4 + S2)
 - ✅ **feed_requests / feedback schema validation** (S3/S4) — URL format, field schema, size caps
 - ✅ **behavior_events full validation** (S5 + A4) — Path match, eventType enum, field whitelist, 2KB cap
-- ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json`
+- ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json` (5 composite indexes)
 - ✅ **syncBehaviorEvents input cap** — Server-side 50-event limit prevents overflow (A4)
 - ✅ **ErrorBoundary** (Batch 1) — Render crash safety net wrapping RootNavigator
 - ✅ **Google Sign-In security** — `request.auth.uid` enforced; client userId ignored; lazy import in Expo Go
+- ✅ **Google Sign-In production log silence** — `console.log` calls gated behind `__DEV__` checks in `linkGoogleAccount()`
 - ✅ **GA_API_SECRET** — Stored in Cloud Secret Manager; `.trim()` applied to strip trailing CRLF from Secret Manager values
 
 ### Core Feed Pipeline
@@ -26,11 +27,11 @@
 - ✅ **Dual candidate pool cron** — Random threshold R, 4 capped queries (~2,000 reads/run). Box 1 (current) + Box 2 (mixed)
 - ✅ **random_score field** — Assigned on ingestion, refreshed daily at zero extra cost
 - ✅ **Trending score decay cron** — Daily ×0.9057 for scores > 1.0 (C1, ~70% write reduction)
-- ✅ **Old article cleanup cron** — Every 3 days: delete paywalled + bottom 3% by peakTrendingScore
+- ✅ **Old article cleanup cron** — Every 3 days: delete paywalled + query 500 worst-scoring articles by peakTrendingScore ASC, delete bottom 3% (fixed 500-read ceiling, composite index)
 - ✅ **peakTrendingScore tracking** — All-time high, never decays, same batch as trendingScore update
 - ✅ **Like/Unlike and Save/Unsave toggle** — Negative increments + per-user per-article dedup
-- ✅ **Normalized 5-component ranked feed** — All components [0,1]; two formulas (personalized + merit)
-- ✅ **Tranche-based feed assembly** — 4 buckets: High/Mid random, Low/Discovery conditional
+- ✅ **Normalized 4-component ranked feed** — All components [0,1]; two formulas (fullScore + tailScore). Diversity enforced by hard per-publisher cap of 5 during assembly.
+- ✅ **Tranche-based feed assembly** — 3 buckets: High/Mid random, Tail sorted by T+R
 - ✅ **Dynamic publisher quality** — `publishers` collection, 10-min TTL cache (C5), atomic increments
 - ✅ **Firestore fallback** — Client falls back to direct query with `isPaywalled == false` filter (C7)
 - ✅ **Idempotent event sync** — `event.id` as Firestore doc ID
@@ -43,7 +44,7 @@
 - ✅ **Flush race condition fixed** — Same mutex for read/write; network outside mutex (B6)
 - ✅ **Offline sync with retry** — `offlineManager.ts`, 30s cooldown
 - ✅ **Watermark-based weight update** — `weightUpdatedAt`, no replay, daily decay at ≥23h intervals
-- ✅ **Faster personalization** — FEEDBACK_DELTAS up to 0.55; noticeable within 1–2 sessions
+- ✅ **Faster personalisation** — P weights 0.60 in score (was 0.40); P=0.60 cat + 0.40 pub; quick_exit delta neutral (0); read_thorough thresholds relaxed (scroll ≥70%, time ≥60% of expected); noticeable within 1–2 sessions
 - ✅ **WPM calibration** — Rolling 80/20 average [150, 750]; skipped for truncated feeds
 - ✅ **Reading streak & weekly count** — `updateReadStats()` in weightUpdater
 
@@ -61,7 +62,8 @@
 - ✅ **WebView navigation lock** — External links → OS browser; archived mode allows same-domain
 - ✅ **Scroll progress bar** — Plain React state with percentage strings (Fabric-safe)
 - ✅ **Per-publisher frontend rules** — `removeCss` + `injectCss` in both modes
-- ✅ **Mock/Sandbox mode** — Reader accepts `mockArticle` + `mockHtml`
+- ✅ **Mock/Sandbox mode** — Reader accepts `mockArticle` (loads live URL in WebView)
+- ✅ **Swipe-back gesture on Reader** — `gestureEnabled: true` for horizontal edge-swipe dismiss (doesn't conflict with vertical article swipes)
 
 ### Auth & Onboarding
 - ✅ **Anonymous auth** — Reuses existing session
@@ -78,8 +80,10 @@
 - ✅ **CategoryPreferences** — Uses `CategoryChipGrid` + `useUser()`; auto-saves on tap
 - ✅ **DashboardStats** — Select ≤3 stats for dashboard pill; uses `useUser()`
 - ✅ **AccountScreen** — Google link/unlink, sign out, reset, delete; uses `useUser()`
+- ✅ **FeedbackScreen** — Thin wrapper over shared `FormScreen`; submit to Firestore `feedback`
+- ✅ **FeedRequestScreen** — Thin wrapper over shared `FormScreen`; submit to Firestore `feed_requests`
 - ✅ **Theme system** — Light/dark/system; pre-compiled WebView CSS; AsyncStorage + Firestore dual persistence
-- ✅ **All 11 screens use safe area insets** — Dynamic `useSafeAreaInsets()` via `SafeAreaProvider`
+- ✅ **All 11 screens use safe area insets** — Manual `topInset` / `bottomInset` from `src/utils/safeArea.ts` (avoids `react-native-safe-area-context` Fabric crash on RN 0.86)
 
 ### Category Reorganisation
 - ✅ **6 legacy → 9 new categories** — Politics, Business, Finance, Technology, Science, History, Culture, Lifestyle, Entertainment
@@ -88,7 +92,7 @@
 
 ### Analytics Logging (GA4 via Measurement Protocol)
 - ✅ **`firebase/functions/src/analytics.ts`** — `sendGAEvents()` + `sendGAUserProperties()` helpers targeting GA4 Web stream (`measurement_id` URL param, `client_id` body field). Auto-chunks at 25 events/request. `GA_DEBUG` mode hits `/debug/mp/collect` and logs `validationMessages`. API secret `.trim()` strips trailing CRLF from Secret Manager values (was silently dropping events).
-- ✅ **`article_shown` event** — Logged per article in `getRankedFeed.ts`: tranche, dominant_component, all 5 component scores, final_score, position.
+- ✅ **`article_shown` event** — Logged per article in `getRankedFeed.ts`: tranche, dominant_component, all 4 component scores (P/T/R/Q), final_score, position.
 - ✅ **`feed_generated` event** — Logged once per feed call: tranche counts, distinct publisher + category counts.
 - ✅ **`weight_updated` event** — Logged per weight change in `weightUpdater.ts`: entity_type, entity_id, old_value, new_value, trigger.
 - ✅ **`config_changed` event** — Logged in `updateScoringConfig` (index.ts) every time `system/scoringConfig` is written.
@@ -108,6 +112,7 @@
 - ✅ **Firebase config env-var support** — `firebase.ts` reads from env with hardcoded production fallback
 - ✅ **SafeAreaProvider** — Wraps entire app tree
 - ✅ **firebase/functions/.env** — `GA_MEASUREMENT_ID=G-4B3N8C8MR3`, `GA_DEBUG=false`
+- ✅ **Unused package removed** — `react-native-safe-area-context` removed from `package.json` (replaced by manual `safeArea.ts`)
 
 ### Account Management
 - ✅ **Native Google Sign-In** — `@react-native-google-signin/google-signin` with lazy import (Expo Go safe)
@@ -120,7 +125,7 @@
 - ✅ **Mid-session UID change remount** — React key bump on RootNavigator
 - ✅ **Orphan cleanup** — `deleteOrphanProfile` CF uses Admin SDK to bypass `allow delete: if false`
 
-### Refactoring (Batches 1–3)
+### Refactoring (Batches 1–3 + Gap Fixes)
 - ✅ **Fabric crash fix** — `cardStyleInterpolator` → `presentation: 'modal'` in RootNavigator (debug-only crash)
 - ✅ **Shared AsyncStorage mutex** — `createStorageMutex()` factory in `asyncStorageMutex.ts`; used by behaviorSync + feedService
 - ✅ **ErrorBoundary** — Class component wrapping RootNavigator; "Something went wrong" + Try Again
@@ -128,8 +133,13 @@
 - ✅ **DashboardStatsScreen header fix** — Added `paddingTop: topInset`
 - ✅ **CategoryChipGrid** — Shared 3-state selector; used by Onboarding + CategoryPreferences
 - ✅ **ArticleListScreen** — Shared offline list; used by History + SavedReads (24 lines each)
+- ✅ **FormScreen** — Shared form wrapper; used by Feedback + FeedRequest (thin wrappers)
 - ✅ **UserContext** — `useUser()` hook replaces per-screen `fetchUserProfile()` in Settings, Account, DashboardStats, CategoryPreferences
 - ✅ **ReaderScreen decomposition** — 1,098 → 430 lines as orchestrator; 5 feature hooks/components under `src/features/reader/`
+- ✅ **Cleanup cron sampling** — Fixed 500-read ceiling via `orderBy('peakTrendingScore', 'asc').limit(500)` + composite index
+- ✅ **Dead code removal** — Removed unused `getSeenArticleIds()` from `feedService.ts`; removed unused `react-native-safe-area-context` from `package.json`
+- ✅ **Reader swipe-back gesture** — Enabled `gestureEnabled: true` (horizontal edge-swipe dismiss)
+- ✅ **Google Sign-In log silencing** — `console.log` calls in `linkGoogleAccount()` gated behind `__DEV__`
 
 ---
 
@@ -166,7 +176,7 @@
 6. **Dashboard infinite scroll** — Only 3 of 30 fetched articles shown; rest via Discover button
 7. **Run `backfillRandomScore.js` once** — Assign `random_score` to all pre-existing articles
 8. **ReaderScreen decomposition** — ✅ Done (Batch 3)
-9. **Shared component extraction** — ✅ Done (Batch 2: CategoryChipGrid, ArticleListScreen)
+9. **Shared component extraction** — ✅ Done (Batch 2 + Gap #5: CategoryChipGrid, ArticleListScreen, FormScreen)
 10. **UserContext** — ✅ Done (Batch 2)
 11. **Service file splits** — Deferred (high risk, low benefit currently)
 12. **Theme preference cross-device sync** — `themePreference` written to Firestore but ThemeContext only reads from AsyncStorage

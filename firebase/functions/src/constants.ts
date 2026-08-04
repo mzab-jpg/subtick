@@ -54,22 +54,22 @@ export const SUBSTACK_FEEDS: FeedSource[] = [
 
 // --- Scoring Formula Weights (High/Mid tranches — personalized) ---
 // All components normalized to [0,1] so these weights are honest percentages.
-// Weights must sum to 1.0.
+// Diversity enforced by a hard per-publisher cap (5) during feed assembly,
+// not as a scoring component. Weights must sum to 1.0.
 export const SCORE_WEIGHTS = {
-  personalization: 0.40, // P: how much you like this category × publisher
+  personalization: 0.60, // P: how much you like this category × publisher
   trending: 0.15,        // T: crowd engagement (normalized, decays over time)
-  recency: 0.20,         // R: how recently published (two-phase decay)
+  recency: 0.10,         // R: how recently published (two-phase decay)
   quality: 0.15,         // Q: crowd-sourced publisher quality
-  diversity: 0.10,       // U: penalty for too many articles from same publisher
 };
 
-// --- Scoring Formula Weights (Low/Discovery tranches — merit-based) ---
-// No personalization or diversity. Pure recency + trending + quality.
+// --- Scoring Formula Weights (Tail tranche — trending + recency only) ---
+// No personalization or quality. Sorted by trending + recency after the full
+// 4-component score places articles in the bottom tranche (fullScore ≤ 0.20).
 // Weights must sum to 1.0.
-export const SCORE_WEIGHTS_MERIT = {
-  recency: 0.40,
-  trending: 0.30,
-  quality: 0.30,
+export const SCORE_WEIGHTS_TAIL = {
+  trending: 0.43,
+  recency: 0.57,
 };
 
 // --- Feedback Delta Multipliers ---
@@ -84,7 +84,7 @@ export const FEEDBACK_DELTAS: Record<string, number> = {
   read_skim: 0.10,
   read_shallow: 0.00,
   swipe_next: 0.00,
-  quick_exit: -0.20,
+  quick_exit: 0,
   swipe_not_interested: -0.40,
 };
 

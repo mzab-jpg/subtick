@@ -167,7 +167,7 @@ export interface ThemeColors {
 export type RootStackParamList = {
   Dashboard: { onboardingSelections?: any };
   Onboarding: undefined;
-  Reader: { articleId: string; queueArticleIds?: string[]; startIndex?: number; userWpm?: number; mode?: 'feed' | 'history' | 'saved'; mockArticle?: Article; mockHtml?: string };
+  Reader: { articleId: string; queueArticleIds?: string[]; startIndex?: number; userWpm?: number; mode?: 'feed' | 'history' | 'saved'; mockArticle?: Article };
   Settings: undefined;
   History: undefined;
   SavedReads: undefined;

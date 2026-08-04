@@ -140,8 +140,8 @@ export function useBehaviorTracker({
       // F5 Fix: Use named constants instead of magic numbers
       if (depth < QUICK_EXIT_MAX_SCROLL && duration < QUICK_EXIT_MAX_DURATION_MS) {
         eventType = 'quick_exit';
-      } else if (depth >= 0.8) {
-        if (duration >= expectedReadTimeMs * 0.7) {
+      } else if (depth >= 0.7) {
+        if (duration >= expectedReadTimeMs * 0.6) {
           eventType = 'read_thorough';
         } else {
           eventType = 'read_skim';

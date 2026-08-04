@@ -259,49 +259,6 @@ export async function getArticleById(articleId: string): Promise<Article | null>
 }
 
 /**
- * Get seen article IDs, merging local AsyncStorage with Firestore profile.
- * This enables cross-device dedup: a user who links Google on a new device
- * will see their full seen history from the server.
- * Local IDs take precedence (faster, always available offline).
- * Firestore IDs are merged in for any the local device hasn't seen yet.
- */
-export async function getSeenArticleIds(): Promise<string[]> {
-  return storageMutex.enqueue(async () => {
-    try {
-      // 1. Read local AsyncStorage (instant, works offline)
-      const raw = await AsyncStorage.getItem(SEEN_ARTICLES_KEY);
-      const localIds: string[] = raw ? JSON.parse(raw) : [];
-
-      // 2. Merge with Firestore profile seenArticleIds (cross-device sync)
-      try {
-        const userId = auth.currentUser?.uid;
-        if (userId) {
-          const userRef = doc(db, 'users', userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const serverIds: string[] = userSnap.data()?.seenArticleIds || [];
-            if (serverIds.length > 0) {
-              // Merge: combine local + server, deduplicate, cap at 1000
-              const merged = Array.from(new Set([...localIds, ...serverIds]));
-              if (merged.length > 1000) {
-                return merged.slice(merged.length - 1000);
-              }
-              return merged;
-            }
-          }
-        }
-      } catch {
-        // Firestore read is best-effort — fall back to local only
-      }
-
-      return localIds;
-    } catch {
-      return [];
-    }
-  });
-}
-
-/**
  * Get seen article IDs from local AsyncStorage, optionally merging with
  * already-known server-side IDs. This avoids a redundant Firestore read
  * when the caller already has the user profile (e.g. via onSnapshot or

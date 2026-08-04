@@ -66,7 +66,7 @@ export default function RootNavigator() {
           name="Reader"
           component={ReaderScreen}
           options={{
-            gestureEnabled: false,
+            gestureEnabled: true,
             presentation: 'modal',
           }}
         />

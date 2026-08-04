@@ -95,23 +95,25 @@ export async function linkGoogleAccount(): Promise<User> {
     // Dynamic import to avoid crash if package isn't installed in web/dev
     const { GoogleSignin, isSuccessResponse } = await import('@react-native-google-signin/google-signin');
 
-    console.log('[Auth] GoogleSignin module loaded, checking Play Services...');
+    if (__DEV__) console.log('[Auth] GoogleSignin module loaded, checking Play Services...');
 
     // Ensure Play Services are available (Android)
     await GoogleSignin.hasPlayServices();
-    console.log('[Auth] Play Services available, calling signIn()...');
+    if (__DEV__) console.log('[Auth] Play Services available, calling signIn()...');
 
     // Sign in with Google (native)
     const signInResult = await GoogleSignin.signIn();
-    console.log('[Auth] signIn() returned. type:', signInResult.type);
-    console.log('[Auth] signIn() data keys:', signInResult.data ? Object.keys(signInResult.data) : 'none');
+    if (__DEV__) {
+      console.log('[Auth] signIn() returned. type:', signInResult.type);
+      console.log('[Auth] signIn() data keys:', signInResult.data ? Object.keys(signInResult.data) : 'none');
+    }
 
     if (!isSuccessResponse(signInResult)) {
       throw new Error(`Google Sign-In was cancelled or failed. type=${signInResult.type}`);
     }
 
     const { idToken, user: googleUser } = signInResult.data;
-    console.log('[Auth] idToken received:', !!idToken, 'length:', idToken?.length);
+    if (__DEV__) console.log('[Auth] idToken received:', !!idToken, 'length:', idToken?.length);
 
     if (!idToken) {
       throw new Error('No idToken returned from Google Sign-In');
@@ -119,7 +121,7 @@ export async function linkGoogleAccount(): Promise<User> {
 
     // Create Firebase credential from the Google idToken
     const credential = GoogleAuthProvider.credential(idToken);
-    console.log('[Auth] Firebase credential created, linking...');
+    if (__DEV__) console.log('[Auth] Firebase credential created, linking...');
 
     // Try to link credential to the existing anonymous account.
     // If the Google account is already linked to a different Firebase account,
@@ -127,16 +129,16 @@ export async function linkGoogleAccount(): Promise<User> {
     let result;
     try {
       result = await linkWithCredential(auth.currentUser!, credential);
-      console.log('[Auth] linkWithCredential succeeded. providerData:', result.user.providerData?.length);
+      if (__DEV__) console.log('[Auth] linkWithCredential succeeded. providerData:', result.user.providerData?.length);
     } catch (linkError: any) {
       if (linkError.code === 'auth/credential-already-in-use') {
-        console.log('[Auth] Credential already in use — signing in as existing Google-linked user');
+        if (__DEV__) console.log('[Auth] Credential already in use — signing in as existing Google-linked user');
         // Save the orphan anonymous UID before signing out so we can clean it up
         const oldAnonymousUid = auth.currentUser?.uid;
         // Sign out of current anonymous, sign in as the Google-linked user
         await signOut(auth);
         result = await signInWithCredential(auth, credential);
-        console.log('[Auth] signInWithCredential succeeded. uid:', result.user.uid);
+        if (__DEV__) console.log('[Auth] signInWithCredential succeeded. uid:', result.user.uid);
         // Ensure Firestore profile exists for the recovered account (preserves all data)
         await ensureUserProfile(result.user);
         // Clean up the orphan anonymous account — delete the now-stale
@@ -150,7 +152,7 @@ export async function linkGoogleAccount(): Promise<User> {
               'deleteOrphanProfile'
             );
             await deleteOrphanFn({ orphanUid: oldAnonymousUid });
-            console.log('[Auth] Deleted orphan Firestore profile:', oldAnonymousUid);
+            if (__DEV__) console.log('[Auth] Deleted orphan Firestore profile:', oldAnonymousUid);
           } catch (cleanupErr) {
             console.warn('[Auth] Could not delete orphan Firestore profile:', cleanupErr);
           }

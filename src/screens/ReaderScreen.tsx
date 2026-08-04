@@ -111,7 +111,7 @@ export default function ReaderScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'Reader'>>();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
-  const { articleId, queueArticleIds, startIndex, userWpm, mode, mockArticle, mockHtml } = route.params;
+  const { articleId, queueArticleIds, startIndex, userWpm, mode, mockArticle } = route.params;
   const currentWpm = userWpm || 250;
   const isHistoryMode = mode === 'history';
   const isSavedMode = mode === 'saved';
@@ -129,7 +129,7 @@ export default function ReaderScreen() {
     article, resolvedHtml, fetchError, loading,
     rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles,
   } = useArticleLoader({
-    articleId, isSavedMode, isMockMode, mockArticle, mockHtml,
+    articleId, isSavedMode, isMockMode, mockArticle,
   });
 
   const {
@@ -321,9 +321,10 @@ export default function ReaderScreen() {
     const safePublicationName = escapeHtml(article.publicationName);
     const safeAuthor = escapeHtml(article.author);
 
+    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const publishDate = article.publishDate ? new Date(article.publishDate) : null;
     const formattedDate = publishDate
-      ? `${String(publishDate.getDate()).padStart(2, '0')}/${String(publishDate.getMonth() + 1).padStart(2, '0')}`
+      ? `${publishDate.getDate()} ${MONTHS[publishDate.getMonth()]}`
       : '';
 
     const titleBlock = `<h1 style="color:${colors.text}; margin-bottom:16px;">${safeTitle}</h1>`;

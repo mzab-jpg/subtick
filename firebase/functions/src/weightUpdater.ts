@@ -204,7 +204,7 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
     }
 
     // If they scrolled deep, they likely finished it
-    if ((event.eventType === 'read_thorough' || event.eventType === 'read_skim') && event.scrollDepth >= 0.8 && event.sessionDuration > 10000) {
+    if ((event.eventType === 'read_thorough' || event.eventType === 'read_skim') && event.scrollDepth >= 0.7 && event.sessionDuration > 10000) {
       newTotalArticlesFinished++;
       articlesFinishedUpdated = true;
 

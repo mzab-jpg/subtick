@@ -22,7 +22,7 @@ import { User, Inbox, Shuffle, AlertTriangle } from 'lucide-react-native';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_XL, TEXT_2XL } from '../utils/constants';
 import { auth, db } from '../services/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { completeOnboarding } from '../services/auth';
+import { completeOnboarding, fetchUserProfile } from '../services/auth';
 import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { getMetricIcon, getTopCategory } from '../utils/dashboardMetrics';
@@ -43,6 +43,11 @@ export default function DashboardScreen() {
   // Passed to getRankedFeed as exclusions so we never recycle cards within a session.
   // In-memory only — resets on Dashboard unmount; articles reappear freely in future sessions.
   const sessionShownIds = useRef<Set<string>>(new Set());
+
+  // Track article IDs consumed (tapped) while the Reader was open.
+  // These are filtered out on the next Dashboard focus (after Reader is dismissed)
+  // so the feed update happens in the background, invisible to the user.
+  const consumedIdsRef = useRef<Set<string>>(new Set());
 
   // Hold the most recent profile data from the real-time listener.
   // We merge contextProfile with live stat deltas so the Dashboard always
@@ -86,7 +91,26 @@ export default function DashboardScreen() {
 
   // --- Load on mount; refresh seen filter silently on focus ---
   useEffect(() => {
+    // Wait until UserContext has finished loading the profile before doing
+    // the initial data load. This prevents the "onboarding shown even when
+    // user is already onboarded" race.
+    if (contextLoading) return;
+
     const unsubscribe = navigation.addListener('focus', () => {
+      // Filter out any articles that were consumed while the Reader was open.
+      // This happens invisibly in the background — the user never sees cards
+      // shifting before the Reader modal opens.
+      if (consumedIdsRef.current.size > 0) {
+        setFeedArticles(prev => {
+          const filtered = prev.filter(a => !consumedIdsRef.current.has(a.id));
+          if (filtered.length === 0 && prev.length > 0) {
+            loadData(true);
+          }
+          return filtered;
+        });
+        consumedIdsRef.current = new Set();
+      }
+
       // Use the server-side seen IDs from the live profile to avoid a
       // redundant Firestore getDoc inside getSeenArticleIds(). This removes
       // one of the three duplicate document reads that happened on every focus.
@@ -111,9 +135,10 @@ export default function DashboardScreen() {
 
     loadData(false);
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, contextLoading]);
 
-  // Onboarding race fix: await completeOnboarding before re-fetching the profile.
+  // Onboarding completion: write selections to Firestore, then fetch the fresh
+  // profile and load feed directly (bypassing the stale UserContext).
   useEffect(() => {
     if (route.params?.onboardingSelections) {
       const { selectedCategoryIds, notInterestedCategoryIds } = route.params.onboardingSelections;
@@ -122,10 +147,16 @@ export default function DashboardScreen() {
         (async () => {
           try {
             await completeOnboarding(userId, selectedCategoryIds, notInterestedCategoryIds);
+            // Fetch the fresh profile with isOnboarded: true so that loadData
+            // won't redirect back to Onboarding a second time.
+            const fresh = await fetchUserProfile(userId);
+            if (fresh) {
+              await refreshProfile();
+              await loadFeedArticles(fresh);
+            }
           } catch (err) {
             console.error('[Dashboard] completeOnboarding error:', err);
           }
-          loadData(false);
         })();
       }
     }
@@ -141,13 +172,18 @@ export default function DashboardScreen() {
 
       // Use the shared profile from UserContext — no fetchUserProfile call needed.
       const profile = contextProfile;
-      if (!profile) {
+
+      // Skip the onboarding redirect if we're processing onboarding selections
+      // (the onboardingSelections effect handles the flow). This prevents the
+      // double-redirect race where loadData fires before completeOnboarding finishes.
+      if (!profile && !route.params?.onboardingSelections) {
         // Brand-new user with no Firestore profile (e.g. fresh anonymous
         // sign-in after a sign-out). Redirect to onboarding.
         navigation.replace('Onboarding');
         return;
       }
-      if (!profile.isOnboarded) { navigation.replace('Onboarding'); return; }
+      if (!profile) return; // Still loading profile — effect will retry
+      if (!profile.isOnboarded && !route.params?.onboardingSelections) { navigation.replace('Onboarding'); return; }
       await loadFeedArticles(profile);
     } catch (error) {
       console.error('[Dashboard] loadData error:', error);
@@ -218,11 +254,21 @@ export default function DashboardScreen() {
 
   const navigateToReader = (articleId: string, index: number) => {
     if (index < 0 || index >= feedArticles.length) return;
+
+    // Build the Reader queue from all feed articles EXCEPT the tapped one.
     const remainingArticles = feedArticles.filter(a => a.id !== articleId);
-    setFeedArticles(remainingArticles);
     const shuffledQueue = [...remainingArticles]
       .sort(() => Math.random() - 0.5)
       .map(a => a.id);
+
+    // Mark the tapped article + all shuffled-queue articles as consumed so
+    // they are filtered out on the next Dashboard focus (after Reader is
+    // dismissed). We do NOT call setFeedArticles here — that would cause a
+    // visible re-render while the Reader modal is sliding up.
+    consumedIdsRef.current = new Set([articleId, ...shuffledQueue]);
+    sessionShownIds.current.add(articleId);
+    shuffledQueue.forEach(id => sessionShownIds.current.add(id));
+
     navigation.navigate('Reader', {
       articleId,
       queueArticleIds: shuffledQueue,

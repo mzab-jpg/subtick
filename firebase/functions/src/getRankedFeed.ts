@@ -9,7 +9,7 @@ import * as admin from 'firebase-admin';
 import { Article, RankedFeedResult, UserProfile } from './types.js';
 import {
   SCORE_WEIGHTS,
-  SCORE_WEIGHTS_MERIT,
+  SCORE_WEIGHTS_TAIL,
   TRENDING_DECAY_RATE,
   MAX_TRENDING_SCORE,
 } from './constants.js';
@@ -60,7 +60,7 @@ function normalizeP(categoryWeight: number, publisherWeight: number): number {
   const RANGE = MAX_W - MIN_W; // 4.9
   const catFraction = Math.max(0, Math.min(1, (categoryWeight - MIN_W) / RANGE));
   const pubFraction = Math.max(0, Math.min(1, (publisherWeight - MIN_W) / RANGE));
-  return catFraction * 0.7 + pubFraction * 0.3;
+  return catFraction * 0.6 + pubFraction * 0.4;
 }
 
 /**
@@ -109,43 +109,29 @@ function normalizeQ(qualityScore: number): number {
 }
 
 /**
- * U — Diversity [0, 1]
- * Rescales the raw diversity penalty from [0.4, 1.0] to [0, 1].
- * Only 1 article from this publisher → U = 1.0 (no penalty)
- * 16+ articles from same publisher → U = 0.0 (maximum penalty)
- */
-function normalizeU(articlesInSamePub: number): number {
-  const rawU = 1.0 - (Math.min(1.0, (articlesInSamePub - 1) / 15) * 0.6);
-  const MIN_U = 0.4;
-  const MAX_U = 1.0;
-  return Math.max(0, Math.min(1, (rawU - MIN_U) / (MAX_U - MIN_U)));
-}
-
-/**
  * Composite score for High/Mid tranches (personalized formula):
- * Score = 0.40P + 0.15T + 0.20R + 0.15Q + 0.10U
+ * Score = 0.60P + 0.15T + 0.10R + 0.15Q
  * All inputs must be normalized [0, 1]. Output is [0, 1].
+ * Diversity is enforced by a hard per-publisher cap during feed assembly.
  */
-function scorePersonalized(P: number, T: number, R: number, Q: number, U: number): number {
+function scorePersonalized(P: number, T: number, R: number, Q: number): number {
   return (
     SCORE_WEIGHTS.personalization * P +
     SCORE_WEIGHTS.trending * T +
     SCORE_WEIGHTS.recency * R +
-    SCORE_WEIGHTS.quality * Q +
-    SCORE_WEIGHTS.diversity * U
+    SCORE_WEIGHTS.quality * Q
   );
 }
 
 /**
- * Composite score for Low/Discovery tranches (merit-based formula):
- * Score = 0.40R + 0.30T + 0.30Q
- * No personalization, no diversity penalty. Output is [0, 1].
+ * Tail score for the Tail tranche (trending + recency only).
+ * No personalization or quality.
+ * Score = 0.43T + 0.57R. Output is [0, 1].
  */
-function scoreMerit(T: number, R: number, Q: number): number {
+function scoreTail(T: number, R: number): number {
   return (
-    SCORE_WEIGHTS_MERIT.recency * R +
-    SCORE_WEIGHTS_MERIT.trending * T +
-    SCORE_WEIGHTS_MERIT.quality * Q
+    SCORE_WEIGHTS_TAIL.trending * T +
+    SCORE_WEIGHTS_TAIL.recency * R
   );
 }
 
@@ -465,17 +451,18 @@ async function getOrUpdatePublisherQualities(): Promise<Record<string, number>> 
 /**
  * Feed Assembly via Tranches
  *
- * Articles are bucketed by P (personalization fraction):
- *   High  (P >= 0.40): 12 articles — random selection, personalized formula score for tiebreaking
- *   Mid   (P >= 0.20): 8 articles  — random selection, personalized formula score for tiebreaking
- *   Low   (P >= 0.10): 4 articles  — sorted by merit score (R+T+Q)
- *   Discovery (P < 0.10): 6 articles — sorted by merit score (R+T+Q)
+ * Articles are scored with the 4-component formula (0.60P + 0.15T +
+ * 0.10R + 0.15Q) and then bucketed by that score:
+ *   High  (fullScore > 0.40): 12 articles — random selection, max 5 per publisher
+ *   Mid   (fullScore > 0.20): 8 articles  — random selection, max 5 per publisher
+ *   Tail  (fullScore ≤ 0.20): 10 articles — sorted by tailScore (T+R), max 5 per publisher
  *
- * High/Mid use random selection to give variety within preferred categories.
- * Low/Discovery use score-sorted selection to surface the best merit-based articles.
+ * A hard per-publisher cap of 5 articles ensures feed diversity regardless
+ * of how many articles a single publisher has in the candidate pool.
+ * Overflow cascades down when capped articles are skipped.
  */
 function assembleFeedWithTranches(
-  scoredList: { article: Article; personalizedScore: number; meritScore: number; pNorm: number }[],
+  scoredList: { article: Article; fullScore: number; tailScore: number }[],
   totalSize = 30,
   totalArticlesRead = 0
 ): Article[] {
@@ -483,76 +470,82 @@ function assembleFeedWithTranches(
 
   const highBucket: typeof scoredList = [];
   const midBucket: typeof scoredList = [];
-  const lowBucket: typeof scoredList = [];
-  const discoveryBucket: typeof scoredList = [];
+  const tailBucket: typeof scoredList = [];
 
   for (const item of scoredList) {
-    if (item.pNorm >= 0.40) {
+    if (item.fullScore > 0.40) {
       highBucket.push(item);
-    } else if (item.pNorm >= 0.20) {
+    } else if (item.fullScore > 0.20) {
       midBucket.push(item);
-    } else if (item.pNorm >= 0.10) {
-      lowBucket.push(item);
     } else {
-      discoveryBucket.push(item);
+      tailBucket.push(item);
     }
   }
 
+  const PUB_CAP = 5;
+  const pubCountsInFeed = new Map<string, number>();
   const finalFeed: Article[] = [];
   let remainingCount = totalSize;
 
+  // Helper: iterate a shuffled (or sorted) bucket, pick articles respecting the
+  // per-publisher cap, and return how many were picked.
+  function pickFromBucket(
+    bucket: typeof scoredList,
+    target: number
+  ): Article[] {
+    const picked: Article[] = [];
+    for (const item of bucket) {
+      if (picked.length >= target) break;
+      const pub = item.article.publicationName;
+      const current = pubCountsInFeed.get(pub) || 0;
+      if (current >= PUB_CAP) continue;
+      pubCountsInFeed.set(pub, current + 1);
+      picked.push(item.article);
+    }
+    return picked;
+  }
+
   let targetHigh = 12;
   let targetMid = 8;
-  let targetLow = 4;
-  let targetDiscovery = 6;
+  let targetTail = 10;
 
-  // High Tranche — random selection (variety within preferred categories)
+  // High Tranche — random selection respecting publisher cap
   shuffleArray(highBucket);
-  const pickedHigh = highBucket.slice(0, Math.min(highBucket.length, targetHigh)).map(s => s.article);
+  const pickedHigh = pickFromBucket(highBucket, targetHigh);
   finalFeed.push(...pickedHigh);
   remainingCount -= pickedHigh.length;
   if (pickedHigh.length < targetHigh) targetMid += (targetHigh - pickedHigh.length);
 
-  // Mid Tranche — random selection
+  // Mid Tranche — random selection respecting publisher cap
   shuffleArray(midBucket);
-  const pickedMid = midBucket.slice(0, Math.min(midBucket.length, targetMid)).map(s => s.article);
+  const pickedMid = pickFromBucket(midBucket, targetMid);
   finalFeed.push(...pickedMid);
   remainingCount -= pickedMid.length;
-  if (pickedMid.length < targetMid) targetLow += (targetMid - pickedMid.length);
+  if (pickedMid.length < targetMid) targetTail += (targetMid - pickedMid.length);
 
-  // Low Tranche — sorted by merit score (R+T+Q), or randomized for new users
+  // Tail — sorted by tailScore (T+R), or randomized for new users
   if (totalArticlesRead < 30) {
-    shuffleArray(lowBucket);
+    shuffleArray(tailBucket);
   } else {
-    lowBucket.sort((a, b) => b.meritScore - a.meritScore);
+    tailBucket.sort((a, b) => b.tailScore - a.tailScore);
   }
-  const pickedLow = lowBucket.slice(0, Math.min(lowBucket.length, targetLow)).map(s => s.article);
-  finalFeed.push(...pickedLow);
-  remainingCount -= pickedLow.length;
-  if (pickedLow.length < targetLow) targetDiscovery += (targetLow - pickedLow.length);
-
-  // Discovery Tranche — sorted by merit score (R+T+Q), or randomized for new users
-  if (totalArticlesRead < 30) {
-    shuffleArray(discoveryBucket);
-  } else {
-    discoveryBucket.sort((a, b) => b.meritScore - a.meritScore);
-  }
-  const pickedDiscovery = discoveryBucket.slice(0, Math.min(discoveryBucket.length, targetDiscovery)).map(s => s.article);
-  finalFeed.push(...pickedDiscovery);
-  remainingCount -= pickedDiscovery.length;
+  const pickedTail = pickFromBucket(tailBucket, targetTail);
+  finalFeed.push(...pickedTail);
+  remainingCount -= pickedTail.length;
 
   // Final fallback if pool was very small
   if (remainingCount > 0) {
     const usedIds = new Set(finalFeed.map(a => a.id));
     const leftovers = scoredList.filter(s => !usedIds.has(s.article.id));
-    leftovers.sort((a, b) => b.meritScore - a.meritScore);
-    finalFeed.push(...leftovers.slice(0, remainingCount).map(s => s.article));
+    leftovers.sort((a, b) => b.tailScore - a.tailScore);
+    const pickedLeftovers = pickFromBucket(leftovers, remainingCount);
+    finalFeed.push(...pickedLeftovers);
   }
 
   // Final shuffle so order is not predictable
   shuffleArray(finalFeed);
 
-  console.log(`[Tranche Selector] High: ${pickedHigh.length}, Mid: ${pickedMid.length}, Low: ${pickedLow.length}, Discovery: ${pickedDiscovery.length}`);
+  console.log(`[Tranche Selector] High: ${pickedHigh.length}, Mid: ${pickedMid.length}, Tail: ${pickedTail.length}`);
 
   return finalFeed;
 }
@@ -596,12 +589,21 @@ export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
       console.warn('[Cron] Paywalled article cleanup failed (non-fatal):', paywallErr.message);
     }
 
-    // Step 2: Delete low-quality old articles (bottom 3% by peakTrendingScore, older than 3 months).
+    // Step 2: Delete low-quality old articles (bottom performers older than 3 months).
+    //
+    // Instead of reading ALL old articles (which grows unbounded and costs
+    // proportionally more Firestore reads every cycle), we query the 500
+    // worst-scoring candidates directly via a composite index. The result is
+    // a fixed 500-read ceiling every 72 hours regardless of collection size.
     const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+
+    const SAMPLE_LIMIT = 500;
+    const DELETE_FRACTION = 0.03;
 
     const snapshot = await db.collection('articles')
       .where('publishDate', '<', threeMonthsAgo)
-      .orderBy('publishDate', 'desc')
+      .orderBy('peakTrendingScore', 'asc')
+      .limit(SAMPLE_LIMIT)
       .get();
 
     if (snapshot.empty) {
@@ -620,12 +622,11 @@ export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
       });
     });
 
-    oldArticles.sort((a, b) => a.peakTrendingScore - b.peakTrendingScore);
-
-    const deleteCount = Math.max(1, Math.floor(oldArticles.length * 0.03));
+    // Already ordered by peakTrendingScore ascending — pick the worst fraction.
+    const deleteCount = Math.max(1, Math.floor(oldArticles.length * DELETE_FRACTION));
     const toDelete = oldArticles.slice(0, deleteCount);
 
-    console.log(`[Cron] ${oldArticles.length} old articles found. Deleting bottom ${deleteCount}.`);
+    console.log(`[Cron] ${oldArticles.length} old articles sampled. Deleting bottom ${deleteCount}.`);
 
     const batchSize = 500;
     for (let i = 0; i < toDelete.length; i += batchSize) {
@@ -686,11 +687,6 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
     const seenSet = new Set(seenArticleIds || []);
     const unseenArticles = pool.filter(article => !seenSet.has(article.id));
 
-    const pubCounts: Record<string, number> = {};
-    unseenArticles.forEach((a) => {
-      pubCounts[a.publicationName] = (pubCounts[a.publicationName] || 0) + 1;
-    });
-
     const scored = unseenArticles.map((article) => {
       const daysOld = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
 
@@ -699,18 +695,16 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       const pubWeight = publisherWeights[article.publicationName] ?? 1.0;
 
       const rawQuality = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
-      const pubCount = pubCounts[article.publicationName] || 1;
 
       const P = normalizeP(catWeight, pubWeight);
       const T = normalizeT(article.trendingScore || 0);
       const R = normalizeR(daysOld);
       const Q = normalizeQ(rawQuality);
-      const U = normalizeU(pubCount);
 
-      const personalizedScore = scorePersonalized(P, T, R, Q, U);
-      const meritScore = scoreMerit(T, R, Q);
+      const fullScore = scorePersonalized(P, T, R, Q);
+      const tailScore = scoreTail(T, R);
 
-      return { article, personalizedScore, meritScore, pNorm: P };
+      return { article, fullScore, tailScore };
     });
 
     const finalFeed = assembleFeedWithTranches(scored, RETURN_FEED_SIZE, totalArticlesRead);
@@ -718,23 +712,21 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
     // B2 Fix: Gate detailed score logging behind the emulator flag so production
     // doesn't ship article titles (PII) and score breakdowns to billable logs.
     if (process.env.FUNCTIONS_EMULATOR === 'true') {
-      console.log(`[getRankedFeed] --- Top 5 by personalized score ---`);
-      [...scored].sort((a, b) => b.personalizedScore - a.personalizedScore).slice(0, 5).forEach((s, i) => {
+      console.log(`[getRankedFeed] --- Top 5 by fullScore ---`);
+      [...scored].sort((a, b) => b.fullScore - a.fullScore).slice(0, 5).forEach((s, i) => {
         const daysOld = Math.max(0, (Date.now() - s.article.publishDate) / (1000 * 60 * 60 * 24));
         const compKey = `${s.article.category}::${s.article.lengthStyle}`;
         const catWeight = categoryLengthWeights[compKey] ?? categoryWeights[s.article.category] ?? 1.0;
         const pubWeight = publisherWeights[s.article.publicationName] ?? 1.0;
         const rawQuality = publisherQualities[s.article.publicationName] ?? s.article.qualityScore ?? 0.8;
-        const pubCount = pubCounts[s.article.publicationName] || 1;
         const P = normalizeP(catWeight, pubWeight);
         const T = normalizeT(s.article.trendingScore || 0);
         const R = normalizeR(daysOld);
         const Q = normalizeQ(rawQuality);
-        const U = normalizeU(pubCount);
         console.log(
           `  #${i + 1} "${s.article.title.substring(0, 50)}..." ` +
-          `pScore=${s.personalizedScore.toFixed(3)} mScore=${s.meritScore.toFixed(3)} ` +
-          `P=${P.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${Q.toFixed(2)} U=${U.toFixed(2)}`
+          `fullScore=${s.fullScore.toFixed(3)} tailScore=${s.tailScore.toFixed(3)} ` +
+          `P=${P.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${Q.toFixed(2)}`
         );
       });
     }
@@ -759,11 +751,10 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       distinctCategories.add(article.category);
 
       const tranche =
-        s.pNorm >= 0.40 ? 'high' :
-        s.pNorm >= 0.20 ? 'mid' :
-        s.pNorm >= 0.10 ? 'low' : 'discovery';
+        s.fullScore > 0.40 ? 'high' :
+        s.fullScore > 0.20 ? 'mid' : 'tail';
 
-      // Dominant component: which of the 5 contributes most to personalized score.
+      // Dominant component: which of the 4 contributes most to fullScore.
       const dayCheck = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
       const compP = normalizeP(
         categoryLengthWeights[`${article.category}::${article.lengthStyle}`] ?? categoryWeights[article.category] ?? 1.0,
@@ -772,13 +763,11 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       const compT = normalizeT(article.trendingScore || 0);
       const compR = normalizeR(dayCheck);
       const compQ = normalizeQ(publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8);
-      const compU = normalizeU(pubCounts[article.publicationName] || 1);
       const contributions: [string, number][] = [
         ['P', SCORE_WEIGHTS.personalization * compP],
         ['T', SCORE_WEIGHTS.trending * compT],
         ['R', SCORE_WEIGHTS.recency * compR],
         ['Q', SCORE_WEIGHTS.quality * compQ],
-        ['U', SCORE_WEIGHTS.diversity * compU],
       ];
       const dominantComponent = contributions.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
 
@@ -791,12 +780,11 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
           category_id: article.category,
           tranche,
           dominant_component: dominantComponent,
-          score_p: s.pNorm,
+          score_p: compP,
           score_t: compT,
           score_r: compR,
           score_q: compQ,
-          score_u: compU,
-          final_score: s.personalizedScore,
+          final_score: s.fullScore,
           position: index,
         },
       });
@@ -809,19 +797,15 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
         user_id: userId,
         tranche_high_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.pNorm >= 0.40;
+          return s && s.fullScore > 0.40;
         }).length,
         tranche_mid_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.pNorm >= 0.20 && s.pNorm < 0.40;
+          return s && s.fullScore > 0.20 && s.fullScore <= 0.40;
         }).length,
-        tranche_low_count: finalFeed.filter((_, i) => {
+        tranche_tail_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.pNorm >= 0.10 && s.pNorm < 0.20;
-        }).length,
-        tranche_discovery_count: finalFeed.filter((_, i) => {
-          const s = scoredById.get(finalFeed[i].id);
-          return s && s.pNorm < 0.10;
+          return s && s.fullScore <= 0.20;
         }).length,
         distinct_publisher_count: distinctPublishers.size,
         distinct_category_count: distinctCategories.size,

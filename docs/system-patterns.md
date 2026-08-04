@@ -1,6 +1,6 @@
 # Tangent — System Patterns
 
-> **Last verified:** 4 August 2026 (post-analytics logging implementation).
+> **Last verified:** 4 August 2026 (post-gap-fix round).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -13,17 +13,18 @@
 | Theme (light/dark/system) + computed color palette | `ThemeContext.tsx: ThemeProvider` | All screens via `useTheme()` | `AsyncStorage[@subtick_theme_preference]` + Firestore `users/{uid}.themePreference` |
 | Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` (initial load only — updates pushed via `injectJavaScript`) | Recomputed on theme change, never persisted |
 | User profile (UserProfile \| null) | `UserContext.tsx: UserProvider` → `useUser()` | SettingsScreen, AccountScreen, DashboardStatsScreen, CategoryPreferencesScreen (all via `useUser()`) | Fetched once from Firestore on auth; re-fetched via `refreshProfile()` on demand |
-| Safe area insets (top/bottom/left/right) | `App.tsx: SafeAreaProvider` | All 11 screens via `useSafeAreaInsets()` | Native OS values — dynamic per device |
+| Safe area insets (top/bottom) | Manual constants `src/utils/safeArea.ts` | All 11 screens via `topInset` / `bottomInset` (avoids `react-native-safe-area-context` Fabric crash on RN 0.86) | Hardcoded per-platform values |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Uses `onSnapshot` listener for real-time stat updates (not `useUser()` — needs live sync). Focus listener only refetches when feed depleted (A5). Reader queue shuffled on tap (A5). Uses `insets.top` for header padding.
-- `ReaderScreen.tsx` (orchestrator): Delegates state to feature hooks — `useArticleLoader` (article, resolvedHtml, fetchError, loading), `useNavigationQueue` (currentIndex, activeQueueIds, goToNext/Prev), `useReaderHUD` (hudVisible, isLiked, isSaved). Retains own `scrollProgress` state and PanResponder refs. Uses `insets.top` for HUD, `insets.bottom` for progress bar.
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `userProfile: UserProfile | null`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Uses `onSnapshot` listener for real-time stat updates (not `useUser()` — needs live sync). Focus listener only refetches when feed depleted (A5). Reader queue shuffled on tap (A5). Uses `topInset` for header padding.
+- `ReaderScreen.tsx` (orchestrator): Delegates state to feature hooks — `useArticleLoader` (article, resolvedHtml, fetchError, loading), `useNavigationQueue` (currentIndex, activeQueueIds, goToNext/Prev), `useReaderHUD` (hudVisible, isLiked, isSaved). Retains own `scrollProgress` state and PanResponder refs. Uses `topInset` for HUD, `bottomInset` for progress bar.
 - `OnboardingScreen.tsx`: `chipStates: Record<string, ChipState>` — pure local, never synced until Continue is pressed. Uses shared `CategoryChipGrid`.
 - `SettingsScreen.tsx`: Profile from `useUser()`. Refreshes on focus. Optimistically updates on changes.
 - `AccountScreen.tsx`: Profile from `useUser()`. Covers Google link/unlink, sign out, reset, delete.
 - `CategoryPreferencesScreen.tsx`: `selectedIds`, `notInterestedIds` derived from profile via `useUser()`. Auto-saves on tap via `updateCategoryWeights()` + `refreshProfile()`.
 - `DashboardStatsScreen.tsx`: `selectedMetricIds` from profile via `useUser()`. Optimistic toggle + `setDoc` merge.
 - `HistoryScreen.tsx` / `SavedReadsScreen.tsx`: 24-line wrappers — delegate all state to `ArticleListScreen`.
+- `FeedbackScreen.tsx` / `FeedRequestScreen.tsx`: Thin wrappers — delegate shell (header, subtitle, submit button, spinner) to shared `FormScreen` component.
 
 ### On-Device State (AsyncStorage — primary store)
 **Note:** `@subtick_seen_articles` IDs are also written to Firestore `users/{uid}.seenArticleIds` (via `arrayUnion`) for cross-device dedup.
@@ -53,7 +54,7 @@ const storageMutex = createStorageMutex();
 
 Each service creates its own independent queue — they intentionally do NOT share a queue because feeds and behavior events are separate domains and one slow domain should not block the other.
 
-`feedService.ts` uses this for: `markArticleSeen`, `markArticleSaved`, `unmarkArticleSaved`, `getSeenArticleIds`, `getSavedArticleIds`.
+`feedService.ts` uses this for: `markArticleSeen`, `markArticleSaved`, `unmarkArticleSaved`, `getSeenArticleIdsLocally`, `getSavedArticleIds`.
 
 `behaviorSync.ts` uses this for: `queueBehaviorEvent` (the queue append) and both the read-step and write-back-step of `flushBehaviorQueue`. The network upload itself runs *outside* the mutex so new events can be queued while an upload is in progress (B6 fix).
 
@@ -63,7 +64,7 @@ Each service creates its own independent queue — they intentionally do NOT sha
 
 ### 2a. Component Normalization
 
-**All 5 scoring components output values in [0, 1].** This ensures the formula weights mean exactly what they say — a 40% weight produces exactly 40% of the score contribution at maximum.
+**All 4 scoring components output values in [0, 1].** This ensures the formula weights mean exactly what they say. Diversity is enforced by a hard per‑publisher cap (5) during feed assembly, not as a scoring component.
 
 ### 2b. P — Personalization [0, 1]
 
@@ -73,10 +74,10 @@ Source: `getRankedFeed.ts: normalizeP()`
 const MIN_W = 0.1, MAX_W = 5.0, RANGE = 4.9;
 catFraction = (categoryWeight - MIN_W) / RANGE
 pubFraction = (publisherWeight - MIN_W) / RANGE
-P = catFraction × 0.7 + pubFraction × 0.3
+P = catFraction × 0.6 + pubFraction × 0.4
 ```
 
-Category gets 70% of P, publisher gets 30%.
+Category gets 60% of P, publisher gets 40%.
 
 | Situation | catWeight | pubWeight | P |
 |---|---|---|---|
@@ -97,7 +98,7 @@ T = min(trendingScore, MAX_TRENDING_SCORE) / MAX_TRENDING_SCORE
 // MAX_TRENDING_SCORE = 50
 ```
 
-`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days). The decay cron only processes articles with `trendingScore > 1.0` (raise from 0.1 to reduce write costs — C1 fix).
+`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days). The decay cron only processes articles with `trendingScore > 1.0` (raised from 0.1 to reduce write costs — C1 fix).
 
 Trending increments (`syncBehaviorEvents.ts`):
 | Action | trendingScore increment |
@@ -111,7 +112,7 @@ Trending increments (`syncBehaviorEvents.ts`):
 | Read shallow | +0.2 |
 | Swipe past / exit | +0.0 |
 
-**peakTrendingScore:** All-time high, never decays. Updated in the same batch as trendingScore. Used by `cronCleanupOldArticles` for deletion ranking.
+**peakTrendingScore:** All-time high, never decays. Updated in the same batch as trendingScore. Used by `cronCleanupOldArticles` for deletion ranking (now via sampled query — 500 worst-scoring candidates, composite index on `publishDate` + `peakTrendingScore`).
 
 **Per-user per-article dedup:** In-batch `likeDedup` and `saveDedup` Sets.
 
@@ -157,43 +158,48 @@ save: +0.010 / like: +0.005 / read_thorough: +0.005 / read_skim: +0.001
 swipe_not_interested: -0.010 / quick_exit: -0.005
 ```
 
-### 2f. U — Diversity [0, 1]
+### 2f. Diversity — Hard Publisher Cap
 
-```typescript
-rawU = 1.0 - (min(1.0, (articlesInSamePub - 1) / 15) × 0.6)
-U = (rawU - 0.4) / 0.6
-```
-
-| Articles from same publisher | U |
-|---|---|
-| 1 | 1.00 |
-| 8 | 0.53 |
-| 16+ | 0.00 |
+Diversity is no longer a scoring component. Instead, a hard per-publisher cap of **5 articles** is enforced during feed assembly in `assembleFeedWithTranches()`. As articles are picked from each tranche, a `pubCountsInFeed` map tracks how many articles each publisher already has in the feed. Once a publisher reaches 5, subsequent articles from that publisher are skipped. The existing overflow cascade naturally fills any gaps from other publishers.
 
 ### 2g. Scoring Formulas by Tranche
 
 **High & Mid tranches (personalized):**
 ```
-Score = 0.40×P + 0.15×T + 0.20×R + 0.15×Q + 0.10×U
+fullScore = 0.60×P + 0.15×T + 0.10×R + 0.15×Q
 ```
 
-**Low & Discovery tranches (merit-based):**
+**Tail tranche (trending + recency only):**
 ```
-Score = 0.40×R + 0.30×T + 0.30×Q
+tailScore = 0.43×T + 0.57×R
 ```
 
-Weights in `firebase/functions/src/constants.ts` (`SCORE_WEIGHTS` / `SCORE_WEIGHTS_MERIT`). Sum = 1.0. Output: [0, 1].
+Weights in `firebase/functions/src/constants.ts` (`SCORE_WEIGHTS` / `SCORE_WEIGHTS_TAIL`). Sum = 1.0. Output: [0, 1].
 
 ### 2h. Tranche Assembly
 
-| Tranche | P threshold | Target | Selection (est.) | Selection (new, <30 reads) |
-|---|---|---|---|---|
-| High | P ≥ 0.40 | 12 | Random shuffle | Random shuffle |
-| Mid | P ≥ 0.20 | 8 | Random shuffle | Random shuffle |
-| Low | P ≥ 0.10 | 4 | Merit score DESC | Random shuffle |
-| Discovery | P < 0.10 | 6 | Merit score DESC | Random shuffle |
+Articles are scored with the 4-component `fullScore` and then bucketed:
 
-Overflow cascades down. Final feed of 30 shuffled before return.
+| Tranche | fullScore threshold | Target | Selection |
+|---|---|---|---|
+| High | > 0.40 | 12 | Random shuffle, max 5 per publisher |
+| Mid | > 0.20 | 8 | Random shuffle, max 5 per publisher |
+| Tail | ≤ 0.20 | 10 | Sorted by tailScore (T+R), max 5 per publisher; randomized for users with <30 reads |
+
+Overflow cascades down. Final feed of 30 shuffled before return. Bucketing is by the full 4-component score, not P alone.
+
+### 2i. Cleanup Cron (Cost-Capped)
+
+The `cronCleanupOldArticles` runs every 72 hours and uses a **sampled query** with a fixed 500-read ceiling:
+
+```
+1. Delete ALL paywalled articles.
+2. Query articles WHERE publishDate < 90 days ago
+   ORDER BY peakTrendingScore ASC LIMIT 500
+   → Delete bottom 3% of the sample (worst ~15 articles).
+```
+
+This uses a composite index (`publishDate` ASC + `peakTrendingScore` ASC) and never reads the full articles collection. Cost is constant regardless of database size.
 
 ---
 
@@ -206,7 +212,7 @@ Source: `firebase/functions/src/constants.ts` (server) and `src/utils/constants.
 ```typescript
 save: +0.55 / like: +0.40 / read_thorough: +0.30 / read_skim: +0.10
 read_shallow: 0.00 / swipe_next: 0.00
-quick_exit: -0.20 / swipe_not_interested: -0.40
+quick_exit: 0.00 / swipe_not_interested: -0.40
 ```
 
 ### 3b. Dimension-Specific Learning Rates
@@ -245,8 +251,8 @@ Source: `useBehaviorTracker.ts: concludeSession()`
 
 ```
 if (scrollDepth < 0.2 AND sessionDuration < 15s) → 'quick_exit'
-else if (scrollDepth >= 0.8):
-    if (sessionDuration >= expectedReadTime × 0.7) → 'read_thorough'
+else if (scrollDepth >= 0.7):
+    if (sessionDuration >= expectedReadTime × 0.6) → 'read_thorough'
     else → 'read_skim'
 else if (scrollDepth >= 0.4) → 'read_shallow'
 else → 'swipe_next'
@@ -316,8 +322,11 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately, not via `c
 ### Progress Bar
 Plain React state (`useState(scrollProgress)`) with a `View` (not `Animated.View`):
 - `width: \`${Math.round(scrollProgress * 100)}%\`` — Fabric-safe (no `AnimatedInterpolation`)
-- Uses `colors.accent` fill; `borderRadius: 3`; positioned at `bottom: insets.bottom`
+- Uses `colors.accent` fill; `borderRadius: 3`; positioned at `bottom: bottomInset`
 - Driven by WebView `postMessage` → `setScrollProgress()` in `onMessage`
+
+### Reader Swipe-Back Gesture
+The Reader screen has `gestureEnabled: true` in `RootNavigator.tsx`. This enables the standard horizontal edge-swipe-to-go-back gesture provided by React Navigation. It does NOT conflict with the Reader's internal vertical article-swiping (handled by PanResponder edge zones) because the navigation gesture is horizontal and the Reader's article swipes are vertical. The `presentation: 'modal'` animation is native and bypasses Fabric's prop validation.
 
 ### Fabric Crash Fix — `cardStyleInterpolator` → `presentation: 'modal'`
 Source: `RootNavigator.tsx`

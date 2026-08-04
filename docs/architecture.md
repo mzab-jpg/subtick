@@ -1,6 +1,6 @@
 # Tangent — Architecture
 
-> **Last verified:** 4 August 2026 (post-analytics logging implementation).
+> **Last verified:** 4 August 2026 (post-gap-fix round).
 > Every claim below is traced to a specific file and function.
 
 ---
@@ -18,7 +18,7 @@
 | Serverless | Firebase Cloud Functions v2 | 10 exported functions | `firebase/functions/src/index.ts` |
 | Analytics | GA4 Measurement Protocol (web stream) | — | `firebase/functions/src/analytics.ts` |
 | Auth | Firebase Anonymous Auth + optional Google link | — | `src/services/auth.ts` |
-| Safe area | `react-native-safe-area-context` | `~5.7.0` | `App.tsx` (SafeAreaProvider) |
+| Safe area | Manual `src/utils/safeArea.ts` | — | `topInset` / `bottomInset` constants (avoids Fabric crash on RN 0.86) |
 | In-app browser | `react-native-webview` | `13.16.1` | `package.json` |
 | Offline storage | `@react-native-async-storage/async-storage` | `2.2.0` | `package.json` |
 | RSS parsing (server) | `rss-parser` | `^3.13.0` | `firebase/functions/src/rssCollector.ts` |
@@ -61,13 +61,15 @@
 │   ├── firebase.json               # Firebase project config + indexes pointer
 │   ├── .firebaserc                 # Project alias (default → subtick-bbd55)
 │   ├── firestore.rules             # Security rules: field whitelists + schema validation
-│   ├── firestore.indexes.json      # 4 composite indexes
+│   ├── firestore.indexes.json      # 5 composite indexes
 │   ├── seedFirestore.js            # One-time: writes seed articles to Firestore
 │   ├── seedFeeds.js                # One-time: writes feed documents
 │   ├── cleanFeeds.js               # One-time: deletes legacy hash-ID feed docs
 │   ├── scripts/
 │   │   └── oneoff/                 # Spent migration scripts (READ BEFORE RE-RUNNING)
 │   │       ├── README.md
+│   │       ├── resetTrendingScores.js
+│   │       ├── resetPublisherQualities.js
 │   │       ├── backfillRandomScore.js
 │   │       └── ... (cleanupArticles, resetAndFetch, forceFetchAll, etc.)
 │   └── functions/
@@ -89,7 +91,7 @@
     │   └── index.ts                # Client TypeScript interfaces + navigation params
     ├── utils/
     │   ├── constants.ts            # Client constants, storage keys, emulator config
-    │   ├── safeArea.ts             # topInset / bottomInset re-exports
+    │   ├── safeArea.ts             # topInset / bottomInset (manual, avoids safe-area-context Fabric crash)
     │   └── validation.ts           # Onboarding selection + feed URL validation
     ├── contexts/
     │   ├── ThemeContext.tsx         # Light/dark/system + pre-compiled WebView CSS
@@ -97,7 +99,9 @@
     ├── components/
     │   ├── ErrorBoundary.tsx        # Crash resilience — wraps RootNavigator
     │   ├── CategoryChipGrid.tsx     # Shared 3-state category selector (onboarding + prefs)
-    │   └── ArticleListScreen.tsx    # Shared offline list (history + saved reads)
+    │   ├── ArticleListScreen.tsx    # Shared offline list (history + saved reads)
+    │   ├── FormScreen.tsx           # Shared form wrapper (Feedback + FeedRequest)
+    │   └── ScreenHeader.tsx         # Shared header with back button
     ├── features/
     │   └── reader/                  # ReaderScreen decomposition (Batch 3 refactoring)
     │       ├── useArticleLoader.ts  # Article fetching (Firestore + RSS) + prefetch caching
@@ -127,8 +131,8 @@
         ├── CategoryPreferencesScreen.tsx  # CategoryChipGrid + useUser (auto-save on tap)
         ├── DashboardStatsScreen.tsx # Select ≤3 stats for dashboard pill (uses useUser)
         ├── DeveloperOptionsScreen.tsx  # __DEV__ only: sandbox reader, data reset
-        ├── FeedbackScreen.tsx       # Submit feedback to Firestore
-        └── FeedRequestScreen.tsx    # Submit feed URL for admin review
+        ├── FeedbackScreen.tsx       # Submit feedback (uses shared FormScreen)
+        └── FeedRequestScreen.tsx    # Submit feed URL for admin review (uses shared FormScreen)
 ```
 
 ---
@@ -162,15 +166,18 @@ cronDecayTrendingScores (every 24h): trendingScore × 0.9057 for scores > 1.0 (C
 
 cronCleanupOldArticles (every 3 days):
   → Step 1: Delete ALL paywalled articles immediately
-  → Step 2: Delete bottom 3% of articles >3 months old by peakTrendingScore
+  → Step 2: Query 500 worst-scoring articles >3 months old by peakTrendingScore ASC,
+    delete bottom 3% of sample. Fixed 500-read ceiling regardless of collection size.
+    Uses composite index (publishDate, peakTrendingScore).
 ```
 
 ### 3c. Feed Request — Client → Cloud Function → Response (+ Analytics)
 
 ```
 DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id from getClientId()
-  → Cloud Function: getOrUpdateCandidatePool → filter seen → 5-component scoring
-  → Tranche assembly: High 12 / Mid 8 / Low 4 / Discovery 6 (random <30 reads, merit otherwise)
+  → Cloud Function: getOrUpdateCandidatePool → filter seen → 4-component scoring (P, T, R, Q)
+  → Tranche assembly: High 12 / Mid 8 / Tail 10 (random for High/Mid, sorted by tailScore for Tail)
+  → Hard per-publisher cap of 5 applied during picking; overflow cascades
   → Final shuffle → return { articles: Article[30] }
   → Client-side seen filter → slice(0,30) → setFeedArticles
   → [ANALYTICS] sendGAEvents(clientId, [feed_generated + 30× article_shown]) — fire-and-forget
@@ -180,6 +187,7 @@ DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id fr
 
 ```
 useArticleLoader.loadArticle(id):
+  ├── isMockMode → setArticle(mockArticle), resolvedHtml = '' (loads live URL in WebView)
   ├── isSavedMode → getSavedArticleHtml(id)
   ├── rssStatus='archived' → useDirectUri
   ├── has guid+feedUrl → fetchAndExtractArticle (lazy-sanitize — C6)
@@ -254,6 +262,8 @@ AccountScreen → linkGoogleAccount():
 - **DashboardScreen focus refetch guard** (A5) — Only refetches when feed depleted
 - **DashboardScreen queue shuffle** (A5) — Untapped cards scattered randomly
 - **ReaderScreen HUD** (A5) — Title truncation + hidden on initial load
+- **ReaderScreen gestureEnabled** — Enabled (horizontal edge-swipe to dismiss; doesn't conflict with vertical article swipes)
+- **Google Sign-In logs** — Gated behind `__DEV__` checks (production logs are clean)
 - **GA_API_SECRET** — Stored in Cloud Secret Manager; `.trim()` applied to strip trailing CRLF
 
 ---

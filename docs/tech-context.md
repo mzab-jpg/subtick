@@ -1,6 +1,6 @@
 # Tangent — Technical Context
 
-> **Last verified:** 4 August 2026 (post-analytics logging implementation).
+> **Last verified:** 4 August 2026 (post-gap-fix round).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -26,13 +26,14 @@
 | `expo-status-bar` | `~57.0.1` | Status bar control |
 | `expo-modules-autolinking` | `^57.0.8` | Expo native module linking |
 | `react-native-gesture-handler` | `~2.32.0` | Touch gesture system (required by React Navigation) |
-| `react-native-safe-area-context` | `~5.7.0` | Safe area insets — wrapped by `SafeAreaProvider` in `App.tsx`, consumed by all 11 screens via `useSafeAreaInsets()` |
 | `react-native-screens` | `4.25.2` | Native screen primitives |
 | `react-native-svg` | `15.15.4` | SVG rendering (required by lucide) |
 | `lucide-react-native` | `^1.25.0` | Icon set |
 | `@react-native-google-signin/google-signin` | `^16.x` | Native Google Sign-In for iOS/Android (used by `linkGoogleAccount()`) |
 
 **Removed (D7 fix):** `rss-parser` was client-side dead weight — RSS parsing on the client uses `fast-xml-parser`. Removed from `package.json`.
+
+**Removed (Gap #6b):** `react-native-safe-area-context` — replaced by manual `src/utils/safeArea.ts` constants. The package caused Fabric crashes on RN 0.86 when insets were undefined/NaN. Removed from `package.json`.
 
 ### Dev Dependencies
 
@@ -47,13 +48,16 @@
 
 ### Client Directory Structure Changes (post-refactoring)
 - `src/contexts/` — Now includes `UserContext.tsx` alongside `ThemeContext.tsx`
-- `src/components/` — Shared components: `ErrorBoundary.tsx`, `CategoryChipGrid.tsx`, `ArticleListScreen.tsx`
+- `src/components/` — Shared components: `ErrorBoundary.tsx`, `CategoryChipGrid.tsx`, `ArticleListScreen.tsx`, `FormScreen.tsx`, `ScreenHeader.tsx`
 - `src/features/reader/` — ReaderScreen decomposition: `useArticleLoader.ts`, `useNavigationQueue.ts`, `useReaderHUD.ts`, `ReaderHUD.tsx`, `ReaderProgressBar.tsx`
 - `src/services/asyncStorageMutex.ts` — Shared AsyncStorage concurrency mutex factory
 - Screens now use `useUser()` from `UserContext` instead of independent `fetchUserProfile()` calls (except DashboardScreen which retains `onSnapshot`)
 - `HistoryScreen.tsx` and `SavedReadsScreen.tsx` are 24-line wrappers over `ArticleListScreen`
+- `FeedbackScreen.tsx` and `FeedRequestScreen.tsx` are thin wrappers over shared `FormScreen`
 - `OnboardingScreen.tsx` uses shared `CategoryChipGrid` component
 - `ReaderScreen.tsx` is a 430-line orchestrator delegating to 3 hooks + 2 components
+- Safe area insets via manual `topInset`/`bottomInset` constants (not `react-native-safe-area-context`)
+- Dead code removed: `getSeenArticleIds()` from `feedService.ts` (replaced by `getSeenArticleIdsLocally()`)
 
 ---
 
@@ -79,7 +83,7 @@ From `firebase/functions/src/index.ts`:
 | `rssCollector` | Scheduled | Every 3 hours | Fetches 42 RSS feeds, batch-checks article existence, writes new articles to Firestore |
 | `cronUpdateCandidatePool` | Scheduled | Every 6 hours | Builds `system/candidatePool_current` and `candidatePool_mixed` |
 | `cronDecayTrendingScores` | Scheduled | Every 24 hours | Applies `trendingScore × 0.9057` to all articles with score **> 1.0** (raised from 0.1 — C1 fix) |
-| `cronCleanupOldArticles` | Scheduled | Every 3 days | Deletes bottom 3% of articles older than 3 months by peakTrendingScore |
+| `cronCleanupOldArticles` | Scheduled | Every 3 days | Step 1: Delete all paywalled articles. Step 2: Query 500 worst-scoring articles >3 months old by `peakTrendingScore` ASC (composite index), delete bottom 3% of sample. Fixed 500-read ceiling. |
 | `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user. Sends `article_shown` + `feed_generated` analytics events via Measurement Protocol. |
 | `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). Sends `read_thorough`, `quick_exit`, `swipe_not_interested`, `save`, `weight_updated` analytics events + user properties. |
 | `updateScoringConfig` | HTTPS Callable | On demand | Writes to `system/scoringConfig` with `{ merge: true }`. Sends `config_changed` analytics event with old_value/new_value/field. |
@@ -176,7 +180,7 @@ From `firebase/functions/src/index.ts`:
 | `wordCount` | `number?` | Estimated word count |
 | `estimatedReadMinutes` | `number` | `ceil(wordCount / 250)`, minimum 1 |
 | `trendingScore` | `number` | Crowd engagement accumulator; decays daily × 0.9057 for scores > 1.0 |
-| `peakTrendingScore` | `number` | All-time high trendingScore, never decays; used by cleanup cron for deletion ranking |
+| `peakTrendingScore` | `number` | All-time high trendingScore, never decays; used by cleanup cron for deletion ranking (sampled query with composite index) |
 | `qualityScore` | `number` | Static feed-level quality from feeds.json (0.0–1.0) |
 | `isSeed` | `boolean` | true for seedFirestore.js entries; false for rssCollector |
 | `rssStatus` | `'current'|'archived'?` | 'archived' if GUID dropped from live feed. Post-sync archive pass now uses delta query (only `'current'` articles checked per feed — C4 fix). |
@@ -242,7 +246,7 @@ Quality increments: `save +0.010 / like +0.005 / read_thorough +0.005 / read_ski
 
 ### Collection: `feed_requests`
 **Document ID:** Auto-generated by `addDoc()`
-**Written by:** `FeedRequestScreen.tsx`
+**Written by:** `FeedRequestScreen.tsx` (via shared `FormScreen`)
 
 | Field | Type | Description |
 |---|---|---|
@@ -258,7 +262,7 @@ Quality increments: `save +0.010 / like +0.005 / read_thorough +0.005 / read_ski
 
 ### Collection: `feedback`
 **Document ID:** Auto-generated
-**Written by:** `FeedbackScreen.tsx`
+**Written by:** `FeedbackScreen.tsx` (via shared `FormScreen`)
 **Read by:** Admin only (no client reads)
 
 **Security:** Any authenticated user can create. Create rule validates field schema and 5KB document size cap (S4 fix). No reads from client.
@@ -273,8 +277,9 @@ From `firebase/firestore.indexes.json` — now deployed on every `firebase deplo
 |---|---|---|---|
 | `articles` | `isPaywalled`, `publishDate` | ASC, DESC | Used by `fallbackGetArticles()` in `feedService.ts` (now includes `isPaywalled == false` filter — C7 fix) |
 | `articles` | `feedUrl`, `rssStatus` | ASC, ASC | Used by `rssCollector.ts` post-sync archive update — queries `rssStatus == 'current'` articles only (C4 fix) |
-| `articles` | `isPaywalled`, `rssStatus`, `publishDate`, `random_score` | ASC, ASC, ASC, ASC | Used by `cronUpdateCandidatePool` Box 1 queries (active articles only) |
-| `articles` | `isPaywalled`, `publishDate`, `random_score` | ASC, ASC, ASC | Used by `cronUpdateCandidatePool` Box 2 queries (any-status articles) |
+| `articles` | `isPaywalled`, `rssStatus`, `random_score` | ASC, ASC, ASC | Used by `cronUpdateCandidatePool` Box 1 queries (active articles only) |
+| `articles` | `isPaywalled`, `random_score` | ASC, ASC | Used by `cronUpdateCandidatePool` Box 2 queries (any-status articles) |
+| `articles` | `publishDate`, `peakTrendingScore` | ASC, ASC | Used by `cronCleanupOldArticles` sampled query — returns worst 500 old articles without reading full collection |
 
 `weightUpdater` queries `users/{id}/behavior_events` by `timestamp >` — Firestore auto-indexes single-field subcollection queries.
 
@@ -343,7 +348,7 @@ export const FIREBASE_EMULATOR_CONFIG = {
 ```
 
 ### Developer Options Gate
-`DeveloperOptionsScreen.tsx` is accessible from Settings but only rendered when `__DEV__` is true. In production builds it is completely hidden. Contains: sandbox reader, AsyncStorage reset tools.
+`DeveloperOptionsScreen.tsx` is accessible from Settings but only rendered when `__DEV__` is true. In production builds it is completely hidden. Contains: sandbox reader, AsyncStorage reset tools. Sandbox reader now passes `mockArticle` only (loads live URL in WebView — `mockHtml` param removed as it was never needed for live-URL testing).
 
 ### One-Time Admin Scripts
 Moved to `firebase/scripts/oneoff/` (D6 fix). See `firebase/scripts/oneoff/README.md` for the full list, status, and warnings about out-of-date data in some scripts.
@@ -357,6 +362,8 @@ Moved to `firebase/scripts/oneoff/` (D6 fix). See `firebase/scripts/oneoff/READM
 | Script (in `firebase/scripts/oneoff/`) | What it does |
 |---|---|
 | `cleanupOldCategories.js` | **July 2026.** Deletes all articles with old category strings, strips deprecated weights from user profiles, cleans candidate pools, removes stale publishers. Run once after category migration deployment. |
+| `resetTrendingScores.js` | Resets all article trending scores to 0. Uses ADC authentication. |
+| `resetPublisherQualities.js` | Resets all publisher quality scores to 0.80. Uses ADC authentication. |
 | `backfillRandomScore.js` | Assigns `random_score: Math.random()` to all existing articles that lack the field. Run once after deploying cost-optimisation changes. Safe to re-run. |
 | `cleanupArticles.js` | One-time cleanup of malformed/duplicate articles — **SPENT** |
 | `resetAndFetch.js` | ⚠️ Uses a truncated feed list (9 vs 35) — **update before any re-use** |

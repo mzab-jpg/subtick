@@ -16,7 +16,7 @@ interface ReaderProgressBarProps {
 
 export function ReaderProgressBar({ scrollProgress, colors }: ReaderProgressBarProps) {
   return (
-    <View style={[styles.container, { bottom: bottomInset }]}>
+    <View style={[styles.container, { bottom: bottomInset, backgroundColor: colors.background }]}>
       <View
         style={[
           styles.fill,

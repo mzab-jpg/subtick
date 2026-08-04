@@ -32,6 +32,14 @@
         { "fieldPath": "isPaywalled", "order": "ASCENDING" },
         { "fieldPath": "random_score", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "articles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "publishDate", "order": "ASCENDING" },
+        { "fieldPath": "peakTrendingScore", "order": "ASCENDING" }
+      ]
     }
   ]
 }

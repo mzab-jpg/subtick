@@ -21,7 +21,6 @@ interface UseArticleLoaderParams {
   isSavedMode: boolean;
   isMockMode: boolean;
   mockArticle?: Article;
-  mockHtml?: string;
 }
 
 interface UseArticleLoaderResult {
@@ -40,7 +39,6 @@ export function useArticleLoader({
   isSavedMode,
   isMockMode,
   mockArticle,
-  mockHtml,
 }: UseArticleLoaderParams): UseArticleLoaderResult {
   const [article, setArticle] = useState<Article | null>(null);
   const [resolvedHtml, setResolvedHtml] = useState<string>('');
@@ -58,7 +56,7 @@ export function useArticleLoader({
 
       if (isMockMode && mockArticle && id === mockArticle.id) {
         setArticle(mockArticle);
-        setResolvedHtml(mockHtml || '');
+        setResolvedHtml('');
         return;
       }
 
@@ -118,7 +116,7 @@ export function useArticleLoader({
     } finally {
       setLoading(false);
     }
-  }, [isSavedMode, isMockMode, mockArticle, mockHtml]);
+  }, [isSavedMode, isMockMode, mockArticle]);
 
   const prefetchArticles = useCallback(async (upcomingIds: string[]) => {
     try {
