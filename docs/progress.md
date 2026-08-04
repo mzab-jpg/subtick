@@ -1,6 +1,6 @@
 # Tangent — Progress & Status
 
-> **Last verified:** 3 August 2026 (post-analytics logging implementation).
+> **Last verified:** 4 August 2026 (post-analytics logging implementation).
 > All status claims are based on reading the actual code.
 
 ---
@@ -16,6 +16,7 @@
 - ✅ **syncBehaviorEvents input cap** — Server-side 50-event limit prevents overflow (A4)
 - ✅ **ErrorBoundary** (Batch 1) — Render crash safety net wrapping RootNavigator
 - ✅ **Google Sign-In security** — `request.auth.uid` enforced; client userId ignored; lazy import in Expo Go
+- ✅ **GA_API_SECRET** — Stored in Cloud Secret Manager; `.trim()` applied to strip trailing CRLF from Secret Manager values
 
 ### Core Feed Pipeline
 - ✅ **RSS ingestion** — `rssCollector.ts` every 3h, batch-checks existence with `db.getAll()` (C3)
@@ -86,16 +87,19 @@
 - ✅ **Cleanup script** — `firebase/scripts/oneoff/cleanupOldCategories.js`
 
 ### Analytics Logging (GA4 via Measurement Protocol)
-- ✅ **`firebase/functions/src/analytics.ts`** — `sendGAEvents()` + `sendGAUserProperties()` helpers targeting GA4 Web stream (`measurement_id` URL param, `client_id` body field). Auto-chunks at 25 events/request. `GA_DEBUG` mode hits `/debug/mp/collect` and logs `validationMessages`.
+- ✅ **`firebase/functions/src/analytics.ts`** — `sendGAEvents()` + `sendGAUserProperties()` helpers targeting GA4 Web stream (`measurement_id` URL param, `client_id` body field). Auto-chunks at 25 events/request. `GA_DEBUG` mode hits `/debug/mp/collect` and logs `validationMessages`. API secret `.trim()` strips trailing CRLF from Secret Manager values (was silently dropping events).
 - ✅ **`article_shown` event** — Logged per article in `getRankedFeed.ts`: tranche, dominant_component, all 5 component scores, final_score, position.
 - ✅ **`feed_generated` event** — Logged once per feed call: tranche counts, distinct publisher + category counts.
 - ✅ **`weight_updated` event** — Logged per weight change in `weightUpdater.ts`: entity_type, entity_id, old_value, new_value, trigger.
-- ✅ **`config_changed` event** — Logged in `updateScoringConfig` every time `system/scoringConfig` is written.
+- ✅ **`config_changed` event** — Logged in `updateScoringConfig` (index.ts) every time `system/scoringConfig` is written.
+- ✅ **`updateScoringConfig` Cloud Function** — Writes to `system/scoringConfig` + logs `config_changed` analytics event.
 - ✅ **User behavior events** — `read_thorough`, `quick_exit`, `swipe_not_interested`, `save` logged in `syncBehaviorEvents.ts`.
 - ✅ **User properties** — `concentration_score`, `top_cat_weight`, `cats_at_ceiling` set after each weight update via Measurement Protocol.
-- ✅ **`getClientId()`** (`src/services/firebase.ts`) — Generates/caches stable 32-hex UUID per device install in AsyncStorage at `@subtick_app_instance_id`; passed as `client_id` in all callable payloads.
+- ✅ **`getClientId()`** (`src/services/firebase.ts`) — Generates/caches stable `XXXXXXXXXX.XXXXXXXXXX` dotted format per device install in AsyncStorage at `@subtick_app_instance_id`; passed as `client_id` in all callable payloads. Legacy 32-hex UUIDs converted deterministically on server by `resolveClientId()`.
+- ✅ **`session_id`** — `Math.floor(Date.now() / 1000)` added to all events for Realtime compatibility.
 - ✅ **Payload validated** — All chunks confirmed `validated OK (no issues)` via GA4 debug endpoint before production deploy.
 - ✅ **Secrets management** — `GA_API_SECRET` in Google Cloud Secret Manager; `GA_MEASUREMENT_ID` in `firebase/functions/.env`. Neither hardcoded.
+- ✅ **GA4 custom dimensions & metrics** — 9 dimensions (tranche, publisher_id, category_id, etc.) + 11 metrics (score_p, score_t, etc.) registered in GA4 Admin for Explore.
 
 ### Build & Foundation
 - ✅ **babel.config.js + metro.config.js** — Standard Expo SDK 57 configs
@@ -103,6 +107,7 @@
 - ✅ **.env.example** — Documents all `EXPO_PUBLIC_*` vars
 - ✅ **Firebase config env-var support** — `firebase.ts` reads from env with hardcoded production fallback
 - ✅ **SafeAreaProvider** — Wraps entire app tree
+- ✅ **firebase/functions/.env** — `GA_MEASUREMENT_ID=G-4B3N8C8MR3`, `GA_DEBUG=false`
 
 ### Account Management
 - ✅ **Native Google Sign-In** — `@react-native-google-signin/google-signin` with lazy import (Expo Go safe)
@@ -133,6 +138,9 @@
 ### Feed Request Review Workflow (Admin Side Only)
 - **Status:** Submission complete. Review/approval not implemented. Requests accumulate as `status: 'pending'`.
 
+### BigQuery Export
+- **Status:** Not yet linked. GA4 → BigQuery integration needs to be enabled in Firebase Console → Project Settings → Integrations for SQL-queryable event data. Streaming export recommended for near-real-time analysis (minimal cost at current scale).
+
 ---
 
 ## 3. Confirmed Absent (Gaps)
@@ -144,6 +152,7 @@
 - **No content moderation** — Paywall detection only
 - **No rate limiting on `syncBehaviorEvents`** — Per-user per-article dedup only within single batch
 - **No pull-to-refresh** — Feed refresh by navigation focus + queue depletion only
+- **No BigQuery logging** — Events flow to GA4 but not yet exported to BigQuery for SQL querying (see Designed section)
 
 ---
 
@@ -161,3 +170,5 @@
 10. **UserContext** — ✅ Done (Batch 2)
 11. **Service file splits** — Deferred (high risk, low benefit currently)
 12. **Theme preference cross-device sync** — `themePreference` written to Firestore but ThemeContext only reads from AsyncStorage
+13. **Link BigQuery export** — GA4 → BigQuery integration for SQL-queryable raw event data; streaming export recommended for rapid iteration (minimal cost)
+14. **Build analytics dashboards** — Looker Studio or in-app dashboard once BigQuery data is flowing

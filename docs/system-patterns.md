@@ -1,6 +1,6 @@
 # Tangent — System Patterns
 
-> **Last verified:** 30 July 2026 (post-refactoring Batches 1–3).
+> **Last verified:** 4 August 2026 (post-analytics logging implementation).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -37,6 +37,7 @@
 | `@subtick_saved_html_{articleId}` | Full sanitized HTML string for offline reading | One key per saved article |
 | `@subtick_behavior_queue` | `PendingBehaviorEvent[]` pending sync | 500 max (oldest dropped first) |
 | `@subtick_theme_preference` | `'system'|'light'|'dark'` | Tiny |
+| `@subtick_app_instance_id` | `string` — stable GA4 client_id in dotted format (XXXXXXXXXX.XXXXXXXXXX) | ~21 chars |
 | `@subtick_rss_failed_{articleId}` | `'1'` flag indicating this article's RSS feed has failed | One key per failed article |
 
 ### AsyncStorage Mutex (Concurrency Safety)

@@ -1,6 +1,6 @@
 # Tangent — Technical Context
 
-> **Last verified:** 30 July 2026 (post-refactoring Batches 1–3).
+> **Last verified:** 4 August 2026 (post-analytics logging implementation).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -80,8 +80,9 @@ From `firebase/functions/src/index.ts`:
 | `cronUpdateCandidatePool` | Scheduled | Every 6 hours | Builds `system/candidatePool_current` and `candidatePool_mixed` |
 | `cronDecayTrendingScores` | Scheduled | Every 24 hours | Applies `trendingScore × 0.9057` to all articles with score **> 1.0** (raised from 0.1 — C1 fix) |
 | `cronCleanupOldArticles` | Scheduled | Every 3 days | Deletes bottom 3% of articles older than 3 months by peakTrendingScore |
-| `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user |
-| `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). |
+| `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user. Sends `article_shown` + `feed_generated` analytics events via Measurement Protocol. |
+| `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). Sends `read_thorough`, `quick_exit`, `swipe_not_interested`, `save`, `weight_updated` analytics events + user properties. |
+| `updateScoringConfig` | HTTPS Callable | On demand | Writes to `system/scoringConfig` with `{ merge: true }`. Sends `config_changed` analytics event with old_value/new_value/field. |
 | `resetAccount` | HTTPS Callable | On demand | Deletes behavior_events + saved_articles subcollections; resets profile stats, weights, and category selections to defaults; sets `isOnboarded: false` |
 | `deleteAccount` | HTTPS Callable | On demand | Requires `confirmation: 'DELETE'`; deletes all subcollections + profile document + Firebase Auth account. Permanent. |
 | `deleteOrphanProfile` | HTTPS Callable | On demand | Deletes a stale anonymous `users/{orphanUid}` Firestore document after Google credential recovery. Uses Admin SDK to bypass `allow delete: if false` security rule. Validates caller is authenticated and orphanUid ≠ caller's own UID. |

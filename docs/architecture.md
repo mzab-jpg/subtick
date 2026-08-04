@@ -1,6 +1,6 @@
 # Tangent — Architecture
 
-> **Last verified:** 30 July 2026 (post-refactoring Batches 1–3).
+> **Last verified:** 4 August 2026 (post-analytics logging implementation).
 > Every claim below is traced to a specific file and function.
 
 ---
@@ -15,7 +15,8 @@
 | React | React 19 + React Native 0.86 | `19.2.3` / `0.86.0` | `package.json` |
 | Navigation | React Navigation Stack | `^7.10.11` | `package.json` |
 | Backend/DB | Firebase Firestore | JS SDK `^12.16.0` | `package.json` |
-| Serverless | Firebase Cloud Functions v2 | 9 exported functions | `firebase/functions/src/index.ts` |
+| Serverless | Firebase Cloud Functions v2 | 10 exported functions | `firebase/functions/src/index.ts` |
+| Analytics | GA4 Measurement Protocol (web stream) | — | `firebase/functions/src/analytics.ts` |
 | Auth | Firebase Anonymous Auth + optional Google link | — | `src/services/auth.ts` |
 | Safe area | `react-native-safe-area-context` | `~5.7.0` | `App.tsx` (SafeAreaProvider) |
 | In-app browser | `react-native-webview` | `13.16.1` | `package.json` |
@@ -31,6 +32,8 @@
 **EAS project ID:** `4bc8bbff-9b89-4baa-8353-7bf95bd36693` (`app.json`).
 **Android package:** `com.tangent.app` (`app.json`).
 **Expo slug/owner:** `tangent` / `tangent_mb123` (`app.json`).
+**GA4 Measurement ID:** `G-4B3N8C8MR3` (`firebase/functions/.env`).
+**GA_API_SECRET:** Stored in Google Cloud Secret Manager; accessed via `defineSecret('GA_API_SECRET')`.
 
 ---
 
@@ -68,16 +71,18 @@
 │   │       ├── backfillRandomScore.js
 │   │       └── ... (cleanupArticles, resetAndFetch, forceFetchAll, etc.)
 │   └── functions/
+│       ├── .env                    # GA_MEASUREMENT_ID=G-4B3N8C8MR3, GA_DEBUG=false
 │       ├── package.json            # firebase-admin, firebase-functions, rss-parser
 │       ├── tsconfig.json           # NodeNext, ES2022, strict mode
 │       └── src/
-│           ├── index.ts            # Exports all 9 Cloud Functions
+│           ├── index.ts            # Exports all 10 Cloud Functions + updateScoringConfig
 │           ├── types.ts            # Shared interfaces (UserProfile, Article, etc.)
 │           ├── constants.ts        # Scoring constants, FEEDBACK_DELTAS, etc.
+│           ├── analytics.ts        # GA4 Measurement Protocol (sendGAEvents, sendGAUserProperties)
 │           ├── rssCollector.ts     # Scheduled every 3h: RSS ingestion
-│           ├── getRankedFeed.ts    # Callable: ranked feed + cron jobs
-│           ├── weightUpdater.ts    # Internal: watermark-based weight updates
-│           └── syncBehaviorEvents.ts  # Callable: batch-save events + trending
+│           ├── getRankedFeed.ts    # Callable: ranked feed + cron jobs + analytics
+│           ├── weightUpdater.ts    # Internal: watermark-based weight updates + analytics
+│           └── syncBehaviorEvents.ts  # Callable: batch-save events + trending + analytics
 │
 └── src/
     ├── types/
@@ -103,10 +108,10 @@
     ├── navigation/
     │   └── RootNavigator.tsx        # Stack: Dashboard → Onboarding → Reader → ...
     ├── services/
-    │   ├── firebase.ts              # Firebase client SDK init with env var support
+    │   ├── firebase.ts              # Firebase client SDK init + getClientId() for GA4 (dotted format)
     │   ├── auth.ts                  # Anonymous auth, Google linking, profile management
-    │   ├── feedService.ts           # Ranking, RSS fetch/sanitize, seen/saved storage
-    │   ├── behaviorSync.ts          # Queue + flush behavior events (mutex-serialized)
+    │   ├── feedService.ts           # Ranking, RSS fetch/sanitize, seen/saved storage, sends client_id
+    │   ├── behaviorSync.ts          # Queue + flush behavior events (mutex-serialized), sends client_id
     │   ├── asyncStorageMutex.ts     # Shared concurrency-safe AsyncStorage queue factory
     │   └── offlineManager.ts        # NetInfo listener → auto-flush on reconnect
     ├── hooks/
@@ -160,14 +165,15 @@ cronCleanupOldArticles (every 3 days):
   → Step 2: Delete bottom 3% of articles >3 months old by peakTrendingScore
 ```
 
-### 3c. Feed Request — Client → Cloud Function → Response
+### 3c. Feed Request — Client → Cloud Function → Response (+ Analytics)
 
 ```
-DashboardScreen → feedService.getRankedFeed(seenIds)
+DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id from getClientId()
   → Cloud Function: getOrUpdateCandidatePool → filter seen → 5-component scoring
   → Tranche assembly: High 12 / Mid 8 / Low 4 / Discovery 6 (random <30 reads, merit otherwise)
   → Final shuffle → return { articles: Article[30] }
   → Client-side seen filter → slice(0,30) → setFeedArticles
+  → [ANALYTICS] sendGAEvents(clientId, [feed_generated + 30× article_shown]) — fire-and-forget
 ```
 
 ### 3d. Article Read — Client fetches live RSS at read time
@@ -183,19 +189,37 @@ useArticleLoader.loadArticle(id):
 → WebView renders client-side; theme CSS injects dynamically (no reload — B9)
 ```
 
-### 3e. Behavior Event Pipeline
+### 3e. Behavior Event Pipeline (+ Analytics)
 
 ```
 ReaderScreen → behaviorTracker.concludeSession() → queueBehaviorEvent()
   → AsyncStorage queue (mutex-serialized via asyncStorageMutex)
-  → syncBehaviorEvents Cloud Function:
+  → syncBehaviorEvents Cloud Function (sends client_id):
       Auth: request.auth.uid enforced
       Swipe_next skipped; trending + peakTrendingScore in single batch
       Publisher quality aggregated (10-min TTL cache — C5)
-      → updateWeights(userId) [watermark-based, no replay]
+      → updateWeights(userId, clientId) [watermark-based, no replay]
+      → [ANALYTICS] sendGAEvents for weight_updated events
+      → [ANALYTICS] sendGAEvents for read_thorough, quick_exit, swipe_not_interested, save
+      → [ANALYTICS] sendGAUserProperties for concentration_score, top_cat_weight, cats_at_ceiling
 ```
 
-### 3f. Sign-Out Flow
+### 3f. Analytics Pipeline
+
+```
+Client → getClientId() → dotted format (XXXXXXXXXX.XXXXXXXXXX, cached in AsyncStorage)
+  → Sent as client_id in callable payloads (feedService.ts, behaviorSync.ts)
+  → Server resolves via resolveClientId() → sendGAEvents() / sendGAUserProperties()
+  → Measurement Protocol POST → google-analytics.com/mp/collect?
+      measurement_id=G-4B3N8C8MR3&api_secret=(trimmed secret)
+  → Events: article_shown, feed_generated, weight_updated, config_changed,
+     read_thorough, quick_exit, swipe_not_interested, save
+  → User properties: concentration_score, top_cat_weight, cats_at_ceiling
+  → session_id = Math.floor(Date.now() / 1000) added to all events
+  → GA_DEBUG toggle in firebase/functions/.env for payload validation
+```
+
+### 3g. Sign-Out Flow
 
 ```
 AccountScreen → signOutUser():
@@ -203,7 +227,7 @@ AccountScreen → signOutUser():
   → ensureUserProfile(newUser) → Dashboard redirects to Onboarding
 ```
 
-### 3g. Google Account Recovery + Orphan Cleanup
+### 3h. Google Account Recovery + Orphan Cleanup
 
 ```
 AccountScreen → linkGoogleAccount():
@@ -230,6 +254,7 @@ AccountScreen → linkGoogleAccount():
 - **DashboardScreen focus refetch guard** (A5) — Only refetches when feed depleted
 - **DashboardScreen queue shuffle** (A5) — Untapped cards scattered randomly
 - **ReaderScreen HUD** (A5) — Title truncation + hidden on initial load
+- **GA_API_SECRET** — Stored in Cloud Secret Manager; `.trim()` applied to strip trailing CRLF
 
 ---
 
@@ -246,3 +271,4 @@ AccountScreen → linkGoogleAccount():
 | Theme preference | `AsyncStorage[@subtick_theme_preference]` + Firestore `users/{uid}.themePreference` (dual) |
 | Pending behavior events | `AsyncStorage[@subtick_behavior_queue]` until flushed |
 | Failed RSS feed flags | `AsyncStorage[@subtick_rss_failed_{articleId}]` per device |
+| GA4 client_id | `AsyncStorage[@subtick_app_instance_id]` — stable per-install dotted format UUID |
