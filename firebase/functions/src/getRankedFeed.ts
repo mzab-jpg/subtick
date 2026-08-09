@@ -10,15 +10,14 @@ import { Article, ArticleScoreDetail, RankedFeedResult, UserProfile } from './ty
 import {
   SCORE_WEIGHTS,
   SCORE_WEIGHTS_TAIL,
-  TRENDING_DECAY_RATE,
   MAX_TRENDING_SCORE,
 } from './constants.js';
 import { gaApiSecret, sendGAEvents } from './analytics.js';
+import { loadScoringConfig, prepareConfig, ScoringConfig } from './scoringConfig.js';
 
 const db = admin.firestore();
 
 // --- Configuration ---
-const RETURN_FEED_SIZE = 30;
 const CACHE_LIFETIME_MS = 10 * 60 * 1000; // 10 minutes memory cache
 
 // Global Cache Variables (persistent across function container instances)
@@ -69,8 +68,8 @@ function normalizeP(categoryWeight: number, publisherWeight: number): number {
  * Score of 0 → T = 0.0 (new article).
  * Score of 50+ → T = 1.0 (very viral).
  */
-function normalizeT(trendingScore: number): number {
-  return Math.min(trendingScore, MAX_TRENDING_SCORE) / MAX_TRENDING_SCORE;
+function normalizeT(trendingScore: number, maxScale: number = MAX_TRENDING_SCORE): number {
+  return Math.min(trendingScore, maxScale) / maxScale;
 }
 
 /**
@@ -114,13 +113,14 @@ function normalizeQ(qualityScore: number): number {
  * All inputs must be normalized [0, 1]. Output is [0, 1].
  * Diversity is enforced by a hard per-publisher cap during feed assembly.
  */
-function scorePersonalized(P: number, T: number, R: number, Q: number): number {
-  return (
-    SCORE_WEIGHTS.personalization * P +
-    SCORE_WEIGHTS.trending * T +
-    SCORE_WEIGHTS.recency * R +
-    SCORE_WEIGHTS.quality * Q
-  );
+function scorePersonalized(
+  P: number,
+  T: number,
+  R: number,
+  Q: number,
+  w: { personalization: number; trending: number; recency: number; quality: number } = SCORE_WEIGHTS
+): number {
+  return w.personalization * P + w.trending * T + w.recency * R + w.quality * Q;
 }
 
 /**
@@ -128,11 +128,12 @@ function scorePersonalized(P: number, T: number, R: number, Q: number): number {
  * No personalization or quality.
  * Score = 0.43T + 0.57R. Output is [0, 1].
  */
-function scoreTail(T: number, R: number): number {
-  return (
-    SCORE_WEIGHTS_TAIL.trending * T +
-    SCORE_WEIGHTS_TAIL.recency * R
-  );
+function scoreTail(
+  T: number,
+  R: number,
+  w: { trending: number; recency: number } = SCORE_WEIGHTS_TAIL
+): number {
+  return w.trending * T + w.recency * R;
 }
 
 /**
@@ -293,6 +294,8 @@ export const cronUpdateCandidatePool = onSchedule('every 6 hours', async () => {
  */
 export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => {
   console.log('[Cron] Starting daily trendingScore decay...');
+  const cfgDecay = await loadScoringConfig();
+  const decayRate = cfgDecay.trending.decayRate;
   try {
     // C1 Fix: Raised threshold from 0.1 to 1.0.
     // Articles with trendingScore < 1.0 are effectively zero-signal — decaying them
@@ -315,7 +318,7 @@ export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => 
       const chunk = docs.slice(i, i + batchSize);
       chunk.forEach(doc => {
         const current = doc.data().trendingScore as number;
-        const newScore = Math.max(0, current * TRENDING_DECAY_RATE);
+        const newScore = Math.max(0, current * decayRate);
         // Refresh random_score on every daily decay pass at zero extra cost.
         // This ensures cronUpdateCandidatePool always picks a genuinely fresh,
         // non-repetitive random cross-section of the database on every run.
@@ -325,7 +328,7 @@ export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => 
       await batch.commit();
     }
 
-    console.log(`[Cron] Decayed trendingScore for ${decayed} articles (×${TRENDING_DECAY_RATE})`);
+    console.log(`[Cron] Decayed trendingScore for ${decayed} articles (×${decayRate})`);
   } catch (error) {
     console.error('[Cron] Error decaying trending scores:', error);
   }
@@ -464,8 +467,26 @@ async function getOrUpdatePublisherQualities(): Promise<Record<string, number>> 
 function assembleFeedWithTranches(
   scoredList: { article: Article; fullScore: number; tailScore: number }[],
   totalSize = 30,
-  totalArticlesRead = 0
+  totalArticlesRead = 0,
+  opts: {
+    highThreshold?: number;
+    midThreshold?: number;
+    highSize?: number;
+    midSize?: number;
+    tailSize?: number;
+    publisherCap?: number;
+    newUserThreshold?: number;
+  } = {}
 ): Article[] {
+  const {
+    highThreshold = 0.40,
+    midThreshold = 0.20,
+    highSize = 12,
+    midSize = 8,
+    tailSize = 10,
+    publisherCap = 5,
+    newUserThreshold = 30,
+  } = opts;
   if (scoredList.length === 0) return [];
 
   const highBucket: typeof scoredList = [];
@@ -473,16 +494,16 @@ function assembleFeedWithTranches(
   const tailBucket: typeof scoredList = [];
 
   for (const item of scoredList) {
-    if (item.fullScore > 0.40) {
+    if (item.fullScore > highThreshold) {
       highBucket.push(item);
-    } else if (item.fullScore > 0.20) {
+    } else if (item.fullScore > midThreshold) {
       midBucket.push(item);
     } else {
       tailBucket.push(item);
     }
   }
 
-  const PUB_CAP = 5;
+  const PUB_CAP = publisherCap;
   const pubCountsInFeed = new Map<string, number>();
   const finalFeed: Article[] = [];
   let remainingCount = totalSize;
@@ -505,9 +526,9 @@ function assembleFeedWithTranches(
     return picked;
   }
 
-  let targetHigh = 12;
-  let targetMid = 8;
-  let targetTail = 10;
+  let targetHigh = highSize;
+  let targetMid = midSize;
+  let targetTail = tailSize;
 
   // High Tranche — random selection respecting publisher cap
   shuffleArray(highBucket);
@@ -524,7 +545,7 @@ function assembleFeedWithTranches(
   if (pickedMid.length < targetMid) targetTail += (targetMid - pickedMid.length);
 
   // Tail — sorted by tailScore (T+R), or randomized for new users
-  if (totalArticlesRead < 30) {
+  if (totalArticlesRead < newUserThreshold) {
     shuffleArray(tailBucket);
   } else {
     tailBucket.sort((a, b) => b.tailScore - a.tailScore);
@@ -650,16 +671,22 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
     throw new Error('unauthenticated');
   }
   const userId = request.auth.uid;
-  const { seenArticleIds, client_id, includeScores } = request.data as {
+  const { seenArticleIds, client_id, includeScores, configOverride } = request.data as {
     userId?: string;
     seenArticleIds: string[];
     client_id?: string;
     includeScores?: boolean;
+    configOverride?: ScoringConfig;
   };
   // GA4 web-stream client_id (32-hex UUID generated client-side). Never fall back
   // to the Auth UID — analytics.ts will mint a random id if this is missing.
   const clientId = client_id || '';
   console.log(`[getRankedFeed] userId: ${userId}, seen limit: ${(seenArticleIds || []).length}`);
+
+  // Single source of truth for all tunable values (cached ~60s per instance).
+  // If the caller supplied a preview config override, use it for THIS request only
+  // (no Firestore read, no cache touch). Otherwise load the live cached config.
+  const cfg = prepareConfig(configOverride) ?? await loadScoringConfig();
 
   let categoryWeights: Record<string, number> = {};
   let categoryLengthWeights: Record<string, number> = {};
@@ -702,17 +729,25 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       const rawQuality = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
 
       const P = normalizeP(catWeight, pubWeight);
-      const T = normalizeT(article.trendingScore || 0);
+      const T = normalizeT(article.trendingScore || 0, cfg.scoring.maxTrendingScore);
       const R = normalizeR(daysOld);
       const Q = normalizeQ(rawQuality);
 
-      const fullScore = scorePersonalized(P, T, R, Q);
-      const tailScore = scoreTail(T, R);
+      const fullScore = scorePersonalized(P, T, R, Q, cfg.scoring);
+      const tailScore = scoreTail(T, R, cfg.scoring);
 
       return { article, fullScore, tailScore };
     });
 
-    const finalFeed = assembleFeedWithTranches(scored, RETURN_FEED_SIZE, totalArticlesRead);
+    const finalFeed = assembleFeedWithTranches(scored, cfg.tranche.feedSize, totalArticlesRead, {
+      highThreshold: cfg.tranche.highThreshold,
+      midThreshold: cfg.tranche.midThreshold,
+      highSize: cfg.tranche.highSize,
+      midSize: cfg.tranche.midSize,
+      tailSize: cfg.tranche.tailSize,
+      publisherCap: cfg.tranche.publisherCap,
+      newUserThreshold: cfg.tranche.newUserThreshold,
+    });
 
     // B2 Fix: Gate detailed score logging behind the emulator flag so production
     // doesn't ship article titles (PII) and score breakdowns to billable logs.
@@ -725,7 +760,7 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
         const pubWeight = publisherWeights[s.article.publicationName] ?? 1.0;
         const rawQuality = publisherQualities[s.article.publicationName] ?? s.article.qualityScore ?? 0.8;
         const P = normalizeP(catWeight, pubWeight);
-        const T = normalizeT(s.article.trendingScore || 0);
+        const T = normalizeT(s.article.trendingScore || 0, cfg.scoring.maxTrendingScore);
         const R = normalizeR(daysOld);
         const Q = normalizeQ(rawQuality);
         console.log(
@@ -760,8 +795,8 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       distinctCategories.add(article.category);
 
       const tranche =
-        s.fullScore > 0.40 ? 'high' :
-        s.fullScore > 0.20 ? 'mid' : 'tail';
+        s.fullScore > cfg.tranche.highThreshold ? 'high' :
+        s.fullScore > cfg.tranche.midThreshold ? 'mid' : 'tail';
 
       // Dominant component: which of the 4 contributes most to fullScore.
       const dayCheck = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
@@ -769,7 +804,7 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
         categoryLengthWeights[`${article.category}::${article.lengthStyle}`] ?? categoryWeights[article.category] ?? 1.0,
         publisherWeights[article.publicationName] ?? 1.0
       );
-      const compT = normalizeT(article.trendingScore || 0);
+      const compT = normalizeT(article.trendingScore || 0, cfg.scoring.maxTrendingScore);
       const compR = normalizeR(dayCheck);
       const compQ = normalizeQ(publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8);
       const contributions: [string, number][] = [
@@ -818,15 +853,15 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
         user_id: userId,
         tranche_high_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.fullScore > 0.40;
+          return s && s.fullScore > cfg.tranche.highThreshold;
         }).length,
         tranche_mid_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.fullScore > 0.20 && s.fullScore <= 0.40;
+          return s && s.fullScore > cfg.tranche.midThreshold && s.fullScore <= cfg.tranche.highThreshold;
         }).length,
         tranche_tail_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.fullScore <= 0.20;
+          return s && s.fullScore <= cfg.tranche.midThreshold;
         }).length,
         distinct_publisher_count: distinctPublishers.size,
         distinct_category_count: distinctCategories.size,
@@ -862,3 +897,7 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
     throw new Error('Failed to rank feed');
   }
 });
+
+
+
+

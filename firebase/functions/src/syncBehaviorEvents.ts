@@ -9,6 +9,7 @@ import * as admin from 'firebase-admin';
 import { BehaviorEvent } from './types.js';
 import { updateWeights } from './weightUpdater.js';
 import { gaApiSecret, sendGAEvents } from './analytics.js';
+import { loadScoringConfig, prepareConfig, classifyRead, ScoringConfig } from './scoringConfig.js';
 
 const db = admin.firestore();
 
@@ -40,31 +41,14 @@ async function getExistingPublisherIds(): Promise<Set<string>> {
   return publisherIdCache;
 }
 
-function getTrendingIncrement(eventType: string): number {
-  switch (eventType) {
-    case 'save': return 3.0;
-    case 'unsave': return -3.0;
-    case 'like': return 2.0;
-    case 'unlike': return -2.0;
-    case 'read_thorough': return 1.5;
-    case 'read_skim': return 0.5;
-    case 'read_shallow': return 0.2;
-    default: return 0.0;
-  }
+function getTrendingIncrement(cfg: ScoringConfig, eventType: string): number {
+  const d = (cfg.trending as any)[eventType];
+  return typeof d === 'number' ? d : 0;
 }
 
-function getPublisherQualityIncrement(eventType: string): number {
-  switch (eventType) {
-    case 'save': return 0.010;
-    case 'unsave': return -0.010;
-    case 'like': return 0.005;
-    case 'unlike': return -0.005;
-    case 'read_thorough': return 0.005;
-    case 'read_skim': return 0.001;
-    case 'swipe_not_interested': return -0.010;
-    case 'quick_exit': return -0.005;
-    default: return 0.0;
-  }
+function getPublisherQualityIncrement(cfg: ScoringConfig, eventType: string): number {
+  const d = (cfg.quality as any)[eventType];
+  return typeof d === 'number' ? d : 0;
 }
 
 export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (request) => {
@@ -74,7 +58,7 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
   }
   const authenticatedUserId = request.auth.uid;
 
-  const data = request.data as { events: BehaviorEvent[]; client_id?: string };
+  const data = request.data as { events: BehaviorEvent[]; client_id?: string; configOverride?: ScoringConfig };
   // GA4 web-stream client_id (32-hex UUID generated client-side). Forwarded to
   // updateWeights so its analytics calls use the same id. Never fall back to the
   // Auth UID — analytics.ts will mint a random id if this is missing.
@@ -94,6 +78,25 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
 
   if (!events.length) {
     return { synced: 0, errors: 0 };
+  }
+
+  // Single source of truth for all tunable values (cached ~60s per instance).
+  // Use a preview config override for this request if supplied; else load live.
+  const cfg = prepareConfig(data.configOverride) ?? await loadScoringConfig();
+
+  // Optional server-authoritative read classification: re-decide read-family
+  // labels from raw scroll/duration/word-count using the config thresholds,
+  // instead of trusting the label the client guessed. OFF until enabled.
+  if (cfg.classification.enable) {
+    events = events.map((e) => {
+      if (typeof e.scrollDepth !== 'number' || typeof e.sessionDuration !== 'number') return e;
+      const family =
+        e.eventType === 'read_thorough' || e.eventType === 'read_skim' ||
+        e.eventType === 'read_shallow' || e.eventType === 'quick_exit' || e.eventType === 'swipe_next';
+      if (!family) return e;
+      const re = classifyRead(cfg, e.scrollDepth, e.sessionDuration, e.actualWordCount || 0, 200);
+      return re && re !== e.eventType ? { ...e, eventType: re } : e;
+    });
   }
 
   console.log(`[syncBehaviorEvents] Processing ${events.length} events into subcollections...`);
@@ -157,8 +160,8 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
         continue;
       }
 
-      const trendingDelta = event.articleId ? getTrendingIncrement(event.eventType) : 0;
-      const qualityDelta = event.articleId ? getPublisherQualityIncrement(event.eventType) : 0;
+      const trendingDelta = event.articleId ? getTrendingIncrement(cfg, event.eventType) : 0;
+      const qualityDelta = event.articleId ? getPublisherQualityIncrement(cfg, event.eventType) : 0;
 
       // P0 Optimization 1: Skip saving zero-impact events to Firestore to reduce write costs.
       // Zero-impact events (like swipe_next) have no trending increment, no publisher quality delta,
@@ -314,7 +317,7 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
   // Forward the GA4 client_id so the weight events share the same id.
   for (const userId of userIds) {
     try {
-      await updateWeights(userId, clientId);
+      await updateWeights(userId, clientId, cfg);
     } catch (error: any) {
       console.error(`[syncBehaviorEvents] Weight update failed for ${userId}:`, error.message);
     }

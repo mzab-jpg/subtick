@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubTick — Algorithm Control Dashboard (Live Config)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0f19'/><text y='0.72em' x='0.5em' font-size='58' text-anchor='middle' dominant-baseline='middle'>🎛️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-dark: #0b0f19;
+    --card-bg: rgba(22, 30, 49, 0.78);
+    --card-border: rgba(255,255,255,0.1);
+    --accent-primary: #6366f1;
+    --accent-success: #10b981;
+    --accent-warning: #f59e0b;
+    --accent-danger: #ef4444;
+    --text-main: #f3f4f6;
+    --text-muted: #9ca3af;
+    --text-dim: #6b7280;
+    --input-bg: rgba(15,23,42,0.85);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-dark);
+    background-image: radial-gradient(at 15% 15%, rgba(99,102,241,0.15) 0px, transparent 50%), radial-gradient(at 85% 85%, rgba(16,185,129,0.1) 0px, transparent 50%);
+    color: var(--text-main);
+    min-height: 100vh;
+  }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: var(--card-bg); backdrop-filter: blur(16px); border-bottom: 1px solid var(--card-border); box-shadow: 0 8px 28px rgba(0,0,0,0.3); gap: 14px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-title { font-size: 21px; font-weight: 800; letter-spacing: -0.5px; }
+  .brand-subtitle { font-size: 12px; color: var(--text-dim); }
+  .header-status { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 700; color: #6ee7b7; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35); padding: 8px 16px; border-radius: 999px; white-space: nowrap; }
+  .header-status .pulse { width: 9px; height: 9px; border-radius: 50%; background: #10b981; animation: hfpulse 2s infinite; }
+  @keyframes hfpulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); } 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
+
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 18px; padding: 18px 24px 30px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card-bg); backdrop-filter: blur(16px); border: 1px solid var(--card-border); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; box-shadow: 0 6px 22px rgba(0,0,0,0.28); }
+  .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+  .hint { font-size: 12px; color: var(--text-dim); line-height: 1.55; }
+
+  .btn { width: 100%; padding: 13px 16px; border: none; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 700; display: flex; justify-content: center; align-items: center; gap: 8px; transition: all .2s ease; }
+  .btn-primary { background: linear-gradient(135deg, var(--accent-primary), #4f46e5); color: #fff; box-shadow: 0 10px 26px rgba(99,102,241,0.45); }
+  .btn-primary:hover { transform: translateY(-2px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-ghost { background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.12); }
+.meta-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-dim); padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .meta-row .v { color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 11.5px; text-align: right; }
+
+  .terminal { background: #05070d; border: 1px solid var(--card-border); border-radius: 10px; height: 220px; overflow-y: auto; padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6; }
+  .log-info { color: #9ca3af; white-space: pre-wrap; }
+  .log-success { color: #6ee7b7; white-space: pre-wrap; }
+  .log-error { color: #f87171; white-space: pre-wrap; }
+  .log-warn { color: #fbbf24; white-space: pre-wrap; }
+
+  .section { background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+  .section-title { font-size: 13px; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .section-sub { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
+  .cfg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px 18px; }
+  .cfg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 8px; }
+  .cfg-row label { font-size: 12.5px; color: var(--text-muted); line-height: 1.3; }
+      .cfg-row .deflt { display: block; font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+  .help { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--accent-primary); color: var(--accent-primary); font-size: 11px; font-weight: 700; cursor: help; vertical-align: middle; margin-left: 4px; padding: 0; background: rgba(99,102,241,0.08); position: relative; }
+  .help:hover::after {
+    content: attr(data-title);
+    position: absolute;
+    bottom: 135%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0f172a;
+    color: #f3f4f6;
+    border: 1px solid var(--accent-primary);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.45;
+    width: 260px;
+    white-space: normal;
+    text-align: left;
+    z-index: 1000;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    pointer-events: none;
+    font-family: 'Inter', sans-serif;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .help:hover::before {
+    content: "";
+    position: absolute;
+    bottom: 115%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--accent-primary) transparent transparent transparent;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .cfg-row input[type="number"] { width: 92px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 5px 8px; font-size: 13px; font-family: 'JetBrains Mono', monospace; text-align: right; }
+  .cfg-row input[type="number"]:focus { outline: 2px solid var(--accent-primary); }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer; z-index: 2; margin: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background-color: #374151; transition: .3s; border-radius: 24px; }
+  .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+  input:checked + .slider { background-color: var(--accent-success); }
+  input:checked + .slider:before { transform: translateX(20px); }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag.dirty { background: rgba(245,158,11,0.18); color: #fcd34d; }
+  .tag.clean { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+  .tag.danger { background: rgba(239,68,68,0.18); color: #fca5a5; }
+
+  .json-view { background: #070b14; border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #a5b4fc; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
+  .empty-state { color: var(--text-dim); text-align: center; padding: 50px 20px; font-size: 14px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span style="font-size:26px">🎛️</span>
+    <div>
+      <div class="brand-title">Algorithm Control Dashboard</div>
+      <div class="brand-subtitle">The single source of truth for every tunable value · verified in Firestore</div>
+    </div>
+  </div>
+  <span class="header-status"><span class="pulse"></span>LIVE · subtick-bbd55</span>
+</header>
+
+<div class="layout">
+
+  <!-- ===== LEFT: ACTIONS & META ===== -->
+  <aside>
+    <div class="card">
+      <div class="card-title"><span>🔄 Load</span></div>
+      <button class="btn btn-ghost" id="btnLoad" type="button">Load current config from LIVE</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>⚙️ Action</span></div>
+      <button class="btn btn-primary" id="btnSave" type="button">💾 Save &amp; Publish to LIVE</button>
+      <button class="btn btn-ghost" id="btnReset" type="button">↩ Reset everything to defaults</button>
+                  <button class="btn btn-ghost" id="btnExport" type="button">📤 Export config (send to simulator)</button>
+      <div class="hint">Published changes apply to the live algorithm within ~60s, and every change is logged as a GA4 <b>config_changed</b> event. Safe ranges are enforced server-side.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>ℹ️ Status</span></div>
+      <div class="meta-row"><span>Source</span><span class="v" id="metaSource">—</span></div>
+      <div class="meta-row"><span>Schema version</span><span class="v" id="metaSchema">—</span></div>
+      <div class="meta-row"><span>Last updated by</span><span class="v" id="metaBy">—</span></div>
+      <div class="meta-row"><span>Last updated at</span><span class="v" id="metaAt">—</span></div>
+      <div class="meta-row"><span>Local edits</span><span class="v" id="metaDirty"><span class="tag clean">none</span></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>🗄️ Stored doc (what's in Firestore)</span></div>
+      <div class="json-view" id="storedJson">Load the config to see the stored document.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>🖥️ Console</span></div>
+      <div class="terminal" id="term"></div>
+    </div>
+  </aside>
+
+  <!-- ===== RIGHT: CONFIGURATION ===== -->
+  <main>
+    <div class="card">
+      <div class="card-title"><span>🧭 How to verify this in Firebase</span></div>
+      <div class="hint">
+        1. Open <b>Firebase Console → subtick-bbd55 → Firestore → <span class="mono" style="font-family:'JetBrains Mono',monospace">system/scoringConfig</span></b>.<br>
+        2. That document IS the live algorithm's settings — the same numbers you see here.<br>
+        3. Editing here (Save &amp; Publish) updates exactly that document; the algorithm re-reads it within ~60s.
+      </div>
+    </div>
+    <div id="configArea">
+      <div class="empty-state" id="emptyState">
+        <div style="font-size:38px;margin-bottom:10px">🎛️</div>
+        <b>Config not loaded yet.</b><br>
+        Click <b>Load current config from LIVE</b> to fetch the exact values the algorithm is using right now.
+      </div>
+      <div id="configSections" style="display:none"></div>
+    </div>
+  </main>
+
+</div>
+</body>
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
+  import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js';
+    const TIPS = {
+  dashboard: {
+    // ---- scoring (final-score components P/T/R/Q + tail + ceiling) ----
+    'scoring.personalization':  "Strength of the personalization factor (P) in the final article score. Raising it makes the feed track the user's category/publisher tastes more aggressively; too high risks an echo chamber. Range 0-1.5; default 0.60.",
+    'scoring.trending':         "Strength of the trending factor (T). Higher values surface content many people are engaging with right now — adds serendipity/viral lift off a user's usual path. Range 0-1.5; default 0.15.",
+    'scoring.recency':          "Strength of the recency factor (R). Pushes newer articles up the feed to keep it fresh. Range 0-1.5; default 0.10.",
+    'scoring.quality':          "Strength of the publisher-quality factor (Q). Rewards articles from publishers with strong historical engagement. Range 0-1.5; default 0.15.",
+    'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.10.",
+    'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.10.",
+    'scoring.maxTrendingScore': "The trending-score value at which factor T normalises to 1.0. Articles at/above it get full T credit; below it, T scales up linearly from 0. Default 50.",
+
+    // ---- feedback (per-action learning delta) ----
+    'feedback.save':              "Weight change when a user saves an article. Larger = saves teach the model faster. Default +0.55.",
+    'feedback.unsave':            "Weight change when a user unsaves. Default -0.55 (symmetric to save).",
+    'feedback.like':              "Weight change per like. Default +0.40.",
+    'feedback.unlike':            "Weight change per unlike. Default -0.40.",
+    'feedback.read_thorough':     "Weight change when the app reports a thorough read. Default +0.30.",
+    'feedback.read_skim':         "Weight change for a skim read. Default +0.10.",
+    'feedback.read_shallow':      "Weight change for a shallow read (almost none). Default 0.00.",
+    'feedback.swipe_next':        "Weight change for swiping past without opening (neutral). Default 0.00.",
+    'feedback.quick_exit':        "Weight change for a near-immediate close (affects trending/quality, not category weights). Default 0.00.",
+        'feedback.swipe_not_interested': "Weight change when a user actively flags 'not interested'. Default -0.40.",
+
+    // ---- learning ----
+    'learning.baseRate':            "Core learning rate — how fast weights move per feedback event. Smaller = slower/smoother, resilient to noise; larger = faster adaptation but more volatile. Range 0-1; default 0.05.",
+    'learning.categoryMultiplier':  "Multiplier on the learning rate for category weights vs the base. Default 1.0 (same rate as everywhere).",
+    'learning.lengthMultiplier':    "Multiplier for length-style weights (short/medium/long). Default 1.5 (~50% faster learning).",
+    'learning.publisherMultiplier': "Multiplier for publisher-quality learning. Default 2.0 (fastest-adapting signal).",
+    'learning.minWeight':           "Floor for a category/publisher weight — keeps the model from fully 'zeroing out' a category. Default 0.5.",
+    'learning.maxWeight':           "Ceiling for weights — prevents one category from dominating. Default 2.0.",
+    'learning.dailyDecayRate':      "Daily multiplicative decay pulling weights toward 1.0 (e.g. 0.98). Too low = rapid forgetting; too high = stale preferences. Range 0.5-1; default 0.98.",
+    'learning.defaultSelectedWeight':      "Starting weight for a brand-new selected category (new-user onboarding). Default 1.5.",
+    'learning.defaultNotInterestedWeight': "Starting weight for a 'not interested' category. Default 0.5.",
+    'learning.defaultNeutralWeight':       "Starting weight for categories with no signal yet (neutral). Default 1.0.",
+
+    // ---- trending ----
+    'trending.decayRate':  "Daily decay applied to article trending scores (e.g. 0.95 -> -5%/day). Keeps trending content fresh. Default 0.95.",
+    'trending.save':       "Trending-score bump when an article is saved. Range -10..10; default +3.0.",
+    'trending.unsave':     "Trending-score drop when unsaved. Default -3.0.",
+    'trending.like':       "Trending bump per like. Default +2.0.",
+    'trending.unlike':     "Trending drop per unlike. Default -2.0.",
+    'trending.read_thorough': "Trending bump for a thorough read. Default +1.5.",
+    'trending.read_skim':     "Trending bump for a skim. Default +0.5.",
+    'trending.read_shallow':  "Trending bump for a shallow read (kept slightly positive). Default +0.2.",
+
+    // ---- quality ----
+    'quality.save':              "Publisher quality change per save. Default +0.010.",
+    'quality.unsave':            "Publisher quality change per unsave. Default -0.010.",
+    'quality.like':              "Publisher quality change per like. Default +0.005.",
+    'quality.unlike':            "Publisher quality change per unlike. Default -0.005.",
+    'quality.read_thorough':     "Publisher quality change per thorough read. Default +0.005.",
+    'quality.read_skim':         "Publisher quality change per skim. Default +0.001.",
+    'quality.swipe_not_interested': "Publisher quality change per 'not interested'. Default -0.010.",
+    'quality.quick_exit':        "Publisher quality change per quick exit. Default -0.005.",
+
+    // ---- tranche ----
+    'tranche.highThreshold':    "Final-score cutoff for the High tranche (top tier). Articles scoring >= this are 'High'. Range 0-1; default 0.40.",
+    'tranche.midThreshold':     "Final-score cutoff for the Mid tranche. Between midThreshold and highThreshold = Mid; below = Tail. Default 0.20.",
+    'tranche.highSize':         "Max articles pulled into the High tranche from candidates. Default 12.",
+    'tranche.midSize':          "Max articles for the Mid tranche. Default 8.",
+    'tranche.tailSize':         "Max articles for the Tail tranche (long-tail discovery). Default 10.",
+    'tranche.publisherCap':     "Hard cap on how many articles from one publisher can appear in a single 30-article feed. Prevents dominance. Range 1-30; default 5.",
+    'tranche.newUserThreshold': "A user is treated as 'new user' until they have this many total reads — they then get the new-user (more exploratory) feed mix. Default 30.",
+            'tranche.feedSize':         "Total articles returned per feed request. Default 30.",
+
+    // ---- classification ----
+    'classification.enable':             "MASTER SWITCH for server-side read classification. OFF (default) = trust the app's reported label (read_thorough/skim/...). ON = backend re-decides the label from scroll depth + session time + word count using the thresholds below, so 'what counts as a read' becomes tunable without an app release. OFF by default — only the simulator sends this override; the live app never does.",
+    'classification.quickExitDepth':     "Articles scrolled LESS than this fraction are candidates for 'quick_exit'. Only active when enable is ON. Default 0.2.",
+    'classification.quickExitTimeoutSec': "If session time is below this and scroll < quickExitDepth, the read is classified as 'quick_exit'. Default 15s.",
+    'classification.thoroughDepth':      "Scroll fraction at/above which a read can qualify as 'thorough'. Default 0.70.",
+    'classification.thoroughTimeFraction': "Session time (as a fraction of expected read time for the article's length) needed to call a read 'thorough'. Default 0.60.",
+    'classification.shallowDepth':       "Articles scrolled between shallowDepth and thoroughDepth, or not meeting thorough criteria, are 'shallow'. Default 0.40.",
+  },
+
+  matrix: {
+    // ---- run settings ----
+    'days':        "Simulated days per user — how many backdated days of activity to generate for each test user. Range 1-14; default 7.",
+    'eventsPerDay': "Behavior events per day — how many actions (reads, likes, saves, swipes) each simulated user generates per day. Default 8.",
+    'pause':       "Pause between users — stagger the launch of each test user so they don't all hit your backend at once. Default 0.3s.",
+    'timeSpacing': "Time-spacing — spreads each user's simulated event timestamps across the day so GA4/BigQuery see smooth daily curves instead of spikes.",
+    'cleanup':     "Delete each test account when done — removes the anonymous test users + their data after the run so your DB stays clean.",
+
+    // ---- per-user behavior rates ----
+    'read_thorough':        "Probability this user reads thoroughly on a given article (opens, scrolls deep, spends enough time). Higher = engaged reader.",
+    'read_skim':            "Probability of a read-skim (opens, scrolls moderately). Mild positive signal to the algorithm.",
+    'read_shallow':         "Probability of a read-shallow (opens, barely scrolls). Near-zero learning signal.",
+    'quick_exit':           "Probability of a quick exit (opens then immediately closes). Negative signal.",
+    'swipe_next':           "Probability of swiping past without opening (neutral).",
+    'swipe_not_interested': "Probability of actively marking an article 'not interested'. Strong negative signal.",
+    'save':                 "Probability of saving an article to the reading list. Strongest positive signal.",
+    'like':                 "Probability of liking an article. Positive signal.",
+    'unlike':               "Probability of unliking an article. Negative signal.",
+    'unsave':               "Probability of unsaving a previously saved article. Negative signal.",
+
+    // ---- behavior randomness / session params ----
+    'stddev':       "Per-user randomness injected into the behavior rates above — makes the simulation less mechanical, more human. 0 = deterministic.",
+    'sessMean':     "Average session length (seconds) for this user.",
+    'sessStd':      "Session-length variability in seconds (higher = more varied session lengths).",
+    'scrollMean':   "Average scroll depth for this user (0.0 = scrolled nothing, 1.0 = scrolled to the bottom).",
+    'scrollStd':    "Scroll-depth variability (higher = more inconsistent scrolling).",
+    'prefStrength': "How strongly this user's pre-set category preferences bias the initial generated weights — higher = stronger initial taste.",
+  },
+};
+
+// Helper: render a "?" help icon with the given tooltip. Usage: helpHtml('scoring.personalization')
+// Returns empty string for unknown keys (no icon shown).
+
+  function helpHtml(key, source = 'dashboard') {
+    const t = (TIPS[source] && TIPS[source][key]) || '';
+    if (!t) return '';
+    return `<span class="help" role="img" aria-label="help" data-title="${t.replace(/"/g, '&quot;')}">?</span>`;
+  }
+
+  function labeled(key, labelText, source = 'dashboard') {
+    const h = helpHtml(key, source);
+    return h ? `${labelText} ${h}` : labelText;
+  }
+
+  const firebaseConfig = {
+    apiKey: 'AIzaSyAggNiBGQIbYTAv5vqGtWhmyhrIPDoipXk',
+    authDomain: 'subtick-bbd55.firebaseapp.com',
+    projectId: 'subtick-bbd55',
+    storageBucket: 'subtick-bbd55.firebasestorage.app',
+    messagingSenderId: '859600771798',
+    appId: '1:859600771798:web:c9898a4501148c4caa0777',
+  };
+
+  const app = initializeApp(firebaseConfig, 'control-dashboard');
+  const auth = getAuth(app);
+  const functions = getFunctions(app, 'us-central1');
+
+  const $ = (id) => document.getElementById(id);
+  function log(msg, type = 'info') {
+    const t = $('term');
+    const d = document.createElement('div');
+    d.className = 'log-' + type;
+    d.textContent = msg;
+    t.appendChild(d);
+    t.scrollTop = t.scrollHeight;
+  }
+  function genClientId() {
+    return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  }
+
+  let state = { config: null, defaults: null, stored: null, source: null, updatedAt: null, updatedBy: null, dirty: false };
+
+  // ------------------------------------------------------------------
+  // Rendering metadata (label, min, max, step), shared action labels.
+  // ------------------------------------------------------------------
+  const ACTION_LABELS = {
+    read_thorough: 'Read thorough', read_skim: 'Read skim', read_shallow: 'Read shallow',
+    quick_exit: 'Quick exit', swipe_next: 'Swipe next', swipe_not_interested: 'Not interested',
+    save: 'Save', like: 'Like', unlike: 'Unlike', unsave: 'Unsave',
+  };
+
+  const BOOL_LABELS = {
+    'classification.enable': 'Enable server-side read classification',
+  };
+
+  const OVERRIDES = {
+    'scoring.personalization': ['Personalization (P)', 0, 1.5, 0.01],
+    'scoring.trending': ['Trending (T)', 0, 1.5, 0.01],
+    'scoring.recency': ['Recency (R)', 0, 1.5, 0.01],
+    'scoring.quality': ['Quality (Q)', 0, 1.5, 0.01],
+    'scoring.tailTrending': ['Tail: Trending (T)', 0, 1.5, 0.01],
+    'scoring.tailRecency': ['Tail: Recency (R)', 0, 1.5, 0.01],
+    'scoring.maxTrendingScore': ['Max trending score (T = 1.0 at)', 1, 200, 1],
+    'learning.baseRate': ['Base learning rate', 0, 1, 0.005],
+    'learning.categoryMultiplier': ['Category multiplier (× base)', 0, 5, 0.1],
+    'learning.lengthMultiplier': ['Length multiplier (× base)', 0, 5, 0.1],
+    'learning.publisherMultiplier': ['Publisher multiplier (× base)', 0, 5, 0.1],
+    'learning.minWeight': ['Minimum weight', 0.01, 1, 0.01],
+    'learning.maxWeight': ['Maximum weight', 1, 10, 0.1],
+    'learning.dailyDecayRate': ['Daily decay rate (pulls towards 1.0)', 0.5, 1, 0.001],
+    'learning.defaultSelectedWeight': ['Default selected-category weight', 1, 5, 0.1],
+    'learning.defaultNotInterestedWeight': ['Default not-interested weight', 0.01, 1, 0.01],
+    'learning.defaultNeutralWeight': ['Default neutral weight', 0.5, 2, 0.05],
+    'tranche.highThreshold': ['High tranche threshold', 0, 1, 0.01],
+    'tranche.midThreshold': ['Mid tranche threshold', 0, 1, 0.01],
+    'tranche.highSize': ['High tranche size (articles)', 1, 50, 1],
+    'tranche.midSize': ['Mid tranche size (articles)', 1, 50, 1],
+    'tranche.tailSize': ['Tail tranche size (articles)', 1, 50, 1],
+    'tranche.publisherCap': ['Max articles per publisher', 1, 30, 1],
+    'tranche.newUserThreshold': ['New-user threshold (total reads)', 0, 500, 1],
+    'tranche.feedSize': ['Feed size (articles)', 1, 100, 1],
+    'classification.quickExitDepth': ['Quick-exit scroll depth (below)', 0, 1, 0.01],
+    'classification.quickExitTimeoutSec': ['Quick-exit timeout (seconds, below)', 1, 120, 1],
+    'classification.thoroughDepth': ['Thorough scroll depth (above)', 0, 1, 0.01],
+    'classification.thoroughTimeFraction': ['Thorough time ≥ fraction of expected', 0.1, 2, 0.01],
+    'classification.shallowDepth': ['Shallow scroll depth (above)', 0, 1, 0.01],
+    'trending.decayRate': ['Trending decay rate (daily ×)', 0.5, 1, 0.001],
+  };
+
+  const GROUP_DEFAULTS = {
+    scoring: [0, 1.5, 0.01],
+    feedback: [-1, 1, 0.05],
+    learning: [0, 5, 0.1],
+    trending: [-10, 10, 0.1],
+    quality: [-0.2, 0.2, 0.001],
+    tranche: [1, 50, 1],
+    classification: [0, 1, 0.01],
+  };
+
+  const GROUP_TITLES = {
+    scoring: ['Score Weights', 'How much each factor contributes to the personalised feed score.'],
+    feedback: ['Feedback Deltas', 'How strongly each action moves the learning weights.'],
+    learning: ['Learning & Weights', 'Learning speed, weight bounds, and daily decay.'],
+    trending: ['Trending (T)', 'Article trending-score increments per action, plus daily decay.'],
+    quality: ['Publisher Quality (Q)', 'How each action moves a publisher\u2019s quality score.'],
+    tranche: ['Tranche Assembly', 'High/Mid/Tail thresholds, sizes, publisher cap, feed size, new-user behaviour.'],
+    classification: ['Read Classification', '\u201cWhat counts as a skim vs thorough read.\u201d Backend re-classifies from scroll + time + words. OFF = app labels are kept; turn ON to make these apply live.'],
+  };
+
+  const SECTION_ORDER = ['scoring', 'feedback', 'learning', 'trending', 'quality', 'tranche', 'classification'];// ------------------------------------------------------------------
+  // Rendering
+  // ------------------------------------------------------------------
+      function labelFor(group, key) {
+    const b = BOOL_LABELS[`${group}.${key}`];
+    let text = b || (OVERRIDES[`${group}.${key}`] && OVERRIDES[`${group}.${key}`][0]) || ACTION_LABELS[key] || key;
+    const tipKey = `${group}.${key}`;
+    return labeled(tipKey, text);
+  }
+  function metaFor(group, key) {
+    const o = OVERRIDES[`${group}.${key}`];
+    const d = GROUP_DEFAULTS[group] || [0, 10, 0.1];
+    return o ? { min: o[1], max: o[2], step: o[3] } : { min: d[0], max: d[1], step: d[2] };
+  }
+
+  function buildGroup(group, keyOrder) {
+    const c = state.config[group] || {};
+    const def = state.defaults[group] || {};
+    const [title, sub] = GROUP_TITLES[group] || [group, ''];
+    const rows = keyOrder.map((k) => {
+      const val = c[k];
+      const dval = def[k];
+      if (typeof val === 'boolean') {
+        const dirty = val !== dval;
+        return `<div class="cfg-row">
+          <label>${labelFor(group, k)}${dirty ? ` <span class="tag dirty">default: ${dval}</span>` : ''}</label>
+          <label class="switch"><input type="checkbox" data-path="${group}.${k}" ${val ? 'checked' : ''}><span class="slider"></span></label>
+        </div>`;
+      }
+      if (typeof val === 'number') {
+        const m = metaFor(group, k);
+        return `<div class="cfg-row">
+          <label>${labelFor(group, k)}<span class="deflt">default ${dval}</span></label>
+          <input type="number" data-path="${group}.${k}" min="${m.min}" max="${m.max}" step="${m.step}" value="${val}">
+        </div>`;
+      }
+      return '';
+    }).join('');
+    return `<div class="section"><div class="section-title">${title}</div><div class="section-sub">${sub}</div><div class="cfg-grid">${rows}</div></div>`;
+  }
+
+  function renderSections() {
+    $('configSections').innerHTML = SECTION_ORDER.map((group) => {
+      const keyOrder = Object.keys(state.defaults[group] || {});
+      return buildGroup(group, keyOrder);
+    }).join('');
+  }
+
+  function renderMeta() {
+    $('metaSource').innerHTML = state.source ? `<span class="tag ${state.source === 'firestore' ? 'clean' : 'danger'}">${state.source}</span>` : '—';
+    $('metaSchema').innerText = state.config ? state.config.schemaVersion : '—';
+    $('metaBy').innerText = state.updatedBy || '—';
+    $('metaAt').innerText = state.updatedAt ? new Date(state.updatedAt).toLocaleString() : '—';
+  }
+
+  function renderStored() {
+    $('storedJson').textContent = state.stored
+      ? JSON.stringify(state.stored, null, 1)
+      : '(no stored document yet — the compiled defaults are active)';
+  }
+
+  function collectConfig() {
+    const out = {};
+    document.querySelectorAll('#configSections [data-path]').forEach((el) => {
+      const [group, key] = el.dataset.path.split('.');
+      if (!out[group]) out[group] = {};
+      out[group][key] = el.type === 'checkbox' ? el.checked : parseFloat(el.value);
+    });
+    out.schemaVersion = state.config ? state.config.schemaVersion : 1;
+    return out;
+  }
+
+  function setDirty(v) {
+    state.dirty = v;
+    $('metaDirty').innerHTML = v ? '<span class="tag dirty">unsaved edits</span>' : '<span class="tag clean">none</span>';
+  }// ------------------------------------------------------------------
+  // Actions
+  // ------------------------------------------------------------------
+  async function loadConfig() {
+    try {
+      const res = await httpsCallable(functions, 'getScoringConfig')({});
+      const d = res.data;
+      state.config = d.config; state.defaults = d.defaults; state.stored = d.stored;
+      state.source = d.source; state.updatedAt = d.updatedAt; state.updatedBy = d.updatedBy;
+      $('emptyState').style.display = 'none';
+      $('configSections').style.display = 'block';
+      renderMeta(); renderStored(); renderSections(); setDirty(false);
+      log('Loaded live config. source=' + d.source + (d.source === 'firestore' ? '' : ' (compiled defaults active)'), 'success');
+    } catch (e) { log('Load failed: ' + e.message, 'error'); }
+  }
+
+  async function saveAndPublish() {
+    if (!state.config) return log('Load the config first.', 'error');
+    const btn = $('btnSave'); btn.disabled = true; btn.innerText = '⏳ Publishing…';
+    try {
+      const config = collectConfig();
+      const res = await httpsCallable(functions, 'updateScoringConfig')({ config, client_id: genClientId() });
+      const changed = (res.data.changed || []).filter((c) => c);
+      log(`✅ Published. ${res.data.leafChanges} change(s): ${changed.join(', ') || 'none'}`, 'success');
+      setDirty(false);
+      await loadConfig();
+    } catch (e) { log('Publish failed: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.innerText = '💾 Save & Publish to LIVE'; }
+  }
+
+  async function resetToDefaults() {
+    if (!state.defaults) return log('Load the config first.', 'error');
+    const btn = $('btnReset'); btn.disabled = true; btn.innerText = '⏳ Resetting…';
+    try {
+      await httpsCallable(functions, 'updateScoringConfig')({ config: JSON.parse(JSON.stringify(state.defaults)), client_id: genClientId() });
+      log('↩ Reset to defaults published.', 'success');
+      setDirty(false);
+      await loadConfig();
+    } catch (e) { log('Reset failed: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.innerText = '↩ Reset everything to defaults'; }
+    }
+
+  /**
+   * Export the currently-edited config so it can be tested in the bot
+   * simulator (scripts/high_fidelity_matrix.html) WITHOUT publishing to
+   * system/scoringConfig. The config is copied to the clipboard and also
+   * stashed in localStorage (key `hfmPreviewConfig`) so the matrix picks it
+   * up automatically when served from the same localhost origin. Nothing is
+   * written to Firestore.
+   */
+  async function exportConfig() {
+    if (!state.config) return log('Load the config first.', 'error');
+    const json = JSON.stringify(collectConfig(), null, 2);
+    try { await navigator.clipboard.writeText(json); } catch { /* ignore clipboard errors */ }
+    try { localStorage.setItem('hfmPreviewConfig', json); } catch { /* ignore */ }
+    log('📋 Edited config copied to clipboard and sent to simulator (NOT saved to Firestore). Open the bot simulator and run a matrix to preview it.', 'success');
+  }
+
+  // ------------------------------------------------------------------
+  // Wiring
+  // ------------------------------------------------------------------
+  window.addEventListener('DOMContentLoaded', async () => {
+    $('btnLoad').addEventListener('click', loadConfig);
+    $('btnSave').addEventListener('click', saveAndPublish);
+        $('btnReset').addEventListener('click', resetToDefaults);
+    $('btnExport').addEventListener('click', exportConfig);
+    $('configSections').addEventListener('input', (e) => {
+      if (e.target && e.target.dataset && e.target.dataset.path) setDirty(true);
+    });
+    try {
+      await signInAnonymously(auth);
+      log('Signed in anonymously for callables.', 'info');
+      await loadConfig();
+    } catch (e) { log('Sign-in failed: ' + e.message, 'error'); }
+  });
+</script>

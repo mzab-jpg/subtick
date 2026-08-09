@@ -12,6 +12,13 @@ const db = admin.firestore();
 const auth = admin.auth();
 
 import { gaApiSecret, sendGAEvents } from './analytics.js';
+import {
+  loadScoringConfig,
+  DEFAULT_SCORING_CONFIG,
+  deepMerge,
+  clampConfig,
+  invalidateConfigCache,
+} from './scoringConfig.js';
 
 // --- Export all Cloud Functions ---
 export { rssCollector } from './rssCollector.js';
@@ -157,15 +164,51 @@ export const updateScoringConfig = onCall({ secrets: [gaApiSecret] }, async (req
   }
 
   const adminUserId = request.auth.uid;
-  const { field, old_value, new_value, client_id } = request.data as {
-    field: string;
-    old_value: number | string;
-    new_value: number | string;
+  const data = request.data as {
+    config?: Record<string, any>;
+    field?: string;
+    old_value?: number | string;
+    new_value?: number | string;
     client_id?: string;
   };
   // GA4 web-stream client_id (32-hex UUID from device). Never the Auth UID.
-  const clientId = client_id || '';
+  const clientId = data.client_id || '';
 
+  const docRef = db.collection('system').doc('scoringConfig');
+  const docSnap = await docRef.get();
+  const previous = ((docSnap.exists ? docSnap.data() : {}) || {}) as Record<string, any>;
+
+  // --- Full-object mode (Control Dashboard): pass a partial config object. ---
+  if (data.config && typeof data.config === 'object') {
+    if (Object.keys(data.config).length === 0) {
+      throw new HttpsError('invalid-argument', 'config object is empty.');
+    }
+    const merged = clampConfig(deepMerge({ ...previous }, data.config));
+    // Overwrite the stored doc with the clamped merged config. It always contains
+    // a full self-describing object (defaults for every key not supplied).
+    await docRef.set({ ...merged, lastUpdated: Date.now(), lastUpdatedBy: adminUserId }, { merge: false });
+
+    const changes = diffConfig(previous, merged);
+    if (changes.length > 0) {
+      sendGAEvents(clientId, changes.map(({ field, oldV, newV }) => ({
+        name: 'config_changed',
+        params: { user_id: adminUserId, field, old_value: String(oldV), new_value: String(newV) },
+      }))).catch(() => {});
+    }
+    console.log(`[updateScoringConfig] ${adminUserId} applied config update (${changes.length} leaf changes)`);
+    invalidateConfigCache();
+
+    return {
+      success: true,
+      applied: true,
+      leafChanges: changes.length,
+      changed: changes.map((c) => c.field),
+      lastUpdated: Date.now(),
+    };
+  }
+
+  // --- Legacy single-field mode ---
+  const { field, old_value, new_value } = data;
   if (!field || typeof field !== 'string') {
     throw new HttpsError('invalid-argument', 'Missing or invalid field.');
   }
@@ -176,13 +219,7 @@ export const updateScoringConfig = onCall({ secrets: [gaApiSecret] }, async (req
     throw new HttpsError('invalid-argument', 'Missing or invalid new_value.');
   }
 
-  // Write the updated field to system/scoringConfig
-  await db.collection('system').doc('scoringConfig').set(
-    { [field]: new_value, lastUpdated: Date.now(), lastUpdatedBy: adminUserId },
-    { merge: true }
-  );
-
-  // Log config_changed event
+  await docRef.set({ [field]: new_value, lastUpdated: Date.now(), lastUpdatedBy: adminUserId }, { merge: true });
   sendGAEvents(clientId, [
     {
       name: 'config_changed',
@@ -194,10 +231,48 @@ export const updateScoringConfig = onCall({ secrets: [gaApiSecret] }, async (req
       },
     },
   ]).catch(() => {});
-
-  console.log(
-    `[updateScoringConfig] ${adminUserId} changed ${field}: ${old_value} → ${new_value}`
-  );
+  console.log(`[updateScoringConfig] ${adminUserId} changed ${field}: ${old_value} → ${new_value}`);
+  invalidateConfigCache();
 
   return { success: true, field, old_value: old_value.toString(), new_value: new_value.toString() };
 });
+
+// ============================================================
+// getScoringConfig — Returns the current effective config (what the
+// algorithm ACTUALLY uses right now) + the stored doc + defaults,
+// so the dashboard, Firebase console, and live app always agree.
+// ============================================================
+export const getScoringConfig = onCall({ secrets: [gaApiSecret] }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+
+  const effective = await loadScoringConfig();
+  const snap = await db.collection('system').doc('scoringConfig').get();
+  const stored = snap.exists ? (snap.data() as Record<string, any>) : null;
+
+  return {
+    config: effective,
+    defaults: DEFAULT_SCORING_CONFIG,
+    stored,
+    source: stored ? 'firestore' : 'defaults',
+    updatedAt: stored?.lastUpdated ?? null,
+    updatedBy: stored?.lastUpdatedBy ?? null,
+  };
+});
+
+/** Flatten two objects and return the leaf-level differences (for audit). */
+function diffConfig(prev: any, next: any): Array<{ field: string; oldV: any; newV: any }> {
+  const out: Array<{ field: string; oldV: any; newV: any }> = [];
+  const walk = (a: any, b: any, path: string) => {
+    if (a === b) return;
+    if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
+      const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+      for (const k of keys) walk(a[k], b[k], path ? `${path}.${k}` : k);
+      return;
+    }
+    out.push({ field: path, oldV: a, newV: b });
+  };
+  walk(prev, next, '');
+  return out;
+}

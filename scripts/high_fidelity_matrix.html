@@ -90,7 +90,7 @@
   .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--input-bg); border-radius: 10px; border: 1px solid var(--card-border); }
   .toggle-row label { font-size: 13px; font-weight: 500; }
   .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
-  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer; z-index: 2; margin: 0; }
   .slider { position: absolute; cursor: pointer; inset: 0; background-color: #374151; transition: .3s; border-radius: 24px; }
   .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
   input:checked + .slider { background-color: var(--accent-success); }
@@ -135,6 +135,20 @@
   .chip:hover { background: rgba(255,255,255,0.1); }
   .chip.active { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(99,102,241,0.35); }
   .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  #userStrip {
+    position: sticky;
+    top: -18px;
+    z-index: 100;
+    background: #161e31; /* matches card bg */
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+    margin-bottom: 16px;
+  }
 
   .grid-wrap { overflow-x: auto; }
   table.ov-grid { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 700px; }
@@ -255,6 +269,44 @@
   .beh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
   .beh-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-muted); }
   .beh-row label { color: var(--text-muted); }
+  .help { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--accent-primary); color: var(--accent-primary); font-size: 9px; font-weight: 700; cursor: help; vertical-align: middle; margin-left: 4px; background: rgba(99,102,241,0.08); user-select: none; position: relative; }
+  .help:hover { background: var(--accent-primary); color: #fff; }
+  .help:hover::after {
+    content: attr(data-title);
+    position: absolute;
+    bottom: 135%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0f172a;
+    color: #f3f4f6;
+    border: 1px solid var(--accent-primary);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.45;
+    width: 250px;
+    white-space: normal;
+    text-align: left;
+    z-index: 1000;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    pointer-events: none;
+    font-family: 'Inter', sans-serif;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .help:hover::before {
+    content: "";
+    position: absolute;
+    bottom: 115%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--accent-primary) transparent transparent transparent;
+    z-index: 1000;
+    pointer-events: none;
+  }
   .beh-row input[type="number"], .beh-row input[type="range"] { width: 64px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 2px 5px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
   .beh-row input[type="range"] { width: 100px; }
   .beh-row span.val { color: var(--text-dim); font-size: 10px; min-width: 26px; text-align: right; }
@@ -300,26 +352,26 @@
     <div class="card">
       <div class="card-title"><span>⚙️ Run Settings</span></div>
       <div class="param-row">
-        <label>Simulated days per user</label>
-        <input type="range" id="inputDays" min="1" max="14" value="7" oninput="document.getElementById('valDays').innerText=this.value">
+        <label>Simulated days per user <span class="help" data-tip="days">?</span></label>
+        <input type="range" id="inputDays" min="1" max="28" value="7" oninput="document.getElementById('valDays').innerText=this.value">
         <span class="val" id="valDays">7</span>
       </div>
       <div class="param-row">
-        <label>Behavior events per day</label>
-        <input type="range" id="inputEventsPerDay" min="1" max="30" value="8" oninput="document.getElementById('valEventsPerDay').innerText=this.value">
-        <span class="val" id="valEventsPerDay">8</span>
+        <label>Feeds (of 30) per day <span class="help" data-tip="feedsPerDay">?</span></label>
+        <input type="range" id="inputFeedsPerDay" min="1" max="10" value="1" oninput="document.getElementById('valFeedsPerDay').innerText=this.value">
+        <span class="val" id="valFeedsPerDay">1</span>
       </div>
       <div class="param-row">
-        <label>Pause between users</label>
+        <label>Pause between users <span class="help" data-tip="pause">?</span></label>
         <input type="range" id="inputPause" min="0" max="5000" step="250" value="300" oninput="document.getElementById('valPause').innerText=(this.value/1000).toFixed(1)+'s'">
         <span class="val" id="valPause">0.3s</span>
       </div>
       <div class="toggle-row">
-        <label>⏱️ Time-spacing (spread GA4 timestamps smoothly)</label>
+        <label>⏱️ Time-spacing <span class="help" data-tip="timeSpacing">?</span> (spread GA4 timestamps smoothly)</label>
         <span class="switch"><input type="checkbox" id="toggleTimeSpacing" checked><span class="slider"></span></span>
       </div>
       <div class="toggle-row">
-        <label>🧹 Delete each test account when done (keeps your DB clean)</label>
+        <label>🧹 Delete each test account when done <span class="help" data-tip="cleanup">?</span> (keeps your DB clean)</label>
         <span class="switch"><input type="checkbox" id="toggleCleanup" checked><span class="slider"></span></span>
       </div>
       <button class="btn-primary" id="btnRun" type="button">▶ Run real-user test on LIVE backend</button>
@@ -348,6 +400,123 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
   import { getAuth, signInAnonymously, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+    const TIPS = {
+  dashboard: {
+    // ---- scoring (final-score components P/T/R/Q + tail + ceiling) ----
+    'scoring.personalization':  "Strength of the personalization factor (P) in the final article score. Raising it makes the feed track the user's category/publisher tastes more aggressively; too high risks an echo chamber. Range 0-1.5; default 0.60.",
+    'scoring.trending':         "Strength of the trending factor (T). Higher values surface content many people are engaging with right now — adds serendipity/viral lift off a user's usual path. Range 0-1.5; default 0.15.",
+    'scoring.recency':          "Strength of the recency factor (R). Pushes newer articles up the feed to keep it fresh. Range 0-1.5; default 0.10.",
+    'scoring.quality':          "Strength of the publisher-quality factor (Q). Rewards articles from publishers with strong historical engagement. Range 0-1.5; default 0.15.",
+    'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.10.",
+    'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.10.",
+    'scoring.maxTrendingScore': "The trending-score value at which factor T normalises to 1.0. Articles at/above it get full T credit; below it, T scales up linearly from 0. Default 50.",
+
+    // ---- feedback (per-action learning delta) ----
+    'feedback.save':              "Weight change when a user saves an article. Larger = saves teach the model faster. Default +0.55.",
+    'feedback.unsave':            "Weight change when a user unsaves. Default -0.55 (symmetric to save).",
+    'feedback.like':              "Weight change per like. Default +0.40.",
+    'feedback.unlike':            "Weight change per unlike. Default -0.40.",
+    'feedback.read_thorough':     "Weight change when the app reports a thorough read. Default +0.30.",
+    'feedback.read_skim':         "Weight change for a skim read. Default +0.10.",
+    'feedback.read_shallow':      "Weight change for a shallow read (almost none). Default 0.00.",
+    'feedback.swipe_next':        "Weight change for swiping past without opening (neutral). Default 0.00.",
+    'feedback.quick_exit':        "Weight change for a near-immediate close (affects trending/quality, not category weights). Default 0.00.",
+        'feedback.swipe_not_interested': "Weight change when a user actively flags 'not interested'. Default -0.40.",
+
+    // ---- learning ----
+    'learning.baseRate':            "Core learning rate — how fast weights move per feedback event. Smaller = slower/smoother, resilient to noise; larger = faster adaptation but more volatile. Range 0-1; default 0.05.",
+    'learning.categoryMultiplier':  "Multiplier on the learning rate for category weights vs the base. Default 1.0 (same rate as everywhere).",
+    'learning.lengthMultiplier':    "Multiplier for length-style weights (short/medium/long). Default 1.5 (~50% faster learning).",
+    'learning.publisherMultiplier': "Multiplier for publisher-quality learning. Default 2.0 (fastest-adapting signal).",
+    'learning.minWeight':           "Floor for a category/publisher weight — keeps the model from fully 'zeroing out' a category. Default 0.5.",
+    'learning.maxWeight':           "Ceiling for weights — prevents one category from dominating. Default 2.0.",
+    'learning.dailyDecayRate':      "Daily multiplicative decay pulling weights toward 1.0 (e.g. 0.98). Too low = rapid forgetting; too high = stale preferences. Range 0.5-1; default 0.98.",
+    'learning.defaultSelectedWeight':      "Starting weight for a brand-new selected category (new-user onboarding). Default 1.5.",
+    'learning.defaultNotInterestedWeight': "Starting weight for a 'not interested' category. Default 0.5.",
+    'learning.defaultNeutralWeight':       "Starting weight for categories with no signal yet (neutral). Default 1.0.",
+
+    // ---- trending ----
+    'trending.decayRate':  "Daily decay applied to article trending scores (e.g. 0.95 -> -5%/day). Keeps trending content fresh. Default 0.95.",
+    'trending.save':       "Trending-score bump when an article is saved. Range -10..10; default +3.0.",
+    'trending.unsave':     "Trending-score drop when unsaved. Default -3.0.",
+    'trending.like':       "Trending bump per like. Default +2.0.",
+    'trending.unlike':     "Trending drop per unlike. Default -2.0.",
+    'trending.read_thorough': "Trending bump for a thorough read. Default +1.5.",
+    'trending.read_skim':     "Trending bump for a skim. Default +0.5.",
+    'trending.read_shallow':  "Trending bump for a shallow read (kept slightly positive). Default +0.2.",
+
+    // ---- quality ----
+    'quality.save':              "Publisher quality change per save. Default +0.010.",
+    'quality.unsave':            "Publisher quality change per unsave. Default -0.010.",
+    'quality.like':              "Publisher quality change per like. Default +0.005.",
+    'quality.unlike':            "Publisher quality change per unlike. Default -0.005.",
+    'quality.read_thorough':     "Publisher quality change per thorough read. Default +0.005.",
+    'quality.read_skim':         "Publisher quality change per skim. Default +0.001.",
+    'quality.swipe_not_interested': "Publisher quality change per 'not interested'. Default -0.010.",
+    'quality.quick_exit':        "Publisher quality change per quick exit. Default -0.005.",
+
+    // ---- tranche ----
+    'tranche.highThreshold':    "Final-score cutoff for the High tranche (top tier). Articles scoring >= this are 'High'. Range 0-1; default 0.40.",
+    'tranche.midThreshold':     "Final-score cutoff for the Mid tranche. Between midThreshold and highThreshold = Mid; below = Tail. Default 0.20.",
+    'tranche.highSize':         "Max articles pulled into the High tranche from candidates. Default 12.",
+    'tranche.midSize':          "Max articles for the Mid tranche. Default 8.",
+    'tranche.tailSize':         "Max articles for the Tail tranche (long-tail discovery). Default 10.",
+    'tranche.publisherCap':     "Hard cap on how many articles from one publisher can appear in a single 30-article feed. Prevents dominance. Range 1-30; default 5.",
+    'tranche.newUserThreshold': "A user is treated as 'new user' until they have this many total reads — they then get the new-user (more exploratory) feed mix. Default 30.",
+            'tranche.feedSize':         "Total articles returned per feed request. Default 30.",
+
+    // ---- classification ----
+    'classification.enable':             "MASTER SWITCH for server-side read classification. OFF (default) = trust the app's reported label (read_thorough/skim/...). ON = backend re-decides the label from scroll depth + session time + word count using the thresholds below, so 'what counts as a read' becomes tunable without an app release. OFF by default — only the simulator sends this override; the live app never does.",
+    'classification.quickExitDepth':     "Articles scrolled LESS than this fraction are candidates for 'quick_exit'. Only active when enable is ON. Default 0.2.",
+    'classification.quickExitTimeoutSec': "If session time is below this and scroll < quickExitDepth, the read is classified as 'quick_exit'. Default 15s.",
+    'classification.thoroughDepth':      "Scroll fraction at/above which a read can qualify as 'thorough'. Default 0.70.",
+    'classification.thoroughTimeFraction': "Session time (as a fraction of expected read time for the article's length) needed to call a read 'thorough'. Default 0.60.",
+    'classification.shallowDepth':       "Articles scrolled between shallowDepth and thoroughDepth, or not meeting thorough criteria, are 'shallow'. Default 0.40.",
+  },
+
+  matrix: {
+    // ---- run settings ----
+    'days':        "Simulated days per user — how many backdated days of activity to generate for each test user. Range 1-28; default 7.",
+    'feedsPerDay': "Feeds (of 30 articles) per day — how many separate feed-refresh requests each simulated user triggers per day. Range 1-10; default 1.",
+    'pause':       "Pause between users — stagger the launch of each test user so they don't all hit your backend at once. Default 0.3s.",
+    'timeSpacing': "Time-spacing — spreads each user's simulated event timestamps across the day so GA4/BigQuery see smooth daily curves instead of spikes.",
+    'cleanup':     "Delete each test account when done — removes the anonymous test users + their data after the run so your DB stays clean.",
+
+    // ---- per-user behavior rates ----
+    'read_thorough':        "Probability this user reads thoroughly on a given article (opens, scrolls deep, spends enough time). Higher = engaged reader.",
+    'read_skim':            "Probability of a read-skim (opens, scrolls moderately). Mild positive signal to the algorithm.",
+    'read_shallow':         "Probability of a read-shallow (opens, barely scrolls). Near-zero learning signal.",
+    'quick_exit':           "Probability of a quick exit (opens then immediately closes). Negative signal.",
+    'swipe_next':           "Probability of swiping past without opening (neutral).",
+    'swipe_not_interested': "Probability of actively marking an article 'not interested'. Strong negative signal.",
+    'save':                 "Probability of saving an article to the reading list. Strongest positive signal.",
+    'like':                 "Probability of liking an article. Positive signal.",
+    'unlike':               "Probability of unliking an article. Negative signal.",
+    'unsave':               "Probability of unsaving a previously saved article. Negative signal.",
+
+    // ---- behavior randomness / session params ----
+    'stddev':       "Per-user randomness injected into the behavior rates above — makes the simulation less mechanical, more human. 0 = deterministic.",
+    'sessMean':     "Average session length (seconds) for this user.",
+    'sessStd':      "Session-length variability in seconds (higher = more varied session lengths).",
+    'scrollMean':   "Average scroll depth for this user (0.0 = scrolled nothing, 1.0 = scrolled to the bottom).",
+    'scrollStd':    "Scroll-depth variability (higher = more inconsistent scrolling).",
+    'prefStrength': "How strongly this user's pre-set category preferences bias the initial generated weights — higher = stronger initial taste.",
+  },
+};
+
+// Helper: render a "?" help icon with the given tooltip. Usage: helpHtml('scoring.personalization')
+// Returns empty string for unknown keys (no icon shown).
+
+  function helpHtml(key, source = 'matrix') {
+    const t = (TIPS[source] && TIPS[source][key]) || '';
+    if (!t) return '';
+    return `<span class="help" role="img" aria-label="help" data-title="${t.replace(/"/g, '&quot;')}">?</span>`;
+  }
+
+  function labeled(key, labelText, source = 'matrix') {
+    const h = helpHtml(key, source);
+    return h ? `${labelText} ${h}` : labelText;
+  }
   import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
   import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js';
 
@@ -359,6 +528,18 @@
     messagingSenderId: '859600771798',
     appId: '1:859600771798:web:c9898a4501148c4caa0777',
   };
+
+  // ---- "Test config in simulator" bridge ----
+  // Looks for a draft config that Control Dashboard exports to localStorage
+  // (key `hfmPreviewConfig`) and, if present, threads it through to the LIVE
+  // backend callables as a per-request `configOverride`. This lets an edited
+  // config be scored by the real engine WITHOUT being published to
+  // system/scoringConfig. Absent/invalid => normal live behaviour.
+  let previewConfig = null;
+  try {
+    const __pc = localStorage.getItem('hfmPreviewConfig');
+    if (__pc) previewConfig = JSON.parse(__pc);
+  } catch (e) { /* ignore malformed preview config */ }
 
   // ============================================================
   // Persona definitions — mirror liveBotSimulator.js + constants.ts
@@ -438,7 +619,20 @@
     ].map(s => ({ ...s, enabled: true, beh: makeBeh(s.persona, s.variant) }));
   }
 
-  let SCENARIOS = defaultScenarios();
+  const SCENARIOS_STORAGE_KEY = 'hfm_scenarios_v2';
+  function saveScenarios() {
+    try {
+      localStorage.setItem(SCENARIOS_STORAGE_KEY, JSON.stringify(SCENARIOS));
+    } catch (e) { /* ignore */ }
+  }
+  function loadScenarios() {
+    try {
+      const saved = localStorage.getItem(SCENARIOS_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) { /* ignore */ }
+    return defaultScenarios();
+  }
+  let SCENARIOS = loadScenarios();
   let results = [];
   let selectedUser = 0;
   let running = false;// ============================================================
@@ -539,7 +733,7 @@
       const b = s.beh;
       const rateInputs = Object.entries(b.rates).map(([k, v]) => `
         <div class="beh-row">
-          <label>${RATE_LABELS[k] || k}</label>
+          <label>${labeled(k, RATE_LABELS[k] || k, 'matrix')}</label>
           <input type="number" min="0" max="1" step="0.05" value="${v.toFixed(2)}" data-idx="${idx}" data-beh="rates.${k}" title="${k} rate (mean)">
         </div>`).join('');
       return `
@@ -555,22 +749,29 @@
       <div class="beh-wrap" id="behwrap_${idx}" style="display:none">
         <div class="beh-title">⚙ Behaviours — ${escapeHtml(s.label)}</div>
         <div class="beh-grid">${rateInputs}
-          <div class="beh-row"><label>⚠ Std. deviation</label><input type="range" class="beh-std" min="0" max="0.4" step="0.01" value="${b.stddev.toFixed(2)}" data-idx="${idx}" data-beh="stddev"><span class="val">${b.stddev.toFixed(2)}</span></div>
+          <div class="beh-row"><label>${labeled('stddev', '⚠ Std. deviation', 'matrix')}</label><input type="range" class="beh-std" min="0" max="0.4" step="0.01" value="${b.stddev.toFixed(2)}" data-idx="${idx}" data-beh="stddev"><span class="val">${b.stddev.toFixed(2)}</span></div>
         </div>
         <div class="beh-grid" style="margin-top:8px">
-          <div class="beh-row"><label>Session (s) mean</label><input type="number" min="1" max="600" step="1" value="${Math.round(b.sessMean)}" data-idx="${idx}" data-beh="sessMean"></div>
-          <div class="beh-row"><label>Session (s) std</label><input type="number" min="0" max="300" step="1" value="${Math.round(b.sessStd)}" data-idx="${idx}" data-beh="sessStd"></div>
-          <div class="beh-row"><label>Scroll depth mean</label><input type="number" min="0" max="1" step="0.05" value="${b.scrollMean.toFixed(2)}" data-idx="${idx}" data-beh="scrollMean"></div>
-          <div class="beh-row"><label>Scroll std</label><input type="number" min="0" max="0.5" step="0.02" value="${b.scrollStd.toFixed(2)}" data-idx="${idx}" data-beh="scrollStd"></div>
-          <div class="beh-row"><label>Initial preference strength</label><input type="number" min="1" max="5" step="0.1" value="${b.prefStrength.toFixed(1)}" data-idx="${idx}" data-beh="prefStrength"></div>
+          <div class="beh-row"><label>${labeled('sessMean', 'Session (s) mean', 'matrix')}</label><input type="number" min="1" max="600" step="1" value="${Math.round(b.sessMean)}" data-idx="${idx}" data-beh="sessMean"></div>
+          <div class="beh-row"><label>${labeled('sessStd', 'Session (s) std', 'matrix')}</label><input type="number" min="0" max="300" step="1" value="${Math.round(b.sessStd)}" data-idx="${idx}" data-beh="sessStd"></div>
+          <div class="beh-row"><label>${labeled('scrollMean', 'Scroll depth mean', 'matrix')}</label><input type="number" min="0" max="1" step="0.05" value="${b.scrollMean.toFixed(2)}" data-idx="${idx}" data-beh="scrollMean"></div>
+          <div class="beh-row"><label>${labeled('scrollStd', 'Scroll std', 'matrix')}</label><input type="number" min="0" max="0.5" step="0.02" value="${b.scrollStd.toFixed(2)}" data-idx="${idx}" data-beh="scrollStd"></div>
+          <div class="beh-row"><label>${labeled('prefStrength', 'Initial preference strength', 'matrix')}</label><input type="number" min="1" max="5" step="0.1" value="${b.prefStrength.toFixed(1)}" data-idx="${idx}" data-beh="prefStrength"></div>
         </div>
       </div>`;
     }).join('');
   };
 
   window.addEventListener('DOMContentLoaded', () => {
+    // Resolve static Settings tooltips dynamically from TIPS.matrix
+    document.querySelectorAll('.help[data-tip]').forEach(el => {
+      const key = el.dataset.tip;
+      if (TIPS.matrix[key]) {
+        el.setAttribute('data-title', TIPS.matrix[key]);
+      }
+    });
     renderScenarios();
-    $('btnResetScenarios').addEventListener('click', () => { SCENARIOS = defaultScenarios(); renderScenarios(); log('Scenario list reset to the 10 defaults.', 'info'); });
+    $('btnResetScenarios').addEventListener('click', () => { SCENARIOS = defaultScenarios(); saveScenarios(); renderScenarios(); log('Scenario list reset to the 10 defaults.', 'info'); });
     $('btnRun').addEventListener('click', runSimulation);
     $('scenarioList').addEventListener('change', (e) => {
       const t = e.target;
@@ -586,6 +787,7 @@
         else if (pth === 'scrollMean') sc.beh.scrollMean = clamp(parseFloat(t.value) || 0, 0, 1);
         else if (pth === 'scrollStd') sc.beh.scrollStd = clamp(parseFloat(t.value) || 0, 0, 0.5);
         else if (pth === 'prefStrength') sc.beh.prefStrength = clamp(parseFloat(t.value) || 1, 1, 5);
+        saveScenarios();
         return;
       }
       // Scenario row inputs
@@ -598,6 +800,7 @@
       if (role === 'enabled') sc.enabled = t.checked;
       if (role === 'label') sc.label = t.value;
       if (role === 'persona') { sc.persona = t.value; sc.beh = makeBeh(sc.persona, sc.variant); renderScenarios(); }
+      saveScenarios();
     });
     $('scenarioList').addEventListener('click', (e) => {
       const t = e.target;
@@ -613,11 +816,12 @@
       const row = btn.closest('.scenario-row');
       const idx = [...row.parentElement.children].filter(el => el.classList.contains('scenario-row')).indexOf(row);
       SCENARIOS.splice(idx, 1);
+      saveScenarios();
       renderScenarios();
     });
     log('Panel ready. Choose users and click Run (LIVE backend).', 'info');
     applySettings();
-    ['inputDays', 'inputEventsPerDay', 'inputPause'].forEach(id => $(id).addEventListener('input', saveSettings));
+    ['inputDays', 'inputFeedsPerDay', 'inputPause'].forEach(id => $(id).addEventListener('input', saveSettings));
     ['toggleTimeSpacing', 'toggleCleanup'].forEach(id => $(id).addEventListener('change', saveSettings));
   });// ============================================================
   // Scoring & per-day metrics
@@ -719,13 +923,13 @@
     };
   }
 
-  function generateEvents(sc, articles, uid, dayIdx, totalDays, epd, timeSpacing) {
+  function generateEvents(sc, articles, uid, dayIdx, totalDays, fIdx, fpd, timeSpacing) {
     const dayMs = 24 * 60 * 60 * 1000;
-    const base = Date.now() - (totalDays - dayIdx) * dayMs;
+    // Spreads the feeds smoothly across the 24-hour day based on feed index fIdx out of fpd total
+    const base = Date.now() - (totalDays - dayIdx) * dayMs + (fIdx / (fpd + 1)) * dayMs;
     const events = [];
-    const count = Math.min(epd, articles.length);
-    for (let i = 0; i < count; i++) {
-      const ts = Math.round(base + i * 4500 + (timeSpacing ? (Math.random() * 2 - 1) * 3 * 60 * 60 * 1000 : 0));
+    for (let i = 0; i < articles.length; i++) {
+      const ts = Math.round(base + i * 4500 + (timeSpacing ? (Math.random() * 2 - 1) * 30 * 60 * 1000 : 0));
       events.push(buildEvent(sc, articles[i], uid, ts));
     }
     return events;
@@ -793,16 +997,17 @@
       return;
     }
     const days = parseInt($('inputDays').value, 10);
-    const epd = parseInt($('inputEventsPerDay').value, 10);
+    const fpd = parseInt($('inputFeedsPerDay').value, 10);
     const pause = parseInt($('inputPause').value, 10);
     const timeSpacing = $('toggleTimeSpacing').checked;
     const cleanup = $('toggleCleanup').checked;
 
     results = [];
     log('====================================================', 'highlight');
-    log(`Running ${enabled.length} real users × ${days} days on LIVE backend`, 'highlight');
+    log(`Running ${enabled.length} real users × ${days} days (with ${fpd} feeds/day) on LIVE backend`, 'highlight');
     log('====================================================', 'highlight');
 
+    if (previewConfig) log('📋 Preview mode ON — using edited config from dashboard (not saved to Firestore).', 'highlight');
     let ui = 0;
     for (const sc of enabled) {
       ui++;
@@ -821,38 +1026,50 @@
         const rec = { scenario: sc, uid, gaClientId, days: [], feeds: [], weightHistory: [], eventsSent: 0, gaEventsEstimate: 0, errors: [] };
 
         for (let d = 1; d <= days; d++) {
-          let articles = [];
-          try {
-            const res = await httpsCallable(fns, 'getRankedFeed')({ seenArticleIds: seen, client_id: gaClientId, includeScores: true });
-            articles = res.data?.articles || [];
-            log(`    📅 Day ${d}/${days}: ${articles.length} articles ranked`, 'info');
-          } catch (e) {
-            log(`    ⚠️ Day ${d}: getRankedFeed error: ${e.message}`, 'warn');
-            rec.errors.push(`day${d} feed: ${e.message}`); continue;
-          }
+          let dayArticles = [];
+          let dayEventsCount = 0;
 
-          const enriched = articles.map(a => ({ ...a, _score: a._score || computeScoreFallback(a, profile.categoryWeights) }));
-          const nScored = enriched.filter(a => a._score && a._score.finalScore !== undefined).length;
-          if (nScored < enriched.length) log(`    ⚠️ ${enriched.length - nScored} articles missing server scores (fallback used)`, 'warn');
-
-          seen.push(...enriched.map(a => a.id));
-          rec.feeds.push(enriched);
-          rec.days.push({ day: d, metrics: computeDayMetrics(enriched) });
-
-          const events = generateEvents(sc, enriched, uid, d, days, epd, timeSpacing);
-          if (events.length) {
+          for (let f = 1; f <= fpd; f++) {
+            let articles = [];
             try {
-              const sres = await httpsCallable(fns, 'syncBehaviorEvents')({ events, client_id: gaClientId });
-              const synced = sres.data?.synced ?? events.length;
-              rec.eventsSent += synced;
-              log(`    ✓ Day ${d}: ${synced}/${events.length} events synced`, 'success');
+              const res = await httpsCallable(fns, 'getRankedFeed')({ seenArticleIds: seen, client_id: gaClientId, includeScores: true, configOverride: previewConfig || undefined });
+              articles = res.data?.articles || [];
+              log(`    📅 Day ${d}/${days} - Feed ${f}/${fpd}: ${articles.length} articles ranked`, 'info');
             } catch (e) {
-              log(`    ⚠️ Day ${d}: syncBehaviorEvents error: ${e.message}`, 'warn');
-              rec.errors.push(`day${d} sync: ${e.message}`);
+              log(`    ⚠️ Day ${d} - Feed ${f}: getRankedFeed error: ${e.message}`, 'warn');
+              rec.errors.push(`day${d} f${f} feed: ${e.message}`);
+              continue;
             }
-          }
-          rec.gaEventsEstimate += enriched.length + 1 + events.length;
 
+            const enriched = articles.map(a => ({ ...a, _score: a._score || computeScoreFallback(a, profile.categoryWeights) }));
+            const nScored = enriched.filter(a => a._score && a._score.finalScore !== undefined).length;
+            if (nScored < enriched.length) log(`    ⚠️ Day ${d} - Feed ${f}: ${enriched.length - nScored} articles missing server scores (fallback used)`, 'warn');
+
+            seen.push(...enriched.map(a => a.id));
+            dayArticles.push(...enriched);
+
+            // Generate events for this specific feed
+            const events = generateEvents(sc, enriched, uid, d, days, f, fpd, timeSpacing);
+            if (events.length) {
+              try {
+                const sres = await httpsCallable(fns, 'syncBehaviorEvents')({ events, client_id: gaClientId, configOverride: previewConfig || undefined });
+                const synced = sres.data?.synced ?? events.length;
+                rec.eventsSent += synced;
+                dayEventsCount += synced;
+                log(`    ✓ Day ${d} - Feed ${f}: ${synced}/${events.length} events synced`, 'success');
+              } catch (e) {
+                log(`    ⚠️ Day ${d} - Feed ${f}: syncBehaviorEvents error: ${e.message}`, 'warn');
+                rec.errors.push(`day${d} f${f} sync: ${e.message}`);
+              }
+            }
+            rec.gaEventsEstimate += enriched.length + 1 + events.length;
+          }
+
+          // Push the aggregated articles and metrics for this day to results
+          rec.feeds.push(dayArticles);
+          rec.days.push({ day: d, metrics: computeDayMetrics(dayArticles) });
+
+          // Retrieve updated profile after all feeds for the day have finished
           try {
             const snap = await getDoc(doc(db, 'users', uid));
             if (snap.exists()) {
@@ -944,7 +1161,7 @@
       <div style="height:18px"></div>
       <div class="card">
         <div class="card-title"><span>🔍 Per-user deep dive</span></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="userStrip"></div>
+        <div id="userStrip"></div>
         <div id="userDetail" style="margin-top:16px"></div>
       </div>`;
     renderUserChips();
@@ -997,7 +1214,6 @@
     selectedUser = i;
     renderUserChips();
     renderDetail();
-    requestAnimationFrame(() => { const holder = $('userDetail'); if (holder) holder.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   };
 
   function drawSparklines() {
@@ -1288,11 +1504,11 @@
   // ============================================================
   // Extras: settings persistence, count-up, download report
   // ============================================================
-  const SETTINGS_KEY = 'hfm_settings';
+  const SETTINGS_KEY = 'hfm_settings_v2';
   function saveSettings() {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-        days: $('inputDays').value, eventsPerDay: $('inputEventsPerDay').value, pause: $('inputPause').value,
+        days: $('inputDays').value, feedsPerDay: $('inputFeedsPerDay').value, pause: $('inputPause').value,
         timeSpacing: $('toggleTimeSpacing').checked, cleanup: $('toggleCleanup').checked,
       }));
     } catch (e) { /* storage may be unavailable */ }
@@ -1301,7 +1517,7 @@
     try {
       const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
       if (s.days) { $('inputDays').value = s.days; $('valDays').innerText = s.days; }
-      if (s.eventsPerDay) { $('inputEventsPerDay').value = s.eventsPerDay; $('valEventsPerDay').innerText = s.eventsPerDay; }
+      if (s.feedsPerDay) { $('inputFeedsPerDay').value = s.feedsPerDay; $('valFeedsPerDay').innerText = s.feedsPerDay; }
       if (s.pause !== undefined) { $('inputPause').value = s.pause; $('valPause').innerText = (s.pause / 1000).toFixed(1) + 's'; }
       if (s.timeSpacing !== undefined) $('toggleTimeSpacing').checked = s.timeSpacing;
       if (s.cleanup !== undefined) $('toggleCleanup').checked = s.cleanup;

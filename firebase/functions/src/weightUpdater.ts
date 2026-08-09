@@ -17,6 +17,7 @@ import {
   DEFAULT_NOT_INTERESTED_WEIGHT,
 } from './constants.js';
 import { sendGAEvents, sendGAUserProperties } from './analytics.js';
+import { loadScoringConfig, ScoringConfig } from './scoringConfig.js';
 
 const db = admin.firestore();
 
@@ -27,10 +28,13 @@ const db = admin.firestore();
  * NOTE: Reads directly from users/{userId}/behavior_events subcollection
  * which is inherently partitioned by user. Filters by timestamp in memory.
  */
-export async function updateWeights(userId: string, clientId?: string): Promise<void> {
+export async function updateWeights(userId: string, clientId?: string, providedCfg?: ScoringConfig): Promise<void> {
   // GA4 web-stream client_id passed through from syncBehaviorEvents. Falls back
   // to '' if missing — analytics.ts will mint a random id. Never the Auth UID.
   const effectiveClientId = clientId || '';
+  // Single source of truth for all tunable values (cached ~60s per instance).
+  // Reuse a caller-supplied config (e.g. preview override) when given; else load live.
+  const cfg = providedCfg ?? await loadScoringConfig();
   // 1. Fetch user profile
   const userRef = db.collection('users').doc(userId);
   const userDoc = await userRef.get();
@@ -83,7 +87,7 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
 
   for (const event of events) {
     const category = event.articleCategory;
-    const delta = FEEDBACK_DELTAS[event.eventType] || 0;
+    const delta = (cfg.feedback as any)[event.eventType] ?? 0;
 
     if (!category) {
       console.warn(`[weightUpdater] Event missing category: ${event.eventType}`);
@@ -96,9 +100,9 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
 
     // Apply Dimension-Specific Learning Rates:
     // Publisher = 0.16 (2.0x of L), Length = 0.12 (1.5x of L), Category = 0.08 (1.0x of L)
-    const categoryL = LEARNING_RATE * 1.0; // 0.08
-    const lengthL = LEARNING_RATE * 1.5;   // 0.12
-    const publisherL = LEARNING_RATE * 2.0;  // 0.16
+    const categoryL = cfg.learning.baseRate * cfg.learning.categoryMultiplier;
+    const lengthL = cfg.learning.baseRate * cfg.learning.lengthMultiplier;
+    const publisherL = cfg.learning.baseRate * cfg.learning.publisherMultiplier;
 
     // Category Weight Update
     updatedWeights[category] += delta * categoryL;
@@ -132,8 +136,8 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
   // 5. Clamp all weights to [MIN, MAX]
   for (const cat of Object.keys(updatedWeights)) {
     updatedWeights[cat] = Math.max(
-      MIN_CATEGORY_WEIGHT,
-      Math.min(MAX_CATEGORY_WEIGHT, updatedWeights[cat])
+      cfg.learning.minWeight,
+      Math.min(cfg.learning.maxWeight, updatedWeights[cat])
     );
   }
 
@@ -141,7 +145,7 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
   // Check if at least 23 hours have passed since the last weight update.
   const TWENTY_THREE_HOURS = 23 * 60 * 60 * 1000;
   const shouldApplyDecay = (now - watermark) >= TWENTY_THREE_HOURS;
-  const decayedWeights = shouldApplyDecay ? applyDecay(updatedWeights) : updatedWeights;
+  const decayedWeights = shouldApplyDecay ? applyDecay(updatedWeights, cfg.learning.dailyDecayRate) : updatedWeights;
   if (shouldApplyDecay) {
     console.log(`[weightUpdater] Applying daily decay for ${userId}`);
   }
@@ -164,19 +168,19 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
       newCategoryWeights[key] = val;
 
       // Dynamic UI Sync: Adjust UI arrays based on algorithm confidence
-      if (val <= DEFAULT_NOT_INTERESTED_WEIGHT) {
+      if (val <= cfg.learning.defaultNotInterestedWeight) {
         if (!newNotInterestedCategoryIds.has(key)) {
           newNotInterestedCategoryIds.add(key);
           newSelectedCategoryIds.delete(key);
           uiArraysChanged = true;
         }
-      } else if (val >= DEFAULT_SELECTED_WEIGHT) {
+      } else if (val >= cfg.learning.defaultSelectedWeight) {
         if (!newSelectedCategoryIds.has(key)) {
           newSelectedCategoryIds.add(key);
           newNotInterestedCategoryIds.delete(key);
           uiArraysChanged = true;
         }
-      } else if (val > DEFAULT_NOT_INTERESTED_WEIGHT && val < DEFAULT_SELECTED_WEIGHT && newNotInterestedCategoryIds.has(key)) {
+      } else if (val > cfg.learning.defaultNotInterestedWeight && val < cfg.learning.defaultSelectedWeight && newNotInterestedCategoryIds.has(key)) {
         newNotInterestedCategoryIds.delete(key);
         uiArraysChanged = true;
       }
@@ -305,7 +309,7 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
   const categoryWeightsEntries = Object.entries(newCategoryWeights);
   const sortedByWeight = [...categoryWeightsEntries].sort((a, b) => b[1] - a[1]);
   const topCategoryWeight = sortedByWeight.length > 0 ? sortedByWeight[0][1] : 1.0;
-  const categoriesAtCeiling = categoryWeightsEntries.filter(([, w]) => w >= MAX_CATEGORY_WEIGHT).length;
+  const categoriesAtCeiling = categoryWeightsEntries.filter(([, w]) => w >= cfg.learning.maxWeight).length;
 
   // Concentration score: Herfindahl-like metric — sum of squared fractions of total weight mass.
   const totalWeight = categoryWeightsEntries.reduce((sum, [, w]) => sum + w, 0);
@@ -333,11 +337,11 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
 /**
  * Apply 0.5% daily decay to pull extreme weights back towards 1.0.
  */
-function applyDecay(weights: Record<string, number>): Record<string, number> {
+function applyDecay(weights: Record<string, number>, rate: number = DAILY_DECAY_RATE): Record<string, number> {
   const decayed: Record<string, number> = {};
   for (const [cat, weight] of Object.entries(weights)) {
     // Move weight towards 1.0 by the decay rate
-    decayed[cat] = 1.0 + (weight - 1.0) * DAILY_DECAY_RATE;
+    decayed[cat] = 1.0 + (weight - 1.0) * rate;
     // Re-clamp for safety
     decayed[cat] = Math.max(MIN_CATEGORY_WEIGHT, Math.min(MAX_CATEGORY_WEIGHT, decayed[cat]));
   }
@@ -399,3 +403,5 @@ async function updateReadStats(
 
   console.log(`[weightUpdater] Stats: weekly=${weeklyReadCount}, streak=${streak}`);
 }
+
+
