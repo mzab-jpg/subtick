@@ -54,6 +54,23 @@ export interface Article {
   };
 }
 
+export interface ArticleScoreDetail {
+  /** Normalized personalization component [0,1] computed by the real algorithm. */
+  scoreP: number;
+  /** Normalized trending component [0,1]. */
+  scoreT: number;
+  /** Normalized recency component [0,1]. */
+  scoreR: number;
+  /** Normalized quality component [0,1]. */
+  scoreQ: number;
+  /** Full weighted final score (0.60P + 0.15T + 0.10R + 0.15Q). */
+  finalScore: number;
+  /** Tranche the article landed in during feed assembly. */
+  tranche: 'high' | 'mid' | 'tail';
+  /** Scoring component that contributed most to the final score. */
+  dominant: 'P' | 'T' | 'R' | 'Q';
+}
+
 export type BehaviorEventType =
   | 'swipe_next'
   | 'swipe_not_interested'

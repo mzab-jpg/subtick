@@ -30,9 +30,9 @@ service cloud.firestore {
         ]);
 
       // S2 Fix: Restrict client updates to only the fields the client legitimately needs
-      // to write. Stats fields (totalArticlesRead, categoryWeights, currentStreakDays, etc.)
-      // are managed exclusively by Cloud Functions via Admin SDK and must not be
-      // writable by the client to prevent score/streak forgery.
+      // to write. User preference fields (theme, metric selection, onboarding, category preferences,
+      // linked account) are allowed. Calculated stats (totalArticlesRead, currentStreakDays, etc.)
+      // are managed exclusively by Cloud Functions via Admin SDK and must not be writable by client.
       allow update: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -42,6 +42,8 @@ service cloud.firestore {
           'isActive',
           'selectedCategoryIds',
           'notInterestedCategoryIds',
+          'categoryWeights',
+          'linkedGoogleAccount',
           'includeArchivedArticles',
           'seenArticleIds',
           'userEmail',

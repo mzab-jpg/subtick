@@ -47,6 +47,10 @@ import { ReaderProgressBar } from '../features/reader/ReaderProgressBar';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 45;
 const SWIPE_THRESHOLD = 40;
+// Extreme edge band: a swipe starting here reveals the system bars
+// (status + nav) so the user can use the native back gesture, without
+// advancing to the next article or firing any weighting events.
+const BACK_EDGE_WIDTH = 22;
 
 // B3 Fix: Extract shared WebView reader script (scroll tracking, HUD toggling,
 // word counting, click handling) into a single constant. Previously duplicated
@@ -118,9 +122,6 @@ export default function ReaderScreen() {
   const isMockMode = !!mockArticle;
   const isRestrictedMode = isHistoryMode || isSavedMode || isMockMode;
 
-  // B1 Fix: Use the shared profile from UserContext to get server-side seen article IDs.
-  // This lets the preloader call getSeenArticleIdsLocally() instead of getSeenArticleIds(),
-  // avoiding a redundant Firestore getDoc on every preload batch.
   const { profile: contextProfile } = useUser();
   const serverSeenIds = contextProfile?.seenArticleIds;
 
@@ -154,6 +155,7 @@ export default function ReaderScreen() {
   const swipeLastMoveTimeRef = useRef<number>(0);
   const SWIPE_PAUSE_THRESHOLD_MS = 200;
   const panX = useRef(0);
+  const swipeStartXRef = useRef(0);
 
   // Reset webview initial load guard whenever article changes
   useEffect(() => {
@@ -236,6 +238,13 @@ export default function ReaderScreen() {
     [behaviorTracker, scrollProgress, handleHudAutoHide, setHudVisible, hudTimeoutRef]
   );
 
+  const showSystemBars = () => {
+    StatusBar.setHidden(false);
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('visible').catch(() => {});
+    }
+  };
+
   // --- PanResponder for edge swipe zones ---
   const panResponder = useMemo(
     () =>
@@ -243,14 +252,20 @@ export default function ReaderScreen() {
         onStartShouldSetPanResponder: (evt) => {
           if (isHistoryMode) return false;
           const x = evt.nativeEvent.locationX;
+          swipeStartXRef.current = x;
           return x <= EDGE_ZONE_WIDTH || x >= SCREEN_WIDTH - EDGE_ZONE_WIDTH;
         },
         onMoveShouldSetPanResponder: (evt, gestureState) => {
           return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         },
         onPanResponderMove: (evt, gestureState) => {
+          // Track frame-to-frame delta rather than cumulative dx so that
+          // a pause (finger stationary) correctly ages the pause timer.
+          // gestureState.dx is cumulative and stays > 5 forever once crossed,
+          // which would prevent the abort check in onPanResponderRelease.
+          const delta = Math.abs(gestureState.dx - panX.current);
           panX.current = gestureState.dx;
-          if (Math.abs(gestureState.dx) > 5) {
+          if (delta > 2) {
             swipeLastMoveTimeRef.current = Date.now();
           }
         },
@@ -260,6 +275,16 @@ export default function ReaderScreen() {
 
           const timeSinceLastMove = Date.now() - swipeLastMoveTimeRef.current;
           if (timeSinceLastMove > SWIPE_PAUSE_THRESHOLD_MS) {
+            return;
+          }
+
+          // Extreme-edge swipe: show system bars so the user can use the
+          // native back gesture. Don't advance the article or fire events.
+          const inBackBand =
+            swipeStartXRef.current <= BACK_EDGE_WIDTH ||
+            swipeStartXRef.current >= SCREEN_WIDTH - BACK_EDGE_WIDTH;
+          if (inBackBand && Math.abs(dx) > SWIPE_THRESHOLD) {
+            showSystemBars();
             return;
           }
 
@@ -355,8 +380,6 @@ export default function ReaderScreen() {
 
   const rawWebpageInjectedScript = useMemo(() => {
     const frontendRules = article?.frontendRules;
-    // Combine the shared reader script with the archived-webpage-specific
-    // CSS injection and viewport meta tag setup.
     return `
       (function() {
         try {

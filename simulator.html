@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent Algorithm Simulator</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#1a1a2e;color:#e0e0e0;display:flex;height:100vh;overflow:hidden;}
+
+/* ====== LEFT PANE: App Config + Sim Size + Persona editor ====== */
+#controls{width:430px;min-width:430px;background:#16213e;overflow-y:auto;padding:14px;border-right:1px solid #0f3460;}
+#controls h2{color:#e94560;font-size:17px;margin-bottom:10px;border-bottom:1px solid #0f3460;padding-bottom:8px;}
+#controls h2.subtitle-h2{color:#4ecca3;border-bottom:1px solid #1a3a2a;margin-top:18px;}
+#controls h3{color:#4ecca3;font-size:13px;margin:12px 0 6px;}
+.section-intro{font-size:11px;color:#a0a0b0;margin-bottom:10px;line-height:1.5;}
+.param-group{background:#0f3460;border-radius:8px;padding:10px;margin-bottom:10px;}
+.param-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:4px;}
+.param-row label{font-size:12px;color:#a0a0b0;flex:1;display:flex;align-items:center;gap:4px;}
+.param-row input[type="number"]{width:62px;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:4px;padding:2px 4px;font-size:12px;}
+.param-row select{background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:4px;padding:2px 4px;font-size:12px;}
+.param-row input[type="checkbox"]{width:16px;height:16px;accent-color:#e94560;cursor:pointer;}
+.mean-stddev{display:flex;gap:4px;align-items:center;}
+.mean-stddev input{width:50px;}
+button{background:#e94560;color:white;border:none;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;width:100%;margin-top:8px;}
+button:hover{background:#c73650;}
+button.secondary{background:#0f3460;}
+button.secondary:hover{background:#1a4a7a;}
+button.small{width:auto;padding:5px 10px;font-size:11px;margin-top:0;}
+button.success{background:#4ecca3;color:#16213e;}
+button.success:hover{background:#3dbb8c;}
+
+/* ====== Persona editor ====== */
+.persona-card{background:#1a2a4a;border:1px solid #2a4a6a;border-radius:6px;padding:8px;margin-bottom:8px;}
+.persona-head{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.persona-head .pname{flex:1;font-size:13px;font-weight:bold;color:#4ecca3;}
+.persona-head .pchip{font-size:10px;background:#0f3460;color:#a0a0b0;padding:2px 6px;border-radius:8px;}
+.persona-body{display:none;margin-top:8px;}
+.persona-body.open{display:block;}
+.persona-rate-row{display:grid;grid-template-columns:90px 46px 46px;gap:4px;align-items:center;margin-bottom:3px;font-size:11px;color:#a0a0b0;}
+.persona-rate-row input{background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:3px;padding:2px;font-size:11px;width:100%;}
+
+/* ====== Sticky actions ====== */
+.sticky-actions{position:sticky;bottom:0;background:#16213e;padding:10px 0 4px;box-shadow:0 -10px 14px -6px rgba(0,0,0,0.7);z-index:10;}
+
+/* ====== RIGHT PANE ====== */
+#results{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;}
+#results h1{color:#e94560;margin-bottom:4px;font-size:22px;}
+.results-intro{color:#888;font-size:12px;margin-bottom:12px;}
+
+/* ====== Config tab strip ====== */
+#tabStrip{display:flex;align-items:center;gap:4px;border-bottom:2px solid #0f3460;padding-bottom:0;margin-bottom:14px;flex-wrap:wrap;}
+.config-tab{background:#0f3460;color:#a0a0b0;padding:8px 14px;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;border:1px solid #0f3460;border-bottom:none;}
+.config-tab.active{background:#1a4a7a;color:#fff;font-weight:bold;}
+.config-tab .tab-close{font-size:14px;color:#666;cursor:pointer;margin-left:2px;}
+.config-tab .tab-close:hover{color:#e94560;}
+.config-tab .tab-diff{font-size:9px;background:#e94560;color:#fff;padding:1px 5px;border-radius:6px;}
+.tab-add{padding:6px 10px;font-size:14px;cursor:pointer;color:#4ecca3;}
+.tab-action{margin-left:auto;display:flex;gap:6px;}
+
+/* ====== Summary cards ====== */
+.summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;}
+.summary-card{background:#16213e;border-radius:8px;padding:12px;text-align:center;}
+.summary-card .label{font-size:10px;color:#888;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:4px;}
+.summary-card .value{font-size:22px;font-weight:bold;color:#4ecca3;}
+.summary-card .delta{font-size:10px;color:#e94560;}
+
+/* ====== Persona summary strip (Mode A mini blocks) ====== */
+.persona-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;}
+.persona-pill{background:#16213e;border-radius:8px;padding:10px;border-left:3px solid #4ecca3;}
+.persona-pill .pill-name{font-size:12px;font-weight:bold;color:#4ecca3;margin-bottom:4px;}
+.persona-pill .pill-stat{font-size:11px;color:#c0c0d0;display:flex;justify-content:space-between;margin-bottom:2px;}
+
+/* ====== Persona comparison grid (Mode A) ====== */
+.mode-toggle{display:flex;gap:8px;margin-bottom:12px;align-items:center;}
+.mode-toggle button{width:auto;margin-top:0;padding:6px 14px;}
+.mode-toggle button.active{background:#4ecca3;color:#16213e;}
+.cmp-grid-wrap{background:#16213e;border-radius:8px;padding:12px;margin-bottom:14px;overflow-x:auto;}
+.cmp-grid{border-collapse:collapse;font-size:12px;width:100%;}
+.cmp-grid th,.cmp-grid td{padding:7px 10px;text-align:center;border:1px solid #0f3460;}
+.cmp-grid th{background:#0f3460;color:#4ecca3;font-weight:bold;position:sticky;top:0;}
+.cmp-grid td.row-label{background:#0f3460;color:#a0a0b0;text-align:left;font-weight:bold;position:sticky;left:0;z-index:2;}
+.cmp-cell{font-weight:bold;border-radius:3px;}
+.spark-canvas{display:block;margin:2px auto;}
+
+/* ====== Chart containers (Mode B reuses these) ====== */
+.chart-container{background:#16213e;border-radius:8px;padding:14px;margin-bottom:14px;}
+.chart-container h3{color:#4ecca3;margin-bottom:4px;font-size:14px;display:flex;align-items:center;gap:6px;}
+.chart-container .subtitle{font-size:11px;color:#888;margin-bottom:8px;}
+canvas{display:block;margin:0 auto;background:#0d1b2a;border-radius:4px;}
+.data-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;}
+.data-table th{background:#0f3460;color:#4ecca3;padding:6px;text-align:left;position:sticky;top:0;}
+.data-table td{padding:4px 6px;border-bottom:1px solid #0f3460;color:#c0c0d0;}
+.table-container{background:#16213e;border-radius:8px;padding:12px;margin-bottom:14px;max-height:300px;overflow-y:auto;}
+
+/* ====== Persona detail selector (Mode B) — sticky so it stays visible while scrolling ====== */
+.persona-selector{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center;position:sticky;top:0;background:#1a1a2e;padding:8px 0;z-index:20;border-bottom:1px solid #0f3460;}
+.persona-selector .ps-label{font-size:12px;color:#a0a0b0;margin-right:4px;}
+.persona-btn{width:auto;margin-top:0;padding:6px 14px;font-size:12px;background:#0f3460;}
+.persona-btn.active{background:#4ecca3;color:#16213e;font-weight:bold;}
+
+/* ====== "How to read this" legend (Mode A) ====== */
+.how-to-read{background:#0f3460;border-left:4px solid #4ecca3;border-radius:6px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.6;color:#c0c0d0;}
+.how-to-read b{color:#4ecca3;}
+.how-to-read .htr-title{font-weight:bold;color:#e94560;margin-bottom:6px;font-size:13px;}
+.how-to-read .htr-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;}
+.how-to-read .htr-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;margin-top:2px;}
+.how-to-read .htr-example{margin-top:8px;padding-top:8px;border-top:1px solid #1a4a7a;color:#a0a0b0;font-style:italic;}
+.metric-desc{display:block;font-size:10px;color:#888;font-weight:normal;margin-top:2px;}
+
+/* ====== Loading / progress ====== */
+#loading{display:none;text-align:center;padding:40px;}
+#loading .spinner{font-size:22px;color:#e94560;}
+#progressBar{width:100%;height:18px;background:#0d1b2a;border-radius:4px;margin-top:8px;overflow:hidden;}
+#progressFill{height:100%;background:#e94560;width:0%;transition:width 0.2s;}
+
+/* ====== Collapsible sections / groups ====== */
+.section-header{cursor:pointer;color:#4ecca3;font-size:14px;margin:10px 0 6px;padding:8px;background:#0f3460;border-radius:4px;}
+.section-header:hover{background:#1a4a7a;}
+.section-content{display:none;}
+.section-content.open{display:block;}
+.group-toggle{cursor:pointer;user-select:none;}
+.group-toggle::before{content:'▸ ';font-size:11px;}
+.group-toggle.open::before{content:'▾ ';}
+.group-content{display:none;}
+.group-content.open{display:block;}
+
+/* ====== Help / tooltip ====== */
+.help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#4ecca3;color:#1a1a2e;font-size:10px;font-weight:bold;cursor:pointer;flex-shrink:0;user-select:none;}
+.help:hover{background:#6ee8c5;}
+.help.small{width:13px;height:13px;font-size:9px;}
+#tooltip{display:none;position:fixed;background:#0f3460;border:1px solid #4ecca3;border-radius:8px;padding:14px 16px;max-width:460px;max-height:70vh;overflow-y:auto;font-size:12px;line-height:1.55;color:#e0e0e0;z-index:9999;box-shadow:0 6px 28px rgba(0,0,0,0.6);}
+#tooltip .tip-title{color:#4ecca3;font-weight:bold;margin-bottom:8px;font-size:14px;border-bottom:1px solid #1a4a7a;padding-bottom:6px;}
+#tooltip .tip-body{color:#c0c0d0;}
+#tooltip .tip-body h4{color:#4ecca3;font-size:12px;margin:10px 0 4px;}
+#tooltip .tip-body p{margin:4px 0;}
+#tooltip .tip-body ul{margin:4px 0 4px 18px;padding:0;}
+#tooltip .tip-body li{margin:2px 0;}
+#tooltip .tip-body code{background:#1a1a2e;color:#ffd24e;padding:1px 4px;border-radius:3px;font-size:11px;}
+#tooltip .tip-body .tip-formula{background:#1a1a2e;border-left:3px solid #4ecca3;padding:6px 8px;margin:6px 0;border-radius:4px;font-family:Consolas,monospace;font-size:11px;color:#ffd24e;white-space:pre-wrap;}
+#tooltip .tip-body .tip-note{color:#ff9e4e;font-size:11px;margin-top:6px;}
+#tooltip .tip-body b{color:#e0e0e0;}
+#tooltip .tip-body .tip-close{display:block;margin-top:10px;text-align:right;}
+#tooltip .tip-body .tip-close button{width:auto;padding:4px 12px;font-size:11px;margin:0;}
+
+/* ====== Compare overlay (cross-tab) ====== */
+#compareOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:5000;overflow:auto;padding:30px;}
+#compareOverlay .ov-inner{background:#1a1a2e;border-radius:10px;padding:20px;max-width:95%;margin:0 auto;}
+#compareOverlay .ov-head{display:flex;align-items:center;margin-bottom:14px;}
+#compareOverlay .ov-head h2{color:#e94560;flex:1;font-size:20px;}
+#compareOverlay .ov-close{background:#0f3460;color:#fff;border:none;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<!-- ============ LEFT PANE ============ -->
+<div id="controls">
+<h2>⚙️ App Configuration</h2>
+<p class="section-intro">The variables <b>you control</b> and ship in the app. These stay fixed while you stress-test across user personas. Set them, then Run to save as a new Config tab.</p>
+
+<div class="param-group">
+<h3>📐 Simulation Size</h3>
+<div class="param-row"><label>Number of Users <span class="help" data-title="Number of Users" data-tip="How many synthetic users per persona. More = more reliable stats but slower. Default 1000.">?</span></label><input type="number" id="numUsers" value="1000" min="10" max="10000"></div>
+<div class="param-row"><label>Simulation Days <span class="help" data-title="Simulation Days" data-tip="Days to simulate per persona. Each day: every user gets feeds, generates behaviour, weights decay. Default 14.">?</span></label><input type="number" id="numDays" value="14" min="1" max="90"></div>
+<div class="param-row"><label>Feeds Per Day <span class="help" data-title="Feeds Per Day" data-tip="Feed requests per user per day (app opens / pull-to-refresh). Default 2.">?</span></label><input type="number" id="feedsPerDay" value="2" min="1" max="10"></div>
+<div class="param-row"><label>Articles Per Feed <span class="help" data-title="Articles Per Feed" data-tip="Max articles returned per feed. Real app MAX_FEED_ARTICLES = 30.">?</span></label><input type="number" id="articlesPerFeed" value="30" min="5" max="50"></div>
+<div class="param-row"><label>Article Pool Size <span class="help" data-title="Article Pool Size" data-tip="Total articles in the simulated pool, distributed across 42 publishers. Default 500.">?</span></label><input type="number" id="numArticles" value="500" min="50" max="2000"></div>
+<div class="param-row"><label>New Articles Per Day <span class="help" data-title="New Articles Per Day" data-tip="Fresh articles added to the pool daily (simulates RSS ingestion). Default 20.">?</span></label><input type="number" id="newArticlesPerDay" value="20" min="0" max="100"></div>
+<div class="param-row"><label>Article Age Range (days) <span class="help" data-title="Article Age Range" data-tip="Max age of articles in the initial pool. Affects recency scores. Default 60.">?</span></label><input type="number" id="articleAgeRange" value="60" min="7" max="365"></div>
+<div class="param-row"><label>⚡ Fast Mode <span class="help" data-title="Fast Mode" data-tip="When ON, caps each persona run to 200 users × 7 days for quick multi-persona iteration. Uncheck for full-fidelity runs. Default ON.">?</span></label><input type="checkbox" id="fastMode" checked></div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Score Weights (Final Score)</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Auto-normalised to sum to 1.0. Source: constants.ts SCORE_WEIGHTS.</p>
+<div class="param-row"><label>P — Personalization <span class="help" data-title="P Weight" data-tip="Weight of personalization in the final score. How much the user's learned category/publisher preferences matter. Real app (constants.ts): 0.60.">?</span></label><input type="number" id="swP" value="0.60" step="0.01" min="0" max="1"></div>
+<div class="param-row"><label>T — Trending <span class="help" data-title="T Weight" data-tip="Weight of trending (crowd engagement) in the final score. Real app: 0.15.">?</span></label><input type="number" id="swT" value="0.15" step="0.01" min="0" max="1"></div>
+<div class="param-row"><label>R — Recency <span class="help" data-title="R Weight" data-tip="Weight of recency (freshness) in the final score. Real app: 0.10.">?</span></label><input type="number" id="swR" value="0.10" step="0.01" min="0" max="1"></div>
+<div class="param-row"><label>Q — Quality <span class="help" data-title="Q Weight" data-tip="Weight of crowd-sourced publisher quality in the final score. Real app: 0.15.">?</span></label><input type="number" id="swQ" value="0.15" step="0.01" min="0" max="1"></div>
+</div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Tail Tranche Weights</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Auto-normalised to sum to 1.0. Source: constants.ts SCORE_WEIGHTS_TAIL.</p>
+<div class="param-row"><label>Tail T — Trending <span class="help" data-title="Tail T Weight" data-tip="Weight of trending in the tail tranche score. Real app: 0.43.">?</span></label><input type="number" id="swtT" value="0.43" step="0.01" min="0" max="1"></div>
+<div class="param-row"><label>Tail R — Recency <span class="help" data-title="Tail R Weight" data-tip="Weight of recency in the tail tranche score. Real app: 0.57.">?</span></label><input type="number" id="swtR" value="0.57" step="0.01" min="0" max="1"></div>
+</div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Feedback Deltas</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Weight change multipliers. Source: constants.ts FEEDBACK_DELTAS.</p>
+<div class="param-row"><label>Save <span class="help" data-help="fdSave" title="What is the Save weight delta?">?</span></label><input type="number" id="fdSave" value="0.55" step="0.05" min="-1" max="1"></div>
+<div class="param-row"><label>Unsave <span class="help" data-help="fdUnsave" title="What is the Unsave weight delta?">?</span></label><input type="number" id="fdUnsave" value="-0.55" step="0.05" min="-1" max="1"></div>
+<div class="param-row"><label>Like <span class="help" data-help="fdLike" title="What is the Like weight delta?">?</span></label><input type="number" id="fdLike" value="0.40" step="0.05" min="-1" max="1"></div>
+<div class="param-row"><label>Unlike <span class="help" data-help="fdUnlike" title="What is the Unlike weight delta?">?</span></label><input type="number" id="fdUnlike" value="-0.40" step="0.05" min="-1" max="1"></div>
+<div class="param-row"><label>Read Thorough <span class="help" data-help="fdRT" title="What is the Read Thorough weight delta?">?</span></label><input type="number" id="fdRT" value="0.30" step="0.05" min="-1" max="1"></div>
+<div class="param-row"><label>Read Skim <span class="help" data-help="fdRS" title="What is the Read Skim weight delta?">?</span></label><input type="number" id="fdRS" value="0.10" step="0.05" min="-1" max="1"></div>
+<div class="param-row"><label>Swipe Not Interested <span class="help" data-help="fdSNI" title="What is the Not Interested weight delta?">?</span></label><input type="number" id="fdSNI" value="-0.40" step="0.05" min="-1" max="1"></div>
+</div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Learning Rates</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Source: constants.ts LEARNING_RATE + weightUpdater.ts multipliers.</p>
+<div class="param-row"><label>Base Learning Rate <span class="help" data-title="Base Learning Rate" data-tip="Base rate at which feedback deltas are applied to weights. Real app (constants.ts LEARNING_RATE): 0.08.">?</span></label><input type="number" id="lrBase" value="0.08" step="0.01" min="0" max="1"></div>
+<div class="param-row"><label>Category Multiplier <span class="help" data-title="Category Multiplier" data-tip="Multiplier applied to base rate for category weight learning. Real app: 1.0× (effective 0.08).">?</span></label><input type="number" id="lrCat" value="1.0" step="0.1" min="0" max="5"></div>
+<div class="param-row"><label>Length Multiplier <span class="help" data-title="Length Multiplier" data-tip="Multiplier for category+length weight learning. Real app: 1.5× (effective 0.12).">?</span></label><input type="number" id="lrLen" value="1.5" step="0.1" min="0" max="5"></div>
+<div class="param-row"><label>Publisher Multiplier <span class="help" data-title="Publisher Multiplier" data-tip="Multiplier for publisher weight learning. Real app: 2.0× (effective 0.16).">?</span></label><input type="number" id="lrPub" value="2.0" step="0.1" min="0" max="5"></div>
+</div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Weight Bounds & Decay</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Source: constants.ts MIN/MAX_CATEGORY_WEIGHT, DAILY_DECAY_RATE.</p>
+<div class="param-row"><label>Min Weight <span class="help" data-title="Min Weight" data-tip="Minimum value for any category/publisher weight. Real app (MIN_CATEGORY_WEIGHT): 0.1.">?</span></label><input type="number" id="minW" value="0.1" step="0.05" min="0" max="1"></div>
+<div class="param-row"><label>Max Weight <span class="help" data-title="Max Weight" data-tip="Maximum value for any weight. Real app (MAX_CATEGORY_WEIGHT): 5.0.">?</span></label><input type="number" id="maxW" value="5.0" step="0.5" min="1" max="10"></div>
+<div class="param-row"><label>Daily Decay Rate <span class="help" data-title="Daily Decay Rate" data-tip="Rate at which weights decay towards 1.0 each day. newWeight = 1 + (weight − 1) × rate. Real app (DAILY_DECAY_RATE): 0.995.">?</span></label><input type="number" id="decayRate" value="0.995" step="0.001" min="0.9" max="1"></div>
+</div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Trending Configuration</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Source: constants.ts + syncBehaviorEvents.ts getTrendingIncrement().</p>
+<div class="param-row"><label>Max Trending Score <span class="help" data-title="Max Trending Score" data-tip="Trending score at which T normalizes to 1.0. Real app (MAX_TRENDING_SCORE): 50.">?</span></label><input type="number" id="maxTS" value="50" step="5" min="1" max="200"></div>
+<div class="param-row"><label>Trending Decay Rate <span class="help" data-title="Trending Decay Rate" data-tip="Daily multiplier for trending scores. 0.9057 = halves every 7 days. Real app (TRENDING_DECAY_RATE): 0.9057.">?</span></label><input type="number" id="tDecay" value="0.9057" step="0.001" min="0.5" max="1"></div>
+<div class="param-row"><label>Save Increment <span class="help" data-help="tiSave" title="What is the Save trending increment?">?</span></label><input type="number" id="tiSave" value="3" step="0.5" min="-10" max="10"></div>
+<div class="param-row"><label>Like Increment <span class="help" data-help="tiLike" title="What is the Like trending increment?">?</span></label><input type="number" id="tiLike" value="2" step="0.5" min="-10" max="10"></div>
+<div class="param-row"><label>Read Thorough Inc <span class="help" data-help="tiRT" title="What is the Read Thorough trending increment?">?</span></label><input type="number" id="tiRT" value="1.5" step="0.1" min="-10" max="10"></div>
+<div class="param-row"><label>Read Skim Inc <span class="help" data-help="tiRS" title="What is the Read Skim trending increment?">?</span></label><input type="number" id="tiRS" value="0.5" step="0.1" min="-10" max="10"></div>
+<div class="param-row"><label>Read Shallow Inc <span class="help" data-help="tiRSh" title="What is the Read Shallow trending increment?">?</span></label><input type="number" id="tiRSh" value="0.2" step="0.1" min="-10" max="10"></div>
+</div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Quality Configuration</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Source: syncBehaviorEvents.ts getPublisherQualityIncrement().</p>
+<div class="param-row"><label>Save Increment <span class="help" data-help="qiSave" title="What is the Save quality increment?">?</span></label><input type="number" id="qiSave" value="0.010" step="0.001" min="-0.1" max="0.1"></div>
+<div class="param-row"><label>Like Increment <span class="help" data-help="qiLike" title="What is the Like quality increment?">?</span></label><input type="number" id="qiLike" value="0.005" step="0.001" min="-0.1" max="0.1"></div>
+<div class="param-row"><label>Read Thorough Inc <span class="help" data-help="qiRT" title="What is the Read Thorough quality increment?">?</span></label><input type="number" id="qiRT" value="0.005" step="0.001" min="-0.1" max="0.1"></div>
+<div class="param-row"><label>Read Skim Inc <span class="help" data-help="qiRS" title="What is the Read Skim quality increment?">?</span></label><input type="number" id="qiRS" value="0.001" step="0.001" min="-0.1" max="0.1"></div>
+<div class="param-row"><label>Swipe Not Interested <span class="help" data-help="qiSNI" title="What is the Not Interested quality increment?">?</span></label><input type="number" id="qiSNI" value="-0.010" step="0.001" min="-0.1" max="0.1"></div>
+<div class="param-row"><label>Quick Exit <span class="help" data-help="qiQE" title="What is the Quick Exit quality increment?">?</span></label><input type="number" id="qiQE" value="-0.005" step="0.001" min="-0.1" max="0.1"></div>
+</div>
+</div>
+
+<div class="param-group">
+<h3 class="group-toggle" onclick="toggleGroup(this)">Tranche Assembly</h3>
+<div class="group-content">
+<p style="font-size:10px;color:#888;margin-bottom:8px">Source: getRankedFeed.ts assembleFeedWithTranches().</p>
+<div class="param-row"><label>High Threshold <span class="help" data-title="High Tranche Threshold" data-tip="Final score above which an article enters the high tranche. Real app: 0.40.">?</span></label><input type="number" id="trHigh" value="0.40" step="0.01" min="0" max="1"></div>
+<div class="param-row"><label>Mid Threshold <span class="help" data-title="Mid Tranche Threshold" data-tip="Final score above which an article enters the mid tranche. Real app: 0.20.">?</span></label><input type="number" id="trMid" value="0.20" step="0.01" min="0" max="1"></div>
+<div class="param-row"><label>High Tranche Size <span class="help" data-title="High Tranche Size" data-tip="Target number of high-tranche articles per feed. Shortfall cascades to mid. Real app: 12.">?</span></label><input type="number" id="trHighSize" value="12" step="1" min="0" max="30"></div>
+<div class="param-row"><label>Mid Tranche Size <span class="help" data-title="Mid Tranche Size" data-tip="Target number of mid-tranche articles per feed. Real app: 8.">?</span></label><input type="number" id="trMidSize" value="8" step="1" min="0" max="30"></div>
+<div class="param-row"><label>Tail Tranche Size <span class="help" data-title="Tail Tranche Size" data-tip="Target number of tail-tranche articles per feed. Real app: 10.">?</span></label><input type="number" id="trTailSize" value="10" step="1" min="0" max="30"></div>
+<div class="param-row"><label>Publisher Cap <span class="help" data-title="Publisher Cap" data-tip="Maximum articles from one publisher per feed. Real app (PUB_CAP): 5.">?</span></label><input type="number" id="pubCap" value="5" step="1" min="1" max="30"></div>
+<div class="param-row"><label>New User Threshold <span class="help" data-title="New User Threshold" data-tip="Articles read below which the tail tranche is shuffled (random) instead of sorted. Real app: 30.">?</span></label><input type="number" id="newUserThresh" value="30" step="5" min="0" max="200"></div>
+</div>
+</div>
+
+<h2 class="subtitle-h2">👤 User Personas</h2>
+<p class="section-intro">The variables <b>you assume about users</b>. Each persona packages a complete behaviour profile (8 rates + reading/prefs/consistency). A run tests your current App Configuration against every enabled persona simultaneously. Click a persona to edit; add/remove/rename freely.</p>
+<div id="personaEditor"></div>
+<div style="margin-top:6px"><button class="small secondary" onclick="addPersona()">+ Add Persona</button></div>
+
+<div class="sticky-actions">
+<button class="success" onclick="runComparison()">▶ Run &amp; Save as Config Tab</button>
+</div>
+</div>
+
+<!-- ============ RIGHT PANE ============ -->
+<div id="results">
+<h1>Tangent Algorithm Simulator</h1>
+<p class="results-intro">Set your App Configuration (left), pick personas, then Run. Each run is saved as a tab — flip tabs or use Compare to see how app settings hold up across user types.</p>
+
+<div id="tabStrip">
+  <span style="color:#888;font-size:12px;padding:8px 4px">No configs yet — run a simulation to create your first tab.</span>
+  <div class="tab-action" style="display:none" id="tabAction">
+    <button class="small secondary" onclick="openCompare()">⇄ Compare All Tabs</button>
+  </div>
+</div>
+
+<div id="loading">
+<div class="spinner">⏳ Running simulation...</div>
+<p id="loadingStatus" style="color:#888;margin-top:8px"></p>
+<div id="progressBar"><div id="progressFill"></div></div>
+</div>
+
+<div id="resultsContent" style="display:none"></div>
+</div>
+
+<div id="tooltip"><div class="tip-title"></div><div class="tip-body"></div></div>
+<div id="compareOverlay"></div>
+
+<script>
+const CATEGORIES=['Politics','Business','Finance','Technology','Science','History','Culture','Lifestyle','Entertainment'];
+const PUBLISHERS=[{name:'Slow Boring',category:'Politics'},{name:'Tangle',category:'Politics'},{name:'The Bulwark',category:'Politics'},{name:'Andrew Sullivan',category:'Politics'},{name:'Heather Cox Richardson',category:'Politics'},{name:'Noahpinion',category:'Politics'},{name:'The Liberal Patriot',category:'Politics'},{name:'Reason',category:'Politics'},{name:'The Diff',category:'Business'},{name:'The Generalist',category:'Business'},{name:'Doomberg',category:'Business'},{name:"Kyla's Newsletter",category:'Business'},{name:'Econlib',category:'Business'},{name:'Net Interest',category:'Finance'},{name:'The Bear Cave',category:'Finance'},{name:'Calculated Risk',category:'Finance'},{name:'Numlock News',category:'Finance'},{name:'Platformer',category:'Technology'},{name:'Stratechery',category:'Technology'},{name:'The Pragmatic Engineer',category:'Technology'},{name:"Lenny's Newsletter",category:'Technology'},{name:'The Algorithmic Bridge',category:'Technology'},{name:'AI Supremacy',category:'Technology'},{name:'MIT Technology Review',category:'Technology'},{name:'Dan Luu',category:'Technology'},{name:'Astral Codex Ten',category:'Science'},{name:'Your Local Epidemiologist',category:'Science'},{name:'Dynomight',category:'Science'},{name:'Experimental History',category:'Science'},{name:'Statistical Modeling',category:'Science'},{name:'Unsettled Science',category:'Science'},{name:'ACOUP',category:'History'},{name:'UnHerd',category:'History'},{name:'The Honest Broker',category:'Culture'},{name:'Culture Study',category:'Culture'},{name:'Freddie deBoer',category:'Culture'},{name:'Why Is This Interesting?',category:'Culture'},{name:'Literary Hub',category:'Culture'},{name:'Art of Manliness',category:'Lifestyle'},{name:'The Prepared',category:'Lifestyle'},{name:'Outside Online',category:'Lifestyle'},{name:'The Ankler',category:'Entertainment'}];
+
+// ====== Engine primitives (UNCHANGED — verbatim from audited version) ======
+function nP(cw,pw,minW,maxW){const R=maxW-minW;return Math.max(0,Math.min(1,(cw-minW)/R))*0.6+Math.max(0,Math.min(1,(pw-minW)/R))*0.4;}
+function nT(ts,maxTS){return Math.min(ts,maxTS)/maxTS;}
+function nR(d){if(d<=0)return 1;if(d<=7)return 1-(d/7)*0.2;return 0.8*Math.pow(7/d,1.5);}
+function nQ(q){return Math.max(0,Math.min(1,(q-0.2)/0.8));}
+function domC(P,T,R,Q,sw){const c=[['P',sw.P*P],['T',sw.T*T],['R',sw.R*R],['Q',sw.Q*Q]];return c.reduce((a,b)=>b[1]>a[1]?b:a)[0];}
+function decayW(w,rate,minW,maxW){return Math.max(minW,Math.min(maxW,1+(w-1)*rate));}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}}
+function gauss(m,s){const u1=Math.random(),u2=Math.random();return m+Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2)*s;}
+function clamp(v,mn,mx){return Math.max(mn,Math.min(mx,v));}
+
+let articleIdCounter=0;
+function makeArticle(idx,config){const p=PUBLISHERS[idx%PUBLISHERS.length];const wc=Math.max(150,Math.round(gauss(800,400)));
+return{id:`article_${articleIdCounter++}`,publicationName:p.name,category:p.category,publishDate:Date.now()-Math.random()*config.articleAgeRange*86400000,wordCount:wc,lengthStyle:wc<500?'short':wc<1500?'medium':'long',estimatedReadMinutes:Math.max(1,Math.ceil(wc/250)),trendingScore:0,peakTrendingScore:0,timesShown:0,scoreSum:0};}
+function genArticles(c){articleIdCounter=0;const a=[];for(let i=0;i<c.numArticles;i++)a.push(makeArticle(i,c));return a;}
+
+function genUsers(c){const u=[];
+for(let i=0;i<c.numUsers;i++){
+const prefs={};const ns=Math.max(0,Math.round(gauss(c.prefs.nsMean,c.prefs.nsStd)));
+const sc=[...CATEGORIES].sort(()=>Math.random()-0.5).slice(0,ns);
+for(const cat of CATEGORIES)prefs[cat]=sc.includes(cat)?clamp(gauss(0.8,0.15),0,1):clamp(gauss(c.prefs.cpMean,c.prefs.cpStd),0,1);
+const rates={};for(const[k,v]of Object.entries(c.behaviour))rates[k]=clamp(gauss(v.mean,v.stddev),0,1);
+const cw={},clw={},pw={};
+for(const cat of CATEGORIES)cw[cat]=1;for(const p of PUBLISHERS)pw[p.name]=1;
+u.push({id:`user_${i}`,prefs,rates,consist:clamp(gauss(c.consist.mean,c.consist.stddev),0,1),prefInf:clamp(gauss(c.prefs.infMean,c.prefs.infStd),0,1),cw,clw,pw,seen:new Set(),read:0,wpm:Math.max(100,Math.round(gauss(c.reading.wpmMean,c.reading.wpmStd))),savedArticles:new Set(),likedArticles:new Set(),pSum:0,shownCount:0,weightHistory:[]});
+}
+return u;}
+function dailyRates(u){const r={};for(const[k,m]of Object.entries(u.rates)){r[k]=clamp(m*(1+(1-u.consist)*gauss(0,0.3)),0,1);}return r;}
+
+function behavior(u,a,dr){
+const cm=u.prefs[a.category]||0.3,p=u.prefInf;const w={};
+for(const b of['read_thorough','read_skim','read_shallow','save','like']){const bk=b==='read_thorough'?'readThorough':b==='read_skim'?'readSkim':b==='read_shallow'?'readShallow':b==='save'?'save':'like';w[b]=(dr[bk]||0)*(1-p+p*cm);}
+for(const b of['quick_exit','swipe_not_interested']){const bk=b==='quick_exit'?'quickExit':'swipeNotInterested';w[b]=(dr[bk]||0)*(1-p+p*(1-cm));}
+w.swipe_next=dr.swipeNext||0.15;
+const t=Object.values(w).reduce((a,b)=>a+b,0);if(t===0)return'swipe_next';
+const r=Math.random();let c=0;for(const[b,v]of Object.entries(w)){c+=v/t;if(r<=c)return b;}return'swipe_next';}
+
+function engMetrics(b,a,wpm){
+if(b==='read_thorough'){const t=a.wordCount/wpm*60;return{dt:Math.round(t*0.7+t*0.3*Math.random()),sd:Math.round(70+30*Math.random()),wpm};}
+if(b==='read_skim'){const t=a.wordCount/(wpm*1.8)*60;return{dt:Math.round(t*0.5+t*0.5*Math.random()),sd:Math.round(70+30*Math.random()),wpm:Math.round(wpm*1.5)};}
+if(b==='read_shallow'){return{dt:Math.round(5+10*Math.random()),sd:Math.round(40+29*Math.random()),wpm:''};}
+if(b==='quick_exit'){return{dt:Math.round(1+13*Math.random()),sd:Math.round(Math.random()*20),wpm:''};}
+if(b==='save'){return{dt:Math.round(10+20*Math.random()),sd:Math.round(50+50*Math.random()),wpm:''};}
+if(b==='like'){return{dt:Math.round(3+7*Math.random()),sd:Math.round(40+50*Math.random()),wpm:''};}
+if(b==='swipe_next'){return{dt:Math.round(1+2*Math.random()),sd:Math.round(Math.random()*40),wpm:''};}
+if(b==='swipe_not_interested'){return{dt:Math.round(1+2*Math.random()),sd:Math.round(Math.random()*40),wpm:''};}
+return{dt:'',sd:'',wpm:''};}
+
+function scoreFeed(u,arts,c,pubQual){
+const now=Date.now();const hi=[],mi=[],ta=[],all=[];
+for(let i=0;i<arts.length;i++){const a=arts[i];if(u.seen.has(a.id))continue;
+const d=Math.max(0,(now-a.publishDate)/86400000);const ck=a.category+'::'+a.lengthStyle;
+const cw=u.clw[ck]??u.cw[a.category]??1,pw=u.pw[a.publicationName]??1;
+const P=nP(cw,pw,c.minW,c.maxW),T=nT(a.trendingScore||0,c.maxTS),R=nR(d),Q=nQ(pubQual[a.publicationName]??0.8);
+const fs=c.sw.P*P+c.sw.T*T+c.sw.R*R+c.sw.Q*Q;const ts=c.swt.T*T+c.swt.R*R;
+const item={article:a,fs,ts,P,T,R,Q};all.push(item);
+if(fs>c.tranche.highThresh)hi.push(item);else if(fs>c.tranche.midThresh)mi.push(item);else ta.push(item);}
+shuffle(hi);shuffle(mi);
+if(u.read<c.tranche.newUserThresh){shuffle(ta);}else{ta.sort((a,b)=>b.ts-a.ts);}
+const pc={},feed=[];const pubCap=c.tranche.pubCap;
+function pick(b,t){let picked=0;for(let i=0;i<b.length;i++){if(picked>=t||feed.length>=c.articlesPerFeed)break;const p=b[i].article.publicationName;if((pc[p]||0)>=pubCap)continue;pc[p]=(pc[p]||0)+1;feed.push(b[i]);picked++;}return picked;}
+let targetHigh=c.tranche.highSize,targetMid=c.tranche.midSize,targetTail=c.tranche.tailSize;
+const pickedHigh=pick(hi,targetHigh);if(pickedHigh<targetHigh)targetMid+=(targetHigh-pickedHigh);
+const pickedMid=pick(mi,targetMid);if(pickedMid<targetMid)targetTail+=(targetMid-pickedMid);
+pick(ta,targetTail);if(feed.length<c.articlesPerFeed){const used=new Set(feed.map(f=>f.article.id));const rem=all.filter(s=>!used.has(s.article.id)).sort((a,b)=>b.ts-a.ts);pick(rem,c.articlesPerFeed);}
+shuffle(feed);return { feed, scored: all };}
+
+function updateW(u,evts,c){
+const uw={...u.cw},ulw={...u.clw},upw={...u.pw};
+for(const e of evts){const d=c.fd[e.b]||0;if(d===0)continue;
+const cat=e.cat;if(!uw[cat])uw[cat]=1;uw[cat]+=d*c.lr.category;
+if(e.ls){const ck=`${cat}::${e.ls}`;if(!ulw[ck])ulw[ck]=1;ulw[ck]+=d*c.lr.length;}
+if(e.pub){if(!upw[e.pub])upw[e.pub]=1;upw[e.pub]+=d*c.lr.publisher;}}
+for(const k of Object.keys(uw))uw[k]=clamp(uw[k],c.minW,c.maxW);
+for(const k of Object.keys(ulw))ulw[k]=clamp(ulw[k],c.minW,c.maxW);
+for(const k of Object.keys(upw))upw[k]=clamp(upw[k],c.minW,c.maxW);
+u.cw=uw;u.clw=ulw;u.pw=upw;}
+
+// ====== Tooltip + collapsible helpers ======
+const tooltipEl=document.getElementById('tooltip');
+function positionTooltip(helpEl){
+  const rect=helpEl.getBoundingClientRect();
+  let left=rect.right+8,top=rect.top-10;
+  if(left+470>window.innerWidth)left=rect.left-478;
+  if(left<0)left=8;
+  if(top+300>window.innerHeight)top=window.innerHeight-310;
+  if(top<0)top=8;
+  tooltipEl.style.left=left+'px';tooltipEl.style.top=top+'px';
+}
+function showHelp(key,anchor){
+  const entry=HELP[key];
+  if(!entry){return;}
+  // Entries are plain HTML strings; support legacy {title,body} objects too.
+  const isObj=typeof entry==='object'&&entry!==null;
+  const title=isObj?(entry.title||'Help'):'Help';
+  const body=isObj?(entry.body||''):entry;
+  tooltipEl.querySelector('.tip-title').innerHTML=title;
+  tooltipEl.querySelector('.tip-body').innerHTML=body+'<div class="tip-close"><button class="small secondary" onclick="document.getElementById(\'tooltip\').style.display=\'none\'">Close</button></div>';
+  tooltipEl.style.display='block';
+  positionTooltip(anchor||tooltipEl);
+}
+document.addEventListener('click',function(e){
+  const helpEl=e.target.closest('.help');
+  if(helpEl){
+    e.stopPropagation();
+    const key=helpEl.getAttribute('data-help');
+    if(key&&HELP[key]){showHelp(key,helpEl);return;}
+    const title=helpEl.getAttribute('data-title')||'';
+    const tip=helpEl.getAttribute('data-tip')||'';
+    tooltipEl.querySelector('.tip-title').textContent=title;
+    tooltipEl.querySelector('.tip-body').textContent=tip;
+    tooltipEl.style.display='block';
+    positionTooltip(helpEl);
+    return;
+  }
+  if(!e.target.closest('#tooltip')&&!e.target.closest('#compareOverlay')){tooltipEl.style.display='none';}
+});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){tooltipEl.style.display='none';closeCompare();}});
+function toggleGroup(el){el.classList.toggle('open');const content=el.nextElementSibling;content.classList.toggle('open');}
+function toggleSection(id){const el=document.getElementById(id);el.classList.toggle('open');const h=el.previousElementSibling;h.textContent=h.textContent.includes('▸')?h.textContent.replace('▸','▾'):h.textContent.replace('▾','▸');}
+
+// ====== HELP dictionary (rich HTML content for every ? button) ======
+// Each entry: {title, body}. body may contain <h4>, <p>, <ul>, <li>, <code>, <div class="tip-formula">.
+const HELP={
+// ---- Persona behaviour rates ----
+readThorough:`<h4>What it is</h4><p>The probability that, when this user engages with an article, they <b>read it thoroughly</b> — the full article at their normal reading speed.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = wordCount / wpm × 60 seconds\nscrollDepth = 70–100%</div><p>This is the <b>strongest positive signal</b> in the system.</p><h4>What it affects</h4><ul><li><b>Counts as a "read"</b> (scrollDepth ≥ 70% & dwell > 10s) → increments the user's read count, which feeds the new-user tail-shuffle threshold.</li><li><b>Weight delta</b> (Feedback Deltas → Read Thorough): default +0.30 on category/publisher weights.</li><li><b>Trending increment</b> (Trending → Read Thorough Inc): default +1.5.</li><li><b>Quality increment</b> (Quality → Read Thorough Inc): default +0.005.</li></ul><p class="tip-note">Higher values = a user who reads deeply and rewards the algorithm with strong learning signals.</p>`,
+readSkim:`<h4>What it is</h4><p>The probability that, when this user engages with an article, they <b>skim it</b> — read it faster than normal, at roughly 1.8× their WPM.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = wordCount / (wpm × 1.8) × 60 seconds\nscrollDepth = 70–100%</div><p>Skimming is faster than thorough reading but still reaches the full scroll depth.</p><h4>What it affects</h4><ul><li><b>Counts as a "read"</b> (scrollDepth ≥ 70% & dwell > 10s) → increments the user's read count.</li><li><b>Weight delta</b> (Feedback Deltas → Read Skim): default +0.10.</li><li><b>Trending increment</b> (Trending → Read Skim Inc): default +0.5.</li><li><b>Quality increment</b> (Quality → Read Skim Inc): default +0.001.</li></ul><p class="tip-note">A positive signal, but weaker than Read Thorough — it rewards the article less.</p>`,
+readShallow:`<h4>What it is</h4><p>The probability that, when this user engages with an article, they only <b>read it shallowly</b> — a quick glance, not a full read.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = 5–15 seconds\nscrollDepth = 40–69%</div><p>This is the key distinction: shallow reads <b>do NOT reach the 70% scroll-depth gate</b>, so they are <b>not counted as a "read"</b>.</p><h4>What it affects</h4><ul><li><b>Does NOT count as a "read"</b> — it does not increment the user's read count, so it does not help escape the new-user tail-shuffle.</li><li><b>No weight delta</b> (read_shallow = 0 in Feedback Deltas).</li><li><b>Trending increment</b> (Trending → Read Shallow Inc): default +0.2 — a small positive.</li><li><b>No quality increment</b> (read_shallow = 0 in Quality).</li></ul><p class="tip-note">A weak, mostly-neutral signal. Users with high shallow-read rates engage but give the algorithm little to learn from.</p>`,
+quickExit:`<h4>What it is</h4><p>The probability that, when this user engages with an article, they <b>exit quickly</b> — open it and leave almost immediately.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = 1–14 seconds\nscrollDepth = 0–20%</div><h4>What it affects</h4><ul><li><b>No weight delta</b> (quick_exit = 0 in Feedback Deltas).</li><li><b>No trending increment</b> (quick_exit = 0).</li><li><b>Quality decrement</b> (Quality → Quick Exit): default −0.005 — lowers the publisher's quality score.</li></ul><p class="tip-note">A negative signal: it drags down publisher quality without rewarding the article. High quick-exit users (e.g. Restless Quick-Exitter) punish publishers.</p>`,
+swipeNext:`<h4>What it is</h4><p>The probability that, when this user sees an article in their feed, they <b>swipe past it</b> without opening it.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = 1–3 seconds\nscrollDepth = 0–40%</div><h4>What it affects</h4><ul><li><b>No weight delta</b> (swipe_next = 0).</li><li><b>No trending increment</b> (swipe_next = 0).</li><li><b>No quality change</b> (swipe_next = 0).</li></ul><p class="tip-note">A neutral "skip" — the user saw the article but gave no feedback. It still counts toward the article's times-shown, which dilutes its average score.</p>`,
+swipeNotInterested:`<h4>What it is</h4><p>The probability that, when this user sees an article, they <b>swipe it away as "not interested"</b> — an explicit negative signal.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = 1–3 seconds\nscrollDepth = 0–40%</div><h4>What it affects</h4><ul><li><b>Weight delta</b> (Feedback Deltas → Swipe Not Interested): default −0.40 on category/publisher weights.</li><li><b>No trending increment</b> (swipe_not_interested = 0).</li><li><b>Quality decrement</b> (Quality → Swipe Not Interested): default −0.010.</li></ul><p class="tip-note">A strong negative signal. High not-interested users (e.g. Hostile / Critical) actively push categories and publishers down.</p>`,
+save:`<h4>What it is</h4><p>The probability that, when this user engages with an article, they <b>save it</b> for later reading.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = 10–30 seconds\nscrollDepth = 50–100%</div><h4>What it affects</h4><ul><li><b>Weight delta</b> (Feedback Deltas → Save): default +0.55 — the strongest positive weight signal.</li><li><b>Trending increment</b> (Trending → Save Increment): default +3.</li><li><b>Quality increment</b> (Quality → Save Increment): default +0.010.</li></ul><p class="tip-note">The strongest positive signal in the system. Saves strongly reward the category, publisher, and article's trending score.</p>`,
+like:`<h4>What it is</h4><p>The probability that, when this user engages with an article, they <b>like it</b>.</p><h4>How it's calculated</h4><div class="tip-formula">dwell = 3–10 seconds\nscrollDepth = 40–90%</div><h4>What it affects</h4><ul><li><b>Weight delta</b> (Feedback Deltas → Like): default +0.40.</li><li><b>Trending increment</b> (Trending → Like Increment): default +2.</li><li><b>Quality increment</b> (Quality → Like Increment): default +0.005.</li></ul><p class="tip-note">A strong positive signal, slightly weaker than Save.</p>`,
+// ---- App config: Feedback Deltas (weight changes) ----
+fdSave:`<h4>What it is</h4><p>The <b>weight change</b> applied to a user's category and publisher weights when they <b>save</b> an article.</p><h4>How it's calculated</h4><div class="tip-formula">categoryWeight += fd.save × lr.category\npublisherWeight += fd.save × lr.publisher</div><p>Applied in <code>updateW()</code> for every save event. The change is clamped to [minW, maxW].</p><p class="tip-note">Default +0.55 — the strongest positive weight signal in the system.</p>`,
+fdUnsave:`<h4>What it is</h4><p>The <b>weight change</b> applied when a user <b>unsaves</b> an article they had previously saved.</p><h4>How it's calculated</h4><div class="tip-formula">categoryWeight += fd.unsave × lr.category\npublisherWeight += fd.unsave × lr.publisher</div><p>Negative, so it pulls weights back down toward neutral. Clamped to [minW, maxW].</p><p class="tip-note">Default −0.55 (mirror of save).</p>`,
+fdLike:`<h4>What it is</h4><p>The <b>weight change</b> applied when a user <b>likes</b> an article.</p><h4>How it's calculated</h4><div class="tip-formula">categoryWeight += fd.like × lr.category\npublisherWeight += fd.like × lr.publisher</div><p>Clamped to [minW, maxW].</p><p class="tip-note">Default +0.40 — a strong positive signal, slightly weaker than save.</p>`,
+fdUnlike:`<h4>What it is</h4><p>The <b>weight change</b> applied when a user <b>unlikes</b> an article they had previously liked.</p><h4>How it's calculated</h4><div class="tip-formula">categoryWeight += fd.unlike × lr.category\npublisherWeight += fd.unlike × lr.publisher</div><p>Negative, pulling weights back down. Clamped to [minW, maxW].</p><p class="tip-note">Default −0.40 (mirror of like).</p>`,
+fdRT:`<h4>What it is</h4><p>The <b>weight change</b> applied when a user <b>reads an article thoroughly</b>.</p><h4>How it's calculated</h4><div class="tip-formula">categoryWeight += fd.read_thorough × lr.category\npublisherWeight += fd.read_thorough × lr.publisher</div><p>Thorough reads also increment the user's read count (scrollDepth ≥ 70% & dwell > 10s), which feeds the new-user tail-shuffle threshold. Clamped to [minW, maxW].</p><p class="tip-note">Default +0.30.</p>`,
+fdRS:`<h4>What it is</h4><p>The <b>weight change</b> applied when a user <b>skims</b> an article (reads at 1.8× WPM).</p><h4>How it's calculated</h4><div class="tip-formula">categoryWeight += fd.read_skim × lr.category\npublisherWeight += fd.read_skim × lr.publisher</div><p>Skims still count as a "read" (scrollDepth ≥ 70%), so they also feed the new-user tail-shuffle threshold. Clamped to [minW, maxW].</p><p class="tip-note">Default +0.10 — weaker than a thorough read.</p>`,
+fdSNI:`<h4>What it is</h4><p>The <b>weight change</b> applied when a user swipes an article as <b>not interested</b>.</p><h4>How it's calculated</h4><div class="tip-formula">categoryWeight += fd.swipe_not_interested × lr.category\npublisherWeight += fd.swipe_not_interested × lr.publisher</div><p>Negative, so it pushes weights for that category/publisher down. Clamped to [minW, maxW].</p><p class="tip-note">Default −0.40 — a strong negative signal.</p>`,
+// ---- App config: Trending increments (article trendingScore changes) ----
+tiSave:`<h4>What it is</h4><p>The <b>trending score increment</b> added to an article when a user <b>saves</b> it.</p><h4>How it's calculated</h4><div class="tip-formula">article.trendingScore += ti.save (default +3)</div><p>Trending is capped by <code>maxTS</code> (<code>MAX_TRENDING_SCORE</code>), and the normalized value feeds the final score:</p><div class="tip-formula">T = min(trendingScore, maxTS) / maxTS → FS += sw.T × T</div><p>Trending scores also decay daily by <code>tDecay</code> (0.9057/day ≈ half every 7 days).</p><p class="tip-note">Save is the biggest trending boost — a saved article climbs the leaderboard fast.</p>`,
+tiLike:`<h4>What it is</h4><p>The <b>trending score increment</b> added to an article when a user <b>likes</b> it.</p><h4>How it's calculated</h4><div class="tip-formula">article.trendingScore += ti.like (default +2)\nT = min(trendingScore, maxTS) / maxTS → FS += sw.T × T</div><p>Likes repeat on the same article are de-duplicated per session, so only the first like per user-article counts toward trending.</p><p class="tip-note">Default +2.</p>`,
+tiRT:`<h4>What it is</h4><p>The <b>trending score increment</b> added to an article when a user <b>reads it thoroughly</b>.</p><h4>How it's calculated</h4><div class="tip-formula">article.trendingScore += ti.read_thorough (default +1.5)\nT = min(trendingScore, maxTS) / maxTS → FS += sw.T × T</div><p class="tip-note">Default +1.5.</p>`,
+tiRS:`<h4>What it is</h4><p>The <b>trending score increment</b> added to an article when a user <b>skims</b> it.</p><h4>How it's calculated</h4><div class="tip-formula">article.trendingScore += ti.read_skim (default +0.5)\nT = min(trendingScore, maxTS) / maxTS → FS += sw.T × T</div><p class="tip-note">Default +0.5 — skimming boosts trending less than a thorough read.</p>`,
+tiRSh:`<h4>What it is</h4><p>The <b>trending score increment</b> added to an article when a user <b>reads it shallowly</b> (a quick glance, scroll depth 40–69%).</p><h4>How it's calculated</h4><div class="tip-formula">article.trendingScore += ti.read_shallow (default +0.2)\nT = min(trendingScore, maxTS) / maxTS → FS += sw.T × T</div><p class="tip-note">Default +0.2 — the smallest positive trending signal. Shallow reads do NOT count as a "read".</p>`,
+// ---- App config: Quality increments (publisher quality score changes) ----
+qiSave:`<h4>What it is</h4><p>The <b>publisher quality increment</b> applied when a user <b>saves</b> an article from that publisher.</p><h4>How it's calculated</h4><div class="tip-formula">pubQual[publisher] = clamp(pubQual[publisher] + qi.save, 0.2, 1.0)</div><p>Quality feeds the final score via:</p><div class="tip-formula">Q = clamp((pubQual − 0.2) / 0.8, 0, 1) → FS += sw.Q × Q</div><p class="tip-note">Default +0.010.</p>`,
+qiLike:`<h4>What it is</h4><p>The <b>publisher quality increment</b> applied when a user <b>likes</b> an article from that publisher.</p><h4>How it's calculated</h4><div class="tip-formula">pubQual[publisher] = clamp(pubQual[publisher] + qi.like, 0.2, 1.0)\nQ = clamp((pubQual − 0.2) / 0.8, 0, 1) → FS += sw.Q × Q</div><p class="tip-note">Default +0.005.</p>`,
+qiRT:`<h4>What it is</h4><p>The <b>publisher quality increment</b> applied when a user <b>reads an article thoroughly</b> from that publisher.</p><h4>How it's calculated</h4><div class="tip-formula">pubQual[publisher] = clamp(pubQual[publisher] + qi.read_thorough, 0.2, 1.0)\nQ = clamp((pubQual − 0.2) / 0.8, 0, 1) → FS += sw.Q × Q</div><p class="tip-note">Default +0.005.</p>`,
+qiRS:`<h4>What it is</h4><p>The <b>publisher quality increment</b> applied when a user <b>skims</b> an article from that publisher.</p><h4>How it's calculated</h4><div class="tip-formula">pubQual[publisher] = clamp(pubQual[publisher] + qi.read_skim, 0.2, 1.0)\nQ = clamp((pubQual − 0.2) / 0.8, 0, 1) → FS += sw.Q × Q</div><p class="tip-note">Default +0.001.</p>`,
+qiSNI:`<h4>What it is</h4><p>The <b>publisher quality decrement</b> applied when a user swipes an article from that publisher as <b>not interested</b>.</p><h4>How it's calculated</h4><div class="tip-formula">pubQual[publisher] = clamp(pubQual[publisher] + qi.swipe_not_interested, 0.2, 1.0)\nQ = clamp((pubQual − 0.2) / 0.8, 0, 1) → FS += sw.Q × Q</div><p>Negative, so it drags the publisher's quality down. Clamped to [0.2, 1.0].</p><p class="tip-note">Default −0.010.</p>`,
+qiQE:`<h4>What it is</h4><p>The <b>publisher quality decrement</b> applied when a user <b>quick-exits</b> an article from that publisher.</p><h4>How it's calculated</h4><div class="tip-formula">pubQual[publisher] = clamp(pubQual[publisher] + qi.quick_exit, 0.2, 1.0)\nQ = clamp((pubQual − 0.2) / 0.8, 0, 1) → FS += sw.Q × Q</div><p>Negative — quick exits punish the publisher's quality score. Clamped to [0.2, 1.0].</p><p class="tip-note">Default −0.005.</p>`,
+// ---- Persona-level fields ----
+wpm:`<h4>What it is</h4><p>The user's <b>reading speed</b> in words per minute. Used to compute how long a thorough or skim read takes.</p><h4>How it's used</h4><div class="tip-formula">thorough dwell = wordCount / wpm × 60s\nskim dwell = wordCount / (wpm × 1.8) × 60s</div><p>Faster readers finish articles in less dwell time, but the "read" gate is based on scroll depth (≥70%) and dwell (>10s), not raw speed.</p><p class="tip-note">Default 300 for power users, 180 for quick-exitters. Each user's WPM is drawn from a normal distribution around this mean (stddev ≈ 12% of the mean).</p>`,
+prefInf:`<h4>What it is</h4><p><b>Preference Influence</b> — how strongly the user's category preferences shape their behaviour. 0 = behaviour is uniform across categories; 1 = behaviour is fully driven by category preference.</p><h4>How it's used</h4><div class="tip-formula">positive signals (read/save/like) scale by (1 − p + p × catPref)\nnegative signals (quick-exit/not-interested) scale by (1 − p + p × (1 − catPref))</div><p>Where <code>p</code> = prefInf and <code>catPref</code> = the user's preference for the article's category.</p><p class="tip-note">High prefInf users (e.g. Engaged, 0.90) read/save/like mostly in their preferred categories and avoid disliked ones. Low prefInf users behave the same everywhere.</p>`,
+catPref:`<h4>What it is</h4><p><b>Category Preference Baseline</b> — the default preference level for categories the user has <b>not</b> marked as a strong preference.</p><h4>How it's used</h4><p>When generating a user, each category gets a preference value: strong-preference categories get ~0.8, all others get a value drawn around this baseline (stddev 0.20).</p><p class="tip-note">A low baseline (e.g. 0.25) means the user is picky — most categories are weakly preferred. A high baseline means the user likes most content.</p>`,
+numStrong:`<h4>What it is</h4><p><b>Number of Strong Categories</b> — how many categories this user has a strong preference for (drawn around this mean, stddev 1).</p><h4>How it's used</h4><p>When generating a user, this many random categories are assigned a high preference (~0.8); the rest get the category-preference baseline.</p><p class="tip-note">Power users (3) have several strong interests; new users (1) have few. This shapes which categories the user engages with most.</p>`,
+consist:`<h4>What it is</h4><p><b>Consistency</b> — how stable the user's behaviour is day to day. 1 = perfectly consistent; 0 = highly erratic.</p><h4>How it's used</h4><div class="tip-formula">daily rate = mean × (1 + (1 − consistency) × gauss(0, 0.3))</div><p>Each day, the user's actual behaviour rates are drawn around their persona means, with variance scaled by (1 − consistency).</p><p class="tip-note">High consistency (0.85) = predictable behaviour. Low consistency (0.30) = the user's rates swing widely day to day.</p>`,
+population:`<h4>What it is</h4><p><b>Population %</b> — the relative weight of this persona in the mixed population. In a unified run, all enabled personas coexist in one shared world; this controls what share of the total users belong to this persona.</p><h4>How it's used</h4><div class="tip-formula">users for persona = round(numUsers × persona.population / Σ all enabled populations)</div><p>All personas share the same article pool, trending scores, and publisher quality — only the user behaviour differs. This models a real mixed user base.</p><p class="tip-note">Set all to 100 for equal shares, or e.g. 200 for a persona that's twice as common.</p>`,
+// ---- Mode A metrics ----
+avgP:`<h4>What it is</h4><p><b>Average P-Score (final)</b> — the mean personalization score of articles shown to this persona on the final day.</p><h4>How it's calculated</h4><div class="tip-formula">P = 0.6 × norm(categoryWeight) + 0.4 × norm(publisherWeight)</div><p>P measures how well the feed matches the user's learned category and publisher preferences. Higher = the algorithm has learned the user's tastes.</p><p class="tip-note">Green = highest across personas. A config that personalises well will show high P for engaged users.</p>`,
+avgFS:`<h4>What it is</h4><p><b>Average Final Score</b> — the mean overall article score on the final day.</p><h4>How it's calculated</h4><div class="tip-formula">FS = sw.P·P + sw.T·T + sw.R·R + sw.Q·Q</div><p>The weighted blend of personalization, trending, recency, and quality. Higher = better-ranked feed overall.</p><p class="tip-note">Green = highest across personas. This is the headline "is my feed good?" metric.</p>`,
+pDom:`<h4>What it is</h4><p><b>P Dominant %</b> — the share of articles where personalization (P) was the <b>top-scoring factor</b> in the final score.</p><h4>How it's calculated</h4><div class="tip-formula">dominant = argmax(sw.P·P, sw.T·T, sw.R·R, sw.Q·Q)</div><p>Higher = personalization drives the feed. A healthy config should see P dominate for engaged users.</p><p class="tip-note">Green = highest across personas. If P never dominates, personalization isn't winning.</p>`,
+highTranche:`<h4>What it is</h4><p><b>High Tranche %</b> — the share of articles shown to this persona that passed the high-quality threshold (default FS > 0.40).</p><h4>How it's calculated</h4><div class="tip-formula">high if FS > highThresh (default 0.40)</div><p>Higher = this user sees more top-tier content. This is the clearest "does my config hold up for this user type?" signal.</p><p class="tip-note">Green = highest across personas. If a persona is red here, they see little high-quality content.</p>`,
+avgPubs:`<h4>What it is</h4><p><b>Feed Diversity</b> — the average number of distinct publishers shown per feed to this persona.</p><h4>How it's calculated</h4><div class="tip-formula">avg distinct publishers per feed (capped by Publisher Cap, default 5)</div><p>Higher = more varied sources, less echo-chamber. The publisher cap prevents any single source from dominating.</p><p class="tip-note">Green = highest across personas. Very low diversity can indicate over-concentration on a few publishers.</p>`,
+weightSpread:`<h4>What it is</h4><p><b>Weight Spread</b> — the gap between a user's strongest and weakest category weights.</p><h4>How it's calculated</h4><div class="tip-formula">spread = max(categoryWeights) − min(categoryWeights)</div><p>Higher = more differentiated preferences (the user has clearly learned likes and dislikes). <b>Lower is better</b> here — a small spread means balanced, healthy learning.</p><p class="tip-note">This is the one metric where <b>green = lowest</b> (red = highest). A huge spread can mean runaway over-learning.</p>`,
+// ---- Mode A / B general ----
+modeToggle:`<h4>Two ways to view a config</h4><p><b>⊞ Persona Comparison</b> — the at-a-glance grid. Columns = personas, rows = key metrics, cells colour-coded green (best) → red (worst) per row. Best for "does my config hold up across user types?"</p><p><b>📊 Persona Detail</b> — the full chart suite for one persona at a time. Pick a persona, then scroll through all 11 charts + the User Inspector. Best for deep-diving one user type.</p><p class="tip-note">Both views show the same underlying simulation — they're just different lenses on it.</p>`,
+gridHeader:`<h4>Persona Comparison grid</h4><p><b>Columns</b> = the user personas you tested your app config against. <b>Rows</b> = key metrics of how the feed performed for each persona.</p><p><b>Cell colours</b> compare personas <i>against each other</i> within each row: <b>green = best</b> persona for that metric, <b>red = worst</b>. It's a relative ranking, not an absolute pass/fail.</p><p><b>Sparkline</b> under each number = that persona's trend for the metric across simulation days (line going up = improving over time).</p><p><b>Mini-cards on top</b> = a quick headline snapshot of how each persona fares overall (Avg P, P Dominant %, High Tranche %).</p>`,
+miniCards:`<h4>Mini-cards (headline snapshot)</h4><p>Each card summarises one persona's overall performance with three headline numbers:</p><ul><li><b>Avg P</b> — average personalization score on the final day.</li><li><b>P Dom</b> — % of articles where personalization was the top factor.</li><li><b>High %</b> — % of articles passing the high-quality threshold.</li></ul><p class="tip-note">These are the same numbers as the first three grid rows, condensed for a quick scan.</p>`,
+sparkline:`<h4>Sparkline (trajectory)</h4><p>The small line under each grid cell shows that persona's <b>trend for the metric across simulation days</b>.</p><p>A line going <b>up</b> = the metric is improving over time (e.g. P-score rising as personalization learns). A line going <b>down</b> = it's declining.</p><p class="tip-note">The sparkline is normalised to that persona's own min/max, so it shows shape, not absolute scale.</p>`,
+// ---- Mode B charts ----
+pScore:`<h4>P-Score Distribution Over Time</h4><p>Shows the distribution of personalization scores (P) across all articles shown, at three points: <b>Day 1 (red)</b>, <b>mid (green)</b>, and <b>final (blue)</b>.</p><p>A <b>right shift</b> over time = personalization is improving — the feed is matching the user's tastes better as weights learn.</p><p class="tip-note">P = 0.6 × norm(categoryWeight) + 0.4 × norm(publisherWeight).</p>`,
+dominant:`<h4>Dominant Component Shift Over Time</h4><p>Stacked area showing which scoring component (P/T/R/Q) is the <b>top factor</b> for articles each day.</p><p>Watch <b>P (blue)</b> grow as personalization learns — a healthy sign. If T or Q stays dominant, personalization isn't winning.</p><p class="tip-note">Dominant = argmax(sw.P·P, sw.T·T, sw.R·R, sw.Q·Q) per article.</p>`,
+weight:`<h4>Category Weight Spread Over Time</h4><p>Shows the average <b>highest (red)</b>, <b>middle (green)</b>, and <b>lowest (blue)</b> category weight per user, across days.</p><p>Weights start at 1.0 (neutral). Divergence from 1.0 = learned preference. The gap between highest and lowest = how differentiated the user's tastes have become.</p><p class="tip-note">Weights are clamped to [minW, maxW] and decay toward 1.0 each day.</p>`,
+finalScore:`<h4>Final Score Distribution (Day 1 vs Final)</h4><p>Histogram of overall article scores (FS) on <b>Day 1 (red)</b> vs the <b>final day (blue)</b>.</p><p>A <b>right shift</b> over time = improving feed quality. FS = sw.P·P + sw.T·T + sw.R·R + sw.Q·Q.</p>`,
+tranche:`<h4>Tranche Breakdown Over Time</h4><p>Stacked area showing the share of articles in each tranche each day: <b>High (green)</b>, <b>Mid (orange)</b>, <b>Tail (red)</b>.</p><p>As personalization improves, <b>High should grow</b> and <b>Tail should shrink</b> — the user sees more top-tier content.</p><p class="tip-note">Tranche thresholds: high > 0.40, mid > 0.20, tail ≤ 0.20 (configurable).</p>`,
+userP:`<h4>Per-User P-Score Distribution (final)</h4><p>Histogram of each user's <b>average P-score</b> on the final day.</p><p>A <b>wide spread</b> = personalization works differently for different users (some strongly personalised, some less). A narrow spike = everyone gets similar personalization.</p>`,
+diversity:`<h4>Feed Diversity Over Time</h4><p>Line showing the average number of <b>distinct publishers</b> per feed, across days.</p><p>Higher = more varied sources, less echo-chamber. The publisher cap (default 5) limits any single source.</p>`,
+pubQ:`<h4>Individual Publisher Quality (Q) Over Time</h4><p>Each line = one sampled publisher's <b>crowd-sourced quality score</b> across days.</p><p>Saves/likes/thorough-reads <b>raise</b> it; not-interested/quick-exit <b>lower</b> it. The legend shows the top 5 and bottom 5 publishers by final Q.</p><p class="tip-note">Q is clamped to [0.2, 1.0]. It feeds the final score via sw.Q·Q.</p>`,
+scoreComp:`<h4>Average Score Composition Per Day</h4><p>Stacked bar showing the <b>weighted contribution</b> of each component to the day's average <b>initial</b> final score — i.e. the 4-component assembly of <b>all evaluated candidates</b>, before tranche bucketing and feed selection.</p><div class="tip-formula">bar height for P = sw.P × avgInitP\nTotal bar = sw.P·avgInitP + sw.T·avgInitT + sw.R·avgInitR + sw.Q·avgInitQ = avgInitFS</div><p>The y-axis is an <b>absolute 0.00–1.00 final-score scale</b>, shared by every persona and config, so bar heights can be compared directly. Watch <b>P (blue)</b> grow as personalization learns. The legend shows each component's weight (×).</p>`,
+trending:`<h4>Trending Score Leaderboard Over Time</h4><p>Lines for sampled articles showing their <b>trending score</b> across days.</p><p>Lines <b>climb</b> from saves/likes/reads, then <b>decay</b> (×0.9057/day, halving every 7 days). The dashed red line is MAX_TRENDING_SCORE (default 50), where T normalizes to 1.0.</p><p class="tip-note">Top 5 and bottom 5 articles by final score are highlighted; the rest are faint.</p>`,
+dayTable:`<h4>Per-Day Metrics table</h4><p>A raw data table of the daily metrics: <b>Day, Count, Avg P, Avg FS, P Dom%, High%, Mid%, Tail%, Pubs</b>.</p><p>This is the underlying numbers behind all the charts — useful for exact values and spot-checking.</p>`,
+userInspector:`<h4>👤 Individual User Inspector</h4><p>5 randomly sampled users from this persona. Inspect how each user's <b>category weights evolved</b> over time and what <b>variables were assigned</b> to them (behaviour rates, WPM, preference influence, consistency, articles read/shown).</p><p class="tip-note">This is the closest look at a single simulated user — great for debugging why a persona behaves a certain way.</p>`,
+userCat:`<h4>Category Weights Over Time</h4><p>Each line = one category's weight for this user, across days.</p><p>Weights start at 1.0 (neutral). <b>Divergence from 1.0</b> = learned preference (above = liked, below = disliked).</p>`,
+userFinal:`<h4>Final Weightings per Category</h4><p>Bar chart of this user's <b>final category weights</b>.</p><p>Higher = stronger learned preference. This is the end state of the Category Weights Over Time chart.</p>`,
+userConfig:`<h4>Assigned Variable Configs</h4><p>Table of the exact variables assigned to this sampled user: each behaviour rate, WPM, preference influence, consistency, articles read, and articles shown.</p><p class="tip-note">These are drawn from the persona's mean/stddev — this shows one concrete draw.</p>`,
+// ---- Compare overlay ----
+compare:`<h4>⇄ Compare Configs Across Personas</h4><p>Each block is <b>one metric × one persona</b>. <b>Columns = config tabs</b> (your different app configurations). <b>Cells colour-coded</b> <span style="color:#4ecca3">green=best</span> → <span style="color:#e94560">red=worst</span> within each row.</p><p>This is the side-by-side answer to <b>"which config wins for which user type?"</b> — instead of flipping tabs and memorizing, you see them all at once.</p><p class="tip-note">The App Config Differences table below shows which app variables differ across your tabs.</p>`,
+compareConfigDiff:`<h4>App Config Differences</h4><p>Shows the key app variables across all your config tabs. A <span style="color:#e94560">red ●</span> marks variables that <b>differ</b> between tabs; differing cells are highlighted.</p><p class="tip-note">This tells you exactly what changed between Config 1 and Config 2 — so you know what caused the metric differences above.</p>`
+};
+
+// ====== Config builders ======
+// getAppConfig(): the developer-shipped app variables (score weights, deltas, rates, decay, trending, quality, tranche).
+function getAppConfig(){
+const g=id=>document.getElementById(id).value;
+let p=+g('swP'),t=+g('swT'),r=+g('swR'),q=+g('swQ');
+const s1=p+t+r+q||1;p/=s1;t/=s1;r/=s1;q/=s1;
+let tt=+g('swtT'),tr=+g('swtR');const s2=tt+tr||1;tt/=s2;tr/=s2;
+const lrBase=+g('lrBase');
+return{
+sw:{P:p,T:t,R:r,Q:q},swt:{T:tt,R:tr},
+fd:{save:+g('fdSave'),unsave:+g('fdUnsave'),like:+g('fdLike'),unlike:+g('fdUnlike'),read_thorough:+g('fdRT'),read_skim:+g('fdRS'),read_shallow:0,swipe_next:0,quick_exit:0,swipe_not_interested:+g('fdSNI')},
+lr:{category:lrBase*(+g('lrCat')),length:lrBase*(+g('lrLen')),publisher:lrBase*(+g('lrPub'))},
+minW:+g('minW'),maxW:+g('maxW'),decayRate:+g('decayRate'),
+maxTS:+g('maxTS'),tDecay:+g('tDecay'),
+ti:{save:+g('tiSave'),unsave:-Math.abs(+g('tiSave')),like:+g('tiLike'),unlike:-Math.abs(+g('tiLike')),read_thorough:+g('tiRT'),read_skim:+g('tiRS'),read_shallow:+g('tiRSh'),quick_exit:0,swipe_next:0,swipe_not_interested:0},
+qi:{save:+g('qiSave'),unsave:-Math.abs(+g('qiSave')),like:+g('qiLike'),unlike:-Math.abs(+g('qiLike')),read_thorough:+g('qiRT'),read_skim:+g('qiRS'),swipe_not_interested:+g('qiSNI'),quick_exit:+g('qiQE'),read_shallow:0,swipe_next:0},
+tranche:{highThresh:+g('trHigh'),midThresh:+g('trMid'),highSize:+g('trHighSize'),midSize:+g('trMidSize'),tailSize:+g('trTailSize'),pubCap:+g('pubCap'),newUserThresh:+g('newUserThresh')}
+};
+}
+
+// getSimSize(): the population-level knobs shared across personas.
+function getSimSize(){
+const g=id=>+document.getElementById(id).value;
+return{numUsers:g('numUsers'),numDays:g('numDays'),feedsPerDay:g('feedsPerDay'),articlesPerFeed:g('articlesPerFeed'),numArticles:g('numArticles'),newArticlesPerDay:g('newArticlesPerDay'),articleAgeRange:g('articleAgeRange')};
+}
+
+// ====== PERSONAS ======
+// Each persona packages the user-assumption variables: 8 behaviour rates (mean+stddev),
+// reading speed, preference influence, category-preference baseline, num-strong-cats, and consistency.
+const RATE_KEYS=[
+{key:'readThorough',label:'Read Thorough'},
+{key:'readSkim',label:'Read Skim'},
+{key:'readShallow',label:'Read Shallow'},
+{key:'quickExit',label:'Quick Exit'},
+{key:'swipeNext',label:'Swipe Next'},
+{key:'swipeNotInterested',label:'Not Interested'},
+{key:'save',label:'Save'},
+{key:'like',label:'Like'}
+];
+const DEFAULT_PERSONAS=[
+{name:'Engaged Power User',enabled:true,population:100,rates:{readThorough:{m:0.45,s:0.05},readSkim:{m:0.30,s:0.06},readShallow:{m:0.10,s:0.04},quickExit:{m:0.03,s:0.02},swipeNext:{m:0.07,s:0.03},swipeNotInterested:{m:0.02,s:0.02},save:{m:0.15,s:0.04},like:{m:0.20,s:0.05}},wpm:300,prefInf:0.90,catPref:0.30,numStrong:3,consist:0.85},
+{name:'Casual Skimmer',enabled:true,population:100,rates:{readThorough:{m:0.05,s:0.03},readSkim:{m:0.35,s:0.07},readShallow:{m:0.25,s:0.06},quickExit:{m:0.12,s:0.04},swipeNext:{m:0.18,s:0.05},swipeNotInterested:{m:0.03,s:0.02},save:{m:0.01,s:0.01},like:{m:0.02,s:0.02}},wpm:220,prefInf:0.60,catPref:0.30,numStrong:2,consist:0.55},
+{name:'Restless Quick-Exitter',enabled:true,population:100,rates:{readThorough:{m:0.02,s:0.02},readSkim:{m:0.08,s:0.04},readShallow:{m:0.15,s:0.05},quickExit:{m:0.55,s:0.08},swipeNext:{m:0.15,s:0.05},swipeNotInterested:{m:0.05,s:0.03},save:{m:0.00,s:0.01},like:{m:0.00,s:0.01}},wpm:180,prefInf:0.30,catPref:0.25,numStrong:1,consist:0.40},
+{name:'Hostile / Critical',enabled:true,population:100,rates:{readThorough:{m:0.15,s:0.05},readSkim:{m:0.15,s:0.05},readShallow:{m:0.10,s:0.04},quickExit:{m:0.10,s:0.04},swipeNext:{m:0.05,s:0.03},swipeNotInterested:{m:0.35,s:0.08},save:{m:0.02,s:0.02},like:{m:0.03,s:0.02}},wpm:240,prefInf:0.75,catPref:0.30,numStrong:3,consist:0.70},
+{name:'New User',enabled:true,population:100,rates:{readThorough:{m:0.10,s:0.05},readSkim:{m:0.20,s:0.06},readShallow:{m:0.20,s:0.06},quickExit:{m:0.25,s:0.06},swipeNext:{m:0.20,s:0.05},swipeNotInterested:{m:0.02,s:0.02},save:{m:0.01,s:0.01},like:{m:0.02,s:0.02}},wpm:200,prefInf:0.20,catPref:0.25,numStrong:1,consist:0.30}
+];
+
+let personas=[];
+function loadPersonas(){
+try{const s=localStorage.getItem('tangent_personas');if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length){personas=p;return;}}}catch(e){}
+personas=JSON.parse(JSON.stringify(DEFAULT_PERSONAS));
+}
+function savePersonas(){try{localStorage.setItem('tangent_personas',JSON.stringify(personas));}catch(e){}}
+
+function renderPersonaEditor(){
+const ed=document.getElementById('personaEditor');ed.innerHTML='';
+personas.forEach((p,idx)=>{
+const card=document.createElement('div');card.className='persona-card';
+const head=document.createElement('div');head.className='persona-head';
+head.innerHTML=`<input type="checkbox" ${p.enabled?'checked':''} onchange="personas[${idx}].enabled=this.checked;savePersonas()" title="Include in runs">
+<span class="pname">${escapeHtml(p.name)}</span>
+<span class="pchip">${RATE_KEYS.length} rates</span>`;
+const body=document.createElement('div');body.className='persona-body';
+let html=`<div style="margin-bottom:6px"><input type="text" value="${escapeAttr(p.name)}" onchange="personas[${idx}].name=this.value;savePersonas();renderPersonaEditor();" style="width:60%;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:4px;padding:3px;font-size:12px"> <button class="small secondary" onclick="deletePersona(${idx})" style="width:auto;padding:3px 8px">🗑 Delete</button></div>`;
+html+=`<div class="persona-rate-row" style="font-weight:bold;color:#4ecca3"><span>Rate</span><span style="text-align:center">Mean</span><span style="text-align:center">StdDev</span></div>`;
+RATE_KEYS.forEach(rk=>{
+const rv=p.rates[rk.key]||{m:0,s:0};
+html+=`<div class="persona-rate-row"><span>${rk.label} <span class="help small" data-help="${rk.key}" title="What does ${rk.label} do?">?</span></span><input type="number" step="0.01" min="0" max="1" value="${rv.m}" onchange="personas[${idx}].rates['${rk.key}'].m=+this.value;savePersonas()"><input type="number" step="0.01" min="0" max="0.5" value="${rv.s}" onchange="personas[${idx}].rates['${rk.key}'].s=+this.value;savePersonas()"></div>`;
+});
+html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+<label style="font-size:11px;color:#a0a0b0">WPM <span class="help small" data-help="wpm" title="What is WPM?">?</span><br><input type="number" value="${p.wpm}" min="100" max="500" onchange="personas[${idx}].wpm=+this.value;savePersonas()" style="width:100%;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:3px;padding:2px;font-size:11px"></label>
+<label style="font-size:11px;color:#a0a0b0">Pref Influence <span class="help small" data-help="prefInf" title="What is Preference Influence?">?</span><br><input type="number" step="0.05" min="0" max="1" value="${p.prefInf}" onchange="personas[${idx}].prefInf=+this.value;savePersonas()" style="width:100%;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:3px;padding:2px;font-size:11px"></label>
+<label style="font-size:11px;color:#a0a0b0">Cat Pref Baseline <span class="help small" data-help="catPref" title="What is Category Preference Baseline?">?</span><br><input type="number" step="0.05" min="0" max="1" value="${p.catPref}" onchange="personas[${idx}].catPref=+this.value;savePersonas()" style="width:100%;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:3px;padding:2px;font-size:11px"></label>
+<label style="font-size:11px;color:#a0a0b0">Num Strong Cats <span class="help small" data-help="numStrong" title="What are Strong Categories?">?</span><br><input type="number" step="1" min="0" max="9" value="${p.numStrong}" onchange="personas[${idx}].numStrong=+this.value;savePersonas()" style="width:100%;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:3px;padding:2px;font-size:11px"></label>
+<label style="font-size:11px;color:#a0a0b0">Consistency <span class="help small" data-help="consist" title="What is Consistency?">?</span><br><input type="number" step="0.05" min="0" max="1" value="${p.consist}" onchange="personas[${idx}].consist=+this.value;savePersonas()" style="width:100%;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:3px;padding:2px;font-size:11px"></label>
+<label style="font-size:11px;color:#a0a0b0">Population % <span class="help small" data-help="population" title="What is Population %?">?</span><br><input type="number" step="10" min="0" max="1000" value="${p.population??100}" onchange="personas[${idx}].population=+this.value;savePersonas()" style="width:100%;background:#1a1a2e;color:#e0e0e0;border:1px solid #0f3460;border-radius:3px;padding:2px;font-size:11px"></label>
+</div>`;
+body.innerHTML=html;
+head.onclick=(e)=>{if(e.target.tagName!=='INPUT'){body.classList.toggle('open');}};
+card.appendChild(head);card.appendChild(body);ed.appendChild(card);
+});
+}
+function addPersona(){
+personas.push({name:`Persona ${personas.length+1}`,enabled:true,population:100,rates:{readThorough:{m:0.10,s:0.05},readSkim:{m:0.20,s:0.06},readShallow:{m:0.15,s:0.05},quickExit:{m:0.20,s:0.06},swipeNext:{m:0.15,s:0.05},swipeNotInterested:{m:0.05,s:0.03},save:{m:0.03,s:0.02},like:{m:0.05,s:0.03}},wpm:230,prefInf:0.50,catPref:0.30,numStrong:2,consist:0.60});
+savePersonas();renderPersonaEditor();
+}
+function deletePersona(idx){if(personas.length<=1){alert('Keep at least one persona.');return;}personas.splice(idx,1);savePersonas();renderPersonaEditor();}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeAttr(s){return String(s).replace(/"/g,'&quot;');}
+
+// personaToUserSlice(p): builds the behaviour/reading/prefs/consist slice that genUsers() consumes.
+function personaToUserSlice(p){
+const behaviour={};
+for(const rk of RATE_KEYS){const rv=p.rates[rk.key]||{m:0,s:0};behaviour[rk.key]={mean:rv.m,stddev:rv.s};}
+return{behaviour,reading:{wpmMean:p.wpm,wpmStd:Math.round(p.wpm*0.12)},prefs:{infMean:p.prefInf,infStd:0.15,cpMean:p.catPref,cpStd:0.20,nsMean:p.numStrong,nsStd:1},consist:{mean:p.consist,stddev:0.15}};
+}
+
+// ====== Per-persona simulation (refactored from runSimulation core) ======
+// Runs one full simulation for (appConfig + simSize + persona). Produces the same simData shape as before.
+function runPersonaSim(appConfig,simSize,persona,onProgress,onDone){
+const config={...appConfig,...simSize,...personaToUserSlice(persona)};
+const articles=genArticles(config);const users=genUsers(config);
+const dailyMetrics=[];const sampleEvents=[];const articleStats={};let sampleArticleId=null;
+const pubQual={};for(const p of PUBLISHERS)pubQual[p.name]=0.80;
+// Persisted random samples so charts are stable per tab (not re-rolled on every draw)
+const sampledPublishers=[...PUBLISHERS].sort(()=>Math.random()-0.5).slice(0,8).map(p=>p.name);
+const sampledArticleIds=[...articles].sort(()=>Math.random()-0.5).slice(0,30).map(a=>a.id);
+const sampledUsers=[...users].sort(()=>Math.random()-0.5).slice(0,5);
+const sampledUserIds=new Set(sampledUsers.map(u=>u.id));
+let currentDay=1;
+function processDay(){
+if(currentDay>config.numDays){
+const simData={config,articles,users,dailyMetrics,sampleEvents,articleStats,sampleArticleId,pubQual,sampledPublishers,sampledArticleIds,sampledUsers};
+onDone(simData);return;}
+if(currentDay>1&&config.newArticlesPerDay>0){for(let i=0;i<config.newArticlesPerDay;i++){const a=makeArticle(articles.length+i,config);a.publishDate=Date.now()-Math.random()*3*86400000;articles.push(a);}}
+const dm={day:currentDay,count:0,dom:{P:0,T:0,R:0,Q:0},pSum:0,tSum:0,rSum:0,qSum:0,fsSum:0,initPSum:0,initTSum:0,initRSum:0,initQSum:0,initFSSum:0,initCount:0,pHist:new Array(20).fill(0),fsHist:new Array(20).fill(0),pubs:0,userSpreads:[],weightHigh:0,weightLow:0,weightMid:0,trancheCounts:{high:0,mid:0,tail:0},catStats:{},pubQualSnap:{}};
+for(let ui=0;ui<users.length;ui++){const u=users[ui];const dr=dailyRates(u);const evts=[];const likeDedup=new Set();const saveDedup=new Set();
+for(let feed=0;feed<config.feedsPerDay;feed++){const fa=scoreFeed(u,articles,config,pubQual);
+for(let si=0;si<fa.scored.length;si++){const si2=fa.scored[si];dm.initCount++;dm.initPSum+=si2.P;dm.initTSum+=si2.T;dm.initRSum+=si2.R;dm.initQSum+=si2.Q;dm.initFSSum+=si2.fs;}
+for(let pos=0;pos<fa.feed.length;pos++){const s=fa.feed[pos],a=s.article,dc=domC(s.P,s.T,s.R,s.Q,config.sw);const tranche=s.fs>config.tranche.highThresh?'high':s.fs>config.tranche.midThresh?'mid':'tail';
+dm.count++;dm.dom[dc]++;dm.pSum+=s.P;dm.tSum+=s.T;dm.rSum+=s.R;dm.qSum+=s.Q;dm.fsSum+=s.fs;dm.trancheCounts[tranche]++;u.pSum+=s.P;u.shownCount++;
+dm.pHist[Math.min(19,Math.floor(s.P*20))]++;dm.fsHist[Math.min(19,Math.floor(s.fs*20))]++;a.timesShown++;a.scoreSum+=s.fs;
+if(!articleStats[a.id])articleStats[a.id]={count:0,scoreSum:0};articleStats[a.id].count++;articleStats[a.id].scoreSum+=s.fs;
+if(currentDay===config.numDays&&pos===0&&ui<30){sampleEvents.push({day:currentDay,userId:u.id,articleId:a.id,scoreP:s.P});if(sampleArticleId===null)sampleArticleId=a.id;}
+const b=behavior(u,a,dr);evts.push({b,cat:a.category,ls:a.lengthStyle,pub:a.publicationName});
+const dedupKey=u.id+'::'+a.id;let shouldApplyTrending=true;
+if(b==='like'||b==='unlike'){if(likeDedup.has(dedupKey))shouldApplyTrending=false;else likeDedup.add(dedupKey);}
+else if(b==='save'||b==='unsave'){if(saveDedup.has(dedupKey))shouldApplyTrending=false;else saveDedup.add(dedupKey);}
+if(shouldApplyTrending){const ti=config.ti[b]||0;if(ti!==0){a.trendingScore+=ti;a.peakTrendingScore=Math.max(a.peakTrendingScore,a.trendingScore);}}
+const qi=config.qi[b]||0;if(qi!==0){pubQual[a.publicationName]=clamp((pubQual[a.publicationName]??0.8)+qi,0.2,1);}
+if(b==='read_thorough'||b==='read_skim'){const em=engMetrics(b,a,u.wpm);if(em.sd>=70&&em.dt>10)u.read++;}u.seen.add(a.id);
+if(b==='save')u.savedArticles.add(a.id);if(b==='like')u.likedArticles.add(a.id);}
+	dm.pubs+=new Set(fa.feed.map(f=>f.article.publicationName)).size;}
+	updateW(u,evts,config);
+if(sampledUserIds.has(u.id)){const wh={day:currentDay};for(const cat of CATEGORIES)wh[cat]=u.cw[cat]||1;u.weightHistory.push(wh);}
+const wVals=Object.values(u.cw);dm.userSpreads.push(Math.max(...wVals)-Math.min(...wVals));dm.weightHigh+=Math.max(...wVals);dm.weightLow+=Math.min(...wVals);dm.weightMid+=wVals.reduce((s,v)=>s+v,0)/wVals.length;}
+for(const cat of CATEGORIES){const vals=users.map(u=>u.cw[cat]||1).sort((a,b)=>a-b);dm.catStats[cat]={avg:vals.reduce((s,v)=>s+v,0)/vals.length,p10:vals[Math.floor(vals.length*0.1)]||0,p50:vals[Math.floor(vals.length*0.5)]||0,p90:vals[Math.floor(vals.length*0.9)]||0};}
+dm.pubQualSnap={...pubQual};
+dm.sampledTrending={};for(const id of sampledArticleIds){const a=articles.find(x=>x.id===id);dm.sampledTrending[id]=a?a.trendingScore:0;}
+dm.trendingTop=[...articles].sort((a,b)=>b.trendingScore-a.trendingScore).slice(0,10).map(a=>({id:a.id,pub:a.publicationName,ts:a.trendingScore}));
+dm.avgP=dm.count>0?dm.pSum/dm.count:0;dm.avgT=dm.count>0?dm.tSum/dm.count:0;dm.avgR=dm.count>0?dm.rSum/dm.count:0;dm.avgQ=dm.count>0?dm.qSum/dm.count:0;dm.avgFS=dm.count>0?dm.fsSum/dm.count:0;dm.avgInitP=dm.initCount>0?dm.initPSum/dm.initCount:0;dm.avgInitT=dm.initCount>0?dm.initTSum/dm.initCount:0;dm.avgInitR=dm.initCount>0?dm.initRSum/dm.initCount:0;dm.avgInitQ=dm.initCount>0?dm.initQSum/dm.initCount:0;dm.avgInitFS=dm.initCount>0?dm.initFSSum/dm.initCount:0;dm.avgPubs=dm.pubs/(users.length*config.feedsPerDay);
+dm.weightHigh/=users.length;dm.weightLow/=users.length;dm.weightMid/=users.length;
+dailyMetrics.push(dm);
+for(const u of users){for(const c of Object.keys(u.cw))u.cw[c]=decayW(u.cw[c],config.decayRate,config.minW,config.maxW);for(const k of Object.keys(u.clw))u.clw[k]=decayW(u.clw[k],config.decayRate,config.minW,config.maxW);for(const p of Object.keys(u.pw))u.pw[p]=decayW(u.pw[p],config.decayRate,config.minW,config.maxW);}
+for(const a of articles){if(a.trendingScore>1)a.trendingScore*=config.tDecay;}
+onProgress(currentDay);
+currentDay++;setTimeout(processDay,0);
+}
+setTimeout(processDay,0);
+}
+
+// ====== UNIFIED multi-persona simulation ======
+// One shared world: a single article pool, a single pubQual map, and single trending scores,
+// updated by ALL users regardless of persona. The mixed population is split across the enabled
+// personas by each persona's `population` weight. Per-persona metrics are partitioned by user
+// group, but trending/quality signals come from the whole crowd — exactly how the real backend behaves.
+function runUnifiedSim(appConfig,simSize,enabledPersonas,onProgress,onDone){
+const baseConfig={...appConfig,...simSize};
+const articles=genArticles(baseConfig);
+const pubQual={};for(const p of PUBLISHERS)pubQual[p.name]=0.80;
+const totalWeight=enabledPersonas.reduce((s,p)=>s+Math.max(0,p.population??100),0)||1;
+const groups=enabledPersonas.map((persona,gi)=>{
+const share=Math.max(0,persona.population??100)/totalWeight;
+const count=Math.max(1,Math.round(simSize.numUsers*share));
+const config={...baseConfig,...personaToUserSlice(persona)};
+const users=genUsers({...config,numUsers:count});
+users.forEach((u,ui)=>{u.personaIdx=gi;u.inGroupIdx=ui;});
+return{persona,config,users};
+});
+const allUsers=groups.flatMap(g=>g.users);
+const persState={};enabledPersonas.forEach(p=>{persState[p.name]={dailyMetrics:[],sampleEvents:[],articleStats:{},sampleArticleId:null};});
+const sampledPublishers=[...PUBLISHERS].sort(()=>Math.random()-0.5).slice(0,8).map(p=>p.name);
+const sampledArticleIds=[...articles].sort(()=>Math.random()-0.5).slice(0,30).map(a=>a.id);
+let currentDay=1;
+function processDay(){
+if(currentDay>simSize.numDays){
+const results={};
+enabledPersonas.forEach(p=>{
+const g=groups.find(x=>x.persona===p);
+const st=persState[p.name];
+const sampledUsers=[...g.users].sort(()=>Math.random()-0.5).slice(0,5);
+results[p.name]={config:g.config,articles,users:g.users,dailyMetrics:st.dailyMetrics,sampleEvents:st.sampleEvents,articleStats:st.articleStats,sampleArticleId:st.sampleArticleId,pubQual,sampledPublishers,sampledArticleIds,sampledUsers};
+});
+onDone(results);return;}
+if(currentDay>1&&simSize.newArticlesPerDay>0){for(let i=0;i<simSize.newArticlesPerDay;i++){const a=makeArticle(articles.length+i,baseConfig);a.publishDate=Date.now()-Math.random()*3*86400000;articles.push(a);}}
+const dms={};enabledPersonas.forEach(p=>{
+const m={day:currentDay,count:0,dom:{P:0,T:0,R:0,Q:0},pSum:0,tSum:0,rSum:0,qSum:0,fsSum:0,initPSum:0,initTSum:0,initRSum:0,initQSum:0,initFSSum:0,initCount:0,pHist:new Array(20).fill(0),fsHist:new Array(20).fill(0),pubs:0,userSpreads:[],weightHigh:0,weightLow:0,weightMid:0,trancheCounts:{high:0,mid:0,tail:0},catStats:{},pubQualSnap:{}};
+dms[p.name]=m;persState[p.name].dailyMetrics.push(m);});
+for(const u of allUsers){
+const g=groups[u.personaIdx];const config=g.config;const pName=g.persona.name;const m=dms[pName];const st=persState[pName];
+const dr=dailyRates(u);const evts=[];const likeDedup=new Set();const saveDedup=new Set();
+for(let feed=0;feed<config.feedsPerDay;feed++){
+const fa=scoreFeed(u,articles,config,pubQual);
+for(let si=0;si<fa.scored.length;si++){const si2=fa.scored[si];m.initCount++;m.initPSum+=si2.P;m.initTSum+=si2.T;m.initRSum+=si2.R;m.initQSum+=si2.Q;m.initFSSum+=si2.fs;}
+for(let pos=0;pos<fa.feed.length;pos++){
+const s=fa.feed[pos],a=s.article,dc=domC(s.P,s.T,s.R,s.Q,config.sw);
+const tranche=s.fs>config.tranche.highThresh?'high':s.fs>config.tranche.midThresh?'mid':'tail';
+m.count++;m.dom[dc]++;m.pSum+=s.P;m.tSum+=s.T;m.rSum+=s.R;m.qSum+=s.Q;m.fsSum+=s.fs;m.trancheCounts[tranche]++;u.pSum+=s.P;u.shownCount++;
+m.pHist[Math.min(19,Math.floor(s.P*20))]++;m.fsHist[Math.min(19,Math.floor(s.fs*20))]++;a.timesShown++;a.scoreSum+=s.fs;
+if(!st.articleStats[a.id])st.articleStats[a.id]={count:0,scoreSum:0};st.articleStats[a.id].count++;st.articleStats[a.id].scoreSum+=s.fs;
+if(currentDay===simSize.numDays&&pos===0&&u.inGroupIdx<30){st.sampleEvents.push({day:currentDay,userId:u.id,articleId:a.id,scoreP:s.P});if(st.sampleArticleId===null)st.sampleArticleId=a.id;}
+const b=behavior(u,a,dr);evts.push({b,cat:a.category,ls:a.lengthStyle,pub:a.publicationName});
+const dedupKey=u.id+'::'+a.id;let shouldApplyTrending=true;
+if(b==='like'||b==='unlike'){if(likeDedup.has(dedupKey))shouldApplyTrending=false;else likeDedup.add(dedupKey);}
+else if(b==='save'||b==='unsave'){if(saveDedup.has(dedupKey))shouldApplyTrending=false;else saveDedup.add(dedupKey);}
+if(shouldApplyTrending){const ti=config.ti[b]||0;if(ti!==0){a.trendingScore+=ti;a.peakTrendingScore=Math.max(a.peakTrendingScore,a.trendingScore);}}
+const qi=config.qi[b]||0;if(qi!==0){pubQual[a.publicationName]=clamp((pubQual[a.publicationName]??0.8)+qi,0.2,1);}
+if(b==='read_thorough'||b==='read_skim'){const em=engMetrics(b,a,u.wpm);if(em.sd>=70&&em.dt>10)u.read++;}
+u.seen.add(a.id);
+if(b==='save')u.savedArticles.add(a.id);if(b==='like')u.likedArticles.add(a.id);}
+m.pubs+=new Set(fa.feed.map(f=>f.article.publicationName)).size;}
+updateW(u,evts,config);
+{const wh={day:currentDay};for(const cat of CATEGORIES)wh[cat]=u.cw[cat]||1;u.weightHistory.push(wh);}
+const wVals=Object.values(u.cw);m.userSpreads.push(Math.max(...wVals)-Math.min(...wVals));m.weightHigh+=Math.max(...wVals);m.weightLow+=Math.min(...wVals);m.weightMid+=wVals.reduce((s,v)=>s+v,0)/wVals.length;}
+enabledPersonas.forEach(p=>{
+const g=groups.find(x=>x.persona===p);const config=g.config;const m=dms[p.name];
+for(const cat of CATEGORIES){const vals=g.users.map(u=>u.cw[cat]||1).sort((a,b)=>a-b);m.catStats[cat]={avg:vals.reduce((s,v)=>s+v,0)/vals.length,p10:vals[Math.floor(vals.length*0.1)]||0,p50:vals[Math.floor(vals.length*0.5)]||0,p90:vals[Math.floor(vals.length*0.9)]||0};}
+m.pubQualSnap={...pubQual};
+m.sampledTrending={};for(const id of sampledArticleIds){const a=articles.find(x=>x.id===id);m.sampledTrending[id]=a?a.trendingScore:0;}
+m.trendingTop=[...articles].sort((a,b)=>b.trendingScore-a.trendingScore).slice(0,10).map(a=>({id:a.id,pub:a.publicationName,ts:a.trendingScore}));
+m.avgP=m.count>0?m.pSum/m.count:0;m.avgT=m.count>0?m.tSum/m.count:0;m.avgR=m.count>0?m.rSum/m.count:0;m.avgQ=m.count>0?m.qSum/m.count:0;m.avgFS=m.count>0?m.fsSum/m.count:0;m.avgInitP=m.initCount>0?m.initPSum/m.initCount:0;m.avgInitT=m.initCount>0?m.initTSum/m.initCount:0;m.avgInitR=m.initCount>0?m.initRSum/m.initCount:0;m.avgInitQ=m.initCount>0?m.initQSum/m.initCount:0;m.avgInitFS=m.initCount>0?m.initFSSum/m.initCount:0;m.avgPubs=m.pubs/(g.users.length*config.feedsPerDay);
+m.weightHigh/=g.users.length;m.weightLow/=g.users.length;m.weightMid/=g.users.length;});
+for(const u of allUsers){for(const c of Object.keys(u.cw))u.cw[c]=decayW(u.cw[c],baseConfig.decayRate,baseConfig.minW,baseConfig.maxW);for(const k of Object.keys(u.clw))u.clw[k]=decayW(u.clw[k],baseConfig.decayRate,baseConfig.minW,baseConfig.maxW);for(const p of Object.keys(u.pw))u.pw[p]=decayW(u.pw[p],baseConfig.decayRate,baseConfig.minW,baseConfig.maxW);}
+for(const a of articles){if(a.trendingScore>1)a.trendingScore*=baseConfig.tDecay;}
+onProgress(currentDay);
+currentDay++;setTimeout(processDay,0);}
+setTimeout(processDay,0);}
+
+// ====== Config-tab state + orchestration ======
+let configTabs=[]; // {id, name, appConfig, simSize, personaResults:{personaName:simData}, mode:'grid'|'detail', detailPersona}
+let activeTabId=null;
+let tabCounter=0;
+
+function runComparison(){
+const appConfig=getAppConfig();
+let simSize=getSimSize();
+const fastMode=document.getElementById('fastMode').checked;
+if(fastMode){simSize={...simSize,numUsers:Math.min(simSize.numUsers,200),numDays:Math.min(simSize.numDays,7)};}
+const enabled=personas.filter(p=>p.enabled);
+if(enabled.length===0){alert('Enable at least one persona.');return;}
+document.getElementById('loading').style.display='block';
+document.getElementById('resultsContent').style.display='none';
+document.getElementById('progressFill').style.width='0%';
+// Unified run: ALL enabled personas coexist in ONE shared system, split by population weight.
+// numUsers is the TOTAL mixed population across all personas (e.g. 5×200 = 1000 users, one world).
+function prog(day){const overall=(day/simSize.numDays*100);document.getElementById('loadingStatus').textContent=`Unified system — ${enabled.length} persona types mixed — Day ${day}/${simSize.numDays}`;document.getElementById('progressFill').style.width=overall.toFixed(1)+'%';}
+runUnifiedSim(appConfig,simSize,enabled,prog,(personaResults)=>{
+document.getElementById('loading').style.display='none';
+tabCounter++;const tabId='tab_'+tabCounter;
+const tab={id:tabId,name:`Config ${tabCounter}`,appConfig,simSize,fastMode,personaResults,mode:'grid',detailPersona:enabled[0].name};
+configTabs.push(tab);activeTabId=tabId;renderTabs();renderTabContent();});
+}
+
+function renderTabs(){
+const strip=document.getElementById('tabStrip');
+const action=document.getElementById('tabAction');
+if(configTabs.length===0){
+strip.innerHTML='<span style="color:#888;font-size:12px;padding:8px 4px">No configs yet — run a simulation to create your first tab.</span>';
+action.style.display='none';return;}
+let html='';
+configTabs.forEach(t=>{
+const active=t.id===activeTabId?'active':'';
+html+=`<div class="config-tab ${active}" onclick="switchTab('${t.id}')" title="Click to view">
+<span contenteditable="false" ondblclick="event.stopPropagation();renameTab('${t.id}',this)">${escapeHtml(t.name)}</span>
+<span class="tab-close" onclick="event.stopPropagation();closeTab('${t.id}')" title="Close">×</span>
+</div>`;
+});
+html+=`<div class="tab-action"><button class="small secondary" onclick="openCompare()">⇄ Compare All</button></div>`;
+strip.innerHTML=html;
+}
+function switchTab(id){activeTabId=id;renderTabs();renderTabContent();}
+function closeTab(id){
+const idx=configTabs.findIndex(t=>t.id===id);if(idx<0)return;
+configTabs.splice(idx,1);
+if(activeTabId===id){activeTabId=configTabs.length?configTabs[Math.min(idx,configTabs.length-1)].id:null;}
+renderTabs();renderTabContent();
+}
+function renameTab(id,span){
+span.setAttribute('contenteditable','true');span.focus();
+const finish=()=>{const v=span.textContent.trim()||'Untitled';const t=configTabs.find(x=>x.id===id);if(t)t.name=v;span.setAttribute('contenteditable','false');span.textContent=v;span.removeEventListener('blur',finish);span.removeEventListener('keydown',onKey);renderTabs();};
+const onKey=e=>{if(e.key==='Enter'){e.preventDefault();span.blur();}};
+span.addEventListener('blur',finish);span.addEventListener('keydown',onKey);
+}
+
+function getActiveTab(){return configTabs.find(t=>t.id===activeTabId);}
+
+function renderTabContent(){
+const content=document.getElementById('resultsContent');
+const tab=getActiveTab();
+if(!tab){content.style.display='none';return;}
+content.style.display='block';
+const pNames=Object.keys(tab.personaResults);
+let html=`<div class="mode-toggle">
+<button class="${tab.mode==='grid'?'active':''}" onclick="setMode('grid')">⊞ Persona Comparison</button>
+<button class="${tab.mode==='detail'?'active':''}" onclick="setMode('detail')">📊 Persona Detail (full charts)</button>
+<span class="help" data-help="modeToggle" title="What are these two views?">?</span>
+<span style="color:#888;font-size:11px;margin-left:auto">App config snapshot — P:${tab.appConfig.sw.P.toFixed(2)} T:${tab.appConfig.sw.T.toFixed(2)} R:${tab.appConfig.sw.R.toFixed(2)} Q:${tab.appConfig.sw.Q.toFixed(2)} | ${tab.fastMode?'fast (≤200u×7d)':'full ('+tab.simSize.numUsers+'u×'+tab.simSize.numDays+'d)'}</span>
+</div>`;
+if(tab.mode==='grid'){html+=renderPersonaGridHTML(tab,pNames);}
+else{html+=renderPersonaDetailHTML(tab,pNames);}
+content.innerHTML=html;
+if(tab.mode==='grid'){drawPersonaGridSparklines(tab,pNames);}
+else{drawPersonaDetailCharts(tab);}
+}
+function setMode(m){const t=getActiveTab();if(t){t.mode=m;renderTabContent();}}
+
+// ====== MODE A: Persona Comparison grid ======
+const METRICS=[
+{key:'avgP',label:'Avg P-Score (final)',desc:'How personalised the feed feels by the end. Higher = the algorithm learned the user\'s tastes.',fmt:v=>v.toFixed(3),higherBetter:true},
+{key:'avgFS',label:'Avg Final Score',desc:'Average overall article score on the final day. Higher = better-ranked feed overall.',fmt:v=>v.toFixed(3),higherBetter:true},
+{key:'pDom',label:'P Dominant %',desc:'Share of articles where personalization was the top scoring factor. Higher = personalization drives the feed.',fmt:v=>(v*100).toFixed(1)+'%',higherBetter:true},
+{key:'highTranche',label:'High Tranche %',desc:'Share of articles passing the high-quality threshold. Higher = this user sees more top-tier content.',fmt:v=>(v*100).toFixed(1)+'%',higherBetter:true},
+{key:'avgPubs',label:'Feed Diversity',desc:'Distinct publishers shown per feed. Higher = more varied sources, less echo-chamber.',fmt:v=>v.toFixed(1),higherBetter:true},
+{key:'weightSpread',label:'Weight Spread',desc:'Gap between a user\'s strongest and weakest category weights. Higher = more differentiated preferences.',fmt:v=>v.toFixed(2),higherBetter:false}
+];
+function extractMetric(simData,key){
+const dm=simData.dailyMetrics;const dN=dm[dm.length-1];if(!dN)return 0;
+if(key==='avgP')return dN.avgP;
+if(key==='avgFS')return dN.avgFS;
+if(key==='pDom')return dN.count>0?dN.dom.P/dN.count:0;
+if(key==='highTranche')return dN.count>0?dN.trancheCounts.high/dN.count:0;
+if(key==='avgPubs')return dN.avgPubs;
+if(key==='weightSpread')return dN.weightHigh-dN.weightLow;
+return 0;
+}
+function colorForValue(v,min,max,higherBetter){
+if(max-min<1e-9)return'rgba(78,204,163,0.5)';
+const t=(v-min)/(max-min);const tt=higherBetter?t:(1-t);
+const r=Math.round(233*(1-tt)+78*tt),g=Math.round(69*(1-tt)+204*tt),b=Math.round(96*(1-tt)+163*tt);
+return`rgb(${r},${g},${b})`;
+}
+function renderPersonaGridHTML(tab,pNames){
+let html=`<div class="how-to-read">
+<div class="htr-title">📖 How to read this comparison <span class="help small" data-help="gridHeader" title="How to read this grid">?</span></div>
+<div class="htr-row"><span class="htr-swatch" style="background:#4ecca3"></span><span><b>Columns</b> = the user personas you tested your app config against. <b>Rows</b> = key metrics of how the feed performed for each persona.</span></div>
+<div class="htr-row"><span class="htr-swatch" style="background:linear-gradient(90deg,#e94560,#4ecca3)"></span><span><b>Cell colours</b> compare personas <i>against each other</i> within each row: <b>green = best</b> persona for that metric, <b>red = worst</b>. It's a relative ranking, not an absolute pass/fail.</span></div>
+<div class="htr-row"><span class="htr-swatch" style="background:#4e9eff"></span><span><b>Sparkline</b> under each number = that persona's trend for the metric across simulation days (line going up = improving over time).</span></div>
+<div class="htr-row"><span class="htr-swatch" style="background:#16213e;border:1px solid #4ecca3"></span><span><b>Mini-cards on top</b> = a quick headline snapshot of how each persona fares overall (Avg P, P Dominant %, High Tranche %).</span></div>
+<div class="htr-example">Example: if <b>Engaged Power User</b> is green across most rows, your config personalises strongly for that type. If <b>Quick-Exitter</b> is red on High Tranche %, that user sees little high-quality content — a sign your config doesn't hold up for them.</div>
+</div>`;
+html+=`<div class="persona-strip"><span class="help small" data-help="miniCards" title="What are these mini-cards?">?</span>`;
+pNames.forEach(pn=>{const sd=tab.personaResults[pn];const dN=sd.dailyMetrics[sd.dailyMetrics.length-1];
+html+=`<div class="persona-pill"><div class="pill-name">${escapeHtml(pn)}</div>
+<div class="pill-stat"><span>Avg P</span><b>${dN.avgP.toFixed(3)}</b></div>
+<div class="pill-stat"><span>P Dom</span><b>${(dN.count>0?dN.dom.P/dN.count*100:0).toFixed(1)}%</b></div>
+<div class="pill-stat"><span>High %</span><b>${(dN.count>0?dN.trancheCounts.high/dN.count*100:0).toFixed(1)}%</b></div>
+</div>`;});
+html+=`</div>`;
+html+=`<div class="cmp-grid-wrap"><table class="cmp-grid"><thead><tr><th>Metric</th>`;
+pNames.forEach(pn=>{html+=`<th>${escapeHtml(pn)}<br><span style="font-weight:normal;font-size:9px;color:#888">(trajectory) <span class="help small" data-help="sparkline" title="What is the trajectory?">?</span></span></th>`;});
+html+=`</tr></thead><tbody>`;
+METRICS.forEach(m=>{
+const vals=pNames.map(pn=>extractMetric(tab.personaResults[pn],m.key));
+const min=Math.min(...vals),max=Math.max(...vals);
+html+=`<tr><td class="row-label">${m.label} <span class="help small" data-help="${m.key}" title="What is ${m.label}?">?</span><span class="metric-desc">${m.desc}</span></td>`;
+pNames.forEach((pn,i)=>{
+const v=vals[i];const bg=colorForValue(v,min,max,m.higherBetter);
+html+=`<td><div class="cmp-cell" style="background:${bg};color:#16213e;padding:4px 6px;border-radius:3px;margin-bottom:3px">${m.fmt(v)}</div><canvas class="spark-canvas" id="spark_${m.key}_${pn.replace(/\W/g,'_')}" width="120" height="28"></canvas></td>`;
+});
+html+=`</tr>`;
+});
+html+=`</tbody></table></div>`;
+html+=`<p style="font-size:11px;color:#888;margin-bottom:14px">Switch to <b>Persona Detail</b> for the full chart suite of any one persona. Run again with different app settings to add a comparison tab, then use <b>Compare All</b>.</p>`;
+return html;
+}
+function drawPersonaGridSparklines(tab,pNames){
+METRICS.forEach(m=>{
+pNames.forEach(pn=>{
+const canvas=document.getElementById(`spark_${m.key}_${pn.replace(/\W/g,'_')}`);
+if(!canvas)return;const ctx=canvas.getContext('2d');const w=canvas.width,h=canvas.height;
+ctx.clearRect(0,0,w,h);
+const sd=tab.personaResults[pn];let series;
+if(m.key==='avgP')series=sd.dailyMetrics.map(d=>d.avgP);
+else if(m.key==='avgFS')series=sd.dailyMetrics.map(d=>d.avgFS);
+else if(m.key==='pDom')series=sd.dailyMetrics.map(d=>d.count>0?d.dom.P/d.count:0);
+else if(m.key==='highTranche')series=sd.dailyMetrics.map(d=>d.count>0?d.trancheCounts.high/d.count:0);
+else if(m.key==='avgPubs')series=sd.dailyMetrics.map(d=>d.avgPubs);
+else if(m.key==='weightSpread')series=sd.dailyMetrics.map(d=>d.weightHigh-d.weightLow);
+else series=sd.dailyMetrics.map(d=>d.avgP);
+if(series.length<2)return;
+const mn=Math.min(...series),mx=Math.max(...series),rng=mx-mn||1;
+ctx.strokeStyle='#4ecca3';ctx.lineWidth=1.5;ctx.beginPath();
+series.forEach((v,i)=>{const x=2+(i/(series.length-1))*(w-4);const y=h-2-((v-mn)/rng)*(h-4);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+ctx.stroke();ctx.fillStyle='#4ecca3';const lx=2+((series.length-1)/(series.length-1))*(w-4);const ly=h-2-((series[series.length-1]-mn)/rng)*(h-4);ctx.beginPath();ctx.arc(lx,ly,2,0,Math.PI*2);ctx.fill();
+});
+});
+}
+
+// ====== MODE B: Persona Detail (full chart suite per persona) ======
+function renderPersonaDetailHTML(tab,pNames){
+let html=`<div class="persona-selector"><span class="ps-label">Inspect persona:</span>`;
+pNames.forEach(pn=>{const active=pn===tab.detailPersona?'active':'';html+=`<button class="persona-btn ${active}" onclick="selectDetailPersona('${escapeAttr(pn)}')">${escapeHtml(pn)}</button>`;});
+html+=`</div>`;
+const pn=tab.detailPersona&&tab.personaResults[tab.detailPersona]?tab.detailPersona:pNames[0];
+const sd=tab.personaResults[pn];
+const dm=sd.dailyMetrics,d1=dm[0],dN=dm[dm.length-1];
+html+=`<div class="summary-cards">`;
+const cards=[
+{label:'Persona',value:escapeHtml(pn)},
+{label:'Avg P-Score (Day 1)',value:d1.avgP.toFixed(3)},
+{label:`Avg P-Score (Day ${dm.length})`,value:dN.avgP.toFixed(3),delta:`${((dN.avgP-d1.avgP)/(d1.avgP||1)*100).toFixed(1)}%`},
+{label:'P Dominant (final)',value:`${(dN.count>0?dN.dom.P/dN.count*100:0).toFixed(1)}%`},
+{label:'Avg Final Score (final)',value:dN.avgFS.toFixed(3)},
+{label:'Avg Distinct Publishers',value:dN.avgPubs.toFixed(1)},
+{label:'High Tranche % (final)',value:`${(dN.count>0?dN.trancheCounts.high/dN.count*100:0).toFixed(1)}%`}
+];
+cards.forEach(c=>{html+=`<div class="summary-card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.delta?`<div class="delta">${c.delta}</div>`:''}</div>`;});
+html+=`</div>`;
+// Unique canvas ids scoped to persona so multiple personas don't collide
+const suf=pn.replace(/\W/g,'_');
+html+=`<div class="chart-container"><h3>P-Score Distribution Over Time <span class="help small" data-help="pScore" title="What is this chart?">?</span></h3><div class="subtitle">Day 1 (red) → mid (green) → final (blue). Right shift = personalization improving.</div><canvas id="pScoreChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Dominant Component Shift Over Time <span class="help small" data-help="dominant" title="What is this chart?">?</span></h3><div class="subtitle">Which scoring component dominates. Watch P (blue) grow as personalization learns.</div><canvas id="dominantChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Category Weight Spread Over Time <span class="help small" data-help="weight" title="What is this chart?">?</span></h3><div class="subtitle">Avg highest (red) / middle (green) / lowest (blue) category weight per user.</div><canvas id="weightChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Final Score Distribution (Day 1 vs Final) <span class="help small" data-help="finalScore" title="What is this chart?">?</span></h3><div class="subtitle">Overall article scores. Right shift over time = improving feed quality.</div><canvas id="finalScoreChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Tranche Breakdown Over Time <span class="help small" data-help="tranche" title="What is this chart?">?</span></h3><div class="subtitle">High (green) should grow, tail (red) shrink as personalization improves.</div><canvas id="trancheChart_${suf}" width="800" height="180"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Per-User P-Score Distribution (final) <span class="help small" data-help="userP" title="What is this chart?">?</span></h3><div class="subtitle">Each user's avg P-score on the final day. Wide spread = personalization works.</div><canvas id="userPChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Feed Diversity Over Time <span class="help small" data-help="diversity" title="What is this chart?">?</span></h3><div class="subtitle">Avg distinct publishers per feed. Higher = more diverse sources.</div><canvas id="diversityChart_${suf}" width="800" height="180"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Individual Publisher Quality (Q) Over Time <span class="help small" data-help="pubQ" title="What is this chart?">?</span></h3><div class="subtitle">Each line = one publisher's crowd-sourced quality score. Saves/likes raise it, not-interested/quick-exit lower it. Legend shows the top 5 and bottom 5 publishers by final Q.</div><canvas id="pubQChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Average Score Composition Per Day <span class="help small" data-help="scoreComp" title="What is this chart?">?</span></h3><div class="subtitle">Absolute 0.00–1.00 score scale, shared across personas/configs. Stacked weighted contributions (sw.P·avgInitP + sw.T·avgInitT + sw.R·avgInitR + sw.Q·avgInitQ) to the day's average <b>initial</b> final score — all candidates, before tranche selection.</div><canvas id="scoreCompChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Trending Score Leaderboard Over Time <span class="help small" data-help="trending" title="What is this chart?">?</span></h3><div class="subtitle">Top articles by trendingScore each day. Lines climb from saves/likes/reads, then decay (×0.9057/day) — validates trending dynamics.</div><canvas id="trendingChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Per-Day Metrics ▸ <span class="help small" data-help="dayTable" title="What is this table?">?</span></h3><div class="table-container"><table class="data-table" id="dayTable_${suf}"></table></div></div>`;
+// ====== User Inspector section ======
+const users=sd.sampledUsers||[];
+if(users.length){
+const ui=tab.inspectorUser||0;
+const u=users[Math.min(ui,users.length-1)];
+html+=`<div class="chart-container"><h3>👤 Individual User Inspector <span class="help small" data-help="userInspector" title="What is this?">?</span></h3><div class="subtitle">5 randomly sampled users from this persona. Inspect how each user's category weights evolved and what variables were assigned to them.</div>`;
+html+=`<div class="persona-selector"><span class="ps-label">Inspect user:</span>`;
+users.forEach((uu,idx)=>{const active=idx===ui?'active':'';html+=`<button class="persona-btn ${active}" onclick="selectInspectorUser(${idx})">User ${idx+1}</button>`;});
+html+=`</div>`;
+html+=`<div class="chart-container"><h3>Category Weights Over Time <span class="help small" data-help="userCat" title="What is this chart?">?</span></h3><div class="subtitle">Each line = one category's weight for this user. Divergence from 1.0 = learned preference.</div><canvas id="userCatChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Final Weightings per Category <span class="help small" data-help="userFinal" title="What is this chart?">?</span></h3><div class="subtitle">This user's final category weights. Higher = stronger learned preference.</div><canvas id="userFinalChart_${suf}" width="800" height="280"></canvas></div>`;
+html+=`<div class="chart-container"><h3>Assigned Variable Configs <span class="help small" data-help="userConfig" title="What is this table?">?</span></h3><div class="table-container"><table class="data-table" id="userConfigTable_${suf}"></table></div></div>`;
+html+=`</div>`;
+}
+html+=`</div>`;
+return html;
+}
+function selectDetailPersona(pn){
+const t=getActiveTab();if(!t)return;
+const results=document.getElementById('results');
+const scrollTop=results.scrollTop;
+t.detailPersona=pn;
+renderTabContent();
+results.scrollTop=scrollTop;
+}
+function selectInspectorUser(idx){
+const t=getActiveTab();if(!t)return;
+const results=document.getElementById('results');
+const scrollTop=results.scrollTop;
+t.inspectorUser=idx;
+renderTabContent();
+results.scrollTop=scrollTop;
+}
+
+// ====== Chart helpers (Mode B draws) ======
+function drawAxis(ctx,w,h,p,xL,yL){ctx.strokeStyle='#0f3460';ctx.fillStyle='#888';ctx.font='11px Segoe UI';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p,h-p);ctx.lineTo(w-p,h-p);ctx.stroke();ctx.beginPath();ctx.moveTo(p,p);ctx.lineTo(p,h-p);ctx.stroke();if(xL){ctx.textAlign='center';ctx.fillText(xL,w/2,h-5);}if(yL){ctx.save();ctx.translate(10,h/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.fillText(yL,0,0);ctx.restore();}}
+function drawHist(ctx,hist,color,w,h,p,xMin,xMax){const max=Math.max(...hist,1);const bw=(w-2*p)/hist.length;ctx.fillStyle=color;for(let i=0;i<hist.length;i++){const bh=(hist[i]/max)*(h-2*p);ctx.fillRect(p+i*bw,h-p-bh,bw-1,bh);}ctx.fillStyle='#888';ctx.font='10px Segoe UI';ctx.textAlign='center';for(let i=0;i<=4;i++){const v=xMin+(xMax-xMin)*i/4;ctx.fillText(v.toFixed(2),p+(w-2*p)*i/4,h-p+12);}}
+
+function drawPersonaDetailCharts(tab){
+const pn=tab.detailPersona&&tab.personaResults[tab.detailPersona]?tab.detailPersona:Object.keys(tab.personaResults)[0];
+const sd=tab.personaResults[pn];if(!sd)return;const suf=pn.replace(/\W/g,'_');
+drawPScore(sd,suf);drawDominant(sd,suf);drawWeight(sd,suf);drawFinalScore(sd,suf);drawTranche(sd,suf);drawUserP(sd,suf);drawDiversity(sd,suf);drawPubQ(sd,suf);drawScoreComp(sd,suf);drawTrending(sd,suf);fillDayTable(sd,suf);drawUserInspector(tab,sd,suf);
+}
+function drawUserInspector(tab,sd,suf){
+const users=sd.sampledUsers||[];if(!users.length)return;
+const ui=tab.inspectorUser||0;const u=users[Math.min(ui,users.length-1)];
+drawUserCatHistory(u,suf);drawUserFinalWeights(u,suf);fillUserConfigTable(u,suf);
+}
+function drawUserCatHistory(u,suf){const c=document.getElementById('userCatChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);const gutter=200;const plotW=w-p-gutter;drawAxis(ctx,plotW+p,h,p,'Day','Category Weight (1.0=neutral)');const hist=u.weightHistory||[];const denom=hist.length>1?hist.length-1:1;const palette=['#4ecca3','#4e9eff','#ff9e4e','#ff4e9e','#e94560','#9e4eff','#4eff9e','#ffd24e','#4ec9ff'];CATEGORIES.forEach((cat,i)=>{const col=palette[i%palette.length];ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();for(let d=0;d<hist.length;d++){const v=hist[d][cat]||1;const x=p+(d/denom)*plotW;const y=h-p-((v-0.5)/4.5)*(h-2*p);if(d===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});ctx.fillStyle='rgba(15,52,96,0.9)';ctx.fillRect(plotW+p+10,10,w-(plotW+p)-20,h-20);ctx.font='10px Segoe UI';ctx.textAlign='left';CATEGORIES.forEach((cat,i)=>{ctx.fillStyle=palette[i%palette.length];ctx.fillRect(plotW+p+18,14+i*16,10,10);ctx.fillStyle='#ccc';ctx.fillText(cat.substring(0,12),plotW+p+34,23+i*16);});}
+function drawUserFinalWeights(u,suf){const c=document.getElementById('userFinalChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);const maxW=Math.max(...CATEGORIES.map(cat=>u.cw[cat]||1),1);const barH=(h-2*p-20)/CATEGORIES.length;ctx.font='11px Segoe UI';CATEGORIES.forEach((cat,i)=>{const v=u.cw[cat]||1;const y=p+i*barH;ctx.fillStyle='#4ecca3';ctx.fillRect(p,y,(v/maxW)*(w-2*p),barH-4);ctx.fillStyle='#ccc';ctx.textAlign='left';ctx.fillText(cat,4,y+barH/2+4);ctx.textAlign='right';ctx.fillText(v.toFixed(2),w-p-4,y+barH/2+4);});}
+function fillUserConfigTable(u,suf){const t=document.getElementById('userConfigTable_'+suf);if(!t)return;const rateLabels={readThorough:'Read Thorough',readSkim:'Read Skim',readShallow:'Read Shallow',quickExit:'Quick Exit',swipeNext:'Swipe Next',swipeNotInterested:'Not Interested',save:'Save',like:'Like'};let h='<thead><tr><th>Variable</th><th>Value</th></tr></thead><tbody>';for(const[k,label]of Object.entries(rateLabels)){h+=`<tr><td>${label} rate</td><td>${(u.rates[k]||0).toFixed(3)}</td></tr>`;}h+=`<tr><td>WPM</td><td>${u.wpm}</td></tr>`;
+h+=`<tr><td>Preference Influence</td><td>${u.prefInf.toFixed(2)}</td></tr>`;
+h+=`<tr><td>Consistency</td><td>${u.consist.toFixed(2)}</td></tr>`;
+h+=`<tr><td>Articles Read</td><td>${u.read}</td></tr>`;
+h+=`<tr><td>Articles Shown</td><td>${u.shownCount}</td></tr>`;
+h+='</tbody>';t.innerHTML=h;}
+function drawPScore(sd,suf){const c=document.getElementById('pScoreChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'P-Score (0→1)','Count');const dm=sd.dailyMetrics;const days=[0,Math.floor(dm.length/2),dm.length-1];const colors=['rgba(233,69,96,0.4)','rgba(78,204,163,0.5)','rgba(100,149,237,0.6)'];const labels=['Day 1',`Day ${days[1]+1}`,`Day ${days[2]+1}`];ctx.textAlign='left';ctx.font='11px Segoe UI';for(let i=0;i<days.length;i++){ctx.fillStyle=colors[i];ctx.fillRect(w-120,p+i*18,12,12);ctx.fillStyle='#ccc';ctx.fillText(labels[i],w-100,p+i*18+10);}for(let i=0;i<days.length;i++)drawHist(ctx,dm[days[i]].pHist,colors[i],w,h,p,0,1);}
+function drawDominant(sd,suf){const c=document.getElementById('dominantChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'Day','% of Articles');const dm=sd.dailyMetrics,comps=['P','T','R','Q'],colors={P:'#4e9eff',T:'#ff9e4e',R:'#4eff9e',Q:'#ff4e9e'};const bw=(w-2*p)/dm.length;for(let i=0;i<dm.length;i++){const t=dm[i].count;let y=h-p;for(const comp of comps){const pct=dm[i].dom[comp]/t;const bh=pct*(h-2*p);ctx.fillStyle=colors[comp];ctx.fillRect(p+i*bw,y-bh,bw-2,bh);y-=bh;}if(i%Math.max(1,Math.floor(dm.length/10))===0){ctx.fillStyle='#888';ctx.font='10px Segoe UI';ctx.textAlign='center';ctx.fillText(`D${i+1}`,p+i*bw+bw/2,h-p+12);}}ctx.font='11px Segoe UI';for(let i=0;i<comps.length;i++){ctx.fillStyle=colors[comps[i]];ctx.fillRect(w-60,10+i*18,12,12);ctx.fillStyle='#ccc';ctx.fillText(comps[i],w-42,20+i*18);}}
+function drawWeight(sd,suf){const c=document.getElementById('weightChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'Day','Category Weight (1.0=neutral)');const dm=sd.dailyMetrics;const denom=dm.length>1?dm.length-1:1;ctx.fillStyle='rgba(78,204,163,0.15)';ctx.beginPath();for(let i=0;i<dm.length;i++){const x=p+(i/denom)*(w-2*p);const y=h-p-((dm[i].weightHigh-0.5)/4.5)*(h-2*p);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}for(let i=dm.length-1;i>=0;i--){const x=p+(i/denom)*(w-2*p);const y=h-p-((dm[i].weightLow-0.5)/4.5)*(h-2*p);ctx.lineTo(x,y);}ctx.closePath();ctx.fill();
+[['#e94560','weightHigh'],['#4e9eff','weightLow'],['#4ecca3','weightMid']].forEach(([col,k])=>{ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();for(let i=0;i<dm.length;i++){const x=p+(i/denom)*(w-2*p);const y=h-p-((dm[i][k]-0.5)/4.5)*(h-2*p);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});
+ctx.fillStyle='#888';ctx.font='10px Segoe UI';ctx.textAlign='right';for(let i=0;i<=5;i++){const v=0.5+i*0.9;const y=h-p-(i/5)*(h-2*p);ctx.fillText(v.toFixed(1),p-5,y+3);}
+ctx.font='11px Segoe UI';ctx.fillStyle='#e94560';ctx.fillRect(w-110,10,12,12);ctx.fillStyle='#ccc';ctx.fillText('Avg Highest',w-92,20);ctx.fillStyle='#4ecca3';ctx.fillRect(w-110,28,12,12);ctx.fillStyle='#ccc';ctx.fillText('Avg Middle',w-92,38);ctx.fillStyle='#4e9eff';ctx.fillRect(w-110,46,12,12);ctx.fillStyle='#ccc';ctx.fillText('Avg Lowest',w-92,54);}
+function drawFinalScore(sd,suf){const c=document.getElementById('finalScoreChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'Final Score','Count');const dm=sd.dailyMetrics;drawHist(ctx,dm[0].fsHist,'rgba(233,69,96,0.5)',w,h,p,0,1);drawHist(ctx,dm[dm.length-1].fsHist,'rgba(100,149,237,0.5)',w,h,p,0,1);ctx.textAlign='left';ctx.font='11px Segoe UI';ctx.fillStyle='rgba(233,69,96,0.8)';ctx.fillRect(w-110,p,12,12);ctx.fillStyle='#ccc';ctx.fillText('Day 1',w-90,p+10);ctx.fillStyle='rgba(100,149,237,0.8)';ctx.fillRect(w-110,p+18,12,12);ctx.fillStyle='#ccc';ctx.fillText('Final',w-90,p+28);}
+function drawTranche(sd,suf){const c=document.getElementById('trancheChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'Day','Articles');const dm=sd.dailyMetrics;const denom=dm.length>1?dm.length-1:1;const bw=(w-2*p)/dm.length;const colors={high:'#4ecca3',mid:'#ff9e4e',tail:'#e94560'};for(let i=0;i<dm.length;i++){const t=dm[i].count||1;let y=h-p;[['high','High'],['mid','Mid'],['tail','Tail']].forEach(([k])=>{const pct=dm[i].trancheCounts[k]/t;const bh=pct*(h-2*p);ctx.fillStyle=colors[k];ctx.fillRect(p+i*bw,y-bh,bw-2,bh);y-=bh;});if(i%Math.max(1,Math.floor(dm.length/10))===0){ctx.fillStyle='#888';ctx.font='10px Segoe UI';ctx.textAlign='center';ctx.fillText(`D${i+1}`,p+i*bw+bw/2,h-p+12);}}
+ctx.font='11px Segoe UI';[['High','#4ecca3'],['Mid','#ff9e4e'],['Tail','#e94560']].forEach(([lab,col],i)=>{ctx.fillStyle=col;ctx.fillRect(w-70,10+i*18,12,12);ctx.fillStyle='#ccc';ctx.fillText(lab,w-50,20+i*18);});}
+function drawUserP(sd,suf){const c=document.getElementById('userPChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'Avg P-Score per User','User Count');const hist=new Array(20).fill(0);for(const u of sd.users){if(u.shownCount>0){const avgP=u.pSum/u.shownCount;hist[Math.min(19,Math.floor(avgP*20))]++;}}drawHist(ctx,hist,'rgba(78,158,255,0.6)',w,h,p,0,1);}
+function drawDiversity(sd,suf){const c=document.getElementById('diversityChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'Day','Distinct Publishers');const dm=sd.dailyMetrics;const denom=dm.length>1?dm.length-1:1;const maxPubs=Math.max(...dm.map(d=>d.avgPubs),1);ctx.strokeStyle='#4ecca3';ctx.lineWidth=2;ctx.beginPath();for(let i=0;i<dm.length;i++){const x=p+(i/denom)*(w-2*p);const y=h-p-(dm[i].avgPubs/maxPubs)*(h-2*p);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();ctx.fillStyle='#888';ctx.font='10px Segoe UI';ctx.textAlign='right';for(let i=0;i<=5;i++){const y=h-p-(i/5)*(h-2*p);ctx.fillText(Math.round(maxPubs*i/5),p-5,y+3);}}
+function drawPubQ(sd,suf){const c=document.getElementById('pubQChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);const gutter=200;const plotW=w-p-gutter;drawAxis(ctx,plotW+p,h,p,'Day','Publisher Quality (Q)');const dm=sd.dailyMetrics;const denom=dm.length>1?dm.length-1:1;const pubs=sd.sampledPublishers||[];const palette=['#4ecca3','#4e9eff','#ff9e4e','#ff4e9e','#e94560','#9e4eff','#4eff9e','#ffd24e'];pubs.forEach((pub,i)=>{const col=palette[i%palette.length];ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();for(let d=0;d<dm.length;d++){const v=dm[d].pubQualSnap[pub]??0.8;const x=p+(d/denom)*plotW;const y=h-p-(v/1.0)*(h-2*p);if(d===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();});ctx.fillStyle='rgba(15,52,96,0.9)';ctx.fillRect(plotW+p+10,10,w-(plotW+p)-20,h-20);ctx.font='11px Segoe UI';ctx.textAlign='left';ctx.fillStyle='#4ecca3';ctx.fillText('Sampled publishers:',plotW+p+18,26);pubs.forEach((pub,i)=>{ctx.fillStyle=palette[i%palette.length];ctx.fillRect(plotW+p+18,32+i*18,10,10);ctx.fillStyle='#ccc';ctx.fillText(pub.substring(0,16),plotW+p+34,41+i*18);});}
+function drawScoreComp(sd,suf){const c=document.getElementById('scoreCompChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);drawAxis(ctx,w,h,p,'Day','Avg Final Score (initial)');const dm=sd.dailyMetrics;const bw=(w-2*p)/dm.length;const sw=sd.config.sw||{P:0.6,T:0.15,R:0.1,Q:0.15};const comps=[['P','#4e9eff'],['T','#ff9e4e'],['R','#4eff9e'],['Q','#ff4e9e']];const scoreMax=1;for(let tick=0;tick<=4;tick++){const value=tick/4;const y=h-p-value*(h-2*p);ctx.strokeStyle='rgba(15,52,96,0.55)';ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();ctx.fillStyle='#888';ctx.font='10px Segoe UI';ctx.textAlign='right';ctx.fillText(value.toFixed(2),p-5,y+3);}for(let i=0;i<dm.length;i++){const d=dm[i];let y=h-p;for(const[comp,col]of comps){const v=(d['avgInit'+comp]||0)*sw[comp];const bh=(v/scoreMax)*(h-2*p);ctx.fillStyle=col;ctx.fillRect(p+i*bw+bw*0.15,y-bh,bw*0.7,bh);y-=bh;}ctx.fillStyle='#888';ctx.font='10px Segoe UI';ctx.textAlign='center';ctx.fillText(`D${d.day}`,p+i*bw+bw/2,h-p+12);}ctx.font='11px Segoe UI';ctx.textAlign='left';for(let i=0;i<comps.length;i++){ctx.fillStyle=comps[i][1];ctx.fillRect(w-110,10+i*18,12,12);ctx.fillStyle='#ccc';ctx.fillText(comps[i][0]+' (×'+sw[comps[i][0]].toFixed(2)+')',w-92,20+i*18);}ctx.fillStyle='#888';ctx.fillText('Absolute scale: 0.00–1.00',w-110,10+comps.length*18);ctx.fillText('Total = avg initial final score',w-110,28+comps.length*18);}
+function drawTrending(sd,suf){const c=document.getElementById('trendingChart_'+suf);if(!c)return;const ctx=c.getContext('2d'),w=c.width,h=c.height,p=40;ctx.clearRect(0,0,w,h);const gutter=200;const plotW=w-p-gutter;drawAxis(ctx,plotW+p,h,p,'Day','Trending Score');const dm=sd.dailyMetrics;const denom=dm.length>1?dm.length-1:1;const ids=sd.sampledArticleIds||[];const maxTS=Math.max(...ids.flatMap(id=>dm.map(d=>d.sampledTrending?.[id]||0)),1);if(maxTS<0.5){ctx.fillStyle='#888';ctx.font='13px Segoe UI';ctx.textAlign='center';ctx.fillText('No significant trending activity for this persona',w/2,h/2);return;}const maxCap=sd.config.maxTS||50;ctx.strokeStyle='rgba(233,69,96,0.6)';ctx.setLineDash([6,4]);ctx.beginPath();const capY=h-p-(maxCap/maxTS)*(h-2*p);ctx.moveTo(p,capY);ctx.lineTo(p+plotW,capY);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#e94560';ctx.font='10px Segoe UI';ctx.textAlign='left';ctx.fillText('MAX_TRENDING_SCORE',p+4,capY-4);const finalScores=ids.map(id=>({id,ts:dm[dm.length-1].sampledTrending?.[id]||0}));const sorted=[...finalScores].sort((a,b)=>b.ts-a.ts);const top5=sorted.slice(0,5),bot5=sorted.slice(-5);const colorFor={};top5.forEach((a,i)=>colorFor[a.id]=`rgb(${Math.round(78+ (233-78)*i/4)},${Math.round(204-(204-69)*i/4)},${Math.round(163-(163-96)*i/4)})`);bot5.forEach((a,i)=>colorFor[a.id]=`rgb(${Math.round(233-(233-78)*i/4)},${Math.round(69+(204-69)*i/4)},${Math.round(96+(163-96)*i/4)})`);ids.forEach(id=>{const col=colorFor[id]||'rgba(120,130,150,0.3)';ctx.strokeStyle=col;ctx.lineWidth=colorFor[id]?1.5:1;ctx.beginPath();let started=false;for(let d=0;d<dm.length;d++){const v=dm[d].sampledTrending?.[id]||0;const x=p+(d/denom)*plotW;const y=h-p-(v/maxTS)*(h-2*p);if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);}ctx.stroke();});ctx.fillStyle='rgba(15,52,96,0.9)';ctx.fillRect(plotW+p+10,10,w-(plotW+p)-20,h-20);ctx.font='10px Segoe UI';ctx.textAlign='left';ctx.fillStyle='#4ecca3';ctx.fillText('Top 5 by final score:',plotW+p+18,24);top5.forEach((a,i)=>{ctx.fillStyle=colorFor[a.id];ctx.fillRect(plotW+p+18,30+i*16,10,10);ctx.fillStyle='#ccc';ctx.fillText(a.id.replace('article_','a')+' '+a.ts.toFixed(1),plotW+p+34,39+i*16);});ctx.fillStyle='#e94560';ctx.fillText('Bottom 5:',plotW+p+18,30+top5.length*16);bot5.forEach((a,i)=>{ctx.fillStyle=colorFor[a.id];ctx.fillRect(plotW+p+18,36+top5.length*16+i*16,10,10);ctx.fillStyle='#ccc';ctx.fillText(a.id.replace('article_','a')+' '+a.ts.toFixed(1),plotW+p+34,45+top5.length*16+i*16);});}
+function fillDayTable(sd,suf){const t=document.getElementById('dayTable_'+suf);if(!t)return;const dm=sd.dailyMetrics;let h='<thead><tr><th>Day</th><th>Count</th><th>Avg P</th><th>Avg FS</th><th>P Dom%</th><th>High%</th><th>Mid%</th><th>Tail%</th><th>Pubs</th></tr></thead><tbody>';dm.forEach(d=>{h+=`<tr><td>D${d.day}</td><td>${d.count}</td><td>${d.avgP.toFixed(3)}</td><td>${d.avgFS.toFixed(3)}</td><td>${(d.count>0?d.dom.P/d.count*100:0).toFixed(1)}</td><td>${(d.count>0?d.trancheCounts.high/d.count*100:0).toFixed(1)}</td><td>${(d.count>0?d.trancheCounts.mid/d.count*100:0).toFixed(1)}</td><td>${(d.count>0?d.trancheCounts.tail/d.count*100:0).toFixed(1)}</td><td>${d.avgPubs.toFixed(1)}</td></tr>`;});h+='</tbody>';t.innerHTML=h;}
+
+// ====== Cross-tab Compare overlay ======
+function openCompare(){
+if(configTabs.length<1){alert('Run at least one config first.');return;}
+const ov=document.getElementById('compareOverlay');
+const tabs=configTabs;
+const pNames=[...new Set(tabs.flatMap(t=>Object.keys(t.personaResults)))];
+let html=`<div class="ov-inner"><div class="ov-head"><h2>⇄ Compare Configs Across Personas <span class="help small" data-help="compare" title="How to read this comparison">?</span></h2><button class="ov-close" onclick="closeCompare()">×</button></div>`;
+html+=`<p style="color:#a0a0b0;font-size:12px;margin-bottom:14px">Each block is one metric × one persona. Columns = config tabs. Cells colour-coded <span style="color:#4ecca3">green=best</span> → <span style="color:#e94560">red=worst</span> within each row. This is the side-by-side answer to "which config wins for which user type?".</p>`;
+METRICS.forEach(m=>{
+html+=`<div class="cmp-grid-wrap"><h3 style="color:#4ecca3;margin-bottom:8px">${m.label} <span class="help small" data-help="${m.key}" title="What is ${m.label}?">?</span></h3><table class="cmp-grid"><thead><tr><th>Persona</th>`;
+tabs.forEach(t=>{html+=`<th>${escapeHtml(t.name)}</th>`;});
+html+=`</tr></thead><tbody>`;
+pNames.forEach(pn=>{
+const vals=tabs.map(t=>t.personaResults[pn]?extractMetric(t.personaResults[pn],m.key):null);
+if(vals.some(v=>v===null))return; // persona not present in all tabs
+const min=Math.min(...vals),max=Math.max(...vals);
+html+=`<tr><td class="row-label">${escapeHtml(pn)}</td>`;
+vals.forEach(v=>{const bg=colorForValue(v,min,max,m.higherBetter);html+=`<td><div class="cmp-cell" style="background:${bg};color:#16213e;padding:5px 7px;border-radius:3px">${m.fmt(v)}</div></td>`;});
+html+=`</tr>`;
+});
+html+=`</tbody></table></div>`;
+});
+html+=`<div style="margin-top:14px"><h3 style="color:#4ecca3;margin-bottom:8px">App Config Differences <span class="help small" data-help="compareConfigDiff" title="What is this table?">?</span></h3>`;
+// Show which app vars differ across tabs
+const ref=tabs[0];
+const flatKeys=[['P','sw.P'],['T','sw.T'],['R','sw.R'],['Q','sw.Q'],['minW','minW'],['maxW','maxW'],['decayRate','decayRate'],['lrCat','lr.category'],['lrLen','lr.length'],['lrPub','lr.publisher'],['highThresh','tranche.highThresh'],['midThresh','tranche.midThresh'],['pubCap','tranche.pubCap']];
+html+=`<div class="cmp-grid-wrap"><table class="cmp-grid"><thead><tr><th>Variable</th>`;tabs.forEach(t=>{html+=`<th>${escapeHtml(t.name)}</th>`;});html+=`</tr></thead><tbody>`;
+flatKeys.forEach(([lab,path])=>{
+const getV=(t)=>{const parts=path.split('.');let v=t.appConfig;for(const p of parts)v=v[p];return v;};
+const refV=getV(ref);const differs=tabs.some(t=>getV(t)!==refV);
+html+=`<tr><td class="row-label">${lab}${differs?' <span style="color:#e94560;font-size:9px">●</span>':''}</td>`;
+tabs.forEach(t=>{const v=getV(t);const hl=differs&&v!==refV;html+=`<td style="${hl?'background:rgba(233,69,96,0.15);font-weight:bold;color:#ff9e4e':''}">${typeof v==='number'?v:escapeHtml(String(v))}</td>`;});
+html+=`</tr>`;
+});
+html+=`</tbody></table></div></div>`;
+html+=`</div>`;
+ov.innerHTML=html;ov.style.display='block';
+}
+function closeCompare(){document.getElementById('compareOverlay').style.display='none';}
+
+// ====== Init ======
+loadPersonas();
+renderPersonaEditor();
+renderTabs();
+</script>
+</body>
+</html>

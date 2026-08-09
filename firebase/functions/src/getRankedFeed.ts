@@ -6,7 +6,7 @@
 import { onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
-import { Article, RankedFeedResult, UserProfile } from './types.js';
+import { Article, ArticleScoreDetail, RankedFeedResult, UserProfile } from './types.js';
 import {
   SCORE_WEIGHTS,
   SCORE_WEIGHTS_TAIL,
@@ -650,7 +650,12 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
     throw new Error('unauthenticated');
   }
   const userId = request.auth.uid;
-  const { seenArticleIds, client_id } = request.data as { userId?: string; seenArticleIds: string[]; client_id?: string };
+  const { seenArticleIds, client_id, includeScores } = request.data as {
+    userId?: string;
+    seenArticleIds: string[];
+    client_id?: string;
+    includeScores?: boolean;
+  };
   // GA4 web-stream client_id (32-hex UUID generated client-side). Never fall back
   // to the Auth UID — analytics.ts will mint a random id if this is missing.
   const clientId = client_id || '';
@@ -738,6 +743,10 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       scoredById.set(s.article.id, s);
     }
 
+    // High-fidelity mode: per-article scoring details, returned only when the
+    // testing dashboard explicitly asks for them (default behavior unchanged).
+    const scoreDetailById = new Map<string, ArticleScoreDetail>();
+
     // Determine tranche per article in the final feed.
     const feedArticleShownEvents: Array<{ name: string; params: Record<string, any> }> = [];
     const distinctPublishers = new Set<string>();
@@ -770,6 +779,18 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
         ['Q', SCORE_WEIGHTS.quality * compQ],
       ];
       const dominantComponent = contributions.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+
+      if (includeScores) {
+        scoreDetailById.set(article.id, {
+          scoreP: compP,
+          scoreT: compT,
+          scoreR: compR,
+          scoreQ: compQ,
+          finalScore: s.fullScore,
+          tranche,
+          dominant: dominantComponent as 'P' | 'T' | 'R' | 'Q',
+        });
+      }
 
       feedArticleShownEvents.push({
         name: 'article_shown',
@@ -816,6 +837,21 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
     sendGAEvents(clientId, feedArticleShownEvents).catch(() => {});
 
     console.log(`[getRankedFeed] Returning ${finalFeed.length} articles to client (pool size: ${pool.length})`);
+
+    // High-fidelity mode: attach each article's exact server-computed scores.
+    // Articles are shallow-cloned so the shared candidate-pool cache is untouched.
+    if (includeScores) {
+      const enrichedArticles = finalFeed.map((article) => {
+        const detail = scoreDetailById.get(article.id);
+        return detail ? { ...article, _score: detail } : article;
+      });
+      return {
+        articles: enrichedArticles,
+        generatedAt: Date.now(),
+        remainingCount: Math.max(0, unseenArticles.length - finalFeed.length),
+      };
+    }
+
     return {
       articles: finalFeed,
       generatedAt: Date.now(),

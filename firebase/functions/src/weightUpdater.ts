@@ -295,6 +295,7 @@ export async function updateWeights(userId: string, clientId?: string): Promise<
         entity_id: entityId,
         old_value: previousVal,
         new_value: val,
+        weight_delta: val - previousVal,
         trigger: triggerEventType,
       },
     });

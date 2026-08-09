@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubTick — High-Fidelity Algorithm Test (Real Backend · Per-User)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230b0f19'/><text y='0.72em' x='0.5em' font-size='58' text-anchor='middle' dominant-baseline='middle'>🧪</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-dark: #0b0f19;
+    --card-bg: rgba(22, 30, 49, 0.78);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --accent-primary: #6366f1;
+    --accent-primary-hover: #4f46e5;
+    --accent-success: #10b981;
+    --accent-warning: #f59e0b;
+    --accent-danger: #ef4444;
+    --text-main: #f3f4f6;
+    --text-muted: #9ca3af;
+    --text-dim: #6b7280;
+    --input-bg: rgba(15, 23, 42, 0.85);
+    --theta-green: #4ecca3;
+    --theta-blue: #4e9eff;
+    --theta-orange: #ff9e4e;
+    --theta-pink: #ff4e9e;
+    --theta-red: #e94560;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-dark);
+    background-image:
+      radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+      radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+    color: var(--text-main);
+    min-height: 100vh;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--card-border);
+    gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-logo { font-size: 26px; }
+  .brand-title { font-size: 19px; font-weight: 800; letter-spacing: -0.4px; }
+  .brand-subtitle { font-size: 12px; color: var(--text-muted); }
+  .header-badge {
+    font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+    background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.35);
+    white-space: nowrap;
+  }
+
+  .layout { display: grid; grid-template-columns: 460px 1fr; gap: 18px; padding: 18px 24px 30px; align-items: start; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .param-group { display: flex; flex-direction: column; gap: 8px; }
+  .param-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .param-row label { font-size: 13px; color: var(--text-main); font-weight: 500; flex: 1; }
+  .param-row .val { font-family: 'JetBrains Mono', monospace; color: var(--accent-primary); font-size: 13px; min-width: 34px; text-align: right; }
+  input[type="range"] { accent-color: var(--accent-primary); width: 150px; }
+  .hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--input-bg); border-radius: 10px; border: 1px solid var(--card-border); }
+  .toggle-row label { font-size: 13px; font-weight: 500; }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background-color: #374151; transition: .3s; border-radius: 24px; }
+  .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+  input:checked + .slider { background-color: var(--accent-success); }
+  input:checked + .slider:before { transform: translateX(20px); }
+
+  .btn-primary {
+    width: 100%; padding: 15px; border: none; border-radius: 12px; cursor: pointer;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover));
+    color: #fff; font-size: 15px; font-weight: 700; display: flex; justify-content: center; align-items: center; gap: 8px;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4); transition: all .2s ease;
+  }
+  .btn-primary:hover { transform: translateY(-2px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-mini { font-size: 11px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text-muted); cursor: pointer; }
+  .btn-mini.danger:hover { color: var(--accent-danger); border-color: var(--accent-danger); }
+.scenario-row {
+    display: grid; grid-template-columns: 22px 1fr 130px 24px; gap: 8px; align-items: center;
+    background: var(--input-bg); border-radius: 10px; padding: 8px 10px; border: 1px solid var(--card-border);
+  }
+  .scenario-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-success); cursor: pointer; }
+  .scenario-row input[type="text"] { background: transparent; border: none; color: var(--text-main); font-size: 12.5px; outline: none; width: 100%; }
+  .scenario-row select { background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 3px 5px; font-size: 12px; }
+
+  .terminal { background: #05070d; border: 1px solid var(--card-border); border-radius: 10px; height: 240px; overflow-y: auto; padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.6; }
+  .log-line { white-space: pre-wrap; word-break: break-word; }
+  .log-info { color: #9ca3af; }
+  .log-success { color: var(--theta-green); }
+  .log-error { color: #f87171; }
+  .log-warn { color: #fbbf24; }
+  .log-highlight { color: var(--accent-primary); font-weight: 700; }
+
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .metric-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; text-align: center; }
+  .metric-card .m-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .metric-card .m-value { font-size: 22px; font-weight: 800; font-family: 'JetBrains Mono', monospace; margin-top: 4px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    background: var(--input-bg); border: 1px solid var(--card-border); color: var(--text-main);
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s ease;
+  }
+  .chip:hover { background: rgba(255,255,255,0.1); }
+  .chip.active { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(99,102,241,0.35); }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  .grid-wrap { overflow-x: auto; }
+  table.ov-grid { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 700px; }
+  table.ov-grid th, table.ov-grid td { padding: 9px 10px; font-size: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  table.ov-grid thead th { position: sticky; top: 0; background: #0f1526; font-size: 11.5px; color: var(--text-muted); }
+  table.ov-grid th.metric-label { text-align: left; color: var(--text-muted); font-weight: 600; }
+  table.ov-grid td.cell { position: relative; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding-bottom: 20px; }
+  table.ov-grid td.good { background: rgba(16,185,129,0.16); color: #a7f3d0; }
+  table.ov-grid td.bad { background: rgba(239,68,68,0.16); color: #fecaca; }
+  table.ov-grid td.mid { background: rgba(245,158,11,0.14); color: #fde68a; }
+  table.ov-grid td.neut { background: rgba(255,255,255,0.05); color: #e5e7eb; }
+  .spark { position: absolute; left: 6px; right: 6px; bottom: 2px; height: 18px; opacity: 0.85; }
+.summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .summary-card { background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; }
+  .summary-card .label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .summary-card .value { font-size: 17px; font-weight: 700; font-family: 'JetBrains Mono', monospace; margin-top: 3px; }
+  .summary-card .delta { font-size: 11px; color: var(--theta-green); margin-top: 2px; }
+
+  .chart-container { background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .chart-container h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .subtitle { font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; }
+  canvas { width: 100%; height: auto; background: #070b14; border-radius: 8px; }
+
+  .verdict { border-radius: 12px; padding: 14px 16px; border: 1px solid var(--card-border); margin-bottom: 16px; }
+  .verdict.healthy { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.4); }
+  .verdict.bubble { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.4); }
+  .verdict.wander { background: rgba(99,102,241,0.14); border-color: rgba(99,102,241,0.4); }
+  .verdict.clear { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); }
+  .verdict .v-title { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+  .verdict .v-text { font-size: 13px; opacity: 0.85; line-height: 1.55; }
+
+  .table-container { overflow-x: auto; }
+  table.data-table { border-collapse: collapse; width: 100%; font-size: 11.5px; min-width: 780px; }
+  table.data-table th, table.data-table td { padding: 7px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  table.data-table th { color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; }
+  .tag.high { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+  .tag.mid { background: rgba(245,158,11,0.18); color: #fcd34d; }
+  .tag.tail { background: rgba(239,68,68,0.18); color: #fca5a5; }
+  .tag.domP { background: rgba(78,158,255,0.18); color: #93c5fd; }
+  .tag.domT { background: rgba(255,158,78,0.18); color: #fdba74; }
+  .tag.domR { background: rgba(78,204,163,0.18); color: #6ee7b7; }
+  .tag.domQ { background: rgba(255,78,158,0.18); color: #f9a8d4; }
+  .scorebar { display: inline-block; height: 7px; border-radius: 4px; background: rgba(255,255,255,0.08); width: 60px; vertical-align: middle; }
+  .scorebar i { display: block; height: 100%; border-radius: 4px; }
+
+  .empty-state { color: var(--text-dim); text-align: center; padding: 60px 20px; font-size: 14px; line-height: 1.8; }
+  .help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,0.12); color: var(--text-muted); font-size: 10px; font-weight: 700; cursor: help; flex-shrink: 0; border: none; }
+</style>
+
+<!-- ============ Professional polish (presentation-only) ============ -->
+<style>
+  html { scroll-behavior: smooth; }
+  body::-webkit-scrollbar, .terminal::-webkit-scrollbar, .grid-wrap::-webkit-scrollbar, .table-container::-webkit-scrollbar { width: 10px; height: 10px; }
+  body::-webkit-scrollbar-thumb, .terminal::-webkit-scrollbar-thumb, .grid-wrap::-webkit-scrollbar-thumb, .table-container::-webkit-scrollbar-thumb { background: #2b3a58; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  body::-webkit-scrollbar-thumb:hover { background: #3b4d73; background-clip: padding-box; }
+  body::-webkit-scrollbar-track, .terminal::-webkit-scrollbar-track { background: transparent; }
+
+  header { box-shadow: 0 1px 0 rgba(255,255,255,0.05), 0 8px 28px rgba(0,0,0,0.3); }
+  .brand-title { font-size: 21px; letter-spacing: -0.5px; }
+  .brand-subtitle { color: var(--text-dim); }
+  .header-status { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 700; color: #6ee7b7; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35); padding: 8px 16px; border-radius: 999px; white-space: nowrap; }
+  .header-status .pulse { width: 9px; height: 9px; border-radius: 50%; background: #10b981; animation: hfpulse 2s infinite; }
+  @keyframes hfpulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); } 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
+
+  .card { box-shadow: 0 6px 22px rgba(0,0,0,0.28); border-radius: 18px; transition: border-color .2s ease, box-shadow .2s ease; }
+  .card:hover { border-color: rgba(255,255,255,0.16); }
+  .card-title { letter-spacing: 1.1px; }
+
+  .btn-primary { box-shadow: 0 10px 26px rgba(99,102,241,0.45); letter-spacing: 0.2px; }
+  .btn-primary:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(99,102,241,0.6); }
+  .btn-primary:focus-visible { outline: 2px solid #a5b4fc; outline-offset: 2px; }
+
+  .metric-card { border-radius: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
+  .metric-card .m-value {
+    font-size: 26px; font-weight: 800;
+    background: linear-gradient(90deg, #a5b4fc, #34d399);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  .chip { box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+
+  table.ov-grid thead th { text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
+  table.ov-grid tbody tr:hover td { filter: brightness(1.14); }
+  table.ov-grid td.cell { border-radius: 0; }
+  .ov-legend { display: flex; flex-wrap: wrap; gap: 16px; justify-content: flex-end; font-size: 11px; color: var(--text-dim); margin-top: 12px; }
+  .ov-legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: middle; }
+
+  .summary-card { transition: transform .15s ease, border-color .15s ease; }
+  .summary-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.22); }
+  .summary-card .label { letter-spacing: 0.6px; }
+
+  .verdict { box-shadow: 0 8px 26px rgba(0,0,0,0.3); border-radius: 16px; }
+  .verdict .v-title { letter-spacing: -0.2px; }
+
+  table.data-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+  table.data-table tbody tr:hover { background: rgba(99,102,241,0.10); }
+  table.data-table td:last-child { font-weight: 800; color: #fff; }
+  table.data-table td:nth-child(7), table.data-table td:nth-child(8), table.data-table td:nth-child(9), table.data-table td:nth-child(10) { text-align: right; font-family: 'JetBrains Mono', monospace; }
+  table.data-table td:nth-child(12) { text-align: right; white-space: nowrap; }
+
+  .tag { letter-spacing: 0.4px; }
+  .chart-container h3 { letter-spacing: -0.1px; }
+
+  .report-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .report-toolbar .t-title { font-size: 15px; font-weight: 800; letter-spacing: -0.3px; }
+  .report-toolbar .t-sub { font-size: 12px; color: var(--text-dim); font-weight: 500; margin-top: 2px; }
+  .btn-report { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--text-main); background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); cursor: pointer; transition: all .2s ease; }
+  .btn-report:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+  .btn-report:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  /* Scenario row now has a gear button too */
+  .scenario-row { grid-template-columns: 22px 1fr 130px 22px 24px; }
+
+  /* Behaviour editor */
+  .beh-wrap { border: 1px dashed var(--card-border); border-radius: 10px; padding: 10px 12px; margin: 0 0 8px 30px; background: rgba(15,23,42,0.5); }
+  .beh-title { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+  .beh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+  .beh-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-muted); }
+  .beh-row label { color: var(--text-muted); }
+  .beh-row input[type="number"], .beh-row input[type="range"] { width: 64px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 2px 5px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+  .beh-row input[type="range"] { width: 100px; }
+  .beh-row span.val { color: var(--text-dim); font-size: 10px; min-width: 26px; text-align: right; }
+
+  /* Score composition stacked bar */
+  .comp-key { display: flex; gap: 12px; margin: 6px 0 10px; font-size: 11px; color: var(--text-dim); align-items: center; flex-wrap: wrap; }
+  .comp-key .ck { display: inline-flex; align-items: center; gap: 5px; }
+  .comp-key .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .compbar { position: relative; display: block; height: 11px; width: 150px; max-width: 100%; background: rgba(255,255,255,0.07); border-radius: 6px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.4); }
+  .compbar i { position: absolute; top: 0; bottom: 0; display: block; }
+  .compbar-cell { vertical-align: middle; }
+
+  /* UID / copy control */
+  .uid-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .uid-line .mono { font-size: 12.5px; color: #a5b4fc; word-break: break-all; }
+  .copy-mini { font-size: 11px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--card-border); background: var(--input-bg); color: var(--text-main); cursor: pointer; }
+  .copy-mini:hover { border-color: var(--accent-primary); color: #c7d2fe; }
+  .chip .uid-mini { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-dim); margin-left: 2px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="brand-logo">🧪</span>
+    <div>
+      <div class="brand-title">High-Fidelity Algorithm Test</div>
+      <div class="brand-subtitle">Real live backend · 10 varied single users · per-user detail · not averaged</div>
+    </div>
+  </div>
+  <span class="header-status"><span class="pulse"></span>LIVE · subtick-bbd55</span>
+</header>
+
+<div class="layout">
+
+  <!-- ===== LEFT: CONFIG ===== -->
+  <aside>
+    <div class="card">
+      <div class="card-title"><span>👤 Test Users (scenarios)</span><button class="btn-mini" id="btnResetScenarios" type="button" title="Restore the default 10 scenarios">Reset defaults</button></div>
+      <div class="hint">Each row is <b>one real user</b> signed in to your live backend. You can edit the name and the persona, and switch users on/off. 10 varied users are pre-configured.</div>
+      <div id="scenarioList" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>⚙️ Run Settings</span></div>
+      <div class="param-row">
+        <label>Simulated days per user</label>
+        <input type="range" id="inputDays" min="1" max="14" value="7" oninput="document.getElementById('valDays').innerText=this.value">
+        <span class="val" id="valDays">7</span>
+      </div>
+      <div class="param-row">
+        <label>Behavior events per day</label>
+        <input type="range" id="inputEventsPerDay" min="1" max="30" value="8" oninput="document.getElementById('valEventsPerDay').innerText=this.value">
+        <span class="val" id="valEventsPerDay">8</span>
+      </div>
+      <div class="param-row">
+        <label>Pause between users</label>
+        <input type="range" id="inputPause" min="0" max="5000" step="250" value="300" oninput="document.getElementById('valPause').innerText=(this.value/1000).toFixed(1)+'s'">
+        <span class="val" id="valPause">0.3s</span>
+      </div>
+      <div class="toggle-row">
+        <label>⏱️ Time-spacing (spread GA4 timestamps smoothly)</label>
+        <span class="switch"><input type="checkbox" id="toggleTimeSpacing" checked><span class="slider"></span></span>
+      </div>
+      <div class="toggle-row">
+        <label>🧹 Delete each test account when done (keeps your DB clean)</label>
+        <span class="switch"><input type="checkbox" id="toggleCleanup" checked><span class="slider"></span></span>
+      </div>
+      <button class="btn-primary" id="btnRun" type="button">▶ Run real-user test on LIVE backend</button>
+      <div class="hint">Runs each enabled user through N simulated days. Every feed call and behavior sync hits your live Cloud Functions and sends real GA4 events.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>🖥️ Live Console</span></div>
+      <div class="terminal" id="term"></div>
+    </div>
+  </aside>
+
+  <!-- ===== RIGHT: RESULTS ===== -->
+  <main id="results">
+    <div class="empty-state" id="emptyState">
+      <div style="font-size:40px;margin-bottom:12px;">📊</div>
+      <b>Nothing to show yet.</b><br>
+      Configure the users on the left, then click <b>Run</b>.<br>
+      The results will show each user's <b>personalised &amp; diverse</b> balance verdict, comparison grid, and a full per-user deep-dive.
+    </div>
+    <div id="resultsBody" style="display:none;"></div>
+  </main>
+
+</div>
+</body>
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
+  import { getAuth, signInAnonymously, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+  import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js';
+
+  const firebaseConfig = {
+    apiKey: 'AIzaSyAggNiBGQIbYTAv5vqGtWhmyhrIPDoipXk',
+    authDomain: 'subtick-bbd55.firebaseapp.com',
+    projectId: 'subtick-bbd55',
+    storageBucket: 'subtick-bbd55.firebasestorage.app',
+    messagingSenderId: '859600771798',
+    appId: '1:859600771798:web:c9898a4501148c4caa0777',
+  };
+
+  // ============================================================
+  // Persona definitions — mirror liveBotSimulator.js + constants.ts
+  // ============================================================
+  const CATEGORIES = ['Politics', 'Business', 'Finance', 'Technology', 'Science', 'History', 'Culture', 'Lifestyle', 'Entertainment'];
+
+  const PERSONAS = {
+    engaged: {
+      name: 'Engaged Power User',
+      selected: ['Technology', 'Science', 'Business'],
+      notInterested: [],
+      actionDist: { read_thorough: 0.65, like: 0.2, save: 0.1, read_skim: 0.05 },
+      sessionDurMs: 60000, scroll: 0.90,
+    },
+    casual: {
+      name: 'Casual Skimmer',
+      selected: ['Culture', 'History'],
+      notInterested: [],
+      actionDist: { read_skim: 0.6, swipe_next: 0.3, like: 0.1 },
+      sessionDurMs: 15000, scroll: 0.50,
+    },
+    quickexit: {
+      name: 'Restless Quick-Exitter',
+      selected: [],
+      notInterested: [],
+      actionDist: { quick_exit: 0.7, swipe_next: 0.3 },
+      sessionDurMs: 3000, scroll: 0.15,
+    },
+    hostile: {
+      name: 'Hostile / Critical',
+      selected: ['Politics'],
+      notInterested: ['Culture', 'Entertainment', 'Lifestyle'],
+      actionDist: { swipe_not_interested: 0.55, unlike: 0.25, swipe_next: 0.2 },
+      sessionDurMs: 6000, scroll: 0.25,
+    },
+    newuser: {
+      name: 'New User',
+      selected: ['Technology'],
+      notInterested: [],
+      actionDist: { read_skim: 0.4, read_thorough: 0.3, swipe_next: 0.3 },
+      sessionDurMs: 25000, scroll: 0.60,
+    },
+  };
+
+  // Build the configurable behaviour model for a scenario from its persona + variant preset.
+  function makeBeh(persona, variant) {
+    const p = PERSONAS[persona];
+    const rates = { read_thorough: 0, read_skim: 0, read_shallow: 0, quick_exit: 0, swipe_next: 0, swipe_not_interested: 0, save: 0, like: 0, unlike: 0, unsave: 0 };
+    Object.assign(rates, p.actionDist);
+    if (variant === 'light') { rates.read_skim = 0.5; rates.read_thorough = 0.2; rates.swipe_next = 0.3; rates.save = 0; rates.like = 0; }
+    if (variant === 'moody') { rates.swipe_next = 0.3; rates.read_skim = 0.5; rates.quick_exit = 0.17; rates.like = 0.03; }
+    if (variant === 'aggressive') { rates.swipe_not_interested = 0.55; rates.like = 0; rates.save = 0; }
+    return {
+      rates,
+      stddev: (persona === 'engaged' || persona === 'casual') ? 0.08 : 0.12,
+      sessMean: p.sessionDurMs / 1000,
+      sessStd: Math.max(4, Math.round((p.sessionDurMs / 1000) * 0.35)),
+      scrollMean: p.scroll,
+      scrollStd: 0.1,
+      prefStrength: (persona === 'engaged' || persona === 'hostile') ? 2.0 : 1.5,
+    };
+  }
+
+  // The 10 default varied single-user scenarios
+  function defaultScenarios() {
+    return [
+      { id: 1, label: 'Engaged Power User — heavy', persona: 'engaged', variant: 'heavy', seed: null },
+      { id: 2, label: 'Engaged Power User — light', persona: 'engaged', variant: 'light', seed: null },
+      { id: 3, label: 'Casual Skimmer — steady', persona: 'casual', variant: 'steady', seed: null },
+      { id: 4, label: 'Casual Skimmer — moody', persona: 'casual', variant: 'moody', seed: null },
+      { id: 5, label: 'Quick-Exitter — cold start', persona: 'quickexit', variant: 'cold', seed: null },
+      { id: 6, label: 'Quick-Exitter — with history', persona: 'quickexit', variant: 'history', seed: { Technology: 2.4, Science: 0.5, Politics: 0.8 } },
+      { id: 7, label: 'Hostile Critic — aggressive', persona: 'hostile', variant: 'aggressive', seed: null },
+      { id: 8, label: 'Hostile Critic — selective', persona: 'hostile', variant: 'selective', seed: null },
+      { id: 9, label: 'New User — vanilla', persona: 'newuser', variant: 'vanilla', seed: null },
+      { id: 10, label: 'New User — explorer', persona: 'newuser', variant: 'explorer', seed: null },
+    ].map(s => ({ ...s, enabled: true, beh: makeBeh(s.persona, s.variant) }));
+  }
+
+  let SCENARIOS = defaultScenarios();
+  let results = [];
+  let selectedUser = 0;
+  let running = false;// ============================================================
+  // Small utilities
+  // ============================================================
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const mean = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const round = (v, d = 3) => Number(v).toFixed(d);
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function pickWeighted(dist) {
+    const r = Math.random();
+    let cum = 0;
+    for (const [k, w] of Object.entries(dist)) { cum += w; if (r <= cum) return k; }
+    return 'swipe_next';
+  }
+
+  // Gaussian sampler (Box–Muller) for behaviour randomness.
+  function gauss(mean, std) {
+    if (!std) return mean;
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    return mean + std * z;
+  }
+  // Jitter each behaviour rate by +/− (mean±std), clamp to [0,1], then normalise
+  // into a probability distribution used to pick the next action.
+  function drawDist(rates, std) {
+    const out = {}; let total = 0;
+    for (const [k, w] of Object.entries(rates)) { const v = clamp(gauss(w, std), 0, 1); out[k] = v; total += v; }
+    if (total > 0) { for (const k of Object.keys(out)) out[k] = out[k] / total; }
+    return out;
+  }
+  // Weighted contributions of the real algorithm (SCORE_WEIGHTS): P·0.60, T·0.15, R·0.10, Q·0.15.
+  // These sum exactly to the final score, so a stacked bar of them is the true composition.
+  function compSegs(sc) {
+    return [
+      { k: 'P', v: 0.60 * (sc.scoreP || 0), c: COMP_COLORS.P },
+      { k: 'T', v: 0.15 * (sc.scoreT || 0), c: COMP_COLORS.T },
+      { k: 'R', v: 0.10 * (sc.scoreR || 0), c: COMP_COLORS.R },
+      { k: 'Q', v: 0.15 * (sc.scoreQ || 0), c: COMP_COLORS.Q },
+    ];
+  }
+  // Stacked bar: each segment is one weighted component; full bar length = final score (0 → 1.0 max).
+  function compositionBar(sc) {
+    const segs = compSegs(sc);
+    const tip = segs.map(s => `${s.k}  ×${s.k === 'P' ? '0.60' : s.k === 'T' ? '0.15' : s.k === 'R' ? '0.10' : '0.15'}  = ${round(s.v, 3)}`).join('  |  ');
+    let cum = 0;
+    const parts = segs.map(s => {
+      const el = `<i style="left:${clamp(cum, 0, 1) * 100}%;width:${clamp(s.v, 0, 1) * 100}%;background:${s.c}" data-k="${s.k}"></i>`;
+      cum += s.v;
+      return el;
+    }).join('');
+    return `<span class="compbar" title="Composition → Final (out of 1.0)&#10;${escapeHtml(tip)}">${parts}</span>`;
+  }
+
+  window.copyUid = function (uid) {
+    const ok = () => log('📋 UID copied: ' + uid, 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(uid).then(ok, () => fallbackCopy(uid)); }
+    else { fallbackCopy(uid); ok(); }
+  };
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+    ta.remove();
+  }
+
+  // Valid GA4 web client_id: 32-hex UUID (analytics.ts converts it to dotted form)
+  function genClientId() {
+    return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  }
+
+  function log(msg, type = 'info') {
+    const t = $('term');
+    const line = document.createElement('div');
+    line.className = `log-line log-${type}`;
+    line.innerText = msg;
+    t.appendChild(line);
+    t.scrollTop = t.scrollHeight;
+  }
+
+  // ============================================================
+  // Scenario editor (left pane)
+  // ============================================================
+  const RATE_LABELS = { read_thorough: 'Read thorough', read_skim: 'Read skim', read_shallow: 'Read shallow', quick_exit: 'Quick exit', swipe_next: 'Swipe next', swipe_not_interested: 'Not interested', save: 'Save', like: 'Like', unlike: 'Unlike', unsave: 'Unsave' };
+
+  window.renderScenarios = function () {
+    $('scenarioList').innerHTML = SCENARIOS.map((s, idx) => {
+      if (!s.beh) s.beh = makeBeh(s.persona, s.variant);
+      const b = s.beh;
+      const rateInputs = Object.entries(b.rates).map(([k, v]) => `
+        <div class="beh-row">
+          <label>${RATE_LABELS[k] || k}</label>
+          <input type="number" min="0" max="1" step="0.05" value="${v.toFixed(2)}" data-idx="${idx}" data-beh="rates.${k}" title="${k} rate (mean)">
+        </div>`).join('');
+      return `
+      <div class="scenario-row">
+        <input type="checkbox" data-role="enabled" ${s.enabled ? 'checked' : ''} title="Include this user in the run">
+        <input type="text" data-role="label" value="${escapeHtml(s.label)}" title="User name">
+        <select data-role="persona" title="Persona type">
+          ${Object.entries(PERSONAS).map(([k, p]) => `<option value="${k}" ${s.persona === k ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+        </select>
+        <button class="btn-mini" data-role="toggle-beh" title="Edit behaviour & randomness">⚙</button>
+        <button class="btn-mini danger" data-role="del" title="Remove this user">✕</button>
+      </div>
+      <div class="beh-wrap" id="behwrap_${idx}" style="display:none">
+        <div class="beh-title">⚙ Behaviours — ${escapeHtml(s.label)}</div>
+        <div class="beh-grid">${rateInputs}
+          <div class="beh-row"><label>⚠ Std. deviation</label><input type="range" class="beh-std" min="0" max="0.4" step="0.01" value="${b.stddev.toFixed(2)}" data-idx="${idx}" data-beh="stddev"><span class="val">${b.stddev.toFixed(2)}</span></div>
+        </div>
+        <div class="beh-grid" style="margin-top:8px">
+          <div class="beh-row"><label>Session (s) mean</label><input type="number" min="1" max="600" step="1" value="${Math.round(b.sessMean)}" data-idx="${idx}" data-beh="sessMean"></div>
+          <div class="beh-row"><label>Session (s) std</label><input type="number" min="0" max="300" step="1" value="${Math.round(b.sessStd)}" data-idx="${idx}" data-beh="sessStd"></div>
+          <div class="beh-row"><label>Scroll depth mean</label><input type="number" min="0" max="1" step="0.05" value="${b.scrollMean.toFixed(2)}" data-idx="${idx}" data-beh="scrollMean"></div>
+          <div class="beh-row"><label>Scroll std</label><input type="number" min="0" max="0.5" step="0.02" value="${b.scrollStd.toFixed(2)}" data-idx="${idx}" data-beh="scrollStd"></div>
+          <div class="beh-row"><label>Initial preference strength</label><input type="number" min="1" max="5" step="0.1" value="${b.prefStrength.toFixed(1)}" data-idx="${idx}" data-beh="prefStrength"></div>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  window.addEventListener('DOMContentLoaded', () => {
+    renderScenarios();
+    $('btnResetScenarios').addEventListener('click', () => { SCENARIOS = defaultScenarios(); renderScenarios(); log('Scenario list reset to the 10 defaults.', 'info'); });
+    $('btnRun').addEventListener('click', runSimulation);
+    $('scenarioList').addEventListener('change', (e) => {
+      const t = e.target;
+      // Behaviour editor input
+      if (t.dataset && t.dataset.idx !== undefined && t.dataset.beh) {
+        const sc = SCENARIOS[+t.dataset.idx];
+        if (!sc) return;
+        const pth = t.dataset.beh;
+        if (pth.startsWith('rates.')) sc.beh.rates[pth.slice(6)] = clamp(parseFloat(t.value) || 0, 0, 1);
+        else if (pth === 'stddev') { sc.beh.stddev = clamp(parseFloat(t.value) || 0, 0, 1); if (t.nextElementSibling) t.nextElementSibling.textContent = sc.beh.stddev.toFixed(2); }
+        else if (pth === 'sessMean') sc.beh.sessMean = Math.max(1, parseFloat(t.value) || 1);
+        else if (pth === 'sessStd') sc.beh.sessStd = Math.max(0, parseFloat(t.value) || 0);
+        else if (pth === 'scrollMean') sc.beh.scrollMean = clamp(parseFloat(t.value) || 0, 0, 1);
+        else if (pth === 'scrollStd') sc.beh.scrollStd = clamp(parseFloat(t.value) || 0, 0, 0.5);
+        else if (pth === 'prefStrength') sc.beh.prefStrength = clamp(parseFloat(t.value) || 1, 1, 5);
+        return;
+      }
+      // Scenario row inputs
+      const row = t.closest('.scenario-row');
+      if (!row) return;
+      const idx = [...row.parentElement.children].filter(el => el.classList.contains('scenario-row')).indexOf(row);
+      const sc = SCENARIOS[idx];
+      if (!sc) return;
+      const role = t.dataset.role;
+      if (role === 'enabled') sc.enabled = t.checked;
+      if (role === 'label') sc.label = t.value;
+      if (role === 'persona') { sc.persona = t.value; sc.beh = makeBeh(sc.persona, sc.variant); renderScenarios(); }
+    });
+    $('scenarioList').addEventListener('click', (e) => {
+      const t = e.target;
+      if (t.dataset && t.dataset.role === 'toggle-beh') {
+        const row = t.closest('.scenario-row');
+        const idx = [...row.parentElement.children].filter(el => el.classList.contains('scenario-row')).indexOf(row);
+        const wrap = document.getElementById('behwrap_' + idx);
+        if (wrap) wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+        return;
+      }
+      const btn = t.closest('[data-role="del"]');
+      if (!btn) return;
+      const row = btn.closest('.scenario-row');
+      const idx = [...row.parentElement.children].filter(el => el.classList.contains('scenario-row')).indexOf(row);
+      SCENARIOS.splice(idx, 1);
+      renderScenarios();
+    });
+    log('Panel ready. Choose users and click Run (LIVE backend).', 'info');
+    applySettings();
+    ['inputDays', 'inputEventsPerDay', 'inputPause'].forEach(id => $(id).addEventListener('input', saveSettings));
+    ['toggleTimeSpacing', 'toggleCleanup'].forEach(id => $(id).addEventListener('change', saveSettings));
+  });// ============================================================
+  // Scoring & per-day metrics
+  // The server now returns exact _score metadata (includeScores: true).
+  // A defensive mirror is included below in case a call is made before
+  // the redeploy propagates, or the response lacks a _score block.
+  // ============================================================
+  function normalizeP(catW, pubW) {
+    const MIN = 0.1, MAX = 5.0, RANGE = MAX - MIN;
+    const cf = clamp((catW - MIN) / RANGE, 0, 1);
+    const pf = clamp((pubW - MIN) / RANGE, 0, 1);
+    return cf * 0.6 + pf * 0.4;
+  }
+  function normalizeT(t) { return Math.min(t, 50) / 50; }
+  function normalizeR(daysOld) {
+    if (daysOld <= 0) return 1.0;
+    if (daysOld <= 7) return 1.0 - (daysOld / 7) * 0.2;
+    return 0.8 * Math.pow(7 / daysOld, 1.5);
+  }
+  function normalizeQ(q) { return clamp((q - 0.2) / 0.8, 0, 1); }
+
+  function computeScoreFallback(article, catWeights) {
+    const catW = catWeights[`${article.category}::${article.lengthStyle}`] ?? catWeights[article.category] ?? 1.0;
+    const scoreP = normalizeP(catW, 1.0);
+    const scoreT = normalizeT(article.trendingScore || 0);
+    const daysOld = Math.max(0, (Date.now() - (article.publishDate || Date.now())) / 86400000);
+    const scoreR = normalizeR(daysOld);
+    const scoreQ = normalizeQ(article.qualityScore ?? 0.8);
+    const finalScore = 0.60 * scoreP + 0.15 * scoreT + 0.10 * scoreR + 0.15 * scoreQ;
+    const tranche = finalScore > 0.40 ? 'high' : finalScore > 0.20 ? 'mid' : 'tail';
+    const contribs = [['P', 0.60 * scoreP], ['T', 0.15 * scoreT], ['R', 0.10 * scoreR], ['Q', 0.15 * scoreQ]];
+    const dominant = contribs.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+    return { scoreP, scoreT, scoreR, scoreQ, finalScore, tranche, dominant };
+  }
+
+  function computeDayMetrics(articles) {
+    const m = { count: articles.length, avgP: 0, avgFS: 0, dom: { P: 0, T: 0, R: 0, Q: 0 }, tranches: { high: 0, mid: 0, tail: 0 }, pubs: 0, cats: 0, pHist: [], fsHist: [], articles: [] };
+    const pubSet = new Set(), catSet = new Set();
+    for (const a of articles) {
+      const sc = a._score;
+      if (!sc) continue;
+      m.avgP += sc.scoreP; m.avgFS += sc.finalScore;
+      m.dom[sc.dominant] = (m.dom[sc.dominant] || 0) + 1;
+      m.tranches[sc.tranche] = (m.tranches[sc.tranche] || 0) + 1;
+      pubSet.add(a.publicationName); catSet.add(a.category);
+      m.pHist.push(sc.scoreP); m.fsHist.push(sc.finalScore);
+    }
+    if (m.count) { m.avgP /= m.count; m.avgFS /= m.count; }
+    m.pubs = pubSet.size; m.cats = catSet.size;
+    return m;
+  }
+
+  // ============================================================
+  // Profile + behavior generator for a scenario
+  // ============================================================
+  function buildProfile(sc) {
+    const p = PERSONAS[sc.persona];
+    let selected = p.selected.slice();
+    let notInterested = p.notInterested.slice();
+    if (sc.variant === 'selective') notInterested = ['Entertainment'];
+    if (sc.variant === 'explorer') selected = CATEGORIES.slice();
+    const weights = {};
+    for (const c of CATEGORIES) {
+      weights[c] = 1.0;
+      if (selected.includes(c) && !notInterested.includes(c)) weights[c] = sc.beh ? sc.beh.prefStrength : 1.5;
+    }
+    for (const c of notInterested) weights[c] = 0.2;
+    if (sc.seed) { for (const [c, w] of Object.entries(sc.seed)) weights[c] = clamp(w, 0.1, 5); }
+    return {
+      isOnboarded: true, isActive: true,
+      selectedCategoryIds: selected, notInterestedCategoryIds: notInterested,
+      categoryWeights: weights, includeArchivedArticles: false,
+      seenArticleIds: [], themePreference: 'system', linkedGoogleAccount: false,
+      totalArticlesRead: 0, weeklyReadCount: 0, currentStreakDays: 0,
+      lastReadDate: Date.now(), averageWpm: 200,
+      dashboardMetricIds: ['streak', 'weeklyReads', 'topCategory'],
+      lastUpdated: Date.now(),
+    };
+  }
+
+  function buildEvent(sc, article, uid, ts) {
+    const b = sc.beh || makeBeh(sc.persona, sc.variant);
+    const dist = drawDist(b.rates, b.stddev);
+    const eventType = pickWeighted(dist);
+    const sessionDuration = Math.max(800, Math.round(gauss(b.sessMean, b.sessStd) * 1000));
+    const scrollDepth = clamp(gauss(b.scrollMean, b.scrollStd), 0, 1);
+    return {
+      id: `hfm_evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      articleId: article.id,
+      userId: uid,
+      eventType,
+      timestamp: ts,
+      articleCategory: article.category || 'Technology',
+      lengthStyle: article.lengthStyle || 'medium',
+      publicationName: article.publicationName,
+      sessionDuration,
+      scrollDepth: Number(scrollDepth.toFixed(2)),
+      actualWordCount: article.wordCount || 1000,
+    };
+  }
+
+  function generateEvents(sc, articles, uid, dayIdx, totalDays, epd, timeSpacing) {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const base = Date.now() - (totalDays - dayIdx) * dayMs;
+    const events = [];
+    const count = Math.min(epd, articles.length);
+    for (let i = 0; i < count; i++) {
+      const ts = Math.round(base + i * 4500 + (timeSpacing ? (Math.random() * 2 - 1) * 3 * 60 * 60 * 1000 : 0));
+      events.push(buildEvent(sc, articles[i], uid, ts));
+    }
+    return events;
+  }// ============================================================
+  // Per-user summary & plain-English verdict
+  // ============================================================
+  function computeSummary(u) {
+    const dm = u.days.map(d => d.metrics).filter(Boolean);
+    if (!dm.length) return { verdict: 'clear', firstP: 0, finalP: 0, pDomPct: 0, highPct: 0, pubs: 0, cats: 0, spread: 0, pSeries: [], fsSeries: [], domSeries: [], trancheSeries: [], pubSeries: [], catSeries: [], fsHistDay1: [], fsHistLast: [] };
+    const first = dm[0], last = dm[dm.length - 1];
+    const finalWeights = u.weightHistory[u.weightHistory.length - 1] || {};
+    const wVals = CATEGORIES.map(c => finalWeights[c]).filter(v => typeof v === 'number');
+    const spread = wVals.length ? Math.max(...wVals) - Math.min(...wVals) : 0;
+    const finalP = last.avgP, firstP = first.avgP;
+    const pDomPct = last.count ? (last.dom.P / last.count) * 100 : 0;
+    const highPct = last.count ? (last.tranches.high / last.count) * 100 : 0;
+    const pubs = last.pubs, cats = last.cats;
+
+    const personalised = finalP >= 0.25 && pDomPct >= 40;
+    const diverse = pubs >= 6 && cats >= 4;
+    const verdict = personalised && diverse ? 'healthy' : personalised && !diverse ? 'bubble' : !personalised && diverse ? 'wander' : 'clear';
+
+    return {
+      verdict, firstP, finalP, pDomPct, highPct, pubs, cats, spread,
+      pSeries: dm.map(x => x.avgP),
+      fsSeries: dm.map(x => x.avgFS),
+      domSeries: dm.map(x => x.count ? { P: x.dom.P / x.count, T: x.dom.T / x.count, R: x.dom.R / x.count, Q: x.dom.Q / x.count } : { P: 0, T: 0, R: 0, Q: 0 }),
+      trancheSeries: dm.map(x => x.count ? { high: x.tranches.high / x.count, mid: x.tranches.mid / x.count, tail: x.tranches.tail / x.count } : { high: 0, mid: 0, tail: 0 }),
+      pubSeries: dm.map(x => x.pubs),
+      catSeries: dm.map(x => x.cats),
+      fsHistDay1: first.fsHist, fsHistLast: last.fsHist,
+    };
+  }
+
+  const VERDICT_INFO = {
+    healthy: {
+      icon: '🟢', short: 'Personalised & diverse', title: '🟢 Healthy — personalised AND diverse',
+      why: (s) => `Both halves of the balance are working: the feed is strongly personalised (P-dominant ${round(s.pDomPct, 1)}% of articles, avg P ${round(s.finalP, 2)}) while still diverse (${s.pubs} publishers, ${s.cats} categories).`,
+    },
+    bubble: {
+      icon: '🟠', short: 'Filter bubble', title: '🟠 Filter bubble — personalised but too narrow',
+      why: (s) => `This user gets a strongly personalised feed, but diversity is low (${s.pubs} publishers, ${s.cats} categories). Healthy = at least ~6 publishers and 4 categories. The diversity guard could be tightened.`,
+    },
+    wander: {
+      icon: '🔵', short: 'Not personalised enough', title: '🔵 Wandering — diverse but not personalised',
+      why: (s) => `The feed is varied (${s.pubs} publishers, ${s.cats} categories) but personalisation is weak (P-dominant ${round(s.pDomPct, 1)}%, avg P ${round(s.finalP, 2)}). The algorithm is not adapting to this user's tastes.`,
+    },
+    clear: {
+      icon: '⚪', short: 'Inconclusive', title: '⚪ Unclear signal',
+      why: () => `Neither personalisation nor diversity reached healthy thresholds. Try more simulated days, or check the console for sync errors.`,
+    },
+  };// ============================================================
+  // Main run engine — real users against the LIVE backend
+  // ============================================================
+  async function runSimulation() {
+    if (running) return;
+    running = true;
+    const btn = $('btnRun');
+    btn.disabled = true; btn.innerText = '⏳ Running on LIVE backend…';
+
+    const enabled = SCENARIOS.filter(s => s.enabled);
+    if (!enabled.length) {
+      log('No users enabled — tick at least one checkbox.', 'error');
+      running = false; btn.disabled = false; btn.innerText = '▶ Run real-user test on LIVE backend';
+      return;
+    }
+    const days = parseInt($('inputDays').value, 10);
+    const epd = parseInt($('inputEventsPerDay').value, 10);
+    const pause = parseInt($('inputPause').value, 10);
+    const timeSpacing = $('toggleTimeSpacing').checked;
+    const cleanup = $('toggleCleanup').checked;
+
+    results = [];
+    log('====================================================', 'highlight');
+    log(`Running ${enabled.length} real users × ${days} days on LIVE backend`, 'highlight');
+    log('====================================================', 'highlight');
+
+    let ui = 0;
+    for (const sc of enabled) {
+      ui++;
+      log(`\n===== USER ${ui}/${enabled.length}: ${sc.label} (${PERSONAS[sc.persona].name}) =====`, 'highlight');
+      const app = initializeApp(firebaseConfig, `hfm-${Date.now()}-${sc.id}`);
+      const auth = getAuth(app); const db = getFirestore(app); const fns = getFunctions(app, 'us-central1');
+      try {
+        const cred = await signInAnonymously(auth);
+        const uid = cred.user.uid;
+        log(`  ✓ Signed in: ${uid.slice(0, 10)}…`, 'success');
+        const profile = buildProfile(sc); profile.userId = uid;
+        await setDoc(doc(db, 'users', uid), profile);
+        log(`  ✓ Profile created — selected: [${profile.selectedCategoryIds.join(', ') || 'none'}]`, 'info');
+        const gaClientId = genClientId();
+        const seen = [];
+        const rec = { scenario: sc, uid, gaClientId, days: [], feeds: [], weightHistory: [], eventsSent: 0, gaEventsEstimate: 0, errors: [] };
+
+        for (let d = 1; d <= days; d++) {
+          let articles = [];
+          try {
+            const res = await httpsCallable(fns, 'getRankedFeed')({ seenArticleIds: seen, client_id: gaClientId, includeScores: true });
+            articles = res.data?.articles || [];
+            log(`    📅 Day ${d}/${days}: ${articles.length} articles ranked`, 'info');
+          } catch (e) {
+            log(`    ⚠️ Day ${d}: getRankedFeed error: ${e.message}`, 'warn');
+            rec.errors.push(`day${d} feed: ${e.message}`); continue;
+          }
+
+          const enriched = articles.map(a => ({ ...a, _score: a._score || computeScoreFallback(a, profile.categoryWeights) }));
+          const nScored = enriched.filter(a => a._score && a._score.finalScore !== undefined).length;
+          if (nScored < enriched.length) log(`    ⚠️ ${enriched.length - nScored} articles missing server scores (fallback used)`, 'warn');
+
+          seen.push(...enriched.map(a => a.id));
+          rec.feeds.push(enriched);
+          rec.days.push({ day: d, metrics: computeDayMetrics(enriched) });
+
+          const events = generateEvents(sc, enriched, uid, d, days, epd, timeSpacing);
+          if (events.length) {
+            try {
+              const sres = await httpsCallable(fns, 'syncBehaviorEvents')({ events, client_id: gaClientId });
+              const synced = sres.data?.synced ?? events.length;
+              rec.eventsSent += synced;
+              log(`    ✓ Day ${d}: ${synced}/${events.length} events synced`, 'success');
+            } catch (e) {
+              log(`    ⚠️ Day ${d}: syncBehaviorEvents error: ${e.message}`, 'warn');
+              rec.errors.push(`day${d} sync: ${e.message}`);
+            }
+          }
+          rec.gaEventsEstimate += enriched.length + 1 + events.length;
+
+          try {
+            const snap = await getDoc(doc(db, 'users', uid));
+            if (snap.exists()) {
+              const p = snap.data();
+              rec.weightHistory.push(p.categoryWeights || {});
+              rec.days[rec.days.length - 1].profile = {
+                totalArticlesRead: p.totalArticlesRead, weeklyReadCount: p.weeklyReadCount,
+                currentStreakDays: p.currentStreakDays, weightUpdatedAt: p.weightUpdatedAt,
+              };
+            }
+          } catch (e) { /* best-effort profile snapshot */ }
+        }
+
+        rec.summary = computeSummary(rec);
+        const vi = VERDICT_INFO[rec.summary.verdict];
+        log(`  ✅ Complete. ${vi.icon} ${vi.short} (avg P ${round(rec.summary.finalP, 2)} · pubs ${rec.summary.pubs} · cats ${rec.summary.cats})`, 'success');
+
+        if (cleanup) {
+          try { await httpsCallable(fns, 'deleteAccount')({ confirmation: 'DELETE' }); log('  🧹 Test account deleted', 'info'); }
+          catch (e) { log(`  ⚠️ Cleanup failed: ${e.message}`, 'warn'); }
+        }
+        results.push(rec);
+      } catch (err) {
+        log(`  ❌ User failed: ${err.message}`, 'error');
+      }
+      try { await signOut(auth); } catch (e) { /* ignore */ }
+      await sleep(pause);
+    }
+
+    renderAll();
+    log('\n====================================================', 'highlight');
+    log(`✅ Run finished — ${results.length} users analysed`, 'success');
+    log('====================================================', 'highlight');
+    running = false; btn.disabled = false; btn.innerText = '▶ Run real-user test on LIVE backend';
+  }// ============================================================
+  // Rendering
+  // ============================================================
+  const VERDICT_COLORS = { healthy: '#10b981', bubble: '#f59e0b', wander: '#6366f1', clear: '#9ca3af' };
+  const COMP_COLORS = { P: '#4e9eff', T: '#ff9e4e', R: '#4ecca3', Q: '#ff4e9e' };
+
+  function scoreBar(color, v) {
+    const pct = clamp(v, 0, 1) * 100;
+    return `<span class="scorebar"><i style="width:${pct}%;background:${color}"></i></span> `;
+  }
+  function metricCard(label, value) {
+    return `<div class="metric-card"><div class="m-label">${label}</div><div class="m-value">${value}</div></div>`;
+  }
+  function cellClass(score) { return score >= 0.66 ? 'good' : score >= 0.33 ? 'mid' : 'bad'; }
+
+  function renderAll() {
+    if (!results.length) {
+      $('emptyState').style.display = ''; $('resultsBody').style.display = 'none';
+      return;
+    }
+    $('emptyState').style.display = 'none';
+    $('resultsBody').style.display = 'block';
+    selectedUser = Math.min(selectedUser, results.length - 1);
+
+    const totalArticles = results.reduce((a, r) => a + r.days.reduce((s, d) => s + d.metrics.count, 0), 0);
+    const totalEvents = results.reduce((a, r) => a + r.eventsSent, 0);
+    const totalGA = results.reduce((a, r) => a + r.gaEventsEstimate, 0);
+    const healthyCount = results.filter(r => r.summary.verdict === 'healthy').length;
+
+    $('resultsBody').innerHTML = `
+      <div class="report-toolbar">
+        <div>
+          <div class="t-title">📈 Test results — real live backend</div>
+          <div class="t-sub">${results.length} real users · ${round(totalArticles / (results.length || 1), 1)} articles/user · ${totalEvents} events synced</div>
+        </div>
+        <button class="btn-report" onclick="downloadReport()">⬇️ Download report</button>
+      </div>
+      <div class="metrics-grid">
+        ${metricCard('Users analysed', results.length)}
+        ${metricCard('Articles ranked', totalArticles)}
+        ${metricCard('Events synced', totalEvents)}
+        ${metricCard('GA4 events est.', totalGA)}
+      </div>
+      <div style="height:18px"></div>
+      <div class="card">
+        <div class="card-title"><span>👥 Overview — all users compared</span><span style="color:var(--theta-green)">🟢 ${healthyCount} of ${results.length} healthy</span></div>
+        ${overviewTable()}
+        <div class="ov-legend">
+          <span><span class="sw" style="background:#10b981"></span>best</span>
+          <span><span class="sw" style="background:#f59e0b"></span>mid</span>
+          <span><span class="sw" style="background:#ef4444"></span>weak</span>
+          <span>· cells rank users against each other within each row</span>
+        </div>
+      </div>
+      <div style="height:18px"></div>
+      <div class="card">
+        <div class="card-title"><span>🔍 Per-user deep dive</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="userStrip"></div>
+        <div id="userDetail" style="margin-top:16px"></div>
+      </div>`;
+    renderUserChips();
+    renderDetail();
+    requestAnimationFrame(drawSparklines);
+    requestAnimationFrame(() => {
+      document.querySelectorAll('#resultsBody .metric-card .m-value').forEach(el => {
+        const target = parseInt(el.textContent.replace(/[^0-9]/g, ''), 10) || 0;
+        el.textContent = '0';
+        countUp(el, target);
+      });
+    });
+  }
+
+  function overviewTable() {
+    const rows = [
+      { key: 'finalP', label: 'Avg P (final)', fmt: v => round(v, 2), invert: false, series: r => r.summary.pSeries },
+      { key: 'pDomPct', label: 'P-Dominant % (final)', fmt: v => round(v, 0) + '%', invert: false, series: r => r.summary.domSeries.map(d => d.P * 100) },
+      { key: 'highPct', label: 'High Tranche % (final)', fmt: v => round(v, 0) + '%', invert: false, series: r => r.summary.trancheSeries.map(t => t.high * 100) },
+      { key: 'pubs', label: 'Publishers (final)', fmt: v => v, invert: false, series: r => r.summary.pubSeries },
+      { key: 'cats', label: 'Categories (final)', fmt: v => v, invert: false, series: r => r.summary.catSeries },
+      { key: 'spread', label: 'Weight Spread', fmt: v => round(v, 2), invert: true, series: r => null },
+    ];
+    const thead = `<tr><th class="metric-label">Metric</th>${results.map(r => `<th>${escapeHtml(r.scenario.label)}</th>`).join('')}</tr>`;
+    const tbody = rows.map(row => {
+      const vals = results.map(r => r.summary[row.key]);
+      const mn = Math.min(...vals), mx = Math.max(...vals);
+      const tds = results.map((r, i) => {
+        const v = vals[i];
+        const norm = (v - mn) / ((mx - mn) || 1);
+        const cls = cellClass(row.invert ? 1 - norm : norm);
+        const series = row.series ? row.series(r) : null;
+        return `<td class="cell ${cls}" data-series="${series ? JSON.stringify(series) : 'null'}">${row.fmt(v)}</td>`;
+      }).join('');
+      return `<tr><td class="metric-label">${row.label}</td>${tds}</tr>`;
+    }).join('');
+    const verdictRow = `<tr><td class="metric-label">Health verdict</td>${results.map(r => `<td class="cell neut" style="font-size:17px" title="${VERDICT_INFO[r.summary.verdict].short}">${VERDICT_INFO[r.summary.verdict].icon}</td>`).join('')}</tr>`;
+    return `<div class="grid-wrap"><table class="ov-grid"><thead>${thead}</thead><tbody>${tbody}${verdictRow}</tbody></table></div>`;
+  }
+
+  function renderUserChips() {
+    $('userStrip').innerHTML = results.map((r, i) => `
+      <button class="chip ${i === selectedUser ? 'active' : ''}" onclick="selectUser(${i})" title="Firebase UID: ${r.uid}">
+        <span class="dot" style="background:${VERDICT_COLORS[r.summary.verdict]}"></span>
+        User ${i + 1}: ${escapeHtml(r.scenario.label)}<span class="uid-mini">${r.uid.slice(0, 6)}…</span>
+      </button>`).join('');
+  }
+
+  window.selectUser = function (i) {
+    selectedUser = i;
+    renderUserChips();
+    renderDetail();
+    requestAnimationFrame(() => { const holder = $('userDetail'); if (holder) holder.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  };
+
+  function drawSparklines() {
+    document.querySelectorAll('.ov-grid td.cell[data-series]').forEach(td => {
+      const raw = td.dataset.series;
+      if (!raw || raw === 'null') return;
+      let series; try { series = JSON.parse(raw); } catch (e) { return; }
+      const cv = document.createElement('canvas');
+      cv.className = 'spark'; cv.width = 110; cv.height = 20;
+      td.appendChild(cv);
+      drawSparkline(cv, series, td.classList.contains('good') ? '#10b981' : td.classList.contains('bad') ? '#ef4444' : '#f59e0b');
+    });
+  }// ============================================================
+  // Per-user deep-dive
+  // ============================================================
+  function renderDetail() {
+    const r = results[selectedUser];
+    if (!r) return;
+    const s = r.summary;
+    const vi = VERDICT_INFO[s.verdict];
+    const prof = r.days[r.days.length - 1]?.profile || {};
+    const delta = s.firstP ? ((s.finalP - s.firstP) / s.firstP) * 100 : 0;
+    const suf = `u${selectedUser}`;
+
+    const cards = [
+      { label: 'Persona', value: `${PERSONAS[r.scenario.persona].name}` },
+      { label: 'Variant', value: r.scenario.variant },
+      { label: 'Avg P — Day 1', value: round(s.firstP, 3) },
+      { label: 'Avg P — Final', value: round(s.finalP, 3), delta: `${delta >= 0 ? '+' : ''}${round(delta, 1)}%` },
+      { label: 'P-dominant (final)', value: round(s.pDomPct, 1) + '%' },
+      { label: 'High tranche (final)', value: round(s.highPct, 1) + '%' },
+      { label: 'Publishers', value: s.pubs },
+      { label: 'Categories', value: s.cats },
+      { label: 'Weight spread', value: round(s.spread, 2) },
+      { label: 'Articles read', value: prof.totalArticlesRead ?? '—' },
+      { label: 'Firebase UID', value: `<span class="uid-line"><span class="mono">${r.uid}</span><button class="copy-mini" onclick="copyUid('${r.uid}')">Copy</button></span>` },
+    ];
+
+    const lastArticles = r.feeds[r.feeds.length - 1] || [];
+    const rowsHtml = lastArticles.map((a, i) => {
+      const sc = a._score || {};
+      const n = (v) => round(v == null ? 0 : v, 2);
+      return `<tr>
+        <td>${i + 1}</td>
+        <td>${escapeHtml((a.title || '').substring(0, 60))}</td>
+        <td>${escapeHtml(a.publicationName || '—')}</td>
+        <td>${escapeHtml(a.category || '—')}</td>
+        <td><span class="tag ${sc.tranche || 'tail'}">${sc.tranche || '—'}</span></td>
+        <td><span class="tag dom${sc.dominant || 'P'}">${sc.dominant || '—'}</span></td>
+        <td>${n(sc.scoreP)}</td>
+        <td>${n(sc.scoreT)}</td>
+        <td>${n(sc.scoreR)}</td>
+        <td>${n(sc.scoreQ)}</td>
+        <td class="compbar-cell">${compositionBar(sc)}</td>
+        <td><b>${round(sc.finalScore == null ? 0 : sc.finalScore, 3)}</b></td>
+      </tr>`;
+    }).join('');
+
+    $('userDetail').innerHTML = `
+      <div class="verdict ${s.verdict}">
+        <div class="v-title">${vi.title}</div>
+        <div class="v-text">${vi.why(s)}</div>
+      </div>
+      <div class="summary-cards">${cards.map(c => `<div class="summary-card"><div class="label">${c.label}</div><div class="value">${c.value}</div>${c.delta ? `<div class="delta">${c.delta}</div>` : ''}</div>`).join('')}</div>
+      <div style="height:16px"></div>
+      <div class="chart-container"><h3>Average P-Score (real algorithm) over days</h3><div class="subtitle">The algorithm's own personalisation score for this user's feed, day by day. Rising = the feed is adapting to this user.</div><canvas id="c_p_${suf}" width="900" height="200"></canvas></div>
+      <div class="chart-container"><h3>Dominant scoring factor per day</h3><div class="subtitle">Which of the 4 factors (P/T/R/Q) drove most of the feed each day. P (blue) growing = personalisation winning.</div><canvas id="c_dom_${suf}" width="900" height="220"></canvas></div>
+      <div class="chart-container"><h3>High / Mid / Tail mix per day</h3><div class="subtitle">Real tranche distribution of the ranked feed. High (green) growing = the user sees more top-tier content.</div><canvas id="c_tr_${suf}" width="900" height="200"></canvas></div>
+      <div class="chart-container"><h3>Real category weights over time (from Firestore)</h3><div class="subtitle">This user's actual profile weights after each day's sync. Divergence from 1.0 = learning; a wide gap = strong preferences.</div><canvas id="c_w_${suf}" width="900" height="260"></canvas></div>
+      <div class="chart-container"><h3>Feed diversity over time</h3><div class="subtitle">Distinct publishers and categories in each day's feed. Higher = less echo-chamber.</div><canvas id="c_div_${suf}" width="900" height="200"></canvas></div>
+      <div class="chart-container"><h3>Final score distribution — Day 1 vs final day</h3><div class="subtitle">Histogram of every article's final score. Right shift = improving feed quality.</div><canvas id="c_fs_${suf}" width="900" height="220"></canvas></div>
+      <div class="chart-container"><h3>📋 This user's ranked feed (final day) — every real score</h3>
+        <div class="subtitle">The actual feed the live algorithm returned. Hover a bar to see the exact weighted component → final score.</div>
+        <div class="comp-key">
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.P}"></span>P ×0.60</span>
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.T}"></span>T ×0.15</span>
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.R}"></span>R ×0.10</span>
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.Q}"></span>Q ×0.15</span>
+          <span>· bar length = Final score (0 → 1.0 max)</span>
+        </div>
+        <div class="table-container"><table class="data-table">
+          <thead><tr><th>#</th><th>Article</th><th>Publisher</th><th>Category</th><th>Tranche</th><th>Dominant</th><th>P</th><th>T</th><th>R</th><th>Q</th><th>Composition →</th><th>Final</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table></div>
+      </div>`;
+
+    drawLineChart($(`c_p_${suf}`), [{ label: 'Avg P', color: '#6366f1', values: s.pSeries }], 'Avg P');
+    drawStackedChart($(`c_dom_${suf}`), s.domSeries, ['P', 'T', 'R', 'Q'], COMP_COLORS);
+    drawStackedChart($(`c_tr_${suf}`), s.trancheSeries, ['high', 'mid', 'tail'], { high: '#10b981', mid: '#f59e0b', tail: '#ef4444' });
+    drawWeights($(`c_w_${suf}`), r.weightHistory);
+    drawLineChart($(`c_div_${suf}`), [
+      { label: 'Publishers', color: '#4ecca3', values: s.pubSeries },
+      { label: 'Categories', color: '#4e9eff', values: s.catSeries },
+    ], 'Count');
+    drawHistCompare($(`c_fs_${suf}`), s.fsHistDay1, s.fsHistLast);
+  }// ============================================================
+  // Canvas chart helpers
+  // ============================================================
+  function setupCanvas(cv) {
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#070b14';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    return ctx;
+  }
+
+  function drawSparkline(cv, values, color) {
+    if (!cv || !values || values.length < 2) return;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    const mn = Math.min(...values), mx = Math.max(...values);
+    const range = (mx - mn) || 1;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = 2 + (i / (values.length - 1)) * (cv.width - 6);
+      const y = cv.height - 3 - ((v - mn) / range) * (cv.height - 7);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  function drawLineChart(cv, seriesList, yLabel) {
+    if (!cv) return;
+    const ctx = setupCanvas(cv);
+    const w = cv.width, h = cv.height, padL = 46, padR = 120, padT = 16, padB = 28;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const all = [];
+    seriesList.forEach(s => all.push(...s.values));
+    if (!all.length) return;
+    const mn = Math.min(...all), mx = Math.max(...all);
+    const lo = Math.max(0, mn - (mx - mn) * 0.15);
+    const hi = mx + (mx - mn) * 0.15;
+    const maxLen = Math.max(...seriesList.map(s => s.values.length), 2);
+    ctx.font = '10px "JetBrains Mono", monospace';
+    for (let i = 0; i <= 4; i++) {
+      const val = lo + ((hi - lo) * i) / 4;
+      const y = padT + plotH - ((val - lo) / (hi - lo || 1)) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.stroke();
+      ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'right';
+      ctx.fillText(round(val, (hi - lo) < 1 ? 2 : 1), padL - 6, y + 3);
+    }
+    seriesList.forEach(s => {
+      const values = s.values;
+      if (values.length < 2) return;
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2;
+      ctx.beginPath();
+      values.forEach((v, i) => {
+        const x = padL + (i / (maxLen - 1)) * plotW;
+        const y = padT + plotH - ((v - lo) / (hi - lo || 1)) * plotH;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+    ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center';
+    ctx.fillText('D1', padL, h - 8);
+    ctx.fillText(`D${maxLen}`, padL + plotW, h - 8);
+    if (yLabel) {
+      ctx.save(); ctx.translate(12, padT + plotH / 2); ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center'; ctx.fillText(yLabel, 0, 0); ctx.restore();
+    }
+    seriesList.slice().reverse().forEach((s, i) => {
+      const y = padT + 12 + i * 16;
+      ctx.fillStyle = s.color; ctx.fillRect(w - padR + 8, y - 8, 12, 12);
+      ctx.fillStyle = '#eee'; ctx.textAlign = 'left'; ctx.font = '11px Inter, sans-serif';
+      ctx.fillText(s.label, w - padR + 26, y + 2);
+    });
+  }// ============================================================
+  // More canvas chart helpers
+  // ============================================================
+  const CAT_COLORS = ['#4ecca3', '#4e9eff', '#ff9e4e', '#ff4e9e', '#e94560', '#9e4eff', '#4eff9e', '#ffd24e', '#4ec9ff'];
+
+  function drawStackedChart(cv, seriesList, keys, colors) {
+    if (!cv || !seriesList || !seriesList.length) return;
+    const ctx = setupCanvas(cv);
+    const w = cv.width, h = cv.height, padL = 46, padR = 90, padT = 16, padB = 28;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    ctx.font = '10px "JetBrains Mono", monospace';
+    for (let i = 0; i <= 4; i++) {
+      const val = i / 4;
+      const y = padT + plotH - val * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.stroke();
+      ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'right';
+      ctx.fillText(`${Math.round(val * 100)}%`, padL - 6, y + 3);
+    }
+    const bw = plotW / seriesList.length;
+    seriesList.forEach((day, i) => {
+      let y = padT + plotH;
+      keys.forEach(k => {
+        const frac = day[k] || 0;
+        const bh = frac * plotH;
+        y -= bh;
+        ctx.fillStyle = colors[k];
+        ctx.fillRect(padL + i * bw + 1, y, Math.max(0, bw - 2), Math.max(0, bh));
+      });
+    });
+    ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center';
+    const step = Math.max(1, Math.floor(seriesList.length / 10));
+    seriesList.forEach((d, i) => {
+      if (i % step === 0) ctx.fillText(`D${i + 1}`, padL + i * bw + bw / 2, h - 8);
+    });
+    keys.forEach((k, i) => {
+      const y = padT + 12 + i * 16;
+      ctx.fillStyle = colors[k];
+      ctx.fillRect(w - padR + 8, y - 8, 12, 12);
+      ctx.fillStyle = '#eee'; ctx.textAlign = 'left'; ctx.font = '11px Inter, sans-serif';
+      ctx.fillText(String(k).toUpperCase(), w - padR + 26, y + 2);
+    });
+  }
+
+  function drawWeights(cv, weightHistory) {
+    if (!cv || !weightHistory || !weightHistory.length) return;
+    const ctx = setupCanvas(cv);
+    const w = cv.width, h = cv.height, padL = 46, padR = 150, padT = 16, padB = 28;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    ctx.font = '10px "JetBrains Mono", monospace';
+    for (let i = 0; i <= 4; i++) {
+      const val = 0 + i * 1.25;
+      const y = padT + plotH - (val / 5) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.stroke();
+      ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'right';
+      ctx.fillText(String(val), padL - 6, y + 3);
+    }
+    const maxLen = weightHistory.length;
+    CATEGORIES.forEach((cat, idx) => {
+      const color = CAT_COLORS[idx % CAT_COLORS.length];
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.beginPath();
+      weightHistory.forEach((wh, i) => {
+        const v = typeof wh[cat] === 'number' ? wh[cat] : 1;
+        const x = padL + (i / (maxLen - 1 || 1)) * plotW;
+        const y = padT + plotH - (clamp(v, 0, 5) / 5) * plotH;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.fillStyle = color; ctx.fillRect(padL + plotW + 12, padT + idx * 15, 10, 10);
+      ctx.fillStyle = '#ccc'; ctx.textAlign = 'left'; ctx.font = '11px Inter, sans-serif';
+      ctx.fillText(cat.length > 10 ? cat.slice(0, 9) : cat, padL + plotW + 28, padT + idx * 15 + 9);
+    });
+    ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center';
+    ctx.fillText('1.0 = neutral · scale 0–5', padL + plotW / 2, h - 8);
+  }
+
+  function drawHistCompare(cv, a, b) {
+    if (!cv) return;
+    const ctx = setupCanvas(cv);
+    const w = cv.width, h = cv.height, padL = 46, padR = 140, padT = 18, padB = 28;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    const bins = 20;
+    function hist(values) {
+      const arr = new Array(bins).fill(0);
+      (values || []).forEach(v => { const bi = clamp(Math.floor(v * bins), 0, bins - 1); arr[bi]++; });
+      const mx = Math.max(...arr, 1);
+      return arr.map(c => c / mx);
+    }
+    const ha = hist(a), hb = hist(b);
+    const bw = plotW / bins;
+    ctx.font = '10px "JetBrains Mono", monospace';
+    for (let i = 0; i <= 4; i++) {
+      const val = i / 4;
+      const y = padT + plotH - val * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.stroke();
+      ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'right';
+      ctx.fillText(round(val, 2), padL - 6, y + 3);
+    }
+    ha.forEach((c, i) => {
+      ctx.fillStyle = 'rgba(233,69,96,0.45)';
+      ctx.fillRect(padL + i * bw + 1, padT + plotH - c * plotH, bw - 1, c * plotH);
+    });
+    hb.forEach((c, i) => {
+      ctx.fillStyle = 'rgba(78,158,255,0.55)';
+      ctx.fillRect(padL + i * bw + 1, padT + plotH - c * plotH, bw - 1, c * plotH);
+    });
+    [['Day 1', 'rgba(233,69,96,0.65)'], ['Final day', 'rgba(78,158,255,0.7)']].forEach(([label, color], i) => {
+      const y = padT + 12 + i * 18;
+      ctx.fillStyle = color; ctx.fillRect(padL + plotW + 14, y - 8, 12, 12);
+      ctx.fillStyle = '#eee'; ctx.textAlign = 'left'; ctx.font = '11px Inter, sans-serif';
+      ctx.fillText(label, padL + plotW + 32, y + 2);
+    });
+    ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center';
+    ctx.fillText('Final score (0→1)', padL + plotW / 2, h - 8);
+  }
+
+  // ============================================================
+  // Extras: settings persistence, count-up, download report
+  // ============================================================
+  const SETTINGS_KEY = 'hfm_settings';
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        days: $('inputDays').value, eventsPerDay: $('inputEventsPerDay').value, pause: $('inputPause').value,
+        timeSpacing: $('toggleTimeSpacing').checked, cleanup: $('toggleCleanup').checked,
+      }));
+    } catch (e) { /* storage may be unavailable */ }
+  }
+  function applySettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+      if (s.days) { $('inputDays').value = s.days; $('valDays').innerText = s.days; }
+      if (s.eventsPerDay) { $('inputEventsPerDay').value = s.eventsPerDay; $('valEventsPerDay').innerText = s.eventsPerDay; }
+      if (s.pause !== undefined) { $('inputPause').value = s.pause; $('valPause').innerText = (s.pause / 1000).toFixed(1) + 's'; }
+      if (s.timeSpacing !== undefined) $('toggleTimeSpacing').checked = s.timeSpacing;
+      if (s.cleanup !== undefined) $('toggleCleanup').checked = s.cleanup;
+    } catch (e) { /* ignore malformed storage */ }
+  }
+
+  function countUp(el, target, dur = 800) {
+    if (!window.requestAnimationFrame) { el.textContent = target.toLocaleString(); return; }
+    const start = performance.now();
+    function frame(now) {
+      const t = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(target * eased).toLocaleString();
+      if (t < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  window.downloadReport = function () {
+    if (!results.length) return;
+    const origin = $('resultsBody');
+    const clone = origin.cloneNode(true);
+    const origCanvases = origin.querySelectorAll('canvas');
+    const cloneCanvases = clone.querySelectorAll('canvas');
+    // Rasterize every canvas (charts + sparklines) into <img> so it survives export.
+    for (let i = 0; i < origCanvases.length; i++) {
+      const img = document.createElement('img');
+      try { img.src = origCanvases[i].toDataURL('image/png'); } catch (e) { img.alt = '(chart)'; }
+      img.style.cssText = 'width:100%;display:block;';
+      if (cloneCanvases[i]) cloneCanvases[i].replaceWith(img);
+    }
+    clone.querySelectorAll('#userStrip').forEach(el => el.remove());
+    const styleText = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>SubTick — Algorithm Test Report</title><style>${styleText}</style></head><body style="background:#0b0f19;color:#f3f4f6;padding:26px;font-family:Inter,sans-serif">${clone.outerHTML}</body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'subtick_algorithm_report.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    log('📄 Report downloaded (' + html.length.toLocaleString() + ' chars).', 'success');
+  };
+</script>
+</body>
+</html>

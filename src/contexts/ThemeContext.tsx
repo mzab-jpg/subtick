@@ -159,16 +159,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
         p {
           margin: 1.4em 0;
-          color: ${c.textSecondary} !important;
+          color: ${c.text} !important;
           font-size: 18px;
         }
         ul, ol {
-          color: ${c.textSecondary} !important;
+          color: ${c.text} !important;
           padding-left: 20px;
           margin: 1.2em 0;
           font-size: 18px;
         }
-        li { margin: 0.6em 0; line-height: 1.6; }
+        li { margin: 0.6em 0; line-height: 1.6; color: ${c.text} !important; }
         a {
           color: ${c.primary} !important;
           text-decoration: none;

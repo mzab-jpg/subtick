@@ -105,6 +105,8 @@ export default function DashboardScreen() {
           const filtered = prev.filter(a => !consumedIdsRef.current.has(a.id));
           if (filtered.length === 0 && prev.length > 0) {
             loadData(true);
+            // Keep stale articles visible while the background reload fetches.
+            return prev;
           }
           return filtered;
         });
@@ -121,6 +123,8 @@ export default function DashboardScreen() {
             const filtered = prev.filter(a => !seenIds.includes(a.id));
             if (filtered.length === 0 && prev.length > 0) {
               loadData(true);
+              // Keep stale articles visible while the background reload fetches.
+              return prev;
             }
             return filtered;
           });
