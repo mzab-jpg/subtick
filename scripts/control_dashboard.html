@@ -130,7 +130,10 @@
       <div class="brand-subtitle">The single source of truth for every tunable value · verified in Firestore</div>
     </div>
   </div>
-  <span class="header-status"><span class="pulse"></span>LIVE · subtick-bbd55</span>
+  <span class="header-status" id="headerStatus" style="cursor:pointer; user-select:none;" title="Click to toggle between LIVE and local EMULATOR connection">
+    <span class="pulse" id="statusPulse" style="background:#10b981;"></span>
+    <span id="statusText">LIVE · subtick-bbd55</span>
+  </span>
 </header>
 
 <div class="layout">
@@ -194,8 +197,8 @@
 </body>
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
-  import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js';
+  import { getAuth, signInAnonymously, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+  import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js';
     const TIPS = {
   dashboard: {
     // ---- scoring (final-score components P/T/R/Q + tail + ceiling) ----
@@ -323,9 +326,16 @@
     appId: '1:859600771798:web:c9898a4501148c4caa0777',
   };
 
+  const USE_EMULATOR = localStorage.getItem('hfm_use_emulator') === 'true';
+
   const app = initializeApp(firebaseConfig, 'control-dashboard');
   const auth = getAuth(app);
   const functions = getFunctions(app, 'us-central1');
+
+  if (USE_EMULATOR) {
+    connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+    connectFunctionsEmulator(functions, 'localhost', 5001);
+  }
 
   const $ = (id) => document.getElementById(id);
   function log(msg, type = 'info') {
@@ -527,25 +537,49 @@
     }
 
   /**
-   * Export the currently-edited config so it can be tested in the bot
-   * simulator (scripts/high_fidelity_matrix.html) WITHOUT publishing to
-   * system/scoringConfig. The config is copied to the clipboard and also
-   * stashed in localStorage (key `hfmPreviewConfig`) so the matrix picks it
-   * up automatically when served from the same localhost origin. Nothing is
-   * written to Firestore.
+   * Export the currently-edited config so it can be tested in the High-Fidelity
+   * Matrix WITHOUT publishing to system/scoringConfig. The config is written to
+   * a private backend staging slot (system/previewConfig via setPreviewConfig) so
+   * the matrix can read it from any browser / tab — no browser-storage tricks.
+   * A new export simply overwrites the slot. Also copied to clipboard as backup.
+   * Nothing written to system/scoringConfig → live app is never affected.
    */
   async function exportConfig() {
     if (!state.config) return log('Load the config first.', 'error');
-    const json = JSON.stringify(collectConfig(), null, 2);
-    try { await navigator.clipboard.writeText(json); } catch { /* ignore clipboard errors */ }
-    try { localStorage.setItem('hfmPreviewConfig', json); } catch { /* ignore */ }
-    log('📋 Edited config copied to clipboard and sent to simulator (NOT saved to Firestore). Open the bot simulator and run a matrix to preview it.', 'success');
+    const btn = $('btnExport'); btn.disabled = true; btn.innerText = '⏳ Sending to simulator…';
+    try {
+      const config = collectConfig();
+      const res = await httpsCallable(functions, 'setPreviewConfig')({ config });
+      const json = JSON.stringify(config, null, 2);
+      try { await navigator.clipboard.writeText(json); } catch { /* clipboard optional */ }
+      log('📤 Edited config sent to simulator preview slot (NOT saved to LIVE). Open the High-Fidelity Matrix, choose "Test dashboard preview", and run.', 'success');
+      return res.data;
+    } catch (e) { log('Send to simulator failed: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.innerText = '📤 Export config (send to simulator)'; }
   }
 
   // ------------------------------------------------------------------
   // Wiring
   // ------------------------------------------------------------------
   window.addEventListener('DOMContentLoaded', async () => {
+    // Status Badge Connection Setup
+    const badge = $('headerStatus');
+    const pulse = $('statusPulse');
+    const text = $('statusText');
+    if (USE_EMULATOR) {
+      pulse.style.background = '#3b82f6'; // Blue pulse
+      pulse.style.boxShadow = '0 0 0 0 rgba(59, 130, 246, 0.7)';
+      text.innerText = '🔌 EMULATOR · localhost';
+      badge.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+      badge.style.background = 'rgba(59, 130, 246, 0.08)';
+      badge.style.color = '#bfdbfe';
+    }
+    badge.addEventListener('click', () => {
+      const nextMode = !USE_EMULATOR;
+      localStorage.setItem('hfm_use_emulator', nextMode ? 'true' : 'false');
+      window.location.reload();
+    });
+
     $('btnLoad').addEventListener('click', loadConfig);
     $('btnSave').addEventListener('click', saveAndPublish);
         $('btnReset').addEventListener('click', resetToDefaults);

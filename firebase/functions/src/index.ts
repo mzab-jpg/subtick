@@ -154,6 +154,51 @@ export const deleteOrphanProfile = onCall(async (request) => {
 });
 
 // ============================================================
+// Preview config slot — private staging area for the Control
+// Dashboard → High-Fidelity Matrix workflow.
+//
+// The dashboard "Send to simulator" button writes an edited
+// config HERE (system/previewConfig) instead of publishing to
+// system/scoringConfig. The matrix can then opt to test live
+// config OR this preview — nothing here ever touches the live
+// algorithm. A new export simply overwrites the slot.
+// ============================================================
+export const setPreviewConfig = onCall({ secrets: [gaApiSecret] }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+  const data = request.data as { config?: Record<string, any> };
+  if (!data.config || typeof data.config !== 'object' || Object.keys(data.config).length === 0) {
+    throw new HttpsError('invalid-argument', 'config object is required.');
+  }
+  const clamped = clampConfig(deepMerge({}, data.config) as any);
+  await db.collection('system').doc('previewConfig').set({
+    config: { ...clamped },
+    lastUpdated: Date.now(),
+    lastUpdatedBy: request.auth.uid,
+  }, { merge: false });
+  console.log(`[setPreviewConfig] ${request.auth.uid} stored preview config for simulator testing`);
+  return { success: true, lastUpdated: Date.now() };
+});
+
+export const getPreviewConfig = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
+  }
+  const snap = await db.collection('system').doc('previewConfig').get();
+  if (!snap.exists) {
+    return { config: null, source: 'none' };
+  }
+  const d = snap.data() as Record<string, any>;
+  return {
+    config: d?.config ?? null,
+    source: 'preview',
+    updatedAt: d?.lastUpdated ?? null,
+    updatedBy: d?.lastUpdatedBy ?? null,
+  };
+});
+
+// ============================================================
 // updateScoringConfig — Updates system/scoringConfig and logs
 // a config_changed analytics event so before/after algorithm
 // changes are always comparable.
