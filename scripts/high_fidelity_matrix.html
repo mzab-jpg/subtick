@@ -433,8 +433,8 @@
     'scoring.trending':         "Strength of the trending factor (T). Higher values surface content many people are engaging with right now — adds serendipity/viral lift off a user's usual path. Range 0-1.5; default 0.15.",
     'scoring.recency':          "Strength of the recency factor (R). Pushes newer articles up the feed to keep it fresh. Range 0-1.5; default 0.10.",
     'scoring.quality':          "Strength of the publisher-quality factor (Q). Rewards articles from publishers with strong historical engagement. Range 0-1.5; default 0.15.",
-    'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.10.",
-    'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.10.",
+    'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.43.",
+    'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.57.",
     'scoring.maxTrendingScore': "The trending-score value at which factor T normalises to 1.0. Articles at/above it get full T credit; below it, T scales up linearly from 0. Default 50.",
 
     // ---- feedback (per-action learning delta) ----
@@ -567,12 +567,14 @@
   // alongside the per-run user apps.
   const _pvApp = initializeApp(firebaseConfig, 'hfm-preview-bridge');
   const _pvAuth = getAuth(_pvApp);
+  const _pvDb = getFirestore(_pvApp);
   const _pvFns = getFunctions(_pvApp, 'us-central1');
   let previewConfig = null;
   let previewMeta = null;
 
   if (USE_EMULATOR) {
     connectAuthEmulator(_pvAuth, 'http://localhost:9099', { disableWarnings: true });
+    connectFirestoreEmulator(_pvDb, 'localhost', 8080);
     connectFunctionsEmulator(_pvFns, 'localhost', 5001);
   }
 
@@ -642,7 +644,7 @@
       if (tag) tag.textContent = 'n/a';
       return;
     }
-    if (tag) tag.textContent = previewConfig ? 'preview' : (liveConfigSource === 'firestore' ? 'firestore' : 'defaults');
+    if (tag) tag.textContent = previewConfig ? 'preview (from dashboard)' : (liveConfigSource === 'firestore' ? 'firestore' : 'defaults');
     const groups = CFG_ORDER.filter(g => cfg[g] && typeof cfg[g] === 'object' && Object.keys(cfg[g]).length);
     const html = groups.map(g => {
       const rows = Object.keys(cfg[g]).map(k => {
@@ -652,7 +654,8 @@
     }).join('');
     let srcLine;
     if (previewConfig) {
-      srcLine = '<div class="cfg-src"><b>PREVIEW</b> · NOT live</div>';
+      const when = previewMeta?.updatedAt ? new Date(previewMeta.updatedAt).toLocaleString() : 'unknown';
+      srcLine = '<div class="cfg-src" style="color:#c7d2fe;border-color:rgba(99,102,241,0.5);background:rgba(99,102,241,0.08);padding:6px 10px;border-radius:8px;margin-bottom:8px"><b>🧪 PREVIEW CONFIG (from Dashboard)</b> · Updated ' + when + ' · NOT live</div>';
     } else {
       srcLine = '<div class="cfg-src">Source: <b>' + liveConfigSource + '</b></div>';
     }
@@ -790,20 +793,32 @@
     if (total > 0) { for (const k of Object.keys(out)) out[k] = out[k] / total; }
     return out;
   }
-  // Weighted contributions of the real algorithm (SCORE_WEIGHTS): P·0.60, T·0.15, R·0.10, Q·0.15.
-  // These sum exactly to the final score, so a stacked bar of them is the true composition.
+  // Weighted contributions of the real algorithm. Read the active config weights
+  // (live or preview override) so the composition display stays truthful when a
+  // custom config is being tested; fall back to the compiled defaults.
+  function scoreWeights() {
+    const s = (previewConfig || liveConfig)?.scoring;
+    return {
+      P: (typeof s?.personalization === 'number') ? s.personalization : 0.60,
+      T: (typeof s?.trending === 'number') ? s.trending : 0.15,
+      R: (typeof s?.recency === 'number') ? s.recency : 0.10,
+      Q: (typeof s?.quality === 'number') ? s.quality : 0.15,
+      maxT: (typeof s?.maxTrendingScore === 'number') ? s.maxTrendingScore : 50,
+    };
+  }
   function compSegs(sc) {
+    const w = scoreWeights();
     return [
-      { k: 'P', v: 0.60 * (sc.scoreP || 0), c: COMP_COLORS.P },
-      { k: 'T', v: 0.15 * (sc.scoreT || 0), c: COMP_COLORS.T },
-      { k: 'R', v: 0.10 * (sc.scoreR || 0), c: COMP_COLORS.R },
-      { k: 'Q', v: 0.15 * (sc.scoreQ || 0), c: COMP_COLORS.Q },
+      { k: 'P', v: w.P * (sc.scoreP || 0), c: COMP_COLORS.P },
+      { k: 'T', v: w.T * (sc.scoreT || 0), c: COMP_COLORS.T },
+      { k: 'R', v: w.R * (sc.scoreR || 0), c: COMP_COLORS.R },
+      { k: 'Q', v: w.Q * (sc.scoreQ || 0), c: COMP_COLORS.Q },
     ];
   }
   // Stacked bar: each segment is one weighted component; full bar length = final score (0 → 1.0 max).
   function compositionBar(sc) {
     const segs = compSegs(sc);
-    const tip = segs.map(s => `${s.k}  ×${s.k === 'P' ? '0.60' : s.k === 'T' ? '0.15' : s.k === 'R' ? '0.10' : '0.15'}  = ${round(s.v, 3)}`).join('  |  ');
+    const tip = segs.map(s => `${s.k}  ×${s.k === 'P' ? round(scoreWeights().P, 2) : s.k === 'T' ? round(scoreWeights().T, 2) : s.k === 'R' ? round(scoreWeights().R, 2) : round(scoreWeights().Q, 2)}  = ${round(s.v, 3)}`).join('  |  ');
     let cum = 0;
     const parts = segs.map(s => {
       const el = `<i style="left:${clamp(cum, 0, 1) * 100}%;width:${clamp(s.v, 0, 1) * 100}%;background:${s.c}" data-k="${s.k}"></i>`;
@@ -904,7 +919,35 @@
       localStorage.setItem('hfm_use_emulator', nextMode ? 'true' : 'false');
       window.location.reload();
     });
-    if ($('togglePreview')) $('togglePreview').addEventListener('change', () => refreshPreview().then(renderActiveConfig));
+    // Preview config polling
+    let previewPollInterval = null;
+    function startPreviewPolling() {
+      if (previewPollInterval) return;
+      previewPollInterval = setInterval(() => {
+        if ($('togglePreview').checked) {
+          refreshPreview().then(renderActiveConfig);
+        }
+      }, 5000);
+    }
+    function stopPreviewPolling() {
+      if (previewPollInterval) {
+        clearInterval(previewPollInterval);
+        previewPollInterval = null;
+      }
+    }
+
+    if ($('togglePreview')) {
+      $('togglePreview').addEventListener('change', () => {
+        refreshPreview().then(renderActiveConfig);
+        if ($('togglePreview').checked) {
+          startPreviewPolling();
+        } else {
+          stopPreviewPolling();
+        }
+      });
+      // Start polling if already checked on load
+      if ($('togglePreview').checked) startPreviewPolling();
+    }
     renderScenarios();
     $('btnResetScenarios').addEventListener('click', () => { SCENARIOS = defaultScenarios(); saveScenarios(); renderScenarios(); log('Scenario list reset to the 10 defaults.', 'info'); });
     $('btnRun').addEventListener('click', runSimulation);
@@ -974,7 +1017,7 @@
     const pf = clamp((pubW - MIN) / RANGE, 0, 1);
     return cf * 0.6 + pf * 0.4;
   }
-  function normalizeT(t) { return Math.min(t, 50) / 50; }
+  function normalizeT(t) { const maxT = scoreWeights().maxT; return Math.min(t, maxT) / maxT; }
   function normalizeR(daysOld) {
     if (daysOld <= 0) return 1.0;
     if (daysOld <= 7) return 1.0 - (daysOld / 7) * 0.2;
@@ -983,15 +1026,16 @@
   function normalizeQ(q) { return clamp((q - 0.2) / 0.8, 0, 1); }
 
   function computeScoreFallback(article, catWeights) {
+    const w = scoreWeights();
     const catW = catWeights[`${article.category}::${article.lengthStyle}`] ?? catWeights[article.category] ?? 1.0;
     const scoreP = normalizeP(catW, 1.0);
     const scoreT = normalizeT(article.trendingScore || 0);
     const daysOld = Math.max(0, (Date.now() - (article.publishDate || Date.now())) / 86400000);
     const scoreR = normalizeR(daysOld);
     const scoreQ = normalizeQ(article.qualityScore ?? 0.8);
-    const finalScore = 0.60 * scoreP + 0.15 * scoreT + 0.10 * scoreR + 0.15 * scoreQ;
+    const finalScore = w.P * scoreP + w.T * scoreT + w.R * scoreR + w.Q * scoreQ;
     const tranche = finalScore > 0.40 ? 'high' : finalScore > 0.20 ? 'mid' : 'tail';
-    const contribs = [['P', 0.60 * scoreP], ['T', 0.15 * scoreT], ['R', 0.10 * scoreR], ['Q', 0.15 * scoreQ]];
+    const contribs = [['P', w.P * scoreP], ['T', w.T * scoreT], ['R', w.R * scoreR], ['Q', w.Q * scoreQ]];
     const dominant = contribs.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
     return { scoreP, scoreT, scoreR, scoreQ, finalScore, tranche, dominant };
   }
@@ -1064,12 +1108,24 @@
 
   function generateEvents(sc, articles, uid, dayIdx, totalDays, fIdx, fpd, timeSpacing) {
     const dayMs = 24 * 60 * 60 * 1000;
-    // Spreads the feeds smoothly across the 24-hour day based on feed index fIdx out of fpd total
-    const base = Date.now() - (totalDays - dayIdx) * dayMs + (fIdx / (fpd + 1)) * dayMs;
+    // weightUpdater only learns from events newer than ~24h (its watermark
+    // defaults to now-24h and advances per sync). Keep the whole simulated
+    // timeline inside a ~20h window AND strictly monotonic across days/feeds so
+    // that every day's events are actually learned from, in order. The day-by-day
+    // metrics come from the daily profile snapshots, not from these timestamps.
+    const spanMs = Math.min(totalDays * dayMs, 20 * 60 * 60 * 1000);
+    const daySpan = spanMs / Math.max(1, totalDays);
+    const dayStart = Date.now() - (totalDays - dayIdx) * daySpan;
+    const feedStart = dayStart + Math.min(Math.max(fIdx - 1, 0), fpd - 1) * (daySpan / Math.max(1, fpd));
     const events = [];
     for (let i = 0; i < articles.length; i++) {
-      const ts = Math.round(base + i * 4500 + (timeSpacing ? (Math.random() * 2 - 1) * 30 * 60 * 1000 : 0));
-      events.push(buildEvent(sc, articles[i], uid, ts));
+      let ts = feedStart + i * 4500;
+      if (timeSpacing) ts += (Math.random() * 2 - 1) * 30 * 60 * 1000;
+      // Keep the event inside this simulated day (defensive; prevents the jitter
+      // from pushing an event into the next day and breaking the monotonic order).
+      const dayEnd = dayStart + daySpan;
+      ts = clamp(ts, dayStart, Math.max(dayStart, dayEnd - 1));
+      events.push(buildEvent(sc, articles[i], uid, Math.round(ts)));
     }
     return events;
   }// ============================================================
@@ -1145,6 +1201,11 @@
     log('====================================================', 'highlight');
     log(`Running ${enabled.length} real users × ${days} days (with ${fpd} feeds/day) on LIVE backend`, 'highlight');
     log('====================================================', 'highlight');
+
+    // Ensure we have the latest preview config if preview mode is enabled
+    if ($('togglePreview').checked) {
+      await refreshPreview();
+    }
 
     if (previewConfig) log('📋 Preview mode ON — using edited config from dashboard (not saved to Firestore).', 'highlight');
     let ui = 0;
@@ -1432,10 +1493,10 @@
       <div class="chart-container"><h3>📋 This user's ranked feed (final day) — every real score</h3>
         <div class="subtitle">The actual feed the live algorithm returned. Hover a bar to see the exact weighted component → final score.</div>
         <div class="comp-key">
-          <span class="ck"><span class="sw" style="background:${COMP_COLORS.P}"></span>P ×0.60</span>
-          <span class="ck"><span class="sw" style="background:${COMP_COLORS.T}"></span>T ×0.15</span>
-          <span class="ck"><span class="sw" style="background:${COMP_COLORS.R}"></span>R ×0.10</span>
-          <span class="ck"><span class="sw" style="background:${COMP_COLORS.Q}"></span>Q ×0.15</span>
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.P}"></span>P ×${round(scoreWeights().P, 2)}</span>
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.T}"></span>T ×${round(scoreWeights().T, 2)}</span>
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.R}"></span>R ×${round(scoreWeights().R, 2)}</span>
+          <span class="ck"><span class="sw" style="background:${COMP_COLORS.Q}"></span>Q ×${round(scoreWeights().Q, 2)}</span>
           <span>· bar length = Final score (0 → 1.0 max)</span>
         </div>
         <div class="table-container"><table class="data-table">

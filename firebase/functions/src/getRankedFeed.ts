@@ -734,7 +734,10 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       const Q = normalizeQ(rawQuality);
 
       const fullScore = scorePersonalized(P, T, R, Q, cfg.scoring);
-      const tailScore = scoreTail(T, R, cfg.scoring);
+      const tailScore = scoreTail(T, R, {
+        trending: cfg.scoring.tailTrending,
+        recency: cfg.scoring.tailRecency,
+      });
 
       return { article, fullScore, tailScore };
     });
@@ -808,10 +811,10 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       const compR = normalizeR(dayCheck);
       const compQ = normalizeQ(publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8);
       const contributions: [string, number][] = [
-        ['P', SCORE_WEIGHTS.personalization * compP],
-        ['T', SCORE_WEIGHTS.trending * compT],
-        ['R', SCORE_WEIGHTS.recency * compR],
-        ['Q', SCORE_WEIGHTS.quality * compQ],
+        ['P', cfg.scoring.personalization * compP],
+        ['T', cfg.scoring.trending * compT],
+        ['R', cfg.scoring.recency * compR],
+        ['Q', cfg.scoring.quality * compQ],
       ];
       const dominantComponent = contributions.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
 

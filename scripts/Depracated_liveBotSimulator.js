@@ -384,6 +384,11 @@ async function runSimulation() {
     }
   }
 
+  console.log('\n====================================================\n');
+  console.warn('⚠️  NOTE: This script (Depracated_liveBotSimulator.js) is OBSOLETE.');
+  console.warn('    It approximates behaviours and does not reflect the current 9-category config.');
+  console.warn('    Prefer the High-Fidelity Matrix (scripts/high_fidelity_matrix.html) or,');
+  console.warn('    for headless bot runs, review the tooling in firebase/scripts/.');
   console.log('====================================================\n');
   process.exit(0);
 }

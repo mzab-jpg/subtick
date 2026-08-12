@@ -292,6 +292,7 @@ export const getScoringConfig = onCall({ secrets: [gaApiSecret] }, async (reques
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
 
+  invalidateConfigCache();  // always fetch fresh from Firestore
   const effective = await loadScoringConfig();
   const snap = await db.collection('system').doc('scoringConfig').get();
   const stored = snap.exists ? (snap.data() as Record<string, any>) : null;

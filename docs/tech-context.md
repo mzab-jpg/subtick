@@ -5,6 +5,20 @@
 
 ---
 
+## 0. Local Emulator Testing
+
+A full user manual lives in [`docs/emulator/`](./emulator/README.md):
+
+- `EMULATOR_GUIDE.md` — how to run Auth/Firestore/Functions emulators with a
+  copy of production data (`firebase/start_emulators_fresh.bat` +
+  `firebase/scripts/sync-prod-to-emulator.js`), and how to open the dashboard
+  and matrix tools over HTTP.
+- `TROUBLESHOOTING.md` — fixes for `auth/network-request-failed`,
+  `Load failed: internal` (missing `GA_API_SECRET` in
+  `firebase/functions/.env`), `0 articles ranked`, and wrong gcloud accounts.
+
+---
+
 ## 1. Client Dependencies (`package.json`)
 
 ### Production Dependencies

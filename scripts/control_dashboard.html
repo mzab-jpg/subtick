@@ -198,6 +198,7 @@
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
   import { getAuth, signInAnonymously, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+  import { getFirestore, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
   import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-functions.js';
     const TIPS = {
   dashboard: {
@@ -206,8 +207,8 @@
     'scoring.trending':         "Strength of the trending factor (T). Higher values surface content many people are engaging with right now — adds serendipity/viral lift off a user's usual path. Range 0-1.5; default 0.15.",
     'scoring.recency':          "Strength of the recency factor (R). Pushes newer articles up the feed to keep it fresh. Range 0-1.5; default 0.10.",
     'scoring.quality':          "Strength of the publisher-quality factor (Q). Rewards articles from publishers with strong historical engagement. Range 0-1.5; default 0.15.",
-    'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.10.",
-    'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.10.",
+    'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.43.",
+    'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.57.",
     'scoring.maxTrendingScore': "The trending-score value at which factor T normalises to 1.0. Articles at/above it get full T credit; below it, T scales up linearly from 0. Default 50.",
 
     // ---- feedback (per-action learning delta) ----
@@ -272,35 +273,6 @@
     'classification.thoroughTimeFraction': "Session time (as a fraction of expected read time for the article's length) needed to call a read 'thorough'. Default 0.60.",
     'classification.shallowDepth':       "Articles scrolled between shallowDepth and thoroughDepth, or not meeting thorough criteria, are 'shallow'. Default 0.40.",
   },
-
-  matrix: {
-    // ---- run settings ----
-    'days':        "Simulated days per user — how many backdated days of activity to generate for each test user. Range 1-14; default 7.",
-    'eventsPerDay': "Behavior events per day — how many actions (reads, likes, saves, swipes) each simulated user generates per day. Default 8.",
-    'pause':       "Pause between users — stagger the launch of each test user so they don't all hit your backend at once. Default 0.3s.",
-    'timeSpacing': "Time-spacing — spreads each user's simulated event timestamps across the day so GA4/BigQuery see smooth daily curves instead of spikes.",
-    'cleanup':     "Delete each test account when done — removes the anonymous test users + their data after the run so your DB stays clean.",
-
-    // ---- per-user behavior rates ----
-    'read_thorough':        "Probability this user reads thoroughly on a given article (opens, scrolls deep, spends enough time). Higher = engaged reader.",
-    'read_skim':            "Probability of a read-skim (opens, scrolls moderately). Mild positive signal to the algorithm.",
-    'read_shallow':         "Probability of a read-shallow (opens, barely scrolls). Near-zero learning signal.",
-    'quick_exit':           "Probability of a quick exit (opens then immediately closes). Negative signal.",
-    'swipe_next':           "Probability of swiping past without opening (neutral).",
-    'swipe_not_interested': "Probability of actively marking an article 'not interested'. Strong negative signal.",
-    'save':                 "Probability of saving an article to the reading list. Strongest positive signal.",
-    'like':                 "Probability of liking an article. Positive signal.",
-    'unlike':               "Probability of unliking an article. Negative signal.",
-    'unsave':               "Probability of unsaving a previously saved article. Negative signal.",
-
-    // ---- behavior randomness / session params ----
-    'stddev':       "Per-user randomness injected into the behavior rates above — makes the simulation less mechanical, more human. 0 = deterministic.",
-    'sessMean':     "Average session length (seconds) for this user.",
-    'sessStd':      "Session-length variability in seconds (higher = more varied session lengths).",
-    'scrollMean':   "Average scroll depth for this user (0.0 = scrolled nothing, 1.0 = scrolled to the bottom).",
-    'scrollStd':    "Scroll-depth variability (higher = more inconsistent scrolling).",
-    'prefStrength': "How strongly this user's pre-set category preferences bias the initial generated weights — higher = stronger initial taste.",
-  },
 };
 
 // Helper: render a "?" help icon with the given tooltip. Usage: helpHtml('scoring.personalization')
@@ -330,10 +302,12 @@
 
   const app = initializeApp(firebaseConfig, 'control-dashboard');
   const auth = getAuth(app);
+  const db = getFirestore(app);
   const functions = getFunctions(app, 'us-central1');
 
   if (USE_EMULATOR) {
     connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+    connectFirestoreEmulator(db, 'localhost', 8080);
     connectFunctionsEmulator(functions, 'localhost', 5001);
   }
 

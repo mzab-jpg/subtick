@@ -70,10 +70,11 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
   }));
 
   // Input size cap: prevent batch overflow (Firestore limits batches to 500 ops)
-  // and rate-limit abuse. Client normally sends ≤20 events per flush.
-  if (events.length > 50) {
-    console.warn(`[syncBehaviorEvents] Truncating ${events.length} events to 50 (possible abuse or oversized flush)`);
-    events = events.slice(0, 50);
+  // and rate-limit abuse. The high-fidelity matrix can send up to feedSize (≤100)
+  // events per feed; the real app normally sends ≤20 per flush.
+  if (events.length > 100) {
+    console.warn(`[syncBehaviorEvents] Truncating ${events.length} events to 100 (possible abuse or oversized flush)`);
+    events = events.slice(0, 100);
   }
 
   if (!events.length) {
