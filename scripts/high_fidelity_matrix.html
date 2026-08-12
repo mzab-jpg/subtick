@@ -278,43 +278,15 @@
   .beh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
   .beh-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-muted); }
   .beh-row label { color: var(--text-muted); }
-  .help { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--accent-primary); color: var(--accent-primary); font-size: 9px; font-weight: 700; cursor: help; vertical-align: middle; margin-left: 4px; background: rgba(99,102,241,0.08); user-select: none; position: relative; }
-  .help:hover { background: var(--accent-primary); color: #fff; }
-  .help:hover::after {
-    content: attr(data-title);
-    position: absolute;
-    bottom: 135%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #0f172a;
-    color: #f3f4f6;
-    border: 1px solid var(--accent-primary);
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 11px;
-    font-weight: 400;
-    line-height: 1.45;
-    width: 250px;
-    white-space: normal;
-    text-align: left;
-    z-index: 1000;
+  .help { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; margin-left: 4px; border-radius: 50%; border: 1px solid var(--card-border); color: var(--text-muted); font-size: 10px; font-weight: 700; cursor: help; user-select: none; background: transparent; transition: all 150ms ease; }
+  .help:hover { border-color: var(--accent-primary); color: var(--accent-primary); background: rgba(201,75,75,0.08); }
+  #tooltip {
+    display: none; position: fixed; z-index: 9999;
+    background-color: var(--card-bg); color: var(--text-main);
+    border: 1px solid var(--card-border); border-radius: 8px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    pointer-events: none;
-    font-family: 'Inter', sans-serif;
-    text-transform: none;
-    letter-spacing: normal;
-  }
-  .help:hover::before {
-    content: "";
-    position: absolute;
-    bottom: 115%;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 6px;
-    border-style: solid;
-    border-color: var(--accent-primary) transparent transparent transparent;
-    z-index: 1000;
-    pointer-events: none;
+    padding: 10px 12px; max-width: 340px; width: max-content;
+    font-size: 11px; line-height: 1.5; pointer-events: none; font-family: 'Inter', sans-serif;
   }
   .beh-row input[type="number"], .beh-row input[type="range"] { width: 64px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 2px 5px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
   .beh-row input[type="range"] { width: 100px; }
@@ -420,6 +392,7 @@
   </main>
 
 </div>
+<div id="tooltip"></div>
 </body>
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
@@ -902,6 +875,41 @@
       }
     });
     // Connection badge (LIVE / EMULATOR toggle)
+// Fixed-position tooltip manager (avoids clipping/overlap)
+    const tipEl = document.getElementById('tooltip');
+    function showTip(html, x, y) {
+      if (!tipEl) return;
+      tipEl.textContent = html;
+      tipEl.style.display = 'block';
+      const r = tipEl.getBoundingClientRect();
+      const pad = 12;
+      let left = Math.min(x + 14, window.innerWidth - r.width - pad);
+      let top = (y - r.height - 14);
+      if (top < pad) top = y + 18;
+      tipEl.style.left = Math.max(left, pad) + 'px';
+      tipEl.style.top = Math.max(top, pad) + 'px';
+    }
+    function hideTip() { if (tipEl) tipEl.style.display = 'none'; }
+    document.addEventListener('mouseover', (e) => {
+      const h = e.target.closest('.help');
+      if (h) {
+        const t = h.getAttribute('data-title') || h.getAttribute('title') || '';
+        if (t) showTip(t, e.clientX, e.clientY);
+      }
+    });
+    document.addEventListener('mouseout', (e) => {
+      if (e.target.closest('.help')) hideTip();
+    });
+    document.addEventListener('focusin', (e) => {
+      const h = e.target.closest('.help');
+      if (h) {
+        const t = h.getAttribute('data-title') || '';
+        if (t) { const r = h.getBoundingClientRect(); showTip(t, r.left, r.top); }
+      }
+    });
+    document.addEventListener('focusout', (e) => {
+      if (e.target.closest('.help')) hideTip();
+    });
     const badge = $('headerStatus');
     const pulse = $('statusPulse');
     const text = $('statusText');
