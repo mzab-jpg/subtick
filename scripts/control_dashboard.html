@@ -5,7 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SubTick — Algorithm Control Dashboard (Live Config)</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23111111'/><text y='0.72em' x='0.5em' font-size='58' text-anchor='middle' dominant-baseline='middle'>🎛️</text></svg>">
+<link rel="stylesheet" href="design-tokens.css">
 <style>
+  /* Inline design tokens — the dashboard carries its own palette so it never
+     renders unstyled even if design-tokens.css fails to load. */
+  :root {
+    --bg: #F8F7F4;
+    --surface: #FFFFFF;
+    --surface-secondary: #FFFFFF;
+    --text: #111111;
+    --text-secondary: #666666;
+    --text-muted: #999999;
+    --primary: #111111;
+    --accent: #B63A3A;
+    --accent-hover: #9B2F2F;
+    --border: #E8E5E1;
+    --error: #C0392B;
+    --success: #3A7D44;
+    --warning: #B8860B;
+    --radius: 10px;
+    --radius-sm: 8px;
+    --row-pad-v: 14px;
+    --row-pad-h: 16px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: Georgia, 'Times New Roman', serif;
+    --font-mono: Menlo, Monaco, Consolas, 'Courier New', monospace;
+    --text-xs: 11px;
+    --text-sm: 13px;
+    --text-base: 15px;
+    --text-lg: 17px;
+    --section-label-size: 12px;
+    --section-label-weight: 700;
+    --section-label-spacing: 1.2px;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08);
+    --transition-fast: 150ms ease;
+    --transition-normal: 200ms ease;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121212;
+      --surface: #1B1B1B;
+      --surface-secondary: #1B1B1B;
+      --text: #F5F5F5;
+      --text-secondary: #B5B5B5;
+      --text-muted: #777777;
+      --primary: #F5F5F5;
+      --accent: #C94B4B;
+      --accent-hover: #E05D5D;
+      --border: #2A2A2A;
+      --error: #FF6B6B;
+      --success: #6FCF97;
+      --warning: #E2B93B;
+      --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+      --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+    }
+  }
 /* Dashboard overrides. Base tokens from design-tokens.css */
 header {
   display: flex; justify-content: space-between; align-items: center;
@@ -145,7 +200,13 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
 .tag.dirty { background-color: rgba(245, 158, 11, 0.18); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); }
 .tag.clean { background-color: rgba(58, 123, 69, 0.18); color: #6FCF97; border: 1px solid rgba(58, 123, 69, 0.35); }
 .tag.danger { background-color: rgba(239, 68, 68, 0.18); color: #FCA5A5; border: 1px solid rgba(239, 68, 68, 0.35); }
-.section { margin-bottom: 24px; }
+.section {
+  margin-bottom: 24px;
+  background-color: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px;
+  box-shadow: var(--shadow-card); transition: box-shadow var(--transition-normal);
+}
+.section:hover { box-shadow: var(--shadow-card-hover); }
 .section-title { font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.5px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .section-sub { font-size: var(--text-xs); color: var(--text-secondary); line-height: 1.5; margin-bottom: 14px; }
 .cfg-grid { display: flex; flex-direction: column; gap: 0; }
@@ -180,6 +241,64 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
 *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 :root[data-emulator="true"] *:focus-visible { outline-color: #3B82F6; }
 
+/* Buttons: ensure ghost/outlined render as clear clickable buttons */
+.btn { min-height: 40px; }
+.btn-ghost { border: 1px solid var(--border); color: var(--text-secondary); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text); background-color: var(--surface-secondary); }
+
+/* STATUS truncation — prevent long UIDs/timestamps overlapping adjacent column */
+.layout > *, aside, main { min-width: 0; }
+.meta-row .v { max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Diff-magnitude tiers */
+.cfg-row.changed { border-left: 3px solid #6366f1; }
+.cfg-row.changed.sm { background-color: rgba(99, 102, 241, 0.05); }
+.cfg-row.changed.md { background-color: rgba(99, 102, 241, 0.13); border-left-color: #4f46e5; }
+.cfg-row.changed.lg { background-color: rgba(99, 102, 241, 0.24); border-left-color: #4338ca; }
+.diff-badge {
+  font-size: var(--text-xs); font-weight: 700; font-family: var(--font-mono);
+  padding: 1px 7px; border-radius: 999px; margin-left: 8px; white-space: nowrap;
+}
+.diff-badge.sm { color: #6366f1; background: rgba(99, 102, 241, 0.1); }
+.diff-badge.md { color: #4f46e5; background: rgba(99, 102, 241, 0.18); }
+.diff-badge.lg { color: #fff; background: #4f46e5; }
+
+/* Validation */
+.range-hint { font-size: var(--text-xs); color: var(--text-muted); }
+.cfg-row.invalid { background-color: rgba(192, 57, 43, 0.08); border-left: 3px solid var(--error); }
+.cfg-row.invalid input[type="number"] { border-color: var(--error); }
+.field-err { font-size: var(--text-xs); color: var(--error); margin-top: 2px; font-weight: 500; }
+
+/* Reset icon — larger hit target */
+.reset-field { width: 34px; height: 34px; font-size: 18px; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Undo toast */
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 9999; display: none; align-items: center; gap: 10px;
+  background-color: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-card-hover);
+  padding: 10px 14px; font-size: var(--text-sm); color: var(--text);
+  font-family: var(--font-sans);
+}
+#toast button {
+  border: 1px solid var(--accent); background: none; color: var(--accent);
+  font-weight: 600; font-size: var(--text-xs); border-radius: 6px; padding: 3px 10px; cursor: pointer;
+}
+#toast button:hover { background: rgba(182, 58, 58, 0.08); }
+
+/* Stored JSON toolbar + syntax colors */
+.json-toolbar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.copy-btn {
+  border: 1px solid var(--border); background: var(--surface-secondary); color: var(--text-secondary);
+  font-size: var(--text-xs); font-weight: 600; border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
+.copy-btn:hover { color: var(--text); border-color: var(--text-muted); }
+.json-view .j-key { color: #6366f1; }
+.json-view .j-str { color: var(--success); }
+.json-view .j-num { color: #d97706; }
+.json-view .j-bool { color: #db2777; }
+.json-view .j-null { color: var(--text-muted); font-style: italic; }
 </style>
 </head>
 <body>
@@ -208,7 +327,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
 
     <div class="card">
       <div class="card-title"><span>⚙️ Actions</span></div>
-      <button class="btn btn-primary" id="btnSave" type="button">💾 Save &amp; Publish to LIVE</button>
+      <button class="btn btn-primary" id="btnSave" type="button">💾 Save changes</button>
       <button class="btn btn-danger" id="btnReset" type="button">↩ Reset to defaults</button>
       <div class="banner"><span class="banner-icon">ℹ️</span><span>Changes apply to the live algorithm within ~60s and are logged as a GA4 <b>config_changed</b> event. Safe ranges are enforced server-side.</span></div>
     </div>
@@ -230,6 +349,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
 
     <div class="card">
       <div class="card-title"><span>🗄️ Stored doc (what's in Firestore)</span></div>
+      <div class="json-toolbar"><button class="copy-btn" id="btnCopyJson" type="button">📋 Copy JSON</button></div>
       <div class="json-view" id="storedJson">Load the config to see the stored document.</div>
     </div>
 
@@ -261,6 +381,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
 
 </div>
 <div id="tooltip"></div>
+<div id="toast"></div>
 </body>
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
@@ -415,9 +536,9 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     'scoring.tailRecency': ['Tail: Recency (R)', 0, 1.5, 0.01],
     'scoring.maxTrendingScore': ['Max trending score (T = 1.0 at)', 1, 200, 1],
     'learning.baseRate': ['Base learning rate', 0, 1, 0.005],
-    'learning.categoryMultiplier': ['Category multiplier (?? base)', 0, 5, 0.1],
-    'learning.lengthMultiplier': ['Length multiplier (?? base)', 0, 5, 0.1],
-    'learning.publisherMultiplier': ['Publisher multiplier (?? base)', 0, 5, 0.1],
+    'learning.categoryMultiplier': ['Category multiplier (× base)', 0, 5, 0.1],
+    'learning.lengthMultiplier': ['Length multiplier (× base)', 0, 5, 0.1],
+    'learning.publisherMultiplier': ['Publisher multiplier (× base)', 0, 5, 0.1],
     'learning.minWeight': ['Minimum weight', 0.01, 1, 0.01],
     'learning.maxWeight': ['Maximum weight', 1, 10, 0.1],
     'learning.dailyDecayRate': ['Daily decay rate (pulls towards 1.0)', 0.5, 1, 0.001],
@@ -437,7 +558,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     'classification.thoroughDepth': ['Thorough scroll depth (above)', 0, 1, 0.01],
     'classification.thoroughTimeFraction': ['Thorough time — fraction of expected', 0.1, 2, 0.01],
     'classification.shallowDepth': ['Shallow scroll depth (above)', 0, 1, 0.01],
-    'trending.decayRate': ['Trending decay rate (daily ??)', 0.5, 1, 0.001],
+    'trending.decayRate': ['Trending decay rate (daily ×)', 0.5, 1, 0.001],
   };
 
   const GROUP_DEFAULTS = {
@@ -496,8 +617,12 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
         const m = metaFor(group, k);
         const dirty = val !== dval;
         const label = labelFor(group, k);
-        return `<div class="cfg-row${dirty ? ' changed' : ''}">
-          <label>${label}<span class="deflt">default ${dval}</span></label>
+        const diffPct = dirty ? (Math.abs(val - dval) / Math.max(Math.abs(dval), 1e-9)) * 100 : 0;
+        const tier = !dirty ? '' : (diffPct >= 75 ? 'lg' : diffPct >= 25 ? 'md' : 'sm');
+        const badge = dirty ? `<span class="diff-badge ${tier}">${val > dval ? '+' : '−'}${Math.round(diffPct)}%</span>` : '';
+        return `<div class="cfg-row${dirty ? ' changed ' + tier : ''}">
+          <label>${label}<span class="deflt">default ${dval} · range ${m.min}–${m.max}</span></label>
+          ${badge}
           <input type="number" data-path="${group}.${k}" min="${m.min}" max="${m.max}" step="${m.step}" value="${val}" title="range ${m.min}–${m.max}, step ${m.step}">
           <button type="button" class="reset-field" data-reset="${group}.${k}" title="Reset to default (${dval})">↺</button>
         </div>`;
@@ -527,18 +652,34 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
   }
 
   function renderMeta() {
+    const short = (s, n) => (s && s.length > n ? s.slice(0, n) + '…' : s || '—');
     $('metaSource').innerHTML = state.source
       ? `<span class="pill ${state.source === 'firestore' ? 'success' : 'warning'}">${state.source}</span>`
       : '<span class="pill">—</span>';
     $('metaSchema').innerHTML = `<span class="pill">${state.config ? state.config.schemaVersion : '—'}</span>`;
-    $('metaBy').innerHTML = `<span class="pill">${state.updatedBy || '—'}</span>`;
-    $('metaAt').innerHTML = `<span class="pill">${state.updatedAt ? new Date(state.updatedAt).toLocaleString() : '—'}</span>`;
+    $('metaBy').innerHTML = state.updatedBy
+      ? `<span class="pill" title="${state.updatedBy}">${short(state.updatedBy, 12)}</span>`
+      : '<span class="pill">—</span>';
+    $('metaAt').innerHTML = `<span class="pill" title="${state.updatedAt ? new Date(state.updatedAt).toLocaleString() : ''}">${short(state.updatedAt ? new Date(state.updatedAt).toLocaleString() : '', 20)}</span>`;
   }
 
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function highlightJSON(obj) {
+    const json = JSON.stringify(obj, null, 1);
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (m) => {
+      let cls = 'j-num';
+      if (/^"/.test(m)) cls = /:$/.test(m) ? 'j-key' : 'j-str';
+      else if (/true|false/.test(m)) cls = 'j-bool';
+      else if (/null/.test(m)) cls = 'j-null';
+      return `<span class="${cls}">${m}</span>`;
+    });
+  }
   function renderStored() {
-    $('storedJson').textContent = state.stored
-      ? JSON.stringify(state.stored, null, 1)
-      : '(no stored document yet — the compiled defaults are active)';
+    $('storedJson').innerHTML = state.stored
+      ? highlightJSON(state.stored)
+      : esc('(no stored document yet — the compiled defaults are active)');
   }
 
   function collectConfig() {
@@ -567,6 +708,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
       $('emptyState').style.display = 'none';
       $('configSections').style.display = 'block';
       renderMeta(); renderStored(); renderSections(); setDirty(false);
+      if (window.__validateConfig) window.__validateConfig();
       const ll = $('lastLoaded'); const llt = $('lastLoadedTime');
       if (ll) ll.style.display = 'block';
       if (llt) llt.textContent = new Date().toLocaleTimeString();
@@ -585,11 +727,12 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
       setDirty(false);
       await loadConfig();
     } catch (e) { log('Publish failed: ' + e.message, 'error'); }
-    finally { btn.disabled = false; btn.innerText = '💾 Save & Publish to LIVE'; }
+    finally { btn.disabled = false; btn.innerText = '💾 Save changes'; }
   }
 
   async function resetToDefaults() {
     if (!state.defaults) return log('Load the config first.', 'error');
+    if (!window.confirm('Reset ALL current values back to their defaults?\n\nThis publishes the default config to the live algorithm.')) return;
     const btn = $('btnReset'); btn.disabled = true; btn.innerText = '… Resetting…';
     try {
       await httpsCallable(functions, 'updateScoringConfig')({ config: JSON.parse(JSON.stringify(state.defaults)), client_id: genClientId() });
@@ -651,6 +794,13 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     $('btnSave').addEventListener('click', saveAndPublish);
     $('btnReset').addEventListener('click', resetToDefaults);
     $('btnExport').addEventListener('click', exportConfig);
+    const copyJsonBtn = $('btnCopyJson');
+    if (copyJsonBtn) copyJsonBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(state.stored ? JSON.stringify(state.stored, null, 2) : '');
+        showToast('✅ Config copied to clipboard');
+      } catch (e) { showToast('Copy failed'); }
+    });
 
     // ---- Tooltip manager (fixed-position, avoids clipping/overlap) ----
     const tipEl = $('tooltip');
@@ -698,6 +848,50 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
       pill.className = 'sum-pill ' + (ok ? 'ok' : 'bad');
       pill.textContent = `${sum.toFixed(2)} ${ok ? '✓' : '⚠ must equal 1.0'}`;
     }
+let toastTimer = null;
+    let undoState = null;
+    function showToast(msg, actionLabel, onAction) {
+      const t = $('toast'); if (!t) return;
+      t.innerHTML = '';
+      const span = document.createElement('span');
+      span.textContent = msg;
+      t.appendChild(span);
+      if (actionLabel && onAction) {
+        const b = document.createElement('button');
+        b.textContent = actionLabel;
+        b.addEventListener('click', () => { onAction(); hideToast(); });
+        t.appendChild(b);
+      }
+      t.style.display = 'flex';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(hideToast, 4000);
+    }
+    function hideToast() { const t = $('toast'); if (t) t.style.display = 'none'; }
+    function validateConfig() {
+      let allOk = true;
+      document.querySelectorAll('#configSections [data-path]').forEach((el) => {
+        const row = el.closest('.cfg-row');
+        if (!row) return;
+        row.classList.remove('invalid');
+        const oldErr = row.querySelector('.field-err');
+        if (oldErr) oldErr.remove();
+        if (el.type === 'number') {
+          const [g, k] = el.dataset.path.split('.');
+          const m = metaFor(g, k);
+          const v = parseFloat(el.value);
+          if (!Number.isNaN(v) && (v < m.min || v > m.max)) {
+            allOk = false;
+            row.classList.add('invalid');
+            const e = document.createElement('div');
+            e.className = 'field-err';
+            e.textContent = `Must be between ${m.min} and ${m.max}`;
+            row.appendChild(e);
+          }
+        }
+      });
+      const saveBtn = $('btnSave'); if (saveBtn) saveBtn.disabled = !allOk;
+      return allOk;
+    }
     $('configSections').addEventListener('click', (e) => {
       const btn = e.target.closest('.reset-field');
       if (!btn) return;
@@ -711,9 +905,17 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     function resetToFieldDefault(grp, key, dval) {
       const input = document.querySelector(`#configSections [data-path="${grp}.${key}"]`);
       if (input) {
+        const oldVal = parseFloat(input.value);
         input.value = dval;
         setDirty(true);
         if (grp === 'scoring') updateSum();
+        if (typeof validateConfig === 'function') validateConfig();
+        showToast(`Reset ${key} to default`, 'Undo', () => {
+          input.value = Number.isNaN(oldVal) ? dval : oldVal;
+          setDirty(true);
+          if (grp === 'scoring') updateSum();
+          if (typeof validateConfig === 'function') validateConfig();
+        });
       }
     }
     $('configSections').addEventListener('input', (e) => {
@@ -722,8 +924,11 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
         // keep the scoring total indicator live
         const grp = e.target.dataset.path.split('.')[0];
         if (grp === 'scoring') updateSum();
+        validateConfig();
       }
     });
+    window.__validateConfig = validateConfig;
+    window.__showToast = showToast;
     try {
       await signInAnonymously(auth);
       log('Signed in anonymously for callables.', 'info');

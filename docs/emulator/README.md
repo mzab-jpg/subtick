@@ -1,4 +1,4 @@
-# SubTick Emulator Tools — Docs
+﻿# SubTick Emulator Tools — Docs
 
 - **`EMULATOR_GUIDE.md`** — the user manual: setup, daily workflow, data sync,
   scripts reference, and verification.

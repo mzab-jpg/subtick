@@ -1,6 +1,6 @@
-# Tangent — System Patterns
+﻿# Tangent — System Patterns
 
-> **Last verified:** 4 August 2026 (post-gap-fix round).
+> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -245,6 +245,31 @@ Each event updates three dimensions: `category += Δ × 0.08`, `length += Δ × 
 
 ---
 
+
+### 3f. Behavior Event Pipeline (syncBehaviorEvents)
+
+The syncBehaviorEvents Cloud Function handles batched behavior events from the client, updates trending scores, publisher quality, and triggers weight updates. Two critical fixes were applied:
+
+**1. FieldValue.increment replaced with absolute writes**
+The emulator's stubbed irebase-admin does not implement FieldValue.increment(). The original code used dmin.firestore.FieldValue.increment(netDelta) which threw TypeError: Cannot read properties of undefined (reading 'increment'). Fixed by computing absolute values:
+
+`	ypescript
+trendingScore: (initial?.trendingScore ?? 0) + netDelta
+qualityScore: (existingQuality ?? DEFAULT) + netDelta
+`
+
+**2. Missing articles skipped to prevent batch failure**
+The batch atch.update(articleRef, ...) threw NOT_FOUND if an event referenced an article that no longer exists (e.g., cleaned up). Fixed by checking rticleInitialScores and skipping missing articles:
+
+`	ypescript
+const initial = articleInitialScores[artId];
+if (!initial) { console.warn(...); continue; }
+`
+
+These fixes ensure the weight update pipeline works reliably in the emulator and is resilient to data drift in production.
+
+---
+
 ## 4. Behavior Event Classification
 
 Source: `useBehaviorTracker.ts: concludeSession()`
@@ -390,3 +415,7 @@ export const deleteOrphanProfile = onCall(async (request) => {
 });
 ```
 Exists because Firestore rules have `allow delete: if false` on `users/{userId}`. Client-side `deleteDoc()` is blocked. The function validates caller authentication for rate-limiting but does NOT require ownership of the orphan document.
+
+
+
+

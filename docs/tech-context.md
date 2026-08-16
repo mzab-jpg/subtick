@@ -1,6 +1,6 @@
-# Tangent — Technical Context
+﻿# Tangent — Technical Context
 
-> **Last verified:** 4 August 2026 (post-gap-fix round).
+> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -99,7 +99,7 @@ From `firebase/functions/src/index.ts`:
 | `cronDecayTrendingScores` | Scheduled | Every 24 hours | Applies `trendingScore × 0.9057` to all articles with score **> 1.0** (raised from 0.1 — C1 fix) |
 | `cronCleanupOldArticles` | Scheduled | Every 3 days | Step 1: Delete all paywalled articles. Step 2: Query 500 worst-scoring articles >3 months old by `peakTrendingScore` ASC (composite index), delete bottom 3% of sample. Fixed 500-read ceiling. |
 | `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user. Sends `article_shown` + `feed_generated` analytics events via Measurement Protocol. |
-| `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). Sends `read_thorough`, `quick_exit`, `swipe_not_interested`, `save`, `weight_updated` analytics events + user properties. |
+| `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). **Fixed: FieldValue.increment replaced with absolute writes; missing articles skipped to prevent batch failure.** Sends `read_thorough`, `quick_exit`, `swipe_not_interested`, `save`, `weight_updated` analytics events + user properties. |
 | `updateScoringConfig` | HTTPS Callable | On demand | Writes to `system/scoringConfig` with `{ merge: true }`. Sends `config_changed` analytics event with old_value/new_value/field. |
 | `resetAccount` | HTTPS Callable | On demand | Deletes behavior_events + saved_articles subcollections; resets profile stats, weights, and category selections to defaults; sets `isOnboarded: false` |
 | `deleteAccount` | HTTPS Callable | On demand | Requires `confirmation: 'DELETE'`; deletes all subcollections + profile document + Firebase Auth account. Permanent. |
@@ -385,3 +385,4 @@ Moved to `firebase/scripts/oneoff/` (D6 fix). See `firebase/scripts/oneoff/READM
 | `migrateUsers.js` | Migrated legacy user profile schema — **SPENT** |
 | `retroCategorize.js` | Back-filled `category` field on articles — **SPENT** |
 | `retroClean.js` | Removed legacy fields from articles — **SPENT** |
+

@@ -30,6 +30,9 @@ function AppContent() {
   const { colors } = useTheme();
   const [initializing, setInitializing] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  // The initial route to navigate to after auth init completes.
+  // Determined by whether the user has completed onboarding.
+  const [initialRoute, setInitialRoute] = useState<'Dashboard' | 'Onboarding'>('Dashboard');
   // Used as React key on RootNavigator; changing this destroys
   // and recreates the entire navigation tree with fresh subscriptions.
   const [navigationKey, setNavigationKey] = useState(0);
@@ -75,9 +78,14 @@ function AppContent() {
       const user: User = await signInAnonymouslyIfNeeded();
 
       // 2. Ensure Firestore user profile exists (creates if new)
-      await ensureUserProfile(user);
+      const profile = await ensureUserProfile(user);
 
-      console.log('[SubTick] Auth initialized, userId:', user.uid);
+      // 3. Determine initial route based on onboarding status
+      //    New users (isOnboarded: false) → Onboarding
+      //    Returning users (isOnboarded: true) → Dashboard
+      setInitialRoute(profile.isOnboarded ? 'Dashboard' : 'Onboarding');
+
+      console.log('[SubTick] Auth initialized, userId:', user.uid, 'initialRoute:', profile.isOnboarded ? 'Dashboard' : 'Onboarding');
 
       // If the UID changed mid-session (e.g. Google account recovery),
       // bump the navigation key to force a clean remount of all screens.
@@ -140,9 +148,10 @@ function AppContent() {
 
   // Ready — render navigation with a key that changes on UID switch,
   // forcing clean remount of all screens with fresh Firestore listeners.
+  // Pass initialRoute so the stack starts at the correct screen (no flash).
   return (
     <ErrorBoundary>
-      <RootNavigator key={navigationKey} />
+      <RootNavigator key={navigationKey} initialRoute={initialRoute} />
     </ErrorBoundary>
   );
 }

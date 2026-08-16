@@ -1,4 +1,4 @@
-# SubTick Emulator — Troubleshooting
+﻿# SubTick Emulator — Troubleshooting
 
 Real fixes for real errors, verified against the codebase.
 
@@ -16,15 +16,15 @@ emulator at `http://127.0.0.1:9099` is not reachable.
 
 ---
 
-## Error: `Load failed: internal` (Dashboard)
-**Cause:** The Cloud Functions declare `secrets: [gaApiSecret]` (see
+## Error: `Load failed: internal` (Dashboard or Matrix)
+**Cause:** The Cloud Functions declare `secrets: [gaApiSecret]`; FieldValue.increment replaced with absolute writes; missing articles skipped to prevent batch failure (see
 `firebase/functions/src/index.ts`). The emulator cannot inject the secret, so
 every callable throws `internal`.
 **Fix:** `firebase/functions/.env` must include:
 ```
 GA_API_SECRET=dummy_local_secret_for_testing
 ```
-Then **restart the emulators** (the env file is read at startup).
+Then **restart the emulators** (the env file is read at startup). Also verify `test-emulator-e2e.js` passes.
 
 ---
 

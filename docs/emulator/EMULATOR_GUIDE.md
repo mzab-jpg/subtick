@@ -1,7 +1,7 @@
-# SubTick Emulator User Guide
+﻿# SubTick Emulator User Guide
 
 > Everything you need to run and test the SubTick algorithm locally with a
-> copy of real production data. Verified against the actual codebase.
+> copy of real production data. Verified against the actual codebase (16 August 2026 — post-syncBehaviorEvents-fix + dashboard rebuild round).
 
 ---
 

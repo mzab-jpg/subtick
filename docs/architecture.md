@@ -1,6 +1,6 @@
-# Tangent — Architecture
+﻿# Tangent — Architecture
 
-> **Last verified:** 4 August 2026 (post-gap-fix round).
+> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
 > Every claim below is traced to a specific file and function.
 
 ---
@@ -257,7 +257,7 @@ AccountScreen → linkGoogleAccount():
 - **behavior_events validation** (S5 + A4) — Path match, eventType enum, 2KB cap
 - **feed_requests / feedback validation** (S3/S4) — Schema + size caps
 - **escapeHtml in ReaderScreen** (S1) — RSS metadata escaped before WebView injection
-- **syncBehaviorEvents 50-event cap** (A4) — Server-side batch limit
+- **syncBehaviorEvents 100-event cap (A4)** — Server-side batch limit (was 50, doubled to support larger batch tests); FieldValue.increment replaced with absolute writes; missing articles skipped to prevent batch failure
 - **ErrorBoundary** (Batch 1) — Crash resilience around RootNavigator
 - **DashboardScreen focus refetch guard** (A5) — Only refetches when feed depleted
 - **DashboardScreen queue shuffle** (A5) — Untapped cards scattered randomly
@@ -282,3 +282,13 @@ AccountScreen → linkGoogleAccount():
 | Pending behavior events | `AsyncStorage[@subtick_behavior_queue]` until flushed |
 | Failed RSS feed flags | `AsyncStorage[@subtick_rss_failed_{articleId}]` per device |
 | GA4 client_id | `AsyncStorage[@subtick_app_instance_id]` — stable per-install dotted format UUID |
+
+
+
+
+
+
+
+
+
+

@@ -24,7 +24,11 @@ import AccountScreen from '../screens/AccountScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
-export default function RootNavigator() {
+interface RootNavigatorProps {
+  initialRoute?: 'Dashboard' | 'Onboarding';
+}
+
+export default function RootNavigator({ initialRoute }: RootNavigatorProps) {
   const { colors, isDark } = useTheme();
 
   // Build navigation theme from our colors
@@ -44,7 +48,7 @@ export default function RootNavigator() {
   return (
     <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator
-        initialRouteName="Dashboard"
+        initialRouteName={initialRoute || 'Dashboard'}
         screenOptions={{
           headerShown: false,
           cardStyle: { backgroundColor: colors.background },

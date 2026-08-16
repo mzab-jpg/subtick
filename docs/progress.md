@@ -1,6 +1,6 @@
-# Tangent — Progress & Status
+﻿# Tangent — Progress & Status
 
-> **Last verified:** 4 August 2026 (post-gap-fix round).
+> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
 > All status claims are based on reading the actual code.
 
 ---
@@ -13,7 +13,7 @@
 - ✅ **feed_requests / feedback schema validation** (S3/S4) — URL format, field schema, size caps
 - ✅ **behavior_events full validation** (S5 + A4) — Path match, eventType enum, field whitelist, 2KB cap
 - ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json` (5 composite indexes)
-- ✅ **syncBehaviorEvents input cap** — Server-side 50-event limit prevents overflow (A4)
+- ✅ **syncBehaviorEvents input cap** — Server-side 100-event limit prevents overflow (was 50, doubled to support larger batch tests) (A4)
 - ✅ **ErrorBoundary** (Batch 1) — Render crash safety net wrapping RootNavigator
 - ✅ **Google Sign-In security** — `request.auth.uid` enforced; client userId ignored; lazy import in Expo Go
 - ✅ **Google Sign-In production log silence** — `console.log` calls gated behind `__DEV__` checks in `linkGoogleAccount()`
@@ -182,3 +182,11 @@
 12. **Theme preference cross-device sync** — `themePreference` written to Firestore but ThemeContext only reads from AsyncStorage
 13. **Link BigQuery export** — GA4 → BigQuery integration for SQL-queryable raw event data; streaming export recommended for rapid iteration (minimal cost)
 14. **Build analytics dashboards** — Looker Studio or in-app dashboard once BigQuery data is flowing
+
+
+
+
+
+
+
+

@@ -236,24 +236,42 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
 
   // P0 Optimization 2 & 3: Commit aggregated updates in the main batch
   
+  // Pre-fetch current publisher quality scores for any affected EXISTING publishers,
+  // so we can write absolute values instead of admin.firestore.FieldValue.increment
+  // (which the Firebase Emulator's stubbed firebase-admin does not implement).
+  const existingPublisherQuality: Record<string, number> = {};
+  const affectedExistingPubs = Object.keys(publisherQualityDeltas).filter((id) => existingPublisherIds.has(id));
+  if (affectedExistingPubs.length > 0) {
+    try {
+      const pubRefs = affectedExistingPubs.map((id) => db.collection('publishers').doc(id));
+      const pubDocs = await db.getAll(...pubRefs);
+      pubDocs.forEach((doc) => {
+        if (doc.exists) {
+          existingPublisherQuality[doc.id] = (doc.data()?.qualityScore ?? DEFAULT_PUBLISHER_QUALITY);
+        }
+      });
+    } catch (err: any) {
+      console.warn('[syncBehaviorEvents] Failed to pre-fetch publisher quality:', err.message);
+    }
+  }
+
   // Apply aggregated article updates (trendingScore and peakTrendingScore merged into ONE write)
   for (const [artId, netDelta] of Object.entries(articleTrendingDeltas)) {
+    // Only touch articles that actually exist in Firestore. If an article was
+    // cleaned up after being shown, skip it rather than failing the whole batch
+    // (which would also drop this batch's weight updates).
+    const initial = articleInitialScores[artId];
+    if (!initial) {
+      console.warn(`[syncBehaviorEvents] Skipping trending update for missing article ${artId}`);
+      continue;
+    }
     if (netDelta !== 0) {
       const articleRef = db.collection('articles').doc(artId);
-      const initial = articleInitialScores[artId];
-      
-      const updateData: any = {
-        trendingScore: admin.firestore.FieldValue.increment(netDelta)
-      };
-
-      // Merge peakTrendingScore update into the main batch
-      if (initial) {
-        const estimatedNewTrending = initial.trendingScore + netDelta;
-        if (estimatedNewTrending > initial.peakTrendingScore) {
-          updateData.peakTrendingScore = estimatedNewTrending;
-        }
+      const updateData: any = { trendingScore: (initial.trendingScore ?? 0) + netDelta };
+      const estimatedNewTrending = initial.trendingScore + netDelta;
+      if (estimatedNewTrending > initial.peakTrendingScore) {
+        updateData.peakTrendingScore = estimatedNewTrending;
       }
-
       batch.update(articleRef, updateData);
     }
   }
@@ -268,7 +286,7 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
         // Existing publisher — safe to use atomic increment
         batch.set(publisherRef, {
           name: pubName,
-          qualityScore: admin.firestore.FieldValue.increment(netDelta),
+          qualityScore: (existingPublisherQuality[sanitizedDocId] ?? DEFAULT_PUBLISHER_QUALITY) + netDelta,
           lastUpdated: Date.now(),
         }, { merge: true });
       } else {
