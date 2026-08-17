@@ -16,10 +16,10 @@
 | Safe area insets (top/bottom) | Manual constants `src/utils/safeArea.ts` | All 11 screens via `topInset` / `bottomInset` (avoids `react-native-safe-area-context` Fabric crash on RN 0.86) | Hardcoded per-platform values |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Receives the shared live profile and rolling weekly count from `useUser()`; it has no separate profile listener. Its active cards and shown IDs are mirrored into a UID-scoped memory cache, so a remount restores the same feed instead of fetching replacements. On Reader return it deliberately leaves visible cards unchanged; only the opened ID is excluded from a later explicit Shuffle/Discover feed request. Reader queue is shuffled on tap (A5). Uses `topInset` for header padding.
-- `ReaderScreen.tsx` (orchestrator): Delegates state to feature hooks — `useArticleLoader` (article, resolvedHtml, fetchError, loading), `useNavigationQueue` (currentIndex, activeQueueIds, goToNext/Prev), `useReaderHUD` (hudVisible, isLiked, isSaved). Prefetches at most four upcoming items sequentially, immediate-next first, and cancels stale work. Its guarded finish path intercepts all normal removals (HUD close, Android/system back, queue-exhausted return), writes History once, queues/syncs the session, and supplies a provisional local stat summary. Retains own `scrollProgress` state and PanResponder refs. Uses `topInset` for HUD, `bottomInset` for progress bar.
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Receives the shared live profile and rolling weekly count from `useUser()`; it has no separate profile listener. Its active cards and shown IDs are mirrored into a UID-scoped memory cache, so a remount restores the same feed instead of fetching replacements. While Reader is open, each genuinely opened article is removed from that cache and replacements append behind unread cards; ordinary navigation never rearranges unread cards. Reader queue is shuffled on tap (A5). Uses `topInset` for header padding.
+- `ReaderScreen.tsx` (orchestrator): Delegates state to feature hooks — `useArticleLoader` (article, resolved HTML, RSS-unavailable state, loading), `useNavigationQueue` (currentIndex, activeQueueIds, goToNext/Prev), `useReaderHUD` (hudVisible, isLiked, isSaved). It sequentially warms raw RSS only for the next two articles but sanitises only the article actually opened. Raw parsed feeds live only in app-process memory, survive later Reader visits, and disappear automatically when Android closes the app; cleaned article HTML is never prefetched. An unavailable live-RSS item silently advances when raw archived pages are disabled. Its guarded finish path intercepts all normal removals (HUD close, Android/system back, queue-exhausted return), writes History once and exits immediately while behavior sync continues in the background. Retains own `scrollProgress` state and PanResponder refs. Uses `topInset` for HUD, `bottomInset` for progress bar.
 - `OnboardingScreen.tsx`: `chipStates: Record<string, ChipState>` remains local until Continue/Skip. It writes onboarding completion directly, disables duplicate taps while saving, and only navigates after the write succeeds. Uses shared `CategoryChipGrid`.
-- `SettingsScreen.tsx`: Profile from `useUser()` and no longer forces a focus-time profile refresh. Its Archived Articles preference uses the reusable `TangentToggle`: local value moves immediately, control disables during the Firestore write, and it restores the prior value on failure.
+- `SettingsScreen.tsx`: Profile from `useUser()` and no longer forces a focus-time profile refresh. It keeps ScreenHeader and the themed shell mounted while profile data settles, showing only an inline spinner. Its Archived Articles preference uses the reusable `TangentToggle`: local value moves immediately, control disables during the Firestore write, and it restores the prior value on failure.
 - `AccountScreen.tsx`: Profile from `useUser()`. Covers Google link/unlink, sign out, reset, delete. The latter three use the application-level account-transition coordinator; root navigation remounts at Onboarding after the fresh/reset profile is ready.
 - `CategoryPreferencesScreen.tsx`: `selectedIds`, `notInterestedIds` derived from profile via `useUser()`. Auto-saves on tap via `updateCategoryWeights()` + `refreshProfile()`.
 - `DashboardStatsScreen.tsx`: `selectedMetricIds` from profile via `useUser()`. Optimistic toggle + `setDoc` merge. It deliberately follows CategoryChipGrid's whole-row state language—selected/full-row inversion and an explicit state label—while retaining its distinct maximum-three multi-select behaviour.
@@ -39,7 +39,7 @@
 | `@subtick_behavior_queue` | `PendingBehaviorEvent[]` pending sync | 500 max (oldest dropped first) |
 | `@subtick_theme_preference` | `'system'|'light'|'dark'` | Tiny |
 | `@subtick_app_instance_id` | `string` — stable GA4 client_id in dotted format (XXXXXXXXXX.XXXXXXXXXX) | ~21 chars |
-| `@subtick_rss_failed_{articleId}` | `'1'` flag indicating this article's RSS feed has failed | One key per failed article |
+| `@subtick_rss_failed_{articleId}` | `'1'` flag indicating this article could not be fetched/found in live RSS; Reader skips it when archived pages are disabled | One key per failed article |
 
 ### AsyncStorage Mutex (Concurrency Safety)
 All AsyncStorage operations in `feedService.ts` and `behaviorSync.ts` involving read-modify-write are serialized through a **Promise chain mutex**, created via the shared factory in `src/services/asyncStorageMutex.ts`:
@@ -344,8 +344,8 @@ Legacy client read-family labels are also reclassified during rollout. Right-swi
 | Operation | Timeout | Failure |
 |---|---|---|
 | `fetch(feedUrl)` | 15s (AbortController) | Throws; `feedSessionCache.delete(feedUrl)` for retry |
-| Article not found in feed | — | `markRssFailed(id)` in AsyncStorage. With Archived Articles on, Reader may use the publication webpage; off, it shows the recoverable error/browser path instead. |
-| HTML sanitization | — | Only the matched article (C6 — lazy sanitize) |
+| Article not found in feed | — | `markRssFailed(id)` persists the failure and Reader remembers it for the session. With Archived Articles on, Reader may use the publication webpage; off, it silently marks the item seen and advances. |
+| HTML sanitization | — | Only the article currently being displayed is sanitized (C6 — lazy sanitize). Background work retains raw parsed RSS only, not cleaned article HTML. |
 
 ### getRankedFeed Cloud Function
 | Operation | Failure |
@@ -383,7 +383,7 @@ Legacy client read-family labels are also reclassified during rollout. Right-swi
 
 - **Sanitized HTML mode:** Any `http` link click → `Linking.openURL(url); return false`
 - **Raw URI (archived) mode:** Same-domain navigations allowed; cross-domain → OS browser.
-- HTTP errors (≥400) or load errors → error UI with "Open in Browser" button.
+- HTTP errors (≥400) or load errors in an allowed raw archived webpage → error UI with "Open in Browser" button. This path is unavailable when Archived Articles is off.
 
 ### Progress Bar
 Plain React state (`useState(scrollProgress)`) with a `View` (not `Animated.View`):
@@ -445,7 +445,7 @@ Sole deduplication mechanism. Format must remain stable across deployments.
 ### `rssStatus` Lifecycle
 - `'current'`: Reader fetches live RSS content
 - `'archived'`: Reader loads `publicationUrl` directly as a full webpage
-- Client sets `@subtick_rss_failed_{id}` in AsyncStorage when live RSS fetch fails
+- Client sets `@subtick_rss_failed_{id}` in AsyncStorage when live RSS fetch/matching fails; with archived pages disabled, Reader silently skips that item
 
 ### `deleteOrphanProfile` Cloud Function (`firebase/functions/src/index.ts`)
 

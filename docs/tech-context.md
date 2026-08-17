@@ -66,13 +66,13 @@ A full user manual lives in [`docs/emulator/`](./emulator/README.md):
 - `src/features/reader/` — ReaderScreen decomposition: `useArticleLoader.ts`, `useNavigationQueue.ts`, `useReaderHUD.ts`, `ReaderHUD.tsx`, `ReaderProgressBar.tsx`
 - `src/services/asyncStorageMutex.ts` — Shared AsyncStorage concurrency mutex factory
 - `src/services/accountTransition.ts` — Small app-wide transition coordinator that blocks old-account UI during sign-out, reset, and deletion
-- `src/services/dashboardFeedCache.ts` — UID-scoped in-memory Dashboard feed cache; remounts restore current cards rather than silently fetching replacements
+- `src/services/dashboardFeedCache.ts` — UID-scoped in-memory Dashboard feed cache; remounts restore current cards, and Reader removes only genuinely opened cards while background replenishment appends unseen replacements
 - `src/components/TangentToggle.tsx` — Reusable built-in-Animated, accessible binary-preference control
 - Screens use `useUser()` from `UserContext`, which owns the single authenticated real-time profile subscription; Dashboard no longer retains a duplicate `onSnapshot` listener.
 - `HistoryScreen.tsx` and `SavedReadsScreen.tsx` are 24-line wrappers over `ArticleListScreen`
 - `FeedbackScreen.tsx` and `FeedRequestScreen.tsx` are thin wrappers over shared `FormScreen`
 - `OnboardingScreen.tsx` uses shared `CategoryChipGrid` component
-- `ReaderScreen.tsx` is a 430-line orchestrator delegating to 3 hooks + 2 components
+- `ReaderScreen.tsx` is a 430-line orchestrator delegating to 3 hooks + 2 components; its sequential RSS warmer retains raw parsed RSS per publisher only in app-process memory, while article HTML is sanitized only when displayed
 - Safe area insets via manual `topInset`/`bottomInset` constants (not `react-native-safe-area-context`)
 - Dead code removed: `getSeenArticleIds()` from `feedService.ts` (replaced by `getSeenArticleIdsLocally()`)
 

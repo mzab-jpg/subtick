@@ -88,18 +88,15 @@ export default function DashboardStatsScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Dashboard Stats" onBack={() => navigation.goBack()} />
 
+      {loading ? (
+        <View style={styles.inlineLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : (
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner}>
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
           Choose up to 3 metrics to display on your dashboard.
@@ -147,13 +144,14 @@ export default function DashboardStatsScreen() {
           })}
         </View>
       </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  inlineLoading: { flex: 1, alignItems: 'center', paddingTop: 40 },
   scrollContent: { flex: 1 },
   scrollInner: { paddingHorizontal: 28, paddingTop: 24, paddingBottom: 48 },
   sectionLabel: { fontSize: TEXT_SM, marginBottom: 14, lineHeight: 20 },

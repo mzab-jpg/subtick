@@ -107,14 +107,6 @@ export default function CategoryPreferencesScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -126,22 +118,28 @@ export default function CategoryPreferencesScreen() {
         <View style={styles.backButton} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Shared category chip grid */}
-        <CategoryChipGrid colors={colors} chipStates={chipStates} onToggle={handleToggle} />
+      {loading ? (
+        <View style={styles.inlineLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Shared category chip grid */}
+          <CategoryChipGrid colors={colors} chipStates={chipStates} onToggle={handleToggle} />
 
-        <View style={{ height: 48 }} />
-      </ScrollView>
+          <View style={{ height: 48 }} />
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  inlineLoading: { flex: 1, alignItems: 'center', paddingTop: 40 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

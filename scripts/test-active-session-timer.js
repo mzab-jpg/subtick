@@ -33,11 +33,13 @@ const fs = require('fs');
 const path = require('path');
 const trackerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'hooks', 'useBehaviorTracker.ts'), 'utf8');
 const readerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'ReaderScreen.tsx'), 'utf8');
-const immediateServerSync = trackerSource.includes('await queueBehaviorEvent(')
+const immediateExitWithBackgroundSync = trackerSource.includes('await queueBehaviorEvent(')
   && readerSource.includes('const wordCountForSession = actualWordCountRef.current || article.wordCount || 0;')
   && readerSource.includes('await behaviorTracker.concludeSession(wordCountForSession);')
-  && readerSource.includes('await flushBehaviorQueue();');
-check('closing Reader queues then immediately flushes the classified session', immediateServerSync, true);
+  && readerSource.includes('await markArticleSeen(article.id, article);')
+  && readerSource.includes('void flushBehaviorQueue();')
+  && !readerSource.includes('await flushBehaviorQueue();');
+check('closing Reader persists local history before immediate exit and syncs in background', immediateExitWithBackgroundSync, true);
 check('Reader supplies stored article words when WebView count has not arrived',
   readerSource.includes('actualWordCountRef.current || article.wordCount || 0'), true);
 

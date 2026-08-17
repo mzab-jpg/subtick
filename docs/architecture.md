@@ -191,6 +191,7 @@ DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id fr
   → return { articles: Article[30] }
   → Phone retains the active 30-card Dashboard feed in a UID-scoped in-memory cache; screen remounts restore it instead of silently requesting a replacement feed
   → Client-side seen filter → slice(0,30) → setFeedArticles
+  → When Reader opens an article, only that article is removed from the mounted Dashboard cache; background replenishment appends unseen replacements after remaining unread cards.
   → Each returned article carries transient `{ feedId, impressionId }` context
   → [ANALYTICS] `feed_generated` + 30× `article_shown` include feed/impression IDs,
     user-stage snapshot, discovery flags, ranking fields, and server-derived environment
@@ -204,13 +205,13 @@ useArticleLoader.loadArticle(id):
   ├── isMockMode → setArticle(mockArticle), resolvedHtml = '' (loads live URL in WebView)
   ├── isSavedMode → getSavedArticleHtml(id)
   ├── rssStatus='archived' → useDirectUri
-  ├── has guid+feedUrl → fetchAndExtractArticle (lazy-sanitize — C6)
+  ├── has guid+feedUrl → finds the item in the raw in-memory RSS cache and lazily sanitizes only this displayed article (C6)
   │     On failure → markRssFailed(id) in AsyncStorage; Archived Articles on → raw publication WebView,
-  │                  off → Reader error with optional OS-browser escape (never silent raw-WebView fallback)
+  │                  off → mark seen and silently advance (no raw WebView or browser escape)
   └── fallback → bodyHtml || ''
 → articleHTML built in ReaderScreen with escapeHtml + sanitized body (S1)
 → WebView renders client-side; theme CSS injects dynamically (no reload — B9)
-→ Reader then prepares up to four upcoming queue entries sequentially, immediate-next first; stale preparation is cancelled when navigation changes.
+→ Reader warms only the next two raw RSS feeds, one at a time. Parsed raw feeds stay only in app-process memory, are reused across later Reader visits, and Android discards them automatically when the app closes. No cleaned article HTML is prefetched or retained. If Archived Articles is off and a live-RSS item is unavailable, Reader records it as seen and silently advances rather than exposing a raw webpage or browser escape.
 ```
 
 ### 3e. Behavior Event Pipeline (+ Analytics)
@@ -219,7 +220,7 @@ useArticleLoader.loadArticle(id):
 ReaderScreen → behaviorTracker records foreground-only duration, maximum scroll, and rendered word count
   → AppState inactive/background intervals are excluded before raw-session telemetry is queued
   → Any normal Reader exit (HUD close, Android/system back, or queue-exhausted exit) uses one guarded finish path:
-    queue raw session + write History + immediately attempt flushBehaviorQueue
+    queue raw session + write local History → navigate immediately; behavior sync continues in the background
   → Phone applies a provisional default-rule stat estimate for instant display; the next server profile update replaces it with the authoritative live-config classification
   → Swipe navigation stays non-blocking; AsyncStorage queue remains mutex-serialized and preserves offline sessions
   → syncBehaviorEvents Cloud Function (sends client_id):

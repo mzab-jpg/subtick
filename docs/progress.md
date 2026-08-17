@@ -57,11 +57,11 @@
 ### Reader Experience
 - ✅ **Live RSS article fetching** — `fetchAndExtractArticle()` with 15s timeout + Promise-level session cache
 - ✅ **Two-mode rendering** — Clean (sanitized HTML) vs Raw (archived URL). Raw publication pages are used only for explicitly archived content or when the user enables Archived Articles.
-- ✅ **RSS failure preference safety** — AsyncStorage flag prevents repeated failed extraction; with Archived Articles off, a failed current-RSS article shows a recoverable Reader error/browser escape rather than silently switching to a raw in-app webpage.
+- ✅ **RSS failure preference safety** — AsyncStorage and Reader-session flags prevent repeated failed extraction. With Archived Articles off, an unavailable current-RSS item is recorded as seen and silently skipped; Tangent never opens or offers its raw webpage/browser URL. With the preference on, the raw publication-page fallback remains available.
 - ✅ **HTML injection prevention** — `escapeHtml()` on title, publicationName, author (S1)
 - ✅ **Theme changes no reload** — CSS injected via `injectJavaScript()` (B9)
-- ✅ **Real-time preloader** — Triggers at 5 remaining; non-blocking behavior-event flush
-- ✅ **Background prefetcher** — Short four-article look-ahead window processed sequentially, immediate-next first, with cancellation when the Reader moves or closes.
+- ✅ **Queue replenisher** — At five remaining Reader cards, requests additional recommendations and flushes behavior events without blocking reading; this is separate from the session content-preparation pass.
+- ✅ **Background RSS warmer** — Sequentially downloads/parses raw RSS for only the next two Reader articles without sanitising article HTML in the background. The raw feed cache remains in app-process memory across Reader visits, reuses repeat publishers, and Android discards it automatically when the app closes.
 - ✅ **HUD with auto-hide** — BlurView, 2.5s auto-hide, article title with `ellipsizeMode="tail"`, hidden on initial load (A5)
 - ✅ **Edge-zone PanResponder swipes** — 45px zones, 40px threshold, 200ms pause detection
 - ✅ **Right-swipe in history/saved modes** — Correctly calls `goToPrev()` (B5)
@@ -76,13 +76,13 @@
 - ✅ **User profile bootstrap** — `ensureUserProfile()` creates default profile with neutral weights
 - ✅ **Onboarding flow** — 3-state chip grid (uses shared `CategoryChipGrid`). Users may select interests, mark dislikes, or skip for a broad first feed. Onboarding saves directly before navigation, shows a saving state, and remains available with a retry message if saving fails.
 - ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding only when the centrally subscribed profile is not complete.
-- ✅ **Live-feed Reader exits enter History** — HUD close, Android/system back, and the queue-exhausted return all share one guarded finish path that concludes the session and writes local History metadata before dismissal; history/saved/mock modes remain excluded.
+- ✅ **Live-feed Reader exits enter History** — HUD close, Android/system back, and the queue-exhausted return all share one guarded finish path that concludes the session and writes local History metadata before immediate dismissal; server behavior sync continues in the background, while history/saved/mock modes remain excluded.
 - ✅ **Account transition stability** — Sign out, reset, and deletion show a blocking preparation screen, clear old profile/weekly-stat state, and remount root navigation at Onboarding. Reset receives the same remount even though its UID does not change.
 - ✅ **Sign-out preserves stability** — Clears AsyncStorage → new anonymous session → fresh profile
 
 ### Screens & Navigation
-- ✅ **Dashboard** — Hero+row layout, stats pill, focus refetch guard (A5), queue shuffle (A5); receives one shared real-time profile source from `UserContext`. The current feed is cached per UID in memory so a Dashboard remount restores the same visible cards. When Shuffle leaves ≤5 cards, Tangent appends unseen replenishment behind those remaining cards rather than replacing them. Only an explicit Shuffle/Discover request, retry, or a new account/session changes the visible feed.
-- ✅ **Settings** — ScrollView, __DEV__ gate for Developer Options, sections: Account / Library / Preferences / Support. It no longer forces a redundant focus-time profile read. Navigation presentation remains the established modal/card mix; the remaining brief device transition flash needs focused loading-state investigation.
+- ✅ **Dashboard** — Hero+row layout, stats pill, focus refetch guard (A5), queue shuffle (A5); receives one shared real-time profile source from `UserContext`. While Reader is open, only genuinely opened articles are removed from its cache and unseen replenishment is appended behind remaining unread cards, so return-to-home does not suggest consumed articles. The current feed is cached per UID in memory so a Dashboard remount restores the same visible cards. When Shuffle leaves ≤5 cards, Tangent appends unseen replenishment behind those remaining cards rather than replacing them. Only an explicit Shuffle/Discover request, retry, or a new account/session changes the visible feed.
+- ✅ **Settings** — ScrollView, __DEV__ gate for Developer Options, sections: Account / Library / Preferences / Support. It no longer forces a redundant focus-time profile read. Settings-family routes retain their themed page shell/header while data settles and use a small inline loader rather than briefly replacing the entire screen with a spinner; navigation presentation remains the established modal/card mix.
 - ✅ **History screen** — 24-line wrapper over `ArticleListScreen` + `getSeenArticleMetas(30)`
 - ✅ **Saved Reads screen** — 24-line wrapper over `ArticleListScreen` + `getSavedArticleMetas`
 - ✅ **CategoryPreferences** — Uses `CategoryChipGrid` + `useUser()`; auto-saves on tap

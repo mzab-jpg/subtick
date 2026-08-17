@@ -8,6 +8,8 @@ const dashboardSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'scree
 const settingsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'SettingsScreen.tsx'), 'utf8');
 const toggleSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'TangentToggle.tsx'), 'utf8');
 const statsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'DashboardStatsScreen.tsx'), 'utf8');
+const feedServiceSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'feedService.ts'), 'utf8');
+const dashboardCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'dashboardFeedCache.ts'), 'utf8');
 const requiredMappings = [
   [".replace(/&/g, '&amp;')", 'ampersand'],
   [".replace(/</g, '&lt;')", 'less-than'],
@@ -36,16 +38,31 @@ if (!themeUpdatesDoNotReload) failed = true;
 const archivePreferenceIsRespected = loaderSource.includes('allowArchivedFallback: boolean;')
   && loaderSource.includes("data.rssStatus === 'archived'")
   && loaderSource.includes('if (!allowArchivedFallback)')
-  && loaderSource.includes('setFetchError(true);')
-  && source.includes('allowArchivedFallback: contextProfile?.includeArchivedArticles === true');
-console.log(`${archivePreferenceIsRespected ? '✓' : '✗'} RSS failure respects Archived Articles being off`);
+  && loaderSource.includes('setUnavailableFromRss(true);')
+  && source.includes('unavailableFromRss')
+  && source.includes('contextProfile?.includeArchivedArticles === true && archivedArticleUrl');
+console.log(`${archivePreferenceIsRespected ? '✓' : '✗'} RSS-unavailable articles silently skip when Archived Articles is off`);
 if (!archivePreferenceIsRespected) failed = true;
 
-const dashboardCardsStayStableAfterReaderClose = !dashboardSource.includes('consumedIdsRef')
-  && dashboardSource.includes('sessionShownIds.current.add(articleId);')
-  && !dashboardSource.includes('shuffledQueue.forEach(id => sessionShownIds.current.add(id));');
-console.log(`${dashboardCardsStayStableAfterReaderClose ? '✓' : '✗'} Reader close does not silently replace unread Dashboard cards`);
-if (!dashboardCardsStayStableAfterReaderClose) failed = true;
+const dashboardCardsUpdateOnlyForOpenedArticles = dashboardSource.includes('subscribeToCachedDashboardFeed')
+  && feedServiceSource.includes('removeArticleFromCachedDashboardFeed(cachedUserId, articleId);')
+  && dashboardCacheSource.includes('removeArticleFromCachedDashboardFeed')
+  && dashboardSource.includes('const merged = [...previous, ...additions');
+console.log(`${dashboardCardsUpdateOnlyForOpenedArticles ? '✓' : '✗'} Reader removes opened Dashboard cards and preserves unread-card order`);
+if (!dashboardCardsUpdateOnlyForOpenedArticles) failed = true;
+
+const rawRssCacheIsWarmedForTheAppProcess = !loaderSource.includes('preparedContentRef')
+  && loaderSource.includes('await warmFeed(data.feedUrl);')
+  && loaderSource.includes('pendingPrefetchIdsRef.current = upcomingIds;')
+  && loaderSource.includes('if (pendingIds) void prefetchArticles(pendingIds);')
+  && source.includes('activeQueueIds.slice(currentIndex + 1, currentIndex + 3)')
+  && source.includes('currentIndex, activeQueueIds, prefetchArticles')
+  && !source.includes('clearFeedSessionCache')
+  && feedServiceSource.includes('export async function warmFeed')
+  && feedServiceSource.includes('const feedSessionCache = new Map')
+  && feedServiceSource.includes('sanitizeClientHtml(matchedItem.rawHtml)');
+console.log(`${rawRssCacheIsWarmedForTheAppProcess ? '✓' : '✗'} Reader warms raw publisher RSS without caching cleaned HTML until app close`);
+if (!rawRssCacheIsWarmedForTheAppProcess) failed = true;
 
 const animatedToggleIsUsed = settingsSource.includes("import { TangentToggle } from '../components/TangentToggle';")
   && settingsSource.includes('<TangentToggle')

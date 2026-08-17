@@ -12,10 +12,11 @@ import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_AR
 import { XMLParser } from 'fast-xml-parser';
 import xss from 'xss';
 import { createStorageMutex } from './asyncStorageMutex';
+import { removeArticleFromCachedDashboardFeed } from './dashboardFeedCache';
 
 // --- Client-Side Feed Cache ---
-// Stores Promises resolving to highly compressed, pre-sanitized articles.
-// This prevents concurrent duplicate downloads and keeps RAM footprint minimal.
+// Stores parsed raw RSS items by publisher for the app process.
+// This prevents concurrent duplicate downloads; HTML stays unsanitized until displayed.
 export interface CachedFeedItem {
   guid: string;
   rawHtml: string; // C6 Fix: raw content stored, sanitized lazily after find()
@@ -23,18 +24,8 @@ export interface CachedFeedItem {
 }
 const feedSessionCache = new Map<string, Promise<CachedFeedItem[]>>();
 
-/**
- * Prune items from the feedSessionCache that are no longer in the lookahead queue window.
- */
-export function pruneFeedSessionCache(keepFeedUrls: string[]) {
-  const keepSet = new Set(keepFeedUrls);
-  for (const url of feedSessionCache.keys()) {
-    if (!keepSet.has(url)) {
-      console.log(`[feedService] Pruning feed from cache: ${url}`);
-      feedSessionCache.delete(url);
-    }
-  }
-}
+// This in-memory cache deliberately lasts for the app process. Android clears it
+// automatically when the app is closed/killed; it is never written to disk.
 
 const storageMutex = createStorageMutex();
 
@@ -76,89 +67,56 @@ export function sanitizeClientHtml(rawHtml: string): string {
   return cleaned;
 }
 
-/**
- * Fetch and extract the sanitized HTML for a specific article directly from its RSS feed.
- * Utilizes Promise-level caching to prevent duplicate concurrent network requests.
- * Pre-sanitizes articles and discards the parsed XML tree immediately to keep RAM usage minimal.
- * 
- * Returns the sanitized HTML and the article-level permalink (item.link) from the RSS feed,
- * which is used as a correct archived fallback URL even for articles ingested before the
- * publicationUrl fix in rssCollector (commit c1fe7e7).
- */
-export async function fetchAndExtractArticle(
-  feedUrl: string,
-  guid: string,
-  articleUrl?: string
-): Promise<{ html: string; link?: string }> {
+/** Download and parse one publisher RSS feed, retaining raw items in app memory. */
+export async function warmFeed(feedUrl: string): Promise<CachedFeedItem[]> {
   try {
     let fetchPromise = feedSessionCache.get(feedUrl);
-
     if (!fetchPromise) {
       console.log(`[feedService] Cache miss, fetching live feed: ${feedUrl}`);
       fetchPromise = (async () => {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-        const response = await fetch(feedUrl, { signal: controller.signal });
-        const xmlText = await response.text();
-        clearTimeout(timeoutId);
-        
-        const parser = new XMLParser({
-          ignoreAttributes: false,
-          attributeNamePrefix: '@_',
-          cdataPropName: '__cdata',
-        });
-        const parsed = parser.parse(xmlText);
-        const channel = parsed?.rss?.channel || parsed?.feed;
-        let rawItems = channel?.item || channel?.entry || [];
-        if (!Array.isArray(rawItems)) rawItems = [rawItems];
-        
-        // C6 Fix: Lazy-sanitize — store raw content per item, only sanitize the matched
-        // article. Previously sanitizeClientHtml (6 regex passes + xss) ran on every item
-        // in the feed (~25-50) just to serve one article, blocking the JS thread.
-        return rawItems.map((item: any) => {
-          const itemGuid = extractGuid(item);
-          const rawContent = item['content:encoded'] || item.content || item.description || '';
-          const cdataContent = typeof rawContent === 'object' ? rawContent.__cdata || rawContent['#text'] : rawContent;
-          return {
-            guid: itemGuid,
-            rawHtml: cdataContent, // store raw; sanitize only after find()
-            link: item.link || undefined, // store article-level permalink for archived fallback
-          };
-        });
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        try {
+          const response = await fetch(feedUrl, { signal: controller.signal });
+          const xmlText = await response.text();
+          const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', cdataPropName: '__cdata' });
+          const parsed = parser.parse(xmlText);
+          const channel = parsed?.rss?.channel || parsed?.feed;
+          let rawItems = channel?.item || channel?.entry || [];
+          if (!Array.isArray(rawItems)) rawItems = [rawItems];
+          return rawItems.map((item: any) => {
+            const rawContent = item['content:encoded'] || item.content || item.description || '';
+            return {
+              guid: extractGuid(item),
+              rawHtml: typeof rawContent === 'object' ? rawContent.__cdata || rawContent['#text'] : rawContent,
+              link: item.link || undefined,
+            };
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
       })();
-      
       feedSessionCache.set(feedUrl, fetchPromise);
     } else {
       console.log(`[feedService] Cache hit for feed: ${feedUrl}`);
     }
+    return await fetchPromise;
+  } catch (error) {
+    feedSessionCache.delete(feedUrl);
+    throw error;
+  }
+}
 
-    const items = await fetchPromise;
-    
-    // Primary match by GUID
-    let matchedItem = items.find((i: any) => i.guid === guid);
-    
-    // Secondary match by articleUrl (for pre-fix articles where publicationUrl was wrong
-    // but the correct URL exists in the RSS item.link field)
-    if (!matchedItem && articleUrl) {
-      matchedItem = items.find((i: any) => i.link === articleUrl);
-    }
-
-    if (!matchedItem) {
-      // Even though we couldn't match the article, we still return a best-effort result:
-      // the parsed feed is available. Instead of throwing immediately, we provide
-      // empty html but allow the caller to use the parsed data for a better fallback URL.
-      throw new Error('Article not found in recent feed items.');
-    }
-
-    // C6 Fix: Sanitize only the matched item (lazy evaluation).
-    return {
-      html: sanitizeClientHtml(matchedItem.rawHtml),
-      link: matchedItem.link,
-    };
+/** Find and lazily sanitize only the article being displayed. */
+export async function fetchAndExtractArticle(feedUrl: string, guid: string, articleUrl?: string): Promise<{ html: string; link?: string }> {
+  try {
+    const items = await warmFeed(feedUrl);
+    const matchedItem = items.find((item) => item.guid === guid)
+      || (articleUrl ? items.find((item) => item.link === articleUrl) : undefined);
+    if (!matchedItem) throw new Error('Article not found in recent feed items.');
+    return { html: sanitizeClientHtml(matchedItem.rawHtml), link: matchedItem.link };
   } catch (error) {
     console.error('[feedService] fetchAndExtractArticle error:', error);
-    // If the network call or parsing failed, clear the cache entry so subsequent requests can retry
-    feedSessionCache.delete(feedUrl);
     throw error;
   }
 }
@@ -322,22 +280,21 @@ export async function markArticleSeen(articleId: string, article?: Article): Pro
         }
         await AsyncStorage.setItem(SEEN_ARTICLES_KEY, JSON.stringify(seen));
 
-        // Firestore sync: write article ID to the user profile's seenArticleIds array
-        // This enables cross-device dedup when a user links their Google account.
-        // Uses arrayUnion which is atomic and idempotent (no duplicates).
-        // Fire-and-forget — never blocks the UI.
-        try {
-          const userId = auth.currentUser?.uid;
-          if (userId) {
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, {
-              seenArticleIds: arrayUnion(articleId),
-              lastUpdated: Date.now(),
-            });
-          }
-        } catch (firestoreErr) {
-          // Firestore write is best-effort — AsyncStorage is the primary store
-          console.warn('[FeedService] Failed to sync seen article to Firestore:', firestoreErr);
+        // The Dashboard remains mounted behind Reader. Remove only this opened
+        // card from its in-memory cache so returning never suggests it again.
+        const cachedUserId = auth.currentUser?.uid;
+        if (cachedUserId) removeArticleFromCachedDashboardFeed(cachedUserId, articleId);
+
+        // Cross-device seen-ID sync is deliberately background work. Local
+        // AsyncStorage/History is authoritative for immediate Reader dismissal.
+        const userId = auth.currentUser?.uid;
+        if (userId) {
+          void updateDoc(doc(db, 'users', userId), {
+            seenArticleIds: arrayUnion(articleId),
+            lastUpdated: Date.now(),
+          }).catch((firestoreErr) => {
+            console.warn('[FeedService] Failed to sync seen article to Firestore:', firestoreErr);
+          });
         }
       }
 

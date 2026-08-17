@@ -97,19 +97,15 @@ export function ArticleListScreen({
     });
   };
 
-  if (loading && articles.length === 0) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
-      {loadError ? (
+      {loading && articles.length === 0 ? (
+        <View style={styles.inlineLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : loadError ? (
         <View style={styles.emptyState}>
           <AlertTriangle size={48} color={colors.error} style={styles.emptyIcon} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Something went wrong</Text>
@@ -165,7 +161,7 @@ export function ArticleListScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  inlineLoading: { flex: 1, alignItems: 'center', paddingTop: 40 },
   listContent: { paddingHorizontal: 24, paddingBottom: 48 },
   rowCard: {
     flexDirection: 'row',

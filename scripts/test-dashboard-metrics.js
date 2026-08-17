@@ -43,6 +43,10 @@ const userContextSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'con
 const dashboardSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'DashboardScreen.tsx'), 'utf8');
 const readerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'ReaderScreen.tsx'), 'utf8');
 const navigatorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'navigation', 'RootNavigator.tsx'), 'utf8');
+const settingsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'SettingsScreen.tsx'), 'utf8');
+const categoryPreferencesSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'CategoryPreferencesScreen.tsx'), 'utf8');
+const dashboardStatsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'DashboardStatsScreen.tsx'), 'utf8');
+const articleListSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'ArticleListScreen.tsx'), 'utf8');
 check('account changes use a blocking transition before onboarding',
   appSource.includes('subscribeToAccountTransition')
     && appSource.includes('if (initializing || accountTransitioning)')
@@ -69,6 +73,18 @@ check('provisional WPM is calculated as words divided by active time',
   true);
 check('Shuffle replenishment appends instead of replacing remaining cards',
   dashboardSource.includes('appendFeedArticles') && dashboardSource.includes('const merged = [...previous, ...additions') && !dashboardSource.includes('loadFeedArticles(effectiveProfile).catch(() => {})'),
+  true);
+check('Settings-family routes retain their page shell during loading',
+  !settingsSource.includes('if (loading)')
+    && !accountSource.includes('if (loading)')
+    && !categoryPreferencesSource.includes('if (loading)')
+    && !dashboardStatsSource.includes('if (loading)')
+    && !articleListSource.includes('if (loading && articles.length === 0)')
+    && settingsSource.includes('styles.inlineLoading')
+    && accountSource.includes('styles.inlineLoading')
+    && categoryPreferencesSource.includes('styles.inlineLoading')
+    && dashboardStatsSource.includes('styles.inlineLoading')
+    && articleListSource.includes('styles.inlineLoading'),
   true);
 
 process.exitCode = failed ? 1 : 0;

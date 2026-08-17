@@ -24,7 +24,7 @@ import { auth } from '../services/firebase';
 import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
-import { getCachedDashboardFeed, setCachedDashboardFeed } from '../services/dashboardFeedCache';
+import { getCachedDashboardFeed, setCachedDashboardFeed, subscribeToCachedDashboardFeed } from '../services/dashboardFeedCache';
 
 const PRELOAD_THRESHOLD = 5;
 
@@ -41,10 +41,26 @@ export default function DashboardScreen() {
   // Passed to getRankedFeed as exclusions so we never recycle cards within a session.
   // In-memory only — resets on Dashboard unmount; articles reappear freely in future sessions.
   const sessionShownIds = useRef<Set<string>>(new Set());
+  const replenishingRef = useRef(false);
 
 
   // UserContext owns the one live profile subscription for every screen.
   const effectiveProfile = contextProfile;
+
+  // Keep Dashboard current while it remains mounted behind Reader. Only opened
+  // articles are removed; unread cards keep their exact order.
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    return subscribeToCachedDashboardFeed(userId, (cached) => {
+      if (!cached) return;
+      sessionShownIds.current = new Set(cached.shownIds);
+      setFeedArticles(cached.articles);
+      if (cached.articles.length < MAX_FEED_ARTICLES) {
+        void appendFeedArticles(effectiveProfile, cached.articles.map((article) => article.id));
+      }
+    });
+  }, [effectiveProfile]);
 
   // --- Load on mount; refresh seen filter silently on focus ---
   useEffect(() => {
@@ -127,6 +143,8 @@ export default function DashboardScreen() {
   };
 
   const appendFeedArticles = async (profile: UserProfile | null, existingIds: string[]) => {
+    if (replenishingRef.current) return;
+    replenishingRef.current = true;
     try {
       const serverSeenIds = profile?.seenArticleIds;
       const seenIds = await getSeenArticleIdsLocally(serverSeenIds);
@@ -144,6 +162,8 @@ export default function DashboardScreen() {
     } catch (error) {
       // Replenishment is optional. Keep the visible cards intact if it fails.
       console.warn('[Dashboard] appendFeedArticles failed:', error);
+    } finally {
+      replenishingRef.current = false;
     }
   };
 

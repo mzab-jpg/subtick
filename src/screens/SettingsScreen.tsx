@@ -76,14 +76,6 @@ export default function SettingsScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   const selectedCategoryCount = getSelectedCategoryCount(profile);
   const activeMetricCount = getActiveMetricCount(profile);
   const isLinked = !!profile?.linkedGoogleAccount;
@@ -92,7 +84,12 @@ export default function SettingsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Settings" onBack={() => navigation.goBack()} />
 
-      {/* ── Scrollable content below the fixed header ── */}
+      {/* Keep the shell/header mounted while the shared profile settles. */}
+      {loading ? (
+        <View style={styles.inlineLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : (
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner} showsVerticalScrollIndicator={false}>
 
       {/* ══════════════════════════════════════════════════
@@ -343,6 +340,7 @@ export default function SettingsScreen() {
 
       <View style={{ height: 48 }} />
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -351,7 +349,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { flex: 1 },
   scrollInner: { paddingHorizontal: 28, paddingTop: 0 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  inlineLoading: { flex: 1, alignItems: 'center', paddingTop: 40 },
 
   // Section label above each card group
   sectionLabel: {

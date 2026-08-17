@@ -173,14 +173,6 @@ export default function AccountScreen() {
   };
 
   // ── Render ────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   const isLinked = !!profile?.linkedGoogleAccount;
   const userEmail = profile?.userEmail || '';
 
@@ -188,6 +180,11 @@ export default function AccountScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Account" onBack={() => navigation.goBack()} />
 
+      {loading ? (
+        <View style={styles.inlineLoading}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : (
       <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollInner} showsVerticalScrollIndicator={false}>
 
         {/* ═══════ ACCOUNT STATUS ═══════ */}
@@ -283,6 +280,7 @@ export default function AccountScreen() {
 
         <View style={{ height: 48 }} />
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -291,7 +289,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { flex: 1 },
   scrollInner: { paddingHorizontal: 28 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  inlineLoading: { flex: 1, alignItems: 'center', paddingTop: 40 },
 
 
   sectionLabel: {

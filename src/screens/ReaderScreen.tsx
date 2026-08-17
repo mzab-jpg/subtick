@@ -128,7 +128,7 @@ export default function ReaderScreen() {
 
   // --- Feature hooks ---
   const {
-    article, resolvedHtml, fetchError, loading,
+    article, resolvedHtml, fetchError, unavailableFromRss, loading,
     rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles, cancelPrefetch,
   } = useArticleLoader({
     articleId,
@@ -153,6 +153,14 @@ export default function ReaderScreen() {
     isRestrictedMode,
     loadArticle, setIsSaved, setIsLiked, serverSeenIds,
   });
+
+  // Skip an unavailable live-RSS item when raw webpages are disabled. It is
+  // recorded as seen so Dashboard will not suggest it again, then Reader moves
+  // on without surfacing a browser prompt or error card.
+  useEffect(() => {
+    if (!unavailableFromRss || !article || isRestrictedMode) return;
+    void markArticleSeen(article.id, article).finally(() => goToNext());
+  }, [unavailableFromRss, article, isRestrictedMode, goToNext]);
 
   // --- Scroll progress (Fabric-safe plain state) ---
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -189,15 +197,18 @@ export default function ReaderScreen() {
     }
   }, [articleId]);
 
-  // Prefetch a short next-article-first queue. The loader fetches sequentially,
-  // and cleanup stops stale work when the Reader moves or closes.
+  // Warm only the next two articles. This keeps the immediate reading path
+  // responsive instead of downloading/parsing a long queue of publisher feeds.
   useEffect(() => {
-    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 5);
-    if (upcomingIds.length > 0) {
-      prefetchArticles(upcomingIds);
-    }
-    return cancelPrefetch;
-  }, [currentIndex, activeQueueIds, prefetchArticles, cancelPrefetch]);
+    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 3);
+    if (upcomingIds.length > 0) prefetchArticles(upcomingIds);
+  }, [currentIndex, activeQueueIds, prefetchArticles]);
+
+  // Stop only this Reader's warming work on dismissal. Raw publisher RSS stays
+  // in app memory and is automatically discarded when Android closes the app.
+  useEffect(() => () => {
+    cancelPrefetch();
+  }, [cancelPrefetch]);
 
   // --- WebView scroll message handler ---
   const handleWebViewMessage = useCallback(
@@ -477,8 +488,11 @@ export default function ReaderScreen() {
         applyProvisionalSession(summary);
         // History represents every article opened from the live feed, no matter
         // whether the person uses the close button, Android back, or catch-up exit.
+        // Local History/seen persistence finishes before leaving. The Cloud
+        // Function is intentionally background work so a slow network never
+        // delays the return gesture or close transition.
         await markArticleSeen(article.id, article);
-        await flushBehaviorQueue();
+        void flushBehaviorQueue();
       }
       exit();
     } finally {
@@ -559,7 +573,7 @@ export default function ReaderScreen() {
       )}
 
       {/* Content */}
-      {loading ? (
+      {loading || unavailableFromRss ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -584,7 +598,7 @@ export default function ReaderScreen() {
           <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
             This article may have been removed or is temporarily unavailable.
           </Text>
-          {archivedArticleUrl ? (
+          {contextProfile?.includeArchivedArticles === true && archivedArticleUrl ? (
             <TouchableOpacity
               style={[styles.catchUpButton, { backgroundColor: colors.primary, marginTop: 16 }]}
               onPress={() => Linking.openURL(archivedArticleUrl)}
