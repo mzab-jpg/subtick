@@ -126,7 +126,7 @@
     └── screens/
         ├── AccountScreen.tsx        # Google link/unlink, sign out, reset, delete (uses useUser)
         ├── OnboardingScreen.tsx     # Category chip grid → writes selections on Continue
-        ├── DashboardScreen.tsx      # Hero+row feed, stats pill, onSnapshot profile listener
+        ├── DashboardScreen.tsx      # Hero+row feed, stats pill; consumes shared UserContext profile state
         ├── ReaderScreen.tsx         # Orchestrator: PanResponder + WebView + hooks + components
         ├── SettingsScreen.tsx       # ScrollView: account, library, preferences, dev (uses useUser)
         ├── HistoryScreen.tsx        # 24-line wrapper: ArticleListScreen + getSeenArticleMetas
@@ -205,6 +205,7 @@ useArticleLoader.loadArticle(id):
   └── fallback → bodyHtml || ''
 → articleHTML built in ReaderScreen with escapeHtml + sanitized body (S1)
 → WebView renders client-side; theme CSS injects dynamically (no reload — B9)
+→ Reader then prepares up to four upcoming queue entries sequentially, immediate-next first; stale preparation is cancelled when navigation changes.
 ```
 
 ### 3e. Behavior Event Pipeline (+ Analytics)

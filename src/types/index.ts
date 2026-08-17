@@ -183,7 +183,7 @@ export interface ThemeColors {
 
 // --- Navigation Param Lists ---
 export type RootStackParamList = {
-  Dashboard: { onboardingSelections?: any };
+  Dashboard: undefined;
   Onboarding: undefined;
   Reader: {
     articleId: string;

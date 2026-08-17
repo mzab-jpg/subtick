@@ -65,7 +65,7 @@ A full user manual lives in [`docs/emulator/`](./emulator/README.md):
 - `src/components/` — Shared components: `ErrorBoundary.tsx`, `CategoryChipGrid.tsx`, `ArticleListScreen.tsx`, `FormScreen.tsx`, `ScreenHeader.tsx`
 - `src/features/reader/` — ReaderScreen decomposition: `useArticleLoader.ts`, `useNavigationQueue.ts`, `useReaderHUD.ts`, `ReaderHUD.tsx`, `ReaderProgressBar.tsx`
 - `src/services/asyncStorageMutex.ts` — Shared AsyncStorage concurrency mutex factory
-- Screens now use `useUser()` from `UserContext` instead of independent `fetchUserProfile()` calls (except DashboardScreen which retains `onSnapshot`)
+- Screens use `useUser()` from `UserContext`, which owns the single authenticated real-time profile subscription; Dashboard no longer retains a duplicate `onSnapshot` listener.
 - `HistoryScreen.tsx` and `SavedReadsScreen.tsx` are 24-line wrappers over `ArticleListScreen`
 - `FeedbackScreen.tsx` and `FeedRequestScreen.tsx` are thin wrappers over shared `FormScreen`
 - `OnboardingScreen.tsx` uses shared `CategoryChipGrid` component
@@ -136,7 +136,7 @@ From `firebase/functions/src/index.ts`:
 | `userEmail` | `string?` | Email from linked Google account; written by `linkGoogleAccount()` |
 | `seenArticleIds` | `string[]?` | Cross-device seen article dedup array (capped at 1000); written via `arrayUnion` in `markArticleSeen()` |
 | `totalArticlesRead` | `number` | Incremented by `weightUpdater.ts` on qualifying reads — server-only write |
-| `weeklyReadCount` | `number` | read_thorough/skim events in last 7 days — server-only write |
+| `weeklyReadCount` | `number` | Historical server-updated counter retained for compatibility. The displayed Dashboard value is calculated from the user's actual `read_thorough`/`read_skim` events in the rolling last seven days, so it remains accurate as events age out. |
 | `currentStreakDays` | `number` | Consecutive days with at least one read — server-only write |
 | `lastReadDate` | `number` | Unix ms of last read event |
 | `averageWpm` | `number` | Personalized rolling 80/20 reading-speed average; initialized to 200. Updated only from qualifying 150–750-WPM deep sessions — server-only write |

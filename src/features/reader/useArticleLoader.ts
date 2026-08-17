@@ -32,6 +32,7 @@ interface UseArticleLoaderResult {
   cacheRef: React.MutableRefObject<Record<string, Article>>;
   loadArticle: (id: string) => Promise<void>;
   prefetchArticles: (upcomingIds: string[]) => Promise<void>;
+  cancelPrefetch: () => void;
 }
 
 export function useArticleLoader({
@@ -47,6 +48,7 @@ export function useArticleLoader({
 
   const cacheRef = useRef<Record<string, Article>>({});
   const rssResolvedLinkRef = useRef<string>('');
+  const prefetchGenerationRef = useRef(0);
 
   const loadArticle = useCallback(async (id: string) => {
     try {
@@ -119,49 +121,53 @@ export function useArticleLoader({
   }, [isSavedMode, isMockMode, mockArticle]);
 
   const prefetchArticles = useCallback(async (upcomingIds: string[]) => {
+    // Work through a small queue one article at a time. This gives the immediate
+    // next article first use of the network instead of competing with many RSS
+    // downloads at once. The Reader effect cleanup invalidates stale queues.
+    const prefetchGeneration = ++prefetchGenerationRef.current;
+    const seenFeedUrls = new Set<string>();
+
     try {
-      const metadataPromises = upcomingIds.map(async (id) => {
-        if (cacheRef.current[id]) return cacheRef.current[id];
-        try {
-          const snap = await getDoc(doc(db, 'articles', id));
-          if (snap.exists()) {
-            const data = snap.data() as Article;
+      for (const id of upcomingIds) {
+        if (prefetchGeneration !== prefetchGenerationRef.current) return;
+
+        let data = cacheRef.current[id];
+        if (!data) {
+          try {
+            const snap = await getDoc(doc(db, 'articles', id));
+            if (!snap.exists()) continue;
+            data = snap.data() as Article;
             cacheRef.current[id] = data;
-            return data;
+          } catch {
+            continue;
           }
-        } catch {
-          // Silent catch
         }
-        return null;
-      });
 
-      const resolvedArticles = await Promise.all(metadataPromises);
-      const activeArticles = resolvedArticles.filter((a): a is Article => a !== null);
+        if (isSavedMode || isMockMode || data.rssStatus !== 'current' || !data.feedUrl || !data.guid) {
+          continue;
+        }
 
-      if (isSavedMode || isMockMode) return;
+        // One RSS fetch warms every queued article from the same feed, so do
+        // not repeat it while this sequential prefetch pass is still running.
+        if (seenFeedUrls.has(data.feedUrl)) continue;
+        seenFeedUrls.add(data.feedUrl);
+        pruneFeedSessionCache([data.feedUrl]);
 
-      const currentArticles = activeArticles.filter((a) => a.rssStatus === 'current');
-      const uniqueFeedUrls = Array.from(
-        new Set(currentArticles.map((a) => a.feedUrl).filter((url): url is string => !!url))
-      );
-
-      pruneFeedSessionCache(uniqueFeedUrls);
-
-      await Promise.all(
-        currentArticles.map(async (art) => {
-          if (art.feedUrl && art.guid) {
-            try {
-              await fetchAndExtractArticle(art.feedUrl, art.guid);
-            } catch {
-              // Silent fail for background prefetch
-            }
-          }
-        })
-      );
+        try {
+          await fetchAndExtractArticle(data.feedUrl, data.guid);
+        } catch {
+          // Background prefetch failures are non-fatal; normal article loading
+          // still retries and falls back to the publication URL when necessary.
+        }
+      }
     } catch (error) {
       console.warn('[useArticleLoader] Background prefetching failed:', error);
     }
   }, [isSavedMode, isMockMode]);
+
+  const cancelPrefetch = useCallback(() => {
+    prefetchGenerationRef.current += 1;
+  }, []);
 
   useEffect(() => {
     loadArticle(articleId);
@@ -176,5 +182,6 @@ export function useArticleLoader({
     cacheRef,
     loadArticle,
     prefetchArticles,
+    cancelPrefetch,
   };
 }

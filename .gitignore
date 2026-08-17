@@ -52,3 +52,4 @@ firebase-debug.log
 
 # Local service-account credentials (never commit)
 /Keys/
+firebase/firestore-debug.log

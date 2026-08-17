@@ -116,7 +116,7 @@ export default function ReaderScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   const { articleId, queueArticleIds, recommendationContexts: initialRecommendationContexts, startIndex, userWpm, mode, mockArticle } = route.params;
-  const currentWpm = userWpm || 250;
+  const currentWpm = userWpm || 200;
   const isHistoryMode = mode === 'history';
   const isSavedMode = mode === 'saved';
   const isMockMode = !!mockArticle;
@@ -128,7 +128,7 @@ export default function ReaderScreen() {
   // --- Feature hooks ---
   const {
     article, resolvedHtml, fetchError, loading,
-    rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles,
+    rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles, cancelPrefetch,
   } = useArticleLoader({
     articleId, isSavedMode, isMockMode, mockArticle,
   });
@@ -184,13 +184,15 @@ export default function ReaderScreen() {
     }
   }, [articleId]);
 
-  // Prefetch upcoming articles
+  // Prefetch a short next-article-first queue. The loader fetches sequentially,
+  // and cleanup stops stale work when the Reader moves or closes.
   useEffect(() => {
-    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 11);
+    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 5);
     if (upcomingIds.length > 0) {
       prefetchArticles(upcomingIds);
     }
-  }, [currentIndex, activeQueueIds, prefetchArticles]);
+    return cancelPrefetch;
+  }, [currentIndex, activeQueueIds, prefetchArticles, cancelPrefetch]);
 
   // --- WebView scroll message handler ---
   const handleWebViewMessage = useCallback(

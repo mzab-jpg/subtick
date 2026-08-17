@@ -51,7 +51,7 @@
 - ✅ **Repeated quick-exit learning** — A single quick exit remains neutral. Distinct quick exits in one category accumulate only within the configurable time window; meeting the configurable threshold applies the existing `feedback.quick_exit` value once to that category only. Positive reads/Likes/Saves clear pending evidence.
 - ✅ **Publisher cold-start balance** — No stored interaction for a publisher uses configurable 90% category / 10% publisher personalization; any stored publisher weight uses normal 60% / 40% weighting. A known negative publisher remains known and is not treated as unknown.
 - ✅ **WPM calibration** — Starts at 200; qualifying deep reads use rendered words first, safe stored-count fallback second, accept only 150–750 WPM, and update with an 80% old / 20% new rolling average. Stored-count fallback is skipped for truncated feeds.
-- ✅ **Reading streak & weekly count** — `updateReadStats()` in weightUpdater
+- ✅ **Reading streak & weekly count** — `updateReadStats()` persists read/streak statistics; `UserContext` calculates the displayed weekly count from each user's actual rolling seven-day qualifying events so inactive users' old reads age out correctly.
 
 ### Reader Experience
 - ✅ **Live RSS article fetching** — `fetchAndExtractArticle()` with 15s timeout + Promise-level session cache
@@ -59,8 +59,8 @@
 - ✅ **RSS failure persistence** — AsyncStorage flag; future loads skip immediately
 - ✅ **HTML injection prevention** — `escapeHtml()` on title, publicationName, author (S1)
 - ✅ **Theme changes no reload** — CSS injected via `injectJavaScript()` (B9)
-- ✅ **Real-time preloader** — Triggers at 5 remaining; non-blocking flush + parallel fetch
-- ✅ **Background prefetcher** — 10-article sliding look-ahead window
+- ✅ **Real-time preloader** — Triggers at 5 remaining; non-blocking behavior-event flush
+- ✅ **Background prefetcher** — Short four-article look-ahead window processed sequentially, immediate-next first, with cancellation when the Reader moves or closes.
 - ✅ **HUD with auto-hide** — BlurView, 2.5s auto-hide, article title with `ellipsizeMode="tail"`, hidden on initial load (A5)
 - ✅ **Edge-zone PanResponder swipes** — 45px zones, 40px threshold, 200ms pause detection
 - ✅ **Right-swipe in history/saved modes** — Correctly calls `goToPrev()` (B5)
@@ -73,12 +73,12 @@
 ### Auth & Onboarding
 - ✅ **Anonymous auth** — Reuses existing session
 - ✅ **User profile bootstrap** — `ensureUserProfile()` creates default profile with neutral weights
-- ✅ **Onboarding flow** — 3-state chip grid (uses shared `CategoryChipGrid`). Min 3 selected
-- ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding
+- ✅ **Onboarding flow** — 3-state chip grid (uses shared `CategoryChipGrid`). Users may select interests, mark dislikes, or skip for a broad first feed. Onboarding saves directly before navigation, shows a saving state, and remains available with a retry message if saving fails.
+- ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding only when the centrally subscribed profile is not complete.
 - ✅ **Sign-out preserves stability** — Clears AsyncStorage → new anonymous session → fresh profile
 
 ### Screens & Navigation
-- ✅ **Dashboard** — Hero+row layout, stats pill, focus refetch guard (A5), queue shuffle (A5), `onSnapshot` listener
+- ✅ **Dashboard** — Hero+row layout, stats pill, focus refetch guard (A5), queue shuffle (A5); receives one shared real-time profile source from `UserContext`.
 - ✅ **Settings** — ScrollView, __DEV__ gate for Developer Options, sections: Account / Library / Preferences / Support
 - ✅ **History screen** — 24-line wrapper over `ArticleListScreen` + `getSeenArticleMetas(30)`
 - ✅ **Saved Reads screen** — 24-line wrapper over `ArticleListScreen` + `getSavedArticleMetas`
@@ -140,7 +140,7 @@
 - ✅ **CategoryChipGrid** — Shared 3-state selector; used by Onboarding + CategoryPreferences
 - ✅ **ArticleListScreen** — Shared offline list; used by History + SavedReads (24 lines each)
 - ✅ **FormScreen** — Shared form wrapper; used by Feedback + FeedRequest (thin wrappers)
-- ✅ **UserContext** — `useUser()` hook replaces per-screen `fetchUserProfile()` in Settings, Account, DashboardStats, CategoryPreferences
+- ✅ **UserContext** — One authenticated real-time profile subscription shared by Dashboard, Settings, Account, DashboardStats, CategoryPreferences, and Reader; also owns the user-scoped rolling seven-day read count.
 - ✅ **ReaderScreen decomposition** — 1,098 → 430 lines as orchestrator; 5 feature hooks/components under `src/features/reader/`
 - ✅ **Cleanup cron sampling** — Fixed 500-read ceiling via `orderBy('peakTrendingScore', 'asc').limit(500)` + composite index
 - ✅ **Dead code removal** — Removed unused `getSeenArticleIds()` from `feedService.ts`; removed unused `react-native-safe-area-context` from `package.json`

@@ -1,7 +1,7 @@
 // ============================================================
 // SubTick — Onboarding Screen
 // Grouped list, lucide icons, colour-coded state rows.
-// Requires ≥1 Selected category to proceed.
+// Users may select interests, mark dislikes, or skip for a broad first feed.
 // ============================================================
 
 import React, { useState } from 'react';
@@ -16,6 +16,8 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
+import { auth } from '../services/firebase';
+import { completeOnboarding } from '../services/auth';
 import { CategoryChipGrid, type ChipState } from '../components/CategoryChipGrid';
 import {
   TEXT_XS,
@@ -31,6 +33,8 @@ export default function OnboardingScreen() {
   const navigation = useNavigation<OnboardingNavProp>();
   const { colors } = useTheme();
   const [chipStates, setChipStates] = useState<Record<string, ChipState>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const toggleChip = (categoryId: string) => {
     setChipStates((prev) => {
@@ -55,13 +59,21 @@ export default function OnboardingScreen() {
 
   const hasMadeSelection = selectedIds.length > 0 || notInterestedIds.length > 0;
 
-  const handleContinue = () => {
-    navigation.replace('Dashboard', {
-      onboardingSelections: {
-        selectedCategoryIds: selectedIds,
-        notInterestedCategoryIds: notInterestedIds,
-      },
-    });
+  const handleContinue = async () => {
+    const userId = auth.currentUser?.uid;
+    if (!userId || saving) return;
+
+    try {
+      setSaving(true);
+      setSaveError(null);
+      await completeOnboarding(userId, selectedIds, notInterestedIds);
+      navigation.replace('Dashboard');
+    } catch (error) {
+      console.error('[Onboarding] Failed to save selections:', error);
+      setSaveError('Could not save your choices. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -84,12 +96,15 @@ export default function OnboardingScreen() {
 
       {/* Sticky Continue Button */}
       <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        {saveError && <Text style={[styles.saveError, { color: colors.error }]}>{saveError}</Text>}
         <TouchableOpacity
           style={[
             styles.continueButton,
             { backgroundColor: hasMadeSelection ? colors.primary : colors.surfaceSecondary },
+            saving && styles.continueButtonDisabled,
           ]}
           onPress={handleContinue}
+          disabled={saving}
           activeOpacity={0.8}
         >
           <Text
@@ -98,7 +113,7 @@ export default function OnboardingScreen() {
               { color: hasMadeSelection ? colors.background : colors.textMuted },
             ]}
           >
-            {hasMadeSelection ? 'Start Reading →' : 'Skip selection'}
+            {saving ? 'Saving…' : hasMadeSelection ? 'Start Reading →' : 'Skip selection'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -130,4 +145,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   continueText: { fontSize: TEXT_BASE, fontWeight: '700' },
+  continueButtonDisabled: { opacity: 0.7 },
+  saveError: { fontSize: TEXT_SM, textAlign: 'center', lineHeight: 18, marginBottom: 10 },
 });

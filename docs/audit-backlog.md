@@ -2,7 +2,7 @@
 
 > **Created:** 17 August 2026 from the code, security, cost, Android-release, and user-experience audit.
 >
-> This document explains every deliberately deferred item in plain language: what is happening, why it matters, what could happen if it stays unchanged, and what a future fix must achieve. Nothing listed here should be treated as already fixed.
+> This document explains deliberately deferred items in plain language: what is happening, why it matters, what could happen if it stays unchanged, and what a future fix must achieve. The completed section records audit findings that have since been addressed; all other entries remain deferred.
 
 ## How to use this document
 
@@ -11,6 +11,22 @@
 - If an item creates a real user problem now, bring it forward regardless of its suggested timing.
 
 ---
+
+## Completed from this backlog
+
+### 17 August 2026 — Startup, onboarding, Reader prefetch, and dashboard-stat batch
+
+The following audit items are no longer deferred:
+
+- **M1 — Reader prefetch:** The Reader now prepares at most four upcoming entries, one at a time, starting with the immediate next article. It stops stale work when the article/queue changes or Reader closes, and avoids repeat RSS work for the same feed within one pass. This removes the old burst of up to ten parallel preparations. It does not move article bodies to Tangent's backend.
+- **M4 — Duplicate profile sources:** `UserContext` now owns one authenticated real-time profile listener used by Dashboard, Reader, Settings, Account, preferences, and stats. Dashboard's separate listener and focus-time profile refresh were removed.
+- **M6 — Dashboard stat limit and accuracy:** The stats picker prevents a fourth selection, removes duplicate old selections, and the dashboard consistently displays at most three metrics. The shown Weekly Reads value is calculated from the user's actual qualifying events in the rolling last seven days, so it falls as older reads age out. The stored historical counter remains only for compatibility.
+- **M8 reliability portion — repeat onboarding:** Onboarding now saves `isOnboarded` and the choices before navigating. The screen shows Saving, blocks double taps, and leaves the user in place with a retry message if saving fails. This removes the prior Dashboard handoff/race that could cause onboarding to reappear after restart.
+
+The remaining M8 entry below concerns only product copy and later tutorial design.
+
+---
+
 
 ## High priority before broad public growth
 
@@ -96,26 +112,12 @@ Tangent periodically builds two large shortlists of possible articles so it can 
 
 ## Medium-priority product, reliability, and UX work
 
-### M1 — Reader prefetch can use more mobile data and battery than necessary
-
-Tangent downloads upcoming RSS feeds in the background so the next article feels fast. When articles come from many publications, opening one can cause several feed downloads at once. This helps on fast Wi-Fi but can waste mobile data, battery, and publisher bandwidth on a poor connection.
-
-**Future outcome:** Limit distinct feeds prepared ahead of time, avoid aggressive prefetch on weak/mobile connections, and stop work when Reader closes.
-**Timing:** Improve after real-device testing confirms a data, battery, or loading problem.
-
 ### M2 — Scheduled background work needs real cost measurement
 
 Tangent collects feeds, builds shortlists, decays popularity, and cleans old content. The code has useful limits, but comments suggesting some work is effectively free are too optimistic. At scale, database reads/writes, server time, logs, and analytics can all cost money.
 
 **Future outcome:** Measure daily usage, set billing alerts, identify busy jobs, and remove work that does not improve feeds. Review how article random-selection values are refreshed.
 **Timing:** Before broad growth or when Firebase/Google charges rise.
-
-### M4 — Different screens can briefly disagree about profile data
-
-Some parts of Tangent load a profile once, while Dashboard also listens for live updates. It usually works, but creates two sources for the same information. This can mean extra database reads and brief moments where screens show different statistics or preferences.
-
-**Future outcome:** Use one central profile source that updates all screens.
-**Timing:** When stale displays are observed, or during the next state-management refactor.
 
 ### M5 — A settings change can look saved even if cloud sync failed
 
@@ -124,13 +126,6 @@ Theme changes immediately on the phone, then Tangent tries to save it to the acc
 **Future outcome:** Wait for cloud save, retry when appropriate, and clearly say when a preference is saved only locally.
 **Timing:** Before presenting settings as cross-device synced, or after user reports.
 
-### M6 — Dashboard metrics promise a maximum of three but do not enforce it
-
-The settings screen says users can choose up to three dashboard metrics, but current logic allows more. This can crowd the dashboard and breaks the interface’s own promise.
-
-**Future outcome:** Prevent a fourth selection with a clear explanation and enforce the same limit in stored account data.
-**Timing:** Low-risk polish for the next UI batch.
-
 ### M7 — TalkBack users do not receive enough information
 
 Android TalkBack reads controls aloud. Tangent’s buttons, category choices, icons, and Reader gestures lack the labels and state information TalkBack needs. A user may hear an unnamed icon rather than “Open settings,” or not hear whether a category is interested, neutral, or not interested.
@@ -138,12 +133,12 @@ Android TalkBack reads controls aloud. Tangent’s buttons, category choices, ic
 **Future outcome:** Label controls, state selections, explain non-obvious gestures, and announce loading/error changes. This also makes automated UI testing easier.
 **Timing:** Before a broad public release; earlier if accessibility is a launch standard.
 
-### M8 — Onboarding wording and behaviour disagree
+### M8 — Skipping onboarding needs clearer expectation-setting
 
-Comments say a person must choose interests, but the screen offers “Skip selection.” Skipping may be right for low friction, but the app should explain that the first feed will be broad until the person teaches Tangent what they like.
+The reliability defect is fixed: onboarding now saves before it opens Dashboard, so it should not reappear merely because the app restarted during an unfinished handoff. The remaining question is product wording. Tangent intentionally allows “Skip selection,” but it does not yet explain that the first feed will be broad until the person teaches Tangent what they like.
 
-**Future outcome:** Choose either required positive interests or an honest skip path with clear expectation-setting.
-**Timing:** Next onboarding UX review.
+**Future outcome:** Keep the low-friction skip path, but add a short honest explanation in the planned onboarding tutorial or beside the skip choice. Do not reintroduce a mandatory-interest rule unless product testing shows it is necessary.
+**Timing:** Next onboarding/tutorial UX review.
 
 ### M9 — Crash screen can show internal error wording to users
 

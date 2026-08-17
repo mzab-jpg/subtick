@@ -27,19 +27,19 @@ import {
   TEXT_LG,
 } from '../utils/constants';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { getMetricIcon, getTopCategory } from '../utils/dashboardMetrics';
+import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
 import { Check, Plus, Minus } from 'lucide-react-native';
 
 export default function DashboardStatsScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
-  const { profile, loading } = useUser();
+  const { profile, weeklyReadCount, loading } = useUser();
 
   const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (profile) {
-      setSelectedMetricIds(profile.dashboardMetricIds || []);
+      setSelectedMetricIds(normalizeDashboardMetricIds(profile.dashboardMetricIds || []));
     }
   }, [profile]);
 
@@ -47,7 +47,7 @@ export default function DashboardStatsScreen() {
     if (!profile) return 0;
     switch (metricId) {
       case 'streak': return profile.currentStreakDays;
-      case 'weeklyReads': return profile.weeklyReadCount;
+      case 'weeklyReads': return weeklyReadCount;
       case 'topCategory': {
         return getTopCategory(profile).charAt(0).toUpperCase() + getTopCategory(profile).slice(1);
       }
@@ -66,17 +66,25 @@ export default function DashboardStatsScreen() {
     if (idx > -1) {
       current.splice(idx, 1);
     } else {
+      // The dashboard has room for three values. Keep the rule in this UI,
+      // where it belongs, rather than treating it as a backend restriction.
+      if (current.length >= 3) return;
       current.push(metricId);
     }
     setSelectedMetricIds(current);
 
-    if (auth.currentUser) {
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      await setDoc(
-        userRef,
-        { dashboardMetricIds: current, lastUpdated: Date.now() },
-        { merge: true }
-      );
+    try {
+      if (auth.currentUser) {
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        await setDoc(
+          userRef,
+          { dashboardMetricIds: current, lastUpdated: Date.now() },
+          { merge: true }
+        );
+      }
+    } catch (error) {
+      console.error('[DashboardStats] Failed to save metric selection:', error);
+      setSelectedMetricIds(selectedMetricIds);
     }
   };
 

@@ -4,7 +4,30 @@
 
 import React from 'react';
 import { Flame, CalendarDays, Clock, Gauge, BookCheck, BookHeart, BarChart3 } from 'lucide-react-native';
-import { UserProfile } from '../types';
+import { BehaviorEvent, UserProfile } from '../types';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Counts the only event types Tangent presents as completed reads in the
+ * rolling seven-day dashboard metric. Kept pure for regression testing.
+ */
+export function countWeeklyQualifyingReads(
+  events: Pick<BehaviorEvent, 'eventType' | 'timestamp'>[],
+  now: number = Date.now()
+): number {
+  const windowStart = now - WEEK_MS;
+  return events.filter((event) =>
+    event.timestamp >= windowStart
+    && event.timestamp <= now
+    && (event.eventType === 'read_thorough' || event.eventType === 'read_skim')
+  ).length;
+}
+
+/** Keeps the dashboard's visual three-metric limit consistent everywhere. */
+export function normalizeDashboardMetricIds(metricIds: string[]): string[] {
+  return [...new Set(metricIds)].slice(0, 3);
+}
 
 /**
  * Returns the appropriate icon element for a dashboard metric ID.

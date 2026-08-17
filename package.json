@@ -36,6 +36,11 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test:bots": "node scripts/liveBotSimulator.js",
+    "test:reader-html": "node scripts/test-reader-html-escaping.js",
+    "test:session-timer": "node scripts/test-active-session-timer.js",
+    "test:classification": "npm --prefix firebase/functions run build && node firebase/scripts/test-classification.js",
+    "typecheck": "tsc --noEmit && npm --prefix firebase/functions run build",
+    "test:dashboard-metrics": "node scripts/test-dashboard-metrics.js",
     "dashboard": "npx serve ."
   },
   "private": true
