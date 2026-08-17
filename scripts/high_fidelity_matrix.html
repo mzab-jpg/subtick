@@ -407,6 +407,8 @@
     'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.43.",
     'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.57.",
     'scoring.maxTrendingScore': "The trending-score value at which factor T normalises to 1.0. Articles at/above it get full T credit; below it, T scales up linearly from 0. Default 50.",
+    'scoring.publisherColdStartCategoryWeight': "For a publisher with no prior user interaction, the category share of personalization. The two cold-start shares are automatically normalized to total 100%. Default 0.90.",
+    'scoring.publisherColdStartPublisherWeight': "For a publisher with no prior user interaction, the publisher share of personalization. The two cold-start shares are automatically normalized to total 100%. Default 0.10.",
 
     // ---- feedback (per-action learning delta) ----
     'feedback.save':              "Weight change when a user saves an article. Larger = saves teach the model faster. Default +0.55.",
@@ -417,7 +419,7 @@
     'feedback.read_skim':         "Weight change for a skim read. Default +0.10.",
     'feedback.read_shallow':      "Weight change for a shallow read (almost none). Default 0.00.",
     'feedback.swipe_next':        "Weight change for swiping past without opening (neutral). Default 0.00.",
-    'feedback.quick_exit':        "Weight change for a near-immediate close (affects trending/quality, not category weights). Default 0.00.",
+    'feedback.quick_exit':        "Category-only weight change applied once after the configured repeated-quick-exit threshold is reached. A single quick exit remains neutral; publisher/length weights are never changed. Default 0.00.",
         'feedback.swipe_not_interested': "Weight change when a user actively flags 'not interested'. Default -0.40.",
 
     // ---- learning ----
@@ -431,6 +433,8 @@
     'learning.defaultSelectedWeight':      "Starting weight for a brand-new selected category (new-user onboarding). Default 1.5.",
     'learning.defaultNotInterestedWeight': "Starting weight for a 'not interested' category. Default 0.5.",
     'learning.defaultNeutralWeight':       "Starting weight for categories with no signal yet (neutral). Default 1.0.",
+    'learning.repeatedQuickExitThreshold': "Distinct quick exits from one category needed before weak category-only evidence is applied once. A single quick exit remains neutral. Default 3.",
+    'learning.repeatedQuickExitLookbackDays': "How many recent days count toward the repeated quick-exit threshold. Default 14 days.",
 
     // ---- trending ----
     'trending.decayRate':  "Daily decay applied to article trending scores (e.g. 0.95 -> -5%/day). Keeps trending content fresh. Default 0.95.",
@@ -461,10 +465,11 @@
     'tranche.publisherCap':     "Hard cap on how many articles from one publisher can appear in a single 30-article feed. Prevents dominance. Range 1-30; default 5.",
     'tranche.newUserThreshold': "A user is treated as 'new user' until they have this many total reads — they then get the new-user (more exploratory) feed mix. Default 30.",
             'tranche.feedSize':         "Total articles returned per feed request. Default 30.",
+    'tranche.maxArticlesPerCategory': "Maximum cards from one category in a feed when eligible alternatives exist. Relaxed only to avoid underfilling a scarce/skewed pool. Default 15.",
+    'tranche.minDistinctCategories': "Desired number of different categories in a feed when eligible alternatives exist. Default 4.",
 
     // ---- classification ----
-    'classification.enable':             "MASTER SWITCH for server-side read classification. OFF (default) = trust the app's reported label (read_thorough/skim/...). ON = backend re-decides the label from scroll depth + session time + word count using the thresholds below, so 'what counts as a read' becomes tunable without an app release. OFF by default — only the simulator sends this override; the live app never does.",
-    'classification.quickExitDepth':     "Articles scrolled LESS than this fraction are candidates for 'quick_exit'. Only active when enable is ON. Default 0.2.",
+    'classification.quickExitDepth':     "Articles scrolled LESS than this fraction are classified as 'quick_exit' when their session time is also below the quick-exit timeout. The backend applies this rule to every raw reading session. Default 0.2.",
     'classification.quickExitTimeoutSec': "If session time is below this and scroll < quickExitDepth, the read is classified as 'quick_exit'. Default 15s.",
     'classification.thoroughDepth':      "Scroll fraction at/above which a read can qualify as 'thorough'. Default 0.70.",
     'classification.thoroughTimeFraction': "Session time (as a fraction of expected read time for the article's length) needed to call a read 'thorough'. Default 0.60.",
@@ -576,12 +581,15 @@
   const CFG_LABELS = {
     'scoring.personalization': 'Personalization (P)', 'scoring.trending': 'Trending (T)', 'scoring.recency': 'Recency (R)', 'scoring.quality': 'Quality (Q)',
     'scoring.tailTrending': 'Tail: Trending', 'scoring.tailRecency': 'Tail: Recency', 'scoring.maxTrendingScore': 'Max trending (T=1.0 at)',
+    'scoring.publisherColdStartCategoryWeight': 'Unknown-publisher category share', 'scoring.publisherColdStartPublisherWeight': 'Unknown-publisher publisher share',
     'learning.baseRate': 'Base learning rate', 'learning.categoryMultiplier': 'Category multiplier', 'learning.lengthMultiplier': 'Length multiplier', 'learning.publisherMultiplier': 'Publisher multiplier',
     'learning.minWeight': 'Min weight', 'learning.maxWeight': 'Max weight', 'learning.dailyDecayRate': 'Daily decay rate',
     'learning.defaultSelectedWeight': 'Default selected weight', 'learning.defaultNotInterestedWeight': 'Default not-interested weight', 'learning.defaultNeutralWeight': 'Default neutral weight',
+    'learning.repeatedQuickExitThreshold': 'Repeated quick-exit threshold', 'learning.repeatedQuickExitLookbackDays': 'Quick-exit lookback (days)',
     'tranche.highThreshold': 'High threshold', 'tranche.midThreshold': 'Mid threshold', 'tranche.highSize': 'High size', 'tranche.midSize': 'Mid size', 'tranche.tailSize': 'Tail size',
     'tranche.publisherCap': 'Publisher cap', 'tranche.newUserThreshold': 'New-user threshold', 'tranche.feedSize': 'Feed size',
-    'classification.enable': 'Enable read classification', 'classification.quickExitDepth': 'Quick-exit depth', 'classification.quickExitTimeoutSec': 'Quick-exit timeout (s)',
+    'tranche.maxArticlesPerCategory': 'Maximum articles per category', 'tranche.minDistinctCategories': 'Minimum distinct categories',
+    'classification.quickExitDepth': 'Quick-exit depth', 'classification.quickExitTimeoutSec': 'Quick-exit timeout (s)',
     'classification.thoroughDepth': 'Thorough depth', 'classification.thoroughTimeFraction': 'Thorough time fraction', 'classification.shallowDepth': 'Shallow depth',
   };
   let liveConfig = null;

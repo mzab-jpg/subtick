@@ -1,6 +1,6 @@
 ﻿# Tangent — System Patterns
 
-> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
+> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -62,6 +62,14 @@ Each service creates its own independent queue — they intentionally do NOT sha
 
 ## 2. The Ranking / Scoring Algorithm
 
+### 1b. Recommendation Attribution and Personalization Health
+
+Every normal ranked-feed response receives a server-generated `feedId`, and every returned article receives an `impressionId` (`feedId:position`). This context is transient: it is returned to the phone, preserved while the Reader moves through its queue, and sent with the later read/Like/Save/Not Interested telemetry. It is never persisted on the global article document.
+
+`article_shown` captures the exact ranking context: feed/impression ID, position, tranche, score components, a reporting-only user stage, prior qualifying reads, days since the prior qualifying read, profile concentration, and unknown-publisher/category discovery flags. `feed_generated` carries the feed-level snapshot. Subsequent behavior events carry the same IDs.
+
+The backend adds `analytics_environment` to every Measurement Protocol event. It is server-derived (`production` or `emulator`), so launch reporting can exclude test traffic without trusting a phone/browser value. The reporting source and Looker instructions live in [`analytics-looker-guide.md`](./analytics-looker-guide.md); its canonical BigQuery view SQL is `firebase/analytics/create_personalization_health_view.sql`.
+
 ### 2a. Component Normalization
 
 **All 4 scoring components output values in [0, 1].** This ensures the formula weights mean exactly what they say. Diversity is enforced by a hard per‑publisher cap (5) during feed assembly, not as a scoring component.
@@ -74,18 +82,21 @@ Source: `getRankedFeed.ts: normalizeP()`
 const MIN_W = 0.1, MAX_W = 5.0, RANGE = 4.9;
 catFraction = (categoryWeight - MIN_W) / RANGE
 pubFraction = (publisherWeight - MIN_W) / RANGE
-P = catFraction × 0.6 + pubFraction × 0.4
+P = catFraction × categoryShare + pubFraction × publisherShare
 ```
 
-Category gets 60% of P, publisher gets 40%.
+For a publisher with **any stored interaction history**, category gets 60% of P and publisher gets 40%.
 
-| Situation | catWeight | pubWeight | P |
-|---|---|---|---|
-| New user (neutral) | 1.0 | 1.0 | ≈ 0.18 |
-| Likes category | 3.0 | 1.0 | ≈ 0.47 |
-| Loves both | 4.5 | 3.5 | ≈ 0.84 |
-| Hates category | 0.1 | 1.0 | ≈ 0.05 |
-| Maximum | 5.0 | 5.0 | 1.00 |
+For a publisher with **no stored publisher weight at all**, the configurable cold-start shares apply: category 90%, publisher 10% by default. The two cold-start shares are normalized to total 1.0 when config is loaded. Presence—not whether the stored publisher weight is positive—is what makes a publisher known. Thus a publisher with a recorded negative weight remains known and receives the normal 60/40 calculation.
+
+| Situation | Publisher history? | catWeight | pubWeight | P |
+|---|---|---:|---:|---:|
+| New user (neutral) | No | 1.0 | 1.0 | ≈ 0.18 |
+| Likes category | No | 3.0 | 1.0 | ≈ 0.55 |
+| Likes category | Yes | 3.0 | 1.0 | ≈ 0.43 |
+| Loves both | Yes | 4.5 | 3.5 | ≈ 0.82 |
+| Hates category | Yes | 0.1 | 1.0 | ≈ 0.07 |
+| Maximum | Yes | 5.0 | 5.0 | 1.00 |
 
 Weights come from the user profile (3D matrix: category × category+length composite × publisher). Neutral = 1.0, max = 5.0, min = 0.1.
 
@@ -158,9 +169,11 @@ save: +0.010 / like: +0.005 / read_thorough: +0.005 / read_skim: +0.001
 swipe_not_interested: -0.010 / quick_exit: -0.005
 ```
 
-### 2f. Diversity — Hard Publisher Cap
+### 2f. Diversity — Publisher Cap and Topic Anti-Fatigue
 
-Diversity is no longer a scoring component. Instead, a hard per-publisher cap of **5 articles** is enforced during feed assembly in `assembleFeedWithTranches()`. As articles are picked from each tranche, a `pubCountsInFeed` map tracks how many articles each publisher already has in the feed. Once a publisher reaches 5, subsequent articles from that publisher are skipped. The existing overflow cascade naturally fills any gaps from other publishers.
+Diversity is not a scoring component. A hard per-publisher cap of **5 articles** is enforced during selection in `assembleFeedWithTranches()`. A configurable `maxArticlesPerCategory` limit is also applied during selection. Both limits relax only when the remaining eligible candidate pool cannot otherwise fill the requested feed.
+
+After normal selection, the backend attempts to meet configurable `minDistinctCategories`: it replaces the weakest removable article from an overrepresented category with the strongest unseen candidate from a missing category, provided that candidate respects the publisher cap. After selection, the final randomized feed is passed through `interleaveArticlesByCategory()`. It will not place a third consecutive card from the same category if any other category remains. These safeguards change membership/display order only: scoring formulas, tranches, and publisher-cap rules remain intact.
 
 ### 2g. Scoring Formulas by Tranche
 
@@ -188,7 +201,13 @@ Articles are scored with the 4-component `fullScore` and then bucketed:
 
 Overflow cascades down. Final feed of 30 shuffled before return. Bucketing is by the full 4-component score, not P alone.
 
-### 2i. Cleanup Cron (Cost-Capped)
+### 2i. Deferred Personalization Designs
+
+**Short-term session mood:** A future, bounded recent-behavior signal may influence only the next generated feed. It must not reorder the current Reader queue, overwrite durable weights, or introduce duplicate feedback-strength controls.
+
+**Lightweight personalized fallback:** When the ranked-feed callable is unavailable, a future client fallback may combine unseen filtering, local category preferences, basic variety limits, and recency tie-breaking. It must remain a safety net rather than a duplicate on-device ranking engine.
+
+### 2j. Cleanup Cron (Cost-Capped)
 
 The `cronCleanupOldArticles` runs every 72 hours and uses a **sampled query** with a fixed 500-read ceiling:
 
@@ -227,17 +246,33 @@ Each event updates three dimensions: `category += Δ × 0.08`, `length += Δ × 
 
 ### 3c. Watermark-Based Event Processing
 
-`updateWeights()` uses `weightUpdatedAt` watermark to process only new events. No replay. Daily decay applied if ≥23h since last update.
+`updateWeights()` uses `weightUpdatedAt` to process only new events, with no replay. Preference aging uses its separate `weightsDecayedAt` timestamp.
 
 ### 3d. Clamping
 
 `weight = max(0.1, min(5.0, weight))`
 
-### 3e. Daily Decay
+### 3e. Time-Accurate Daily Decay
 
-`decayed[cat] = 1.0 + (weight - 1.0) × 0.995` — weights drift toward neutral (1.0) at 0.5% per day.
+`decayedWeight = 1.0 + (weight - 1.0) × dailyDecayRate^elapsedFullDays` — category, category+length, and publisher weights drift toward neutral (1.0) at the configured daily rate for every full day since the last decay. `weightsDecayedAt` is separate from the event watermark so a long inactive period cannot be mistaken for only one day of decay.
 
-### 3f. UI Sync Thresholds
+### 3f. Repeated Quick-Exit Evidence
+
+A single `quick_exit` remains neutral for personal preference learning. The backend stores recent distinct quick-exit article IDs by category only. If the number within `learning.repeatedQuickExitLookbackDays` reaches `learning.repeatedQuickExitThreshold`, it applies `feedback.quick_exit × category learning rate` **once** to that top-level category and clears the pending evidence. It never changes publisher or category+length weights. A `read_thorough`, `read_skim`, Like, or Save in that category clears pending evidence before inference.
+
+### 3g. WPM Calibration and Read-Time Estimates
+
+New user profiles begin at `averageWpm = 200`. For a qualifying server-classified `read_thorough` or `read_skim` event, the updater requires scroll depth at least `classification.thoroughDepth`, duration over 10 seconds, and a word count. It uses the live rendered count first; only if that is missing does it use the stored article count, and it refuses that fallback for `isTruncatedFeed` articles.
+
+```text
+sessionWpm = wordCount / (sessionDurationMs / 60,000)
+accept only 150 <= sessionWpm <= 750
+newAverageWpm = round(oldAverageWpm × 0.80 + sessionWpm × 0.20)
+```
+
+`averageWpm` drives the live Dashboard and Reader `min read` estimate: `max(1, ceil(wordCount / averageWpm))`. Stored article `estimatedReadMinutes` remains a separate ingestion-time generic estimate using fixed 250 WPM, primarily retained in saved/history metadata.
+
+### 3h. UI Sync Thresholds
 
 - `weight <= 0.2` → add to `notInterestedCategoryIds`
 - `weight >= 1.5` → add to `selectedCategoryIds`
@@ -246,7 +281,7 @@ Each event updates three dimensions: `category += Δ × 0.08`, `length += Δ × 
 ---
 
 
-### 3f. Behavior Event Pipeline (syncBehaviorEvents)
+### 3h. Behavior Event Pipeline (syncBehaviorEvents)
 
 The syncBehaviorEvents Cloud Function handles batched behavior events from the client, updates trending scores, publisher quality, and triggers weight updates. Two critical fixes were applied:
 
@@ -272,22 +307,27 @@ These fixes ensure the weight update pipeline works reliably in the emulator and
 
 ## 4. Behavior Event Classification
 
-Source: `useBehaviorTracker.ts: concludeSession()`
+Source: client `useBehaviorTracker.ts` plus server `syncBehaviorEvents.ts` / `scoringConfig.ts`.
+
+The client is a sensor: on normal next swipe or unfinished Reader cleanup it sends a raw `'read_session'` containing foreground-active duration, maximum scroll depth, and the latest rendered word count when available. It does not decide whether the read was a skim or thorough. `useBehaviorTracker.ts` listens to React Native `AppState`: it pauses timing on `inactive` or `background` and resumes on `active`. Thus app switching, locking, calls, and multitasking time are excluded, including if Reader cleanup occurs while still paused.
+
+The backend validates the telemetry, loads the active `system/scoringConfig` and the authenticated user's server-owned `averageWpm` once per batch, then stores one final type:
 
 ```
-if (scrollDepth < 0.2 AND sessionDuration < 15s) → 'quick_exit'
-else if (scrollDepth >= 0.7):
-    if (sessionDuration >= expectedReadTime × 0.6) → 'read_thorough'
+if (scrollDepth < quickExitDepth AND duration < quickExitTimeoutSec) → 'quick_exit'
+else if (scrollDepth >= thoroughDepth):
+    expectedTime = actualWordCount / userWpm
+    if (duration >= expectedTime × thoroughTimeFraction) → 'read_thorough'
     else → 'read_skim'
-else if (scrollDepth >= 0.4) → 'read_shallow'
+else if (scrollDepth >= shallowDepth) → 'read_shallow'
 else → 'swipe_next'
 ```
 
-Right-swipe always emits `'swipe_not_interested'` (fires immediately, not via `concludeSession`).
+The default thresholds are 0.20 depth / 15 seconds for quick exit, 0.70 depth plus 60% of expected time for thorough, and 0.40 depth for shallow. The backend uses 200 WPM only if the profile has no valid `averageWpm`. If no positive live word count was captured, expected time is treated as unavailable and a deep session is classified as `read_thorough`; WPM calibration later attempts a safe stored article-count fallback. The config is cached for about 60 seconds per warm Function instance, so a Dashboard change is near-real-time rather than globally instantaneous.
 
-**Quick-exit double-fire prevention (B2 fix):** Shared `sessionSnapshotRef` — `concludeSession()` sets `concluded = true`; cleanup reads live value.
+Legacy client read-family labels are also reclassified during rollout. Right-swipe `'swipe_not_interested'` and explicit Like/Unlike/Save/Unsave events are never reclassified.
 
-**Tracking disabled** in `'history'`, `'saved'`, and mock/sandbox modes.
+**Duplicate prevention:** `sessionSnapshotRef` marks a concluded session so cleanup does not emit a second raw session. Tracking remains disabled in `'history'`, `'saved'`, and mock/sandbox modes.
 
 ---
 
@@ -311,13 +351,14 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately, not via `c
 ### getRankedFeed Cloud Function
 | Operation | Failure |
 |---|---|
-| `system/candidatePool` read | Falls back to on-the-fly stratified query |
+| `system/candidatePool` read | Falls back to an on-the-fly stratified query; when archived content is off, it accepts only `rssStatus == 'current'` and populates only the current-only cache |
+| Candidate-pool data is stale/misclassified | Final feed filter removes non-current records whenever archived content is off |
 | Publisher quality fetch | Returns expired/empty cache; falls back to `article.qualityScore` |
 
 ### Client getRankedFeed Call
 | Failure | Fallback |
 |---|---|
-| Cloud Function call fails | `fallbackGetArticles()`: Firestore `WHERE isPaywalled == false ORDER BY publishDate DESC LIMIT 90` |
+| Cloud Function call fails | `fallbackGetArticles()` reads the authenticated user's archived-content preference. Off: Firestore `WHERE isPaywalled == false AND rssStatus == 'current' ORDER BY publishDate DESC LIMIT 90`; on: the same query without the status restriction |
 
 ### Behavior Sync
 | Scenario | Behavior |
@@ -327,7 +368,7 @@ Right-swipe always emits `'swipe_not_interested'` (fires immediately, not via `c
 | Sync fails | 30s cooldown (`RETRY_COOLDOWN_MS`), then retry |
 | Concurrent flush | `isSyncing` guard prevents double-flush |
 | Queue overflow | 500 cap; oldest events dropped |
-| Server input cap | 50 events max per call (A4 fix) |
+| Server input cap | 100 events max per call; malformed telemetry is rejected before persistence |
 | Synced events cleanup | Pruned after 5 min if `synced: true` |
 | Concurrent queue + flush | Both use `enqueueStorageOperation` mutex; network outside mutex (B6) |
 
@@ -407,14 +448,12 @@ Sole deduplication mechanism. Format must remain stable across deployments.
 - Client sets `@subtick_rss_failed_{id}` in AsyncStorage when live RSS fetch fails
 
 ### `deleteOrphanProfile` Cloud Function (`firebase/functions/src/index.ts`)
-```typescript
-export const deleteOrphanProfile = onCall(async (request) => {
-  // Validates: caller authenticated, orphanUid provided, orphanUid ≠ caller's own UID
-  // Uses Admin SDK db.doc(`users/${orphanUid}`).delete() to bypass rules
-  // Returns { success: true, deleted: orphanUid } or { alreadyGone: true }
-});
-```
-Exists because Firestore rules have `allow delete: if false` on `users/{userId}`. Client-side `deleteDoc()` is blocked. The function validates caller authentication for rate-limiting but does NOT require ownership of the orphan document.
+
+The callable deletes a stale anonymous `users/{orphanUid}` Firestore profile after
+Google credential recovery. It validates caller authentication and rejects a
+request to delete the caller's own profile, but it does not verify ownership of the
+supplied orphan UID. This known authorization risk is deliberately deferred in
+`docs/audit-backlog.md`.
 
 
 

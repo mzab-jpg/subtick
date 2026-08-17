@@ -49,3 +49,6 @@ firebase-debug.log
 .env
 .env.local
 .env.production
+
+# Local service-account credentials (never commit)
+/Keys/

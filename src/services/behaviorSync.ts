@@ -7,7 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { httpsCallable } from 'firebase/functions';
 import { functions, getClientId } from './firebase';
-import { PendingBehaviorEvent, BehaviorEventType } from '../types';
+import { PendingBehaviorEvent, BehaviorEventType, RecommendationContext } from '../types';
 import { BEHAVIOR_QUEUE_KEY, SYNC_BATCH_SIZE, MAX_QUEUE_SIZE } from '../utils/constants';
 import { auth } from './firebase';
 import { createStorageMutex } from './asyncStorageMutex';
@@ -32,7 +32,8 @@ export async function queueBehaviorEvent(
   publicationName: string | undefined,
   sessionDuration: number,
   scrollDepth: number,
-  actualWordCount?: number
+  actualWordCount?: number,
+  recommendationContext?: RecommendationContext
 ): Promise<void> {
   return storageMutex.enqueue(async () => {
     try {
@@ -51,6 +52,8 @@ export async function queueBehaviorEvent(
         sessionDuration,
         scrollDepth,
         actualWordCount,
+        feedId: recommendationContext?.feedId,
+        impressionId: recommendationContext?.impressionId,
         synced: false,
       };
 

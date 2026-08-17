@@ -44,7 +44,13 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   }
 
   const profile = userDoc.data() as UserProfile;
-  const currentWeights = { ...profile.categoryWeights };
+  // One internal map lets category, category+length, and publisher preferences
+  // receive the same elapsed-day decay even when no new event touches them.
+  const currentWeights: Record<string, number> = {
+    ...profile.categoryWeights,
+    ...Object.fromEntries(Object.entries(profile.categoryLengthWeights || {})),
+    ...Object.fromEntries(Object.entries(profile.publisherWeights || {}).map(([publisher, weight]) => [`pub::${publisher}`, weight])),
+  };
   const now = Date.now();
 
   // P0 Fix: Use a watermark (weightUpdatedAt) so we only process NEW events,
@@ -81,55 +87,69 @@ export async function updateWeights(userId: string, clientId?: string, providedC
 
   console.log(`[weightUpdater] Processing ${events.length} new events for ${userId} (since ${new Date(watermark).toISOString()})`);
 
-  // 4. Apply feedback deltas
+  // 4. Apply explicit/strong feedback deltas. A single quick exit stays
+  // neutral; repeated exits are handled below as category-only weak evidence.
   const updatedWeights = { ...currentWeights };
   const deltasByCategory: Record<string, number> = {};
+  const quickExitSignals: Record<string, Record<string, number>> = { ...(profile.quickExitCategorySignals || {}) };
+  const quickExitCutoff = now - cfg.learning.repeatedQuickExitLookbackDays * 24 * 60 * 60 * 1000;
+  const categoryL = cfg.learning.baseRate * cfg.learning.categoryMultiplier;
+  const lengthL = cfg.learning.baseRate * cfg.learning.lengthMultiplier;
+  const publisherL = cfg.learning.baseRate * cfg.learning.publisherMultiplier;
 
   for (const event of events) {
     const category = event.articleCategory;
-    const delta = (cfg.feedback as any)[event.eventType] ?? 0;
-
     if (!category) {
       console.warn(`[weightUpdater] Event missing category: ${event.eventType}`);
       continue;
     }
-
-    if (!updatedWeights[category]) {
-      updatedWeights[category] = 1.0;
+    if (['read_thorough', 'read_skim', 'like', 'save'].includes(event.eventType)) {
+      // Clear evidence accumulated before this clear positive signal. Any later
+      // quick exits in the same batch begin a fresh, chronological count.
+      delete quickExitSignals[category];
     }
 
-    // Apply Dimension-Specific Learning Rates:
-    // Publisher = 0.16 (2.0x of L), Length = 0.12 (1.5x of L), Category = 0.08 (1.0x of L)
-    const categoryL = cfg.learning.baseRate * cfg.learning.categoryMultiplier;
-    const lengthL = cfg.learning.baseRate * cfg.learning.lengthMultiplier;
-    const publisherL = cfg.learning.baseRate * cfg.learning.publisherMultiplier;
+    if (event.eventType === 'quick_exit') {
+      const signals = Object.fromEntries(
+        Object.entries(quickExitSignals[category] || {}).filter(([, timestamp]) => timestamp >= quickExitCutoff)
+      ) as Record<string, number>;
+      if (event.articleId) signals[event.articleId] = event.timestamp;
+      quickExitSignals[category] = signals;
+      continue;
+    }
 
-    // Category Weight Update
-    updatedWeights[category] += delta * categoryL;
+    const delta = (cfg.feedback as any)[event.eventType] ?? 0;
+    if (delta === 0) continue;
+    updatedWeights[category] = (updatedWeights[category] ?? 1.0) + delta * categoryL;
     deltasByCategory[category] = (deltasByCategory[category] || 0) + delta * categoryL;
 
-    // --- 2D Matrix Style Learning ---
-    // If the event has a lengthStyle, update the categoryLengthWeights (e.g. "Technology & Innovation::long")
-    const lengthStyle = event.lengthStyle;
-    if (lengthStyle) {
-      const compKey = `${category}::${lengthStyle}`;
-      if (!profile.categoryLengthWeights) profile.categoryLengthWeights = {};
-      if (!updatedWeights[compKey]) {
-        updatedWeights[compKey] = profile.categoryLengthWeights[compKey] || 1.0;
-      }
-      updatedWeights[compKey] += delta * lengthL;
+    if (event.lengthStyle) {
+      const compKey = `${category}::${event.lengthStyle}`;
+      updatedWeights[compKey] = (updatedWeights[compKey] ?? profile.categoryLengthWeights?.[compKey] ?? 1.0) + delta * lengthL;
     }
+    if (event.publicationName) {
+      const pubKey = `pub::${event.publicationName}`;
+      updatedWeights[pubKey] = (updatedWeights[pubKey] ?? profile.publisherWeights?.[event.publicationName] ?? 1.0) + delta * publisherL;
+    }
+  }
 
-    // --- 3D Matrix Publisher Learning ---
-    // If the event has a publisher, update the specific publisher weight
-    const publisherName = event.publicationName;
-    if (publisherName) {
-      const pubKey = `pub::${publisherName}`;
-      if (!profile.publisherWeights) profile.publisherWeights = {};
-      if (!updatedWeights[pubKey]) {
-        updatedWeights[pubKey] = profile.publisherWeights[publisherName] || 1.0;
+  // Reaching the threshold applies feedback.quick_exit exactly once to the
+  // category only. Positive events above have already cleared earlier evidence.
+  for (const category of Object.keys(quickExitSignals)) {
+    const signals = Object.fromEntries(
+      Object.entries(quickExitSignals[category]).filter(([, timestamp]) => timestamp >= quickExitCutoff)
+    ) as Record<string, number>;
+    if (Object.keys(signals).length >= cfg.learning.repeatedQuickExitThreshold) {
+      const weakDelta = (cfg.feedback as any).quick_exit ?? FEEDBACK_DELTAS.quick_exit ?? 0;
+      if (weakDelta !== 0) {
+        updatedWeights[category] = (updatedWeights[category] ?? 1.0) + weakDelta * categoryL;
+        deltasByCategory[category] = (deltasByCategory[category] || 0) + weakDelta * categoryL;
       }
-      updatedWeights[pubKey] += delta * publisherL;
+      delete quickExitSignals[category];
+    } else if (Object.keys(signals).length > 0) {
+      quickExitSignals[category] = signals;
+    } else {
+      delete quickExitSignals[category];
     }
   }
 
@@ -143,11 +163,12 @@ export async function updateWeights(userId: string, clientId?: string, providedC
 
   // 6. Apply daily decay ONLY once per day — not on every sync.
   // Check if at least 23 hours have passed since the last weight update.
-  const TWENTY_THREE_HOURS = 23 * 60 * 60 * 1000;
-  const shouldApplyDecay = (now - watermark) >= TWENTY_THREE_HOURS;
-  const decayedWeights = shouldApplyDecay ? applyDecay(updatedWeights, cfg.learning.dailyDecayRate) : updatedWeights;
-  if (shouldApplyDecay) {
-    console.log(`[weightUpdater] Applying daily decay for ${userId}`);
+  const decayReference = profile.weightsDecayedAt ?? profile.weightUpdatedAt ?? now;
+  const elapsedDays = Math.floor(Math.max(0, now - decayReference) / (24 * 60 * 60 * 1000));
+  const effectiveDecayRate = Math.pow(cfg.learning.dailyDecayRate, elapsedDays);
+  const decayedWeights = elapsedDays > 0 ? applyDecay(updatedWeights, effectiveDecayRate) : updatedWeights;
+  if (elapsedDays > 0) {
+    console.log(`[weightUpdater] Applying ${elapsedDays} day(s) of decay for ${userId}`);
   }
 
   // 7. Extract the 2D/3D weights back out of decayedWeights and Sync UI Arrays
@@ -207,8 +228,9 @@ export async function updateWeights(userId: string, clientId?: string, providedC
       readTimeUpdated = true;
     }
 
-    // If they scrolled deep, they likely finished it
-    if ((event.eventType === 'read_thorough' || event.eventType === 'read_skim') && event.scrollDepth >= 0.7 && event.sessionDuration > 10000) {
+    // A finished article is a server-classified deep read. Keep the WPM and
+    // completion gates aligned with the active dashboard classification rule.
+    if ((event.eventType === 'read_thorough' || event.eventType === 'read_skim') && event.scrollDepth >= cfg.classification.thoroughDepth && event.sessionDuration > 10000) {
       newTotalArticlesFinished++;
       articlesFinishedUpdated = true;
 
@@ -250,6 +272,8 @@ export async function updateWeights(userId: string, clientId?: string, providedC
     categoryLengthWeights: newCategoryLengthWeights,
     publisherWeights: newPublisherWeights,
     weightUpdatedAt: latestEventTimestamp, // P0 Fix: advance watermark so events are never replayed
+    weightsDecayedAt: elapsedDays > 0 ? now : (profile.weightsDecayedAt ?? profile.weightUpdatedAt ?? now),
+    quickExitCategorySignals: quickExitSignals,
     ...(uiArraysChanged && {
       selectedCategoryIds: Array.from(newSelectedCategoryIds),
       notInterestedCategoryIds: Array.from(newNotInterestedCategoryIds),
@@ -337,7 +361,7 @@ export async function updateWeights(userId: string, clientId?: string, providedC
 /**
  * Apply 0.5% daily decay to pull extreme weights back towards 1.0.
  */
-function applyDecay(weights: Record<string, number>, rate: number = DAILY_DECAY_RATE): Record<string, number> {
+export function applyDecay(weights: Record<string, number>, rate: number = DAILY_DECAY_RATE): Record<string, number> {
   const decayed: Record<string, number> = {};
   for (const [cat, weight] of Object.entries(weights)) {
     // Move weight towards 1.0 by the decay rate

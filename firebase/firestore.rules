@@ -14,6 +14,7 @@ service cloud.firestore {
           'dashboardMetricIds',
           'isOnboarded',
           'isActive',
+
           'selectedCategoryIds',
           'notInterestedCategoryIds',
           'includeArchivedArticles',
@@ -39,7 +40,6 @@ service cloud.firestore {
           'themePreference',
           'dashboardMetricIds',
           'isOnboarded',
-          'isActive',
           'selectedCategoryIds',
           'notInterestedCategoryIds',
           'categoryWeights',
@@ -64,10 +64,10 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
             'articleId', 'userId', 'eventType', 'timestamp',
             'articleCategory', 'lengthStyle', 'sessionDuration',
-            'scrollDepth', 'publicationName', 'actualWordCount'
+            'scrollDepth', 'publicationName', 'actualWordCount', 'feedId', 'impressionId'
           ])
           && request.resource.data.eventType in [
-            'swipe_next', 'swipe_not_interested', 'like', 'unlike',
+            'read_session', 'swipe_next', 'swipe_not_interested', 'like', 'unlike',
             'save', 'unsave', 'read_thorough', 'read_skim',
             'read_shallow', 'quick_exit'
           ]
@@ -81,7 +81,31 @@ service cloud.firestore {
       // global article is deleted by the cleanup cron.
       match /saved_articles/{articleId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        allow create: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly([
+            'id', 'title', 'author', 'publicationName', 'publicationUrl',
+            'feedUrl', 'category', 'lengthStyle', 'description', 'publishDate',
+            'wordCount', 'estimatedReadMinutes', 'savedAt'
+          ])
+          && request.resource.data.id == articleId
+          && request.resource.data.title is string
+          && request.resource.data.title.size() <= 500
+          && request.resource.data.author is string
+          && request.resource.data.author.size() <= 300
+          && request.resource.data.publicationName is string
+          && request.resource.data.publicationName.size() <= 300
+          && request.resource.data.publicationUrl is string
+          && request.resource.data.publicationUrl.size() <= 2000
+          && request.resource.data.feedUrl is string
+          && request.resource.data.feedUrl.size() <= 2000
+          && request.resource.data.category is string
+          && request.resource.data.category.size() <= 100
+          && request.resource.data.lengthStyle in ['short', 'medium', 'long']
+          && request.resource.data.publishDate is number
+          && request.resource.data.estimatedReadMinutes is number
+          && request.resource.data.savedAt is number
+          && request.resource.size() < 10000;
         allow delete: if request.auth != null && request.auth.uid == userId;
         allow update: if false;
       }
@@ -111,11 +135,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // --- Feedback: any authenticated user can create; no reads from client ---
-    // S4 Fix: Add schema validation and size cap to prevent unbounded writes.
+    // --- Feedback: authenticated users can submit bounded, attributable feedback ---
     match /feedback/{feedbackId} {
       allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
         && request.resource.data.keys().hasOnly(['userId', 'message', 'type', 'timestamp', 'appVersion'])
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 4000
+        && request.resource.data.timestamp is number
         && request.resource.size() < 5000;
       allow read: if false;   // Admin only — no client reads needed
       allow update: if false;

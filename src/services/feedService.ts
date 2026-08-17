@@ -210,15 +210,24 @@ export async function getRankedFeed(seenArticleIds: string[]): Promise<RankedFee
 async function fallbackGetArticles(seenArticleIds: string[] = []): Promise<RankedFeedResult> {
   try {
     const articlesRef = collection(db, 'articles');
-    // C7 Fix: Push isPaywalled filter into the Firestore query so we fetch only
-    // non-paywalled articles. The isPaywalled+publishDate composite index covers this.
-    // Previously fetched 90 docs then dropped paywalled ones in memory.
-    const q = query(
-      articlesRef,
+    // This fallback must respect the same archived-content preference as the
+    // backend. It is intentionally read from the signed-in user's profile rather
+    // than trusting a caller-supplied value.
+    let includeArchivedArticles = false;
+    if (auth.currentUser) {
+      const profile = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      includeArchivedArticles = profile.exists() && profile.data().includeArchivedArticles === true;
+    }
+
+    // Push the current-RSS restriction into Firestore when archived content is
+    // disabled, so webpage-only records are never downloaded by this fallback.
+    const constraints: any[] = [
       where('isPaywalled', '==', false),
+      ...(includeArchivedArticles ? [] : [where('rssStatus', '==', 'current')]),
       orderBy('publishDate', 'desc'),
-      limit(MAX_FEED_ARTICLES * 3)
-    );
+      limit(MAX_FEED_ARTICLES * 3),
+    ];
+    const q = query(articlesRef, ...constraints);
     const snapshot = await getDocs(q);
 
     const seenSet = new Set(seenArticleIds);

@@ -8,7 +8,7 @@ import * as admin from 'firebase-admin';
 import Parser from 'rss-parser';
 import { createHash } from 'crypto';
 import { SUBSTACK_FEEDS, PAYWALL_KEYWORDS } from './constants.js';
-import { Article } from './types.js';
+import { Article, FeedSource } from './types.js';
 
 const parser = new Parser({
   timeout: 15000,
@@ -159,28 +159,35 @@ function chunkArray<T>(array: T[], size: number): T[][] {
   return chunks;
 }
 
-export const rssCollector = onSchedule({ schedule: 'every 3 hours', memory: '512MiB' }, async () => {
+/**
+ * Collect all active feeds, or only the supplied feed(s) for an admin's immediate
+ * first collection. The scheduled job and dashboard flow share this exact path.
+ */
+export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ totalNew: number; totalErrors: number }> {
   console.log('[rssCollector] Starting RSS collection...');
   let totalNew = 0;
   let totalErrors = 0;
 
-  // 1. Fetch dynamic feed configuration from Firestore collection 'feeds'
-  let feedsList: any[] = [];
-  try {
-    const feedsSnap = await db.collection('feeds').get();
-    feedsSnap.forEach((doc) => {
-      const data = doc.data();
-      if (data.isActive !== false) {
-        feedsList.push(data);
-      }
-    });
-    console.log(`[rssCollector] Loaded ${feedsList.length} active feeds from Firestore 'feeds' collection.`);
-  } catch (dbErr: any) {
-    console.warn('[rssCollector] Failed to query Firestore feeds, falling back to static list:', dbErr.message);
+  // 1. Use a supplied feed for immediate admin collection, otherwise load the
+  // active Firestore directory used by the scheduled job.
+  let feedsList: FeedSource[] = feedOverride ? [...feedOverride] : [];
+  if (!feedOverride) {
+    try {
+      const feedsSnap = await db.collection('feeds').get();
+      feedsSnap.forEach((doc) => {
+        const data = doc.data() as FeedSource;
+        if (data.isActive !== false) {
+          feedsList.push(data);
+        }
+      });
+      console.log(`[rssCollector] Loaded ${feedsList.length} active feeds from Firestore 'feeds' collection.`);
+    } catch (dbErr: any) {
+      console.warn('[rssCollector] Failed to query Firestore feeds, falling back to static list:', dbErr.message);
+    }
   }
 
-  // 2. Fallback to static list if database query returned no active feeds
-  if (feedsList.length === 0) {
+  // 2. Fallback to static list only for the scheduled full-directory collection.
+  if (!feedOverride && feedsList.length === 0) {
     console.log('[rssCollector] No active feeds found in Firestore. Using static SUBSTACK_FEEDS fallback.');
     feedsList = SUBSTACK_FEEDS.map(f => ({ ...f, isActive: true, forceArchived: false }));
   }
@@ -366,4 +373,9 @@ export const rssCollector = onSchedule({ schedule: 'every 3 hours', memory: '512
   }
 
   console.log(`[rssCollector] Complete. New articles: ${totalNew}, Errors: ${totalErrors}`);
+  return { totalNew, totalErrors };
+}
+
+export const rssCollector = onSchedule({ schedule: 'every 3 hours', memory: '512MiB' }, async () => {
+  await collectRssFeeds();
 });

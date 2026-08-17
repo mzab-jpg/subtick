@@ -25,6 +25,9 @@ interface SecretParam {
 //   firebase functions:secrets:set GA_API_SECRET
 // GA_MEASUREMENT_ID is stored in firebase/functions/.env (public identifier).
 export const gaApiSecret: SecretParam = defineSecret('GA_API_SECRET');
+// Shared administrator passphrase for browser-based Control Dashboard mutations.
+// Set with: firebase functions:secrets:set CONTROL_DASHBOARD_SECRET
+export const controlDashboardSecret: SecretParam = defineSecret('CONTROL_DASHBOARD_SECRET');
 
 const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID || '';
 
@@ -35,6 +38,14 @@ const GA_MEASUREMENT_ID = process.env.GA_MEASUREMENT_ID || '';
 // The production endpoint always returns 2xx on receipt, even for invalid payloads,
 // so it is useless for diagnosing why events never appear in Realtime reports.
 const GA_DEBUG = process.env.GA_DEBUG === 'true';
+
+// Analytics must be filterable by where it originated. This is derived by the
+// trusted server runtime, never accepted from a browser or mobile client.
+// Firebase sets FUNCTIONS_EMULATOR for local Functions Emulator execution.
+export const ANALYTICS_ENVIRONMENT =
+  process.env.FUNCTIONS_EMULATOR === 'true' || process.env.FIREBASE_EMULATOR_HUB
+    ? 'emulator'
+    : 'production';
 
 // Measurement Protocol allows up to 25 events per request.
 const MAX_EVENTS_PER_REQUEST = 25;
@@ -112,6 +123,8 @@ export async function sendGAEvents(
     name: e.name,
     params: {
       ...e.params,
+      // Server-derived so emulator/test activity cannot masquerade as production.
+      analytics_environment: ANALYTICS_ENVIRONMENT,
       engagement_time_msec: 1,
       session_id: sessionId,
     },
@@ -231,6 +244,7 @@ export async function sendGAUserProperties(
             // Using a non-reserved custom event name.
             name: 'user_properties_update',
             params: {
+              analytics_environment: ANALYTICS_ENVIRONMENT,
               engagement_time_msec: 1,
             },
           },

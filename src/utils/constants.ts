@@ -82,11 +82,6 @@ export const MAX_FEED_ARTICLES = 30;
 // A3 Fix: Skip only the 3 visible cards (hero + 2 rows), not 10 invisible positions.
 export const SURPRISE_ME_MIN_INDEX = 3;
 
-// --- Quick Exit Thresholds ---
-// Named constants matching the thresholds in useBehaviorTracker.ts concludeSession()
-export const QUICK_EXIT_MAX_DURATION_MS = 15_000; // 15 seconds
-export const QUICK_EXIT_MAX_SCROLL = 0.2;         // 20% scroll depth
-
 // --- Available Dashboard Metrics ---
 export const DASHBOARD_METRIC_DEFS = [
   { id: 'streak', label: 'Streak Days', emoji: '🔥' },

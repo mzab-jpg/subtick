@@ -1,6 +1,6 @@
 ﻿# Tangent — Architecture
 
-> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
+> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
 > Every claim below is traced to a specific file and function.
 
 ---
@@ -15,7 +15,7 @@
 | React | React 19 + React Native 0.86 | `19.2.3` / `0.86.0` | `package.json` |
 | Navigation | React Navigation Stack | `^7.10.11` | `package.json` |
 | Backend/DB | Firebase Firestore | JS SDK `^12.16.0` | `package.json` |
-| Serverless | Firebase Cloud Functions v2 | 10 exported functions | `firebase/functions/src/index.ts` |
+| Serverless | Firebase Cloud Functions v2 | 14 exported functions | `firebase/functions/src/index.ts` |
 | Analytics | GA4 Measurement Protocol (web stream) | — | `firebase/functions/src/analytics.ts` |
 | Auth | Firebase Anonymous Auth + optional Google link | — | `src/services/auth.ts` |
 | Safe area | Manual `src/utils/safeArea.ts` | — | `topInset` / `bottomInset` constants (avoids Fabric crash on RN 0.86) |
@@ -65,7 +65,10 @@
 │   ├── seedFirestore.js            # One-time: writes seed articles to Firestore
 │   ├── seedFeeds.js                # One-time: writes feed documents
 │   ├── cleanFeeds.js               # One-time: deletes legacy hash-ID feed docs
+│   ├── analytics/
+│   │   └── create_personalization_health_view.sql # One-time BigQuery view for Looker recommendation health
 │   ├── scripts/
+│   │   ├── test-classification.js  # Focused backend WPM/classification regression test
 │   │   └── oneoff/                 # Spent migration scripts (READ BEFORE RE-RUNNING)
 │   │       ├── README.md
 │   │       ├── resetTrendingScores.js
@@ -77,7 +80,7 @@
 │       ├── package.json            # firebase-admin, firebase-functions, rss-parser
 │       ├── tsconfig.json           # NodeNext, ES2022, strict mode
 │       └── src/
-│           ├── index.ts            # Exports all 10 Cloud Functions + updateScoringConfig
+│           ├── index.ts            # Exports 14 Cloud Functions, protected dashboard actions, and addRssFeed
 │           ├── types.ts            # Shared interfaces (UserProfile, Article, etc.)
 │           ├── constants.ts        # Scoring constants, FEEDBACK_DELTAS, etc.
 │           ├── analytics.ts        # GA4 Measurement Protocol (sendGAEvents, sendGAUserProperties)
@@ -177,10 +180,17 @@ cronCleanupOldArticles (every 3 days):
 DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id from getClientId()
   → Cloud Function: getOrUpdateCandidatePool → filter seen → 4-component scoring (P, T, R, Q)
   → Tranche assembly: High 12 / Mid 8 / Tail 10 (random for High/Mid, sorted by tailScore for Tail)
-  → Hard per-publisher cap of 5 applied during picking; overflow cascades
-  → Final shuffle → return { articles: Article[30] }
+  → Archived Articles off → current-RSS-only candidate pool; on → mixed current/archived pool
+  → Backend final safety filter again removes archived items when the setting is off
+  → Hard per-publisher cap of 5 and configurable category maximum applied during picking; overflow cascades
+  → Configurable minimum distinct categories is filled with eligible alternatives when available
+  → Category-aware final interleave: avoids a third same-category card when another category remains
+  → return { articles: Article[30] }
   → Client-side seen filter → slice(0,30) → setFeedArticles
-  → [ANALYTICS] sendGAEvents(clientId, [feed_generated + 30× article_shown]) — fire-and-forget
+  → Each returned article carries transient `{ feedId, impressionId }` context
+  → [ANALYTICS] `feed_generated` + 30× `article_shown` include feed/impression IDs,
+    user-stage snapshot, discovery flags, ranking fields, and server-derived environment
+  → Later read/Like/Save/Not Interested actions carry that same impression ID — fire-and-forget
 ```
 
 ### 3d. Article Read — Client fetches live RSS at read time
@@ -200,16 +210,22 @@ useArticleLoader.loadArticle(id):
 ### 3e. Behavior Event Pipeline (+ Analytics)
 
 ```
-ReaderScreen → behaviorTracker.concludeSession() → queueBehaviorEvent()
-  → AsyncStorage queue (mutex-serialized via asyncStorageMutex)
+ReaderScreen → behaviorTracker records foreground-only duration, maximum scroll, and rendered word count
+  → AppState inactive/background intervals are excluded before raw-session telemetry is queued
+  → queueBehaviorEvent('read_session') → AsyncStorage queue (mutex-serialized)
   → syncBehaviorEvents Cloud Function (sends client_id):
-      Auth: request.auth.uid enforced
-      Swipe_next skipped; trending + peakTrendingScore in single batch
+      Auth: request.auth.uid enforced; request fields are validated
+      Reads the authenticated user's stored averageWpm once per batch
+      Loads active scoringConfig (per-instance cache: about 60s)
+      Reclassifies raw and legacy read events server-side as quick_exit, shallow,
+      skim, thorough, or swipe_next; explicit Like/Save/Not Interested actions stay unchanged
+      Stores the final event type; trending + peakTrendingScore update in one batch
       Publisher quality aggregated (10-min TTL cache — C5)
-      → updateWeights(userId, clientId) [watermark-based, no replay]
-      → [ANALYTICS] sendGAEvents for weight_updated events
-      → [ANALYTICS] sendGAEvents for read_thorough, quick_exit, swipe_not_interested, save
-      → [ANALYTICS] sendGAUserProperties for concentration_score, top_cat_weight, cats_at_ceiling
+      → updateWeights(userId, clientId, cfg) [watermark-based, no replay]
+      → repeated quick exits from distinct articles may create one category-only weak signal after live threshold/window; positive category engagement clears pending evidence
+      → qualifying deep reads update completion/read-time statistics and WPM
+      → WPM accepts 150–750 session WPM and uses an 80% old / 20% new rolling average
+      → [ANALYTICS] final event types + weight_updated/user-property events
 ```
 
 ### 3f. Analytics Pipeline
@@ -252,19 +268,21 @@ AccountScreen → linkGoogleAccount():
 ### Security Fixes Applied
 - **getRankedFeed / syncBehaviorEvents** — `request.auth.uid` enforced
 - **Behavior event IDs** — Client-generated, used as document ID (idempotent retries)
-- **deleteOrphanProfile CF** — Admin SDK deletes stale anonymous profiles
+- **deleteOrphanProfile CF** — Admin SDK deletes stale anonymous profiles (security hardening deferred; see audit-backlog.md)
 - **User profile field whitelist** (S2 + A4) — Create/update restricted to whitelisted fields
-- **behavior_events validation** (S5 + A4) — Path match, eventType enum, 2KB cap
+- **behavior_events validation** (S5 + A4) — Direct-write path match, 11-type event whitelist, field whitelist, 2KB cap; callable additionally validates raw telemetry before persistence
 - **feed_requests / feedback validation** (S3/S4) — Schema + size caps
 - **escapeHtml in ReaderScreen** (S1) — RSS metadata escaped before WebView injection
 - **syncBehaviorEvents 100-event cap (A4)** — Server-side batch limit (was 50, doubled to support larger batch tests); FieldValue.increment replaced with absolute writes; missing articles skipped to prevent batch failure
 - **ErrorBoundary** (Batch 1) — Crash resilience around RootNavigator
 - **DashboardScreen focus refetch guard** (A5) — Only refetches when feed depleted
-- **DashboardScreen queue shuffle** (A5) — Untapped cards scattered randomly
+- **DashboardScreen queue shuffle** (A5) — Untapped cards remain intentionally randomized; ranked-order preservation is deferred
 - **ReaderScreen HUD** (A5) — Title truncation + hidden on initial load
 - **ReaderScreen gestureEnabled** — Enabled (horizontal edge-swipe to dismiss; doesn't conflict with vertical article swipes)
 - **Google Sign-In logs** — Gated behind `__DEV__` checks (production logs are clean)
 - **GA_API_SECRET** — Stored in Cloud Secret Manager; `.trim()` applied to strip trailing CRLF
+- **Control Dashboard mutations** — Saving live/preview scoring configuration and adding feeds require the server-held `CONTROL_DASHBOARD_SECRET`; read-only dashboard/matrix access remains available to authenticated users
+- **Archived-content preference** — Enforced in normal ranking, backend emergency pool construction, a final server filter, and the phone-side Functions-outage fallback
 
 ---
 

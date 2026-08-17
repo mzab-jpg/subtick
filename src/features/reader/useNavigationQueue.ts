@@ -7,9 +7,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { flushBehaviorQueue } from '../../services/behaviorSync';
 import { getRankedFeed, getSeenArticleIdsLocally, getSavedArticleIds } from '../../services/feedService';
+import { RecommendationContext } from '../../types';
 
 interface UseNavigationQueueParams {
   queueArticleIds: string[];
+  recommendationContexts?: Record<string, RecommendationContext>;
   startIndex: number;
   isRestrictedMode: boolean;
   loadArticle: (id: string) => Promise<void>;
@@ -21,6 +23,7 @@ interface UseNavigationQueueParams {
 
 interface UseNavigationQueueResult {
   activeQueueIds: string[];
+  recommendationContexts: Record<string, RecommendationContext>;
   currentIndex: number;
   hasNext: boolean;
   hasPrev: boolean;
@@ -33,6 +36,7 @@ interface UseNavigationQueueResult {
 
 export function useNavigationQueue({
   queueArticleIds,
+  recommendationContexts: initialRecommendationContexts = {},
   startIndex,
   isRestrictedMode,
   loadArticle,
@@ -41,6 +45,7 @@ export function useNavigationQueue({
   serverSeenIds,
 }: UseNavigationQueueParams): UseNavigationQueueResult {
   const [activeQueueIds, setQueueIds] = useState<string[]>(queueArticleIds || []);
+  const [recommendationContexts, setRecommendationContexts] = useState<Record<string, RecommendationContext>>(initialRecommendationContexts);
   const [currentIndex, setCurrentIndex] = useState(startIndex ?? 0);
   const [queueExhausted, setQueueExhausted] = useState(false);
   const [preloading, setPreloading] = useState(false);
@@ -64,7 +69,13 @@ export function useNavigationQueue({
 
       if (result.articles && result.articles.length > 0) {
         const newIds = result.articles.map((a) => a.id);
+        const newContexts = Object.fromEntries(
+          result.articles
+            .filter((article) => !!article.recommendationContext)
+            .map((article) => [article.id, article.recommendationContext!])
+        );
         setQueueIds((prev) => [...prev, ...newIds]);
+        setRecommendationContexts((previous) => ({ ...previous, ...newContexts }));
       }
     } catch (error) {
       console.warn('[Preloader] Background preloading failed:', error);
@@ -112,6 +123,7 @@ export function useNavigationQueue({
 
   return {
     activeQueueIds,
+    recommendationContexts,
     currentIndex,
     hasNext,
     hasPrev,

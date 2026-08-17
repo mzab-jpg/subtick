@@ -1,7 +1,7 @@
 ﻿# SubTick Emulator User Guide
 
 > Everything you need to run and test the SubTick algorithm locally with a
-> copy of real production data. Verified against the actual codebase (16 August 2026 — post-syncBehaviorEvents-fix + dashboard rebuild round).
+> copy of real production data. Verified against the actual codebase (16 August 2026 — backend-authoritative read classification, personalized WPM, and publisher cold-start update).
 
 ---
 
@@ -45,9 +45,10 @@ nothing you do locally touches your live app or its users.
    GA_MEASUREMENT_ID=G-4B3N8C8MR3
    GA_DEBUG=false
    GA_API_SECRET=dummy_local_secret_for_testing
+   CONTROL_DASHBOARD_SECRET=local_dashboard_secret
+
    ```
-   The functions declare `secrets: [gaApiSecret]`; the emulator needs *a* value
-   or every callable fails with `internal`.
+   The Functions declare secrets for analytics and protected Control Dashboard actions. The emulator needs dummy values or the affected callables fail with `internal`. In production, set a strong non-dummy dashboard value with `firebase functions:secrets:set CONTROL_DASHBOARD_SECRET`; enter that value in the dashboard only for save, preview, or feed-add actions.
 
 ---
 
@@ -150,6 +151,7 @@ whatever is already in the running emulator session.
 | `firebase/start_emulators_fresh.bat` | **Main launcher** — emulators + prod sync |
 | `firebase/scripts/sync-prod-to-emulator.js` | Prod → emulator copy (called by launcher) |
 | `firebase/scripts/test-emulator-e2e.js` | Verifies sign-in + `getRankedFeed` work |
+| `firebase/scripts/test-classification.js` | Focused no-network regression test for WPM-aware classification thresholds and cold-start config normalization; runs against compiled Functions output |
 | `firebase/scripts/probe-emulator.js` | Dumps a sample of emulator data (diagnostics) |
 | `scripts/start_matrix.bat` | Serves the UI tools on `localhost:3000` |
 | `scripts/start_emulators.bat` | Plain emulator start (no sync — legacy) |
@@ -170,7 +172,10 @@ Optional self-test after the *ALL READY!* message:
 ```bash
 cd c:\2SubTick\firebase
 node scripts\test-emulator-e2e.js
+node scripts\test-classification.js
 ```
+
+`test-classification.js` is a focused compiled-Functions regression check. It does not need the emulator to be running; it verifies that the 450-WPM case classifies differently from the 200-WPM case, checks read-depth boundaries, and checks cold-start configuration normalization.
 
 Expected output (mirrors the matrix's own flow — anonymous sign-in on
 `127.0.0.1:9099`, then `getRankedFeed` and `getScoringConfig` on

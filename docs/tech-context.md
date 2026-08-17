@@ -1,6 +1,6 @@
 ﻿# Tangent — Technical Context
 
-> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
+> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -99,10 +99,14 @@ From `firebase/functions/src/index.ts`:
 | `cronDecayTrendingScores` | Scheduled | Every 24 hours | Applies `trendingScore × 0.9057` to all articles with score **> 1.0** (raised from 0.1 — C1 fix) |
 | `cronCleanupOldArticles` | Scheduled | Every 3 days | Step 1: Delete all paywalled articles. Step 2: Query 500 worst-scoring articles >3 months old by `peakTrendingScore` ASC (composite index), delete bottom 3% of sample. Fixed 500-read ceiling. |
 | `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user. Sends `article_shown` + `feed_generated` analytics events via Measurement Protocol. |
-| `syncBehaviorEvents` | HTTPS Callable | On demand | Saves behavior events batch; updates trendingScore, publisher quality, user weights, peakTrendingScore. Publisher list cached with 10-min TTL (C5 fix). **Fixed: FieldValue.increment replaced with absolute writes; missing articles skipped to prevent batch failure.** Sends `read_thorough`, `quick_exit`, `swipe_not_interested`, `save`, `weight_updated` analytics events + user properties. |
-| `updateScoringConfig` | HTTPS Callable | On demand | Writes to `system/scoringConfig` with `{ merge: true }`. Sends `config_changed` analytics event with old_value/new_value/field. |
-| `resetAccount` | HTTPS Callable | On demand | Deletes behavior_events + saved_articles subcollections; resets profile stats, weights, and category selections to defaults; sets `isOnboarded: false` |
-| `deleteAccount` | HTTPS Callable | On demand | Requires `confirmation: 'DELETE'`; deletes all subcollections + profile document + Firebase Auth account. Permanent. |
+| `syncBehaviorEvents` | HTTPS Callable | On demand | Validates a behavior-event batch; classifies raw `read_session` and legacy read-family telemetry server-side using active config plus authenticated profile WPM; stores final event types; then updates trendingScore, publisher quality, user weights, and peakTrendingScore. Publisher list cached with 10-min TTL. Sends final behavior, `weight_updated`, and user-property analytics. |
+| `updateScoringConfig` | HTTPS Callable | On demand | Requires the server-held Control Dashboard secret; writes clamped configuration to `system/scoringConfig` and sends `config_changed` analytics. |
+| `addRssFeed` | HTTPS Callable | On demand | Requires the Control Dashboard secret; validates a unique HTTPS RSS/Atom feed, creates an active `feeds` record, then runs immediate first collection through the normal collector path. |
+| `setPreviewConfig` | HTTPS Callable | On demand | Requires the Control Dashboard secret; writes a non-live scoring-config preview for the High-Fidelity Matrix. |
+| `getPreviewConfig` | HTTPS Callable | On demand | Returns the current Matrix preview configuration to an authenticated caller. |
+| `getScoringConfig` | HTTPS Callable | On demand | Returns effective, stored, and default scoring configuration to an authenticated caller. |
+| `resetAccount` | HTTPS Callable | On demand | Deletes known user subcollections in retry-safe pages; resets profile stats, weights, and category selections to defaults; sets `isOnboarded: false` |
+| `deleteAccount` | HTTPS Callable | On demand | Requires `confirmation: 'DELETE'`; deletes known user subcollections in retry-safe pages, then the profile document and Firebase Auth account. Permanent. |
 | `deleteOrphanProfile` | HTTPS Callable | On demand | Deletes a stale anonymous `users/{orphanUid}` Firestore document after Google credential recovery. Uses Admin SDK to bypass `allow delete: if false` security rule. Validates caller is authenticated and orphanUid ≠ caller's own UID. |
 
 ---
@@ -125,6 +129,8 @@ From `firebase/functions/src/index.ts`:
 | `categoryLengthWeights` | `Record<string, number>` | Learned per-`"category::lengthStyle"` weights — server-only write |
 | `publisherWeights` | `Record<string, number>` | Learned per-publisher weights — server-only write |
 | `weightUpdatedAt` | `number?` | Unix ms watermark — last event timestamp processed by `updateWeights()` |
+| `weightsDecayedAt` | `number?` | Unix ms of the last preference-decay application; separate from the event watermark |
+| `quickExitCategorySignals` | `Record<string, Record<string, number>>?` | Server-owned category → distinct quick-exit article ID → timestamp evidence, pruned/cleared after inference or positive engagement |
 | `themePreference` | `'system'|'light'|'dark'` | User theme choice |
 | `linkedGoogleAccount` | `boolean` | True after `linkGoogleAccount()` completes successfully |
 | `userEmail` | `string?` | Email from linked Google account; written by `linkGoogleAccount()` |
@@ -133,17 +139,42 @@ From `firebase/functions/src/index.ts`:
 | `weeklyReadCount` | `number` | read_thorough/skim events in last 7 days — server-only write |
 | `currentStreakDays` | `number` | Consecutive days with at least one read — server-only write |
 | `lastReadDate` | `number` | Unix ms of last read event |
-| `averageWpm` | `number` | Rolling 80/20 average WPM; initialized to 200 — server-only write |
+| `averageWpm` | `number` | Personalized rolling 80/20 reading-speed average; initialized to 200. Updated only from qualifying 150–750-WPM deep sessions — server-only write |
 | `dashboardMetricIds` | `string[]` | Up to 3 metric IDs for Dashboard stats pill |
 | `includeArchivedArticles` | `boolean?` | User opt-in to `candidatePool_mixed` |
 | `totalReadTimeMs` | `number?` | Cumulative active reading time (ms) — server-only write |
 | `lastUpdated` | `number` | Unix ms of last profile write |
 
+### WPM and Publisher Cold-Start Configuration
+
+The server loads `system/scoringConfig`, merges it over compiled defaults, clamps numeric values, and caches the effective configuration for about 60 seconds per warm Function instance. Relevant defaults are:
+
+| Setting | Default | Purpose |
+|---|---:|---|
+| `classification.quickExitDepth` | `0.20` | Below this depth plus a short session is a quick exit |
+| `classification.quickExitTimeoutSec` | `15` | Quick-exit duration threshold in seconds |
+| `classification.thoroughDepth` | `0.70` | Minimum deep-read depth used for classification and WPM eligibility |
+| `classification.thoroughTimeFraction` | `0.60` | Fraction of WPM-based expected time required for thorough classification |
+| `classification.shallowDepth` | `0.40` | Minimum depth for shallow classification |
+| `scoring.publisherColdStartCategoryWeight` | `0.90` | Category share for a publisher with no stored user history |
+| `scoring.publisherColdStartPublisherWeight` | `0.10` | Publisher share for a publisher with no stored user history |
+| `learning.repeatedQuickExitThreshold` | `3` | Distinct quick exits in one category before weak category-only learning is inferred |
+| `learning.repeatedQuickExitLookbackDays` | `14` | Recent window used to count those quick exits |
+| `tranche.maxArticlesPerCategory` | `15` | Category selection cap when eligible alternatives can fill the feed |
+| `tranche.minDistinctCategories` | `4` | Desired category variety when eligible alternatives exist |
+
+The two cold-start shares are normalized to total 1.0. Once `publisherWeights` has any property for a publisher—including a negative one—the normal 0.60 category / 0.40 publisher blend applies.
+
+Feed assembly additionally uses a fixed display-order anti-fatigue guard after tranche selection: it avoids a third consecutive article from the same category whenever any other category remains in the selected feed. It is deliberately not a scoring-config slider; scoring, tranche membership, and the publisher cap remain unchanged.
+
+Reader timing uses the built-in React Native `AppState` API (no Expo package). `inactive` and `background` intervals are excluded from a Reader session; only `active` foreground time is sent as `sessionDuration`. This protects WPM calibration, server read classification, and total reading-time statistics from phone interruptions.
+
+
 **Note:** `totalArticlesSaved` and `totalArticlesLiked` fields have been removed — they were initialized to 0 but never incremented anywhere in the codebase (A2 fix).
 
 **Client-writable fields (create):** All 18 initial profile fields written by `ensureUserProfile()`.
-**Client-writable fields (update, S2 fix):** `themePreference`, `dashboardMetricIds`, `isOnboarded`, `isActive`, `selectedCategoryIds`, `notInterestedCategoryIds`, `includeArchivedArticles`, `seenArticleIds`, `userEmail`, `lastUpdated`. Stats and weights are server-only.
-**Security:** Owner-only read. Delete disabled (`allow delete: if false`). Orphan profile cleanup must use the `deleteOrphanProfile` Cloud Function (Admin SDK bypass).
+**Client-writable fields (update):** `themePreference`, `dashboardMetricIds`, `isOnboarded`, `selectedCategoryIds`, `notInterestedCategoryIds`, `includeArchivedArticles`, `seenArticleIds`, `userEmail`, `linkedGoogleAccount`, `categoryWeights`, and `lastUpdated`. Stats and the administrative `isActive` flag are server-only.
+**Security:** Owner-only read. Delete disabled (`allow delete: if false`). The server denies normal feed/behavior actions for profiles where `isActive` is false. Secure orphan-profile cleanup is deferred to the documented server-only retention design in `docs/audit-backlog.md`.
 
 ---
 
@@ -155,7 +186,7 @@ From `firebase/functions/src/index.ts`:
 |---|---|---|
 | `articleId` | `string` | Article the event relates to |
 | `userId` | `string` | Owning user (overwritten server-side from `request.auth.uid`; validated by security rule to match path userId — S5 + A4 fix) |
-| `eventType` | `BehaviorEventType` | One of 10 types (also validated by rules against enum — A4 fix) |
+| `eventType` | `BehaviorEventType` | Client may submit raw `read_session`; callable persists a final concrete outcome. The direct-write rules whitelist 11 types for schema parity. |
 | `timestamp` | `number` | Unix ms |
 | `articleCategory` | `string` | e.g. `"Politics"` |
 | `lengthStyle` | `string` | `'short'|'medium'|'long'` |
@@ -163,12 +194,23 @@ From `firebase/functions/src/index.ts`:
 | `scrollDepth` | `number` | Max scroll 0.0–1.0 |
 | `publicationName` | `string?` | Publisher name (for weight learning) |
 | `actualWordCount` | `number?` | Live word count from WebView JS (for WPM) |
+| `feedId` / `impressionId` | `string?` | Transient ranked-feed attribution IDs retained with Reader-originated actions; server-written and validated |
 
-**Valid `eventType` values:** `'swipe_next' | 'swipe_not_interested' | 'like' | 'unlike' | 'save' | 'unsave' | 'read_thorough' | 'read_skim' | 'read_shallow' | 'quick_exit'`
+**Client-submittable event types:** `'read_session' | 'swipe_next' | 'swipe_not_interested' | 'like' | 'unlike' | 'save' | 'unsave' | 'read_thorough' | 'read_skim' | 'read_shallow' | 'quick_exit'`.
 
-**Security:** Owner-only create/read. Update/delete disabled. Create rule enforces: path userId matches body userId, `eventType` is one of 10 valid values, only whitelisted fields can be written, and document size capped at 2KB (S5 + A4 fix).
+`read_session` is raw telemetry only: the callable validates it and writes a final `'quick_exit' | 'read_shallow' | 'read_skim' | 'read_thorough' | 'swipe_next'` type. Legacy read-family types are reclassified while old app versions remain in use; explicit action types are unchanged. `feedId` and `impressionId`, when supplied by the live Reader queue, are validated and persisted with the final event so GA4/BigQuery can attribute the outcome to one exact recommendation appearance.
+
+**Security:** The normal mobile path is the authenticated callable, which overwrites userId and validates IDs, strings, finite timestamps/duration/depth, depth [0,1], duration ≤24h, and optional word count ≤1,000,000 before Admin-SDK persistence. Owner-only direct create/read remains rule-limited: path userId must match body userId, eventType is one of 11 whitelisted values, only approved fields are allowed, and size is capped at 2KB. Update/delete are disabled.
 
 ---
+
+### Analytics Export and Personalization Health
+
+**GA4 property:** `subtick-bbd55` (`545741262`). The GA4 → BigQuery export is connected at `subtick-bbd55.analytics_545741262`; it contains GA4 intraday `events_intraday_YYYYMMDD` tables and pre-existing Looker-oriented views.
+
+For launch-ready recommendation analysis, run `firebase/analytics/create_personalization_health_view.sql` once in BigQuery Console. It creates `v_personalization_health`, a one-row-per-impression source which joins an exact `impression_id` to later outcomes. The MCP BigQuery service account is intentionally read-only, so it cannot create that view itself. See `docs/analytics-looker-guide.md` for the report setup.
+
+New post-deployment analytics fields are `analytics_environment`, `feed_id`, `impression_id`, `user_stage`, `prior_qualifying_reads`, `days_since_last_read`, `profile_concentration`, `is_new_publisher`, and `is_new_category`. Only `analytics_environment = 'production'` belongs in real-user reporting. Existing pre-deployment events lack exact impression attribution and are suitable only for pipeline testing.
 
 ### Collection: `articles`
 **Document ID:** `article_{sha256(url::title).slice(0,16)}`
@@ -192,12 +234,12 @@ From `firebase/functions/src/index.ts`:
 | `isPaywalled` | `boolean` | Result of three-layer paywall check |
 | `headerImageUrl` | `string?` | OG image URL |
 | `wordCount` | `number?` | Estimated word count |
-| `estimatedReadMinutes` | `number` | `ceil(wordCount / 250)`, minimum 1 |
+| `estimatedReadMinutes` | `number` | Generic ingestion-time `ceil(wordCount / 250)`, minimum 1; active Dashboard/Reader views calculate their own personalized estimate from `averageWpm` |
 | `trendingScore` | `number` | Crowd engagement accumulator; decays daily × 0.9057 for scores > 1.0 |
 | `peakTrendingScore` | `number` | All-time high trendingScore, never decays; used by cleanup cron for deletion ranking (sampled query with composite index) |
 | `qualityScore` | `number` | Static feed-level quality from feeds.json (0.0–1.0) |
 | `isSeed` | `boolean` | true for seedFirestore.js entries; false for rssCollector |
-| `rssStatus` | `'current'|'archived'?` | 'archived' if GUID dropped from live feed. Post-sync archive pass now uses delta query (only `'current'` articles checked per feed — C4 fix). |
+| `rssStatus` | `'current'|'archived'?` | 'archived' if GUID dropped from live feed or the source is explicitly webpage-only. When a user has Archived Articles off, all ranked and fallback paths restrict delivery to `'current'`. |
 | `frontendRules` | `{removeCss?, injectCss?}?` | Per-publisher CSS overrides |
 | `bodyHtml` | `string?` | **NOT POPULATED** — legacy field only |
 | `random_score` | `number` | Uniformly distributed [0, 1) random float. Assigned on ingestion, refreshed daily by `cronDecayTrendingScores`. Used by `cronUpdateCandidatePool` for cheap random sampling without full collection scans. |
@@ -208,7 +250,7 @@ From `firebase/functions/src/index.ts`:
 
 ### Collection: `feeds`
 **Document ID:** `feed_{slugified_publicationName}`
-**Written by:** `seedFeeds.js` (one-time setup)
+**Written by:** `seedFeeds.js` (one-time setup) and the protected `addRssFeed` callable from Control Dashboard
 
 | Field | Type | Description |
 |---|---|---|
@@ -220,6 +262,7 @@ From `firebase/functions/src/index.ts`:
 | `isActive` | `boolean` | If false, rssCollector skips this feed |
 | `forceArchived` | `boolean` | If true, all articles get `rssStatus='archived'` |
 | `frontendRules` | `{removeCss?, injectCss?}?` | CSS rules copied to articles |
+| `addedAt`, `addedBy` | `number`, `string` (dashboard-added feeds) | Audit information for a protected dashboard feed addition |
 
 **Security:** Admin SDK only (default deny for client).
 
@@ -289,7 +332,8 @@ From `firebase/firestore.indexes.json` — now deployed on every `firebase deplo
 
 | Collection | Fields | Order | Purpose |
 |---|---|---|---|
-| `articles` | `isPaywalled`, `publishDate` | ASC, DESC | Used by `fallbackGetArticles()` in `feedService.ts` (now includes `isPaywalled == false` filter — C7 fix) |
+| `articles` | `isPaywalled`, `publishDate` | ASC, DESC | Used by the archived-enabled `fallbackGetArticles()` path |
+| `articles` | `isPaywalled`, `rssStatus`, `publishDate` | ASC, ASC, DESC | Used by the archived-disabled `fallbackGetArticles()` path to fetch current RSS articles only |
 | `articles` | `feedUrl`, `rssStatus` | ASC, ASC | Used by `rssCollector.ts` post-sync archive update — queries `rssStatus == 'current'` articles only (C4 fix) |
 | `articles` | `isPaywalled`, `rssStatus`, `random_score` | ASC, ASC, ASC | Used by `cronUpdateCandidatePool` Box 1 queries (active articles only) |
 | `articles` | `isPaywalled`, `random_score` | ASC, ASC | Used by `cronUpdateCandidatePool` Box 2 queries (any-status articles) |
@@ -305,12 +349,12 @@ From `firebase/firestore.rules` (updated with S2–S5 fixes):
 
 | Collection | Read | Write | Notes |
 |---|---|---|---|
-| `users/{userId}` | Owner only | Owner only — 10 whitelisted fields (update: themePreference, dashboardMetricIds, isOnboarded, isActive, selectedCategoryIds, notInterestedCategoryIds, includeArchivedArticles, seenArticleIds, userEmail, lastUpdated); 18 fields (create: all initial profile fields) | Delete disabled (`allow delete: if false`). Orphan cleanup via `deleteOrphanProfile` Cloud Function (Admin SDK). |
-| `users/{userId}/behavior_events` | Owner only | Create only (owner + body userId must match + eventType validated + field whitelist + 2KB cap — S5 + A4 fix) | Update/delete disabled |
-| `users/{userId}/saved_articles` | Owner only | Create/delete (owner) | Update disabled; persists even if global article is deleted |
+| `users/{userId}` | Owner only | Owner-only preference updates; `isActive` is server/admin-only | Delete disabled (`allow delete: false`). Normal feed and behavior callables reject inactive profiles. |
+| `users/{userId}/behavior_events` | Owner only | Direct create only (owner + body userId must match + 11-type event whitelist + field whitelist including optional feed/impression IDs + 2KB cap); normal mobile sync uses the authenticated callable, which independently validates telemetry before Admin-SDK writes | Update/delete disabled |
+| `users/{userId}/saved_articles` | Owner only | Create/delete (owner) | Create validates article metadata schema and bounded fields; update disabled. |
 | `articles/{articleId}` | Any authenticated user | Never (Admin SDK only) | Client cannot update articles |
 | `feed_requests/{id}` | Owner only | Create (validated: userId, URL format, schema, 2KB cap — S3 fix) | Update/delete disabled |
-| `feedback/{id}` | Never | Create (validated: field schema, 5KB cap — S4 fix) | Admin-only reads |
+| `feedback/{id}` | Never | Create (validated: authenticated owner, message, timestamp, schema, 5KB cap) | Admin-only reads |
 | Everything else | Never | Never | Default deny — covers `feeds`, `publishers`, `system` |
 
 ---

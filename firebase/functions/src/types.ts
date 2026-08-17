@@ -21,7 +21,16 @@ export interface UserProfile {
   includeArchivedArticles?: boolean;
   totalReadTimeMs?: number;
   weightUpdatedAt?: number; // Watermark: timestamp of the last event processed by updateWeights
+  weightsDecayedAt?: number; // Timestamp of the last time preference decay was applied
+  quickExitCategorySignals?: Record<string, Record<string, number>>; // category -> distinct article IDs -> quick-exit timestamps
   lastUpdated: number;
+}
+
+export interface RecommendationContext {
+  /** Identifies the particular recommendation batch that contained this article. */
+  feedId: string;
+  /** Identifies this one article at this one position in that recommendation batch. */
+  impressionId: string;
 }
 
 export interface Article {
@@ -52,6 +61,8 @@ export interface Article {
     removeCss?: string[];
     injectCss?: string;
   };
+  /** Present only in ranked-feed callable responses; never persisted on articles. */
+  recommendationContext?: RecommendationContext;
 }
 
 export interface ArticleScoreDetail {
@@ -72,6 +83,7 @@ export interface ArticleScoreDetail {
 }
 
 export type BehaviorEventType =
+  | 'read_session' // Raw session telemetry; the backend assigns the final read outcome.
   | 'swipe_next'
   | 'swipe_not_interested'
   | 'like'
@@ -95,6 +107,9 @@ export interface BehaviorEvent {
   sessionDuration: number;
   scrollDepth: number;
   actualWordCount?: number;
+  /** Present when the action came from a ranked recommendation. */
+  feedId?: string;
+  impressionId?: string;
 }
 
 export interface RankedFeedResult {

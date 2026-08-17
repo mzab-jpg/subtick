@@ -14,4 +14,5 @@
 | Prod → emulator sync | `c:\2SubTick\firebase\scripts\sync-prod-to-emulator.js` |
 | UI server | `c:\2SubTick\scripts\start_matrix.bat` |
 | End-to-end self-test | `c:\2SubTick\firebase\scripts\test-emulator-e2e.js` |
+| Classification/WPM regression test | `c:\2SubTick\firebase\scripts\test-classification.js` |
 | Data probe | `c:\2SubTick\firebase\scripts\probe-emulator.js` |

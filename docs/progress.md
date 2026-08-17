@@ -1,6 +1,6 @@
 ﻿# Tangent — Progress & Status
 
-> **Last verified:** 16 August 2026 (post-syncBehaviorEvents-fix + dashboard rebuild round).
+> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
 > All status claims are based on reading the actual code.
 
 ---
@@ -11,8 +11,9 @@
 - ✅ **XSS prevention in Reader** — `escapeHtml()` in ReaderScreen correctly escapes RSS metadata
 - ✅ **User profile field whitelist (create + update)** — Firestore rules restrict both to safe fields (A4 + S2)
 - ✅ **feed_requests / feedback schema validation** (S3/S4) — URL format, field schema, size caps
-- ✅ **behavior_events full validation** (S5 + A4) — Path match, eventType enum, field whitelist, 2KB cap
-- ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json` (5 composite indexes)
+- ✅ **behavior-events validation** (S5 + A4) — Direct-write path match, 11-type whitelist, field whitelist, 2KB cap; callable also validates raw telemetry before persistence
+- ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json` (6 composite indexes)
+- ✅ **Protected Control Dashboard mutations** — Server-held `CONTROL_DASHBOARD_SECRET` is required for live config changes, preview publishing, and feed addition; it is never stored by the browser
 - ✅ **syncBehaviorEvents input cap** — Server-side 100-event limit prevents overflow (was 50, doubled to support larger batch tests) (A4)
 - ✅ **ErrorBoundary** (Batch 1) — Render crash safety net wrapping RootNavigator
 - ✅ **Google Sign-In security** — `request.auth.uid` enforced; client userId ignored; lazy import in Expo Go
@@ -20,7 +21,7 @@
 - ✅ **GA_API_SECRET** — Stored in Cloud Secret Manager; `.trim()` applied to strip trailing CRLF from Secret Manager values
 
 ### Core Feed Pipeline
-- ✅ **RSS ingestion** — `rssCollector.ts` every 3h, batch-checks existence with `db.getAll()` (C3)
+- ✅ **RSS ingestion** — `rssCollector.ts` every 3h, batch-checks existence with `db.getAll()` (C3); protected dashboard feed-add validates HTTPS RSS/Atom input, rejects duplicates, writes an active directory record, and runs the same collector immediately
 - ✅ **Delta-driven archive update** — Queries only `rssStatus == 'current'` per feed (C4)
 - ✅ **OG metadata fallback scraper** — `fetchOgMetadata()` extracts og:image/description/author (6s timeout)
 - ✅ **Paywall detection** — Three-layer: keywords, CSS class patterns, script patterns
@@ -31,21 +32,25 @@
 - ✅ **peakTrendingScore tracking** — All-time high, never decays, same batch as trendingScore update
 - ✅ **Like/Unlike and Save/Unsave toggle** — Negative increments + per-user per-article dedup
 - ✅ **Normalized 4-component ranked feed** — All components [0,1]; two formulas (fullScore + tailScore). Diversity enforced by hard per-publisher cap of 5 during assembly.
-- ✅ **Tranche-based feed assembly** — 3 buckets: High/Mid random, Tail sorted by T+R
+- ✅ **Tranche-based feed assembly** — 3 buckets: High/Mid random, Tail sorted by T+R; configurable category maximum/minimum-distinct safeguards apply when eligible alternatives exist; final category-aware interleave avoids a third same-category card whenever an alternative remains.
 - ✅ **Dynamic publisher quality** — `publishers` collection, 10-min TTL cache (C5), atomic increments
-- ✅ **Firestore fallback** — Client falls back to direct query with `isPaywalled == false` filter (C7)
+- ✅ **Archive-safe feed retrieval** — The archived-article preference is honored by the normal candidate pool, backend on-the-fly fallback and cache, final server filter, and phone-side Functions-outage fallback; current-only client fallback uses the `isPaywalled + rssStatus + publishDate` index
 - ✅ **Idempotent event sync** — `event.id` as Firestore doc ID
+- ✅ **Launch-ready recommendation attribution** — Each ranked article has a transient feed/impression ID; Reader actions retain it, allowing BigQuery to connect one exact recommendation appearance to its later outcome. Feed analytics also record reporting-only user stage, profile concentration, and discovery flags.
 - ✅ **Firestore write optimizations** — Skip swipe_next, batch peakTrendingScore, aggregate publisher writes (~34–52% reduction)
 
 ### Personalization & Learning
-- ✅ **Behavior event classification** — 8 types based on scroll depth + session duration with named constants
-- ✅ **Quick-exit double-fire fix** — Shared `sessionSnapshotRef` (B2)
+- ✅ **Backend-authoritative reading sessions** — Client sends raw `read_session` telemetry; backend validates it, applies live Dashboard thresholds, and stores the final read outcome. Legacy read-family events are reclassified during rollout; explicit Like/Save/Not Interested actions are preserved.
+- ✅ **Personalized server WPM classification** — Backend reads the authenticated profile's `averageWpm` once per sync batch rather than using fixed 200 WPM.
+- ✅ **Quick-exit double-fire fix** — Shared `sessionSnapshotRef` prevents duplicate raw session reports; cleanup retains latest scroll depth and rendered word count.
+- ✅ **Background pause protection** — React Native `AppState` excludes `inactive`/`background` intervals from normal, explicit-action, and cleanup session durations, preventing interruption time from corrupting WPM or reading-time statistics.
 - ✅ **AsyncStorage behavior queue** — 500-item cap, mutex-serialized (via shared `asyncStorageMutex`) (B6)
 - ✅ **Flush race condition fixed** — Same mutex for read/write; network outside mutex (B6)
 - ✅ **Offline sync with retry** — `offlineManager.ts`, 30s cooldown
-- ✅ **Watermark-based weight update** — `weightUpdatedAt`, no replay, daily decay at ≥23h intervals
-- ✅ **Faster personalisation** — P weights 0.60 in score (was 0.40); P=0.60 cat + 0.40 pub; quick_exit delta neutral (0); read_thorough thresholds relaxed (scroll ≥70%, time ≥60% of expected); noticeable within 1–2 sessions
-- ✅ **WPM calibration** — Rolling 80/20 average [150, 750]; skipped for truncated feeds
+- ✅ **Watermark-based weight update** — `weightUpdatedAt` prevents replay; separate `weightsDecayedAt` applies the configured daily decay for every full elapsed day across category, length, and publisher preferences.
+- ✅ **Repeated quick-exit learning** — A single quick exit remains neutral. Distinct quick exits in one category accumulate only within the configurable time window; meeting the configurable threshold applies the existing `feedback.quick_exit` value once to that category only. Positive reads/Likes/Saves clear pending evidence.
+- ✅ **Publisher cold-start balance** — No stored interaction for a publisher uses configurable 90% category / 10% publisher personalization; any stored publisher weight uses normal 60% / 40% weighting. A known negative publisher remains known and is not treated as unknown.
+- ✅ **WPM calibration** — Starts at 200; qualifying deep reads use rendered words first, safe stored-count fallback second, accept only 150–750 WPM, and update with an 80% old / 20% new rolling average. Stored-count fallback is skipped for truncated feeds.
 - ✅ **Reading streak & weekly count** — `updateReadStats()` in weightUpdater
 
 ### Reader Experience
@@ -104,6 +109,7 @@
 - ✅ **Payload validated** — All chunks confirmed `validated OK (no issues)` via GA4 debug endpoint before production deploy.
 - ✅ **Secrets management** — `GA_API_SECRET` in Google Cloud Secret Manager; `GA_MEASUREMENT_ID` in `firebase/functions/.env`. Neither hardcoded.
 - ✅ **GA4 custom dimensions & metrics** — 9 dimensions (tranche, publisher_id, category_id, etc.) + 11 metrics (score_p, score_t, etc.) registered in GA4 Admin for Explore.
+- ✅ **Personalization-health reporting contract** — Post-deployment production events carry exact recommendation IDs and a server-derived environment. `firebase/analytics/create_personalization_health_view.sql` supplies the one-row-per-impression BigQuery source; `docs/analytics-looker-guide.md` specifies the Looker setup.
 
 ### Build & Foundation
 - ✅ **babel.config.js + metro.config.js** — Standard Expo SDK 57 configs
@@ -118,9 +124,9 @@
 - ✅ **Native Google Sign-In** — `@react-native-google-signin/google-signin` with lazy import (Expo Go safe)
 - ✅ **Cross-device seen article dedup** — AsyncStorage primary + Firestore `arrayUnion`
 - ✅ **Sign Out** — Clears `@subtick_*` → signOut → anonymous → fresh profile
-- ✅ **Reset Account** — `resetAccount` CF: deletes subcollections, resets profile, forces re-onboarding
-- ✅ **Delete Account** — `deleteAccount` CF: requires `confirmation: 'DELETE'`, permanent
-- ✅ **`isActive` soft-delete** — Default true; set false in Firestore console to disable
+- ✅ **Reset Account** — Deletes known subcollections in retry-safe batches, resets profile, forces re-onboarding
+- ✅ **Delete Account** — Requires `confirmation: 'DELETE'`; deletes known subcollections in retry-safe batches before profile/Auth deletion
+- ✅ **`isActive` soft-disable** — Server/admin-only after initial profile creation; normal feed and behavior callables reject disabled profiles
 - ✅ **Credential recovery after sign-out** — Catches `auth/credential-already-in-use`, falls back to `signInWithCredential`
 - ✅ **Mid-session UID change remount** — React key bump on RootNavigator
 - ✅ **Orphan cleanup** — `deleteOrphanProfile` CF uses Admin SDK to bypass `allow delete: if false`
@@ -148,21 +154,20 @@
 ### Feed Request Review Workflow (Admin Side Only)
 - **Status:** Submission complete. Review/approval not implemented. Requests accumulate as `status: 'pending'`.
 
-### BigQuery Export
-- **Status:** Not yet linked. GA4 → BigQuery integration needs to be enabled in Firebase Console → Project Settings → Integrations for SQL-queryable event data. Streaming export recommended for near-real-time analysis (minimal cost at current scale).
+### Personalization Health Reporting
+- **Status:** GA4 → BigQuery export is linked at `analytics_545741262`. Existing dashboard views expose raw ranking fields. The new canonical recommendation-to-outcome view is supplied in `firebase/analytics/create_personalization_health_view.sql`; it needs a one-time run in BigQuery Console because the connected MCP service account is read-only. Looker instructions are in `docs/analytics-looker-guide.md`.
 
 ---
 
 ## 3. Confirmed Absent (Gaps)
 
-- **No automated tests** — No jest/vitest/testing-library
+- **No full automated test framework** — No Jest/Vitest/testing-library suite. Focused Node regression scripts exist for backend classification and the unified simulator, but emulator integration coverage remains limited.
 - **No push notifications** — No `expo-notifications` or FCM
 - ~~**No analytics / error tracking**~~ — ✅ GA4 analytics implemented via Measurement Protocol (see Analytics Logging section)
 - **No cross-device saved HTML sync** — Saved article metadata syncs to Firestore, full HTML is device-local
 - **No content moderation** — Paywall detection only
 - **No rate limiting on `syncBehaviorEvents`** — Per-user per-article dedup only within single batch
 - **No pull-to-refresh** — Feed refresh by navigation focus + queue depletion only
-- **No BigQuery logging** — Events flow to GA4 but not yet exported to BigQuery for SQL querying (see Designed section)
 
 ---
 
@@ -171,7 +176,7 @@
 1. **Configure Google Sign-In client IDs** — Native Google Sign-In is implemented. Needs OAuth client IDs from Google Cloud Console.
 2. **Add trending score rate limiting** — Cross-session dedup for `syncBehaviorEvents`
 3. **Build feed request admin workflow** — Cloud Function trigger or admin UI
-4. **Add automated tests** — Scoring formula, weight update math, behavior classification, paywall detection
+4. **Expand automated tests** — Focused backend classification regression test exists (`firebase/scripts/test-classification.js`); broader scoring, weight-update, and paywall coverage is still needed.
 5. **Candidate pool document size limit** — At ~1,250 articles, `system/candidatePool_current` approaches 1 MB. Strip to essential fields or migrate to subcollection.
 6. **Dashboard infinite scroll** — Only 3 of 30 fetched articles shown; rest via Discover button
 7. **Run `backfillRandomScore.js` once** — Assign `random_score` to all pre-existing articles
@@ -182,6 +187,8 @@
 12. **Theme preference cross-device sync** — `themePreference` written to Firestore but ThemeContext only reads from AsyncStorage
 13. **Link BigQuery export** — GA4 → BigQuery integration for SQL-queryable raw event data; streaming export recommended for rapid iteration (minimal cost)
 14. **Build analytics dashboards** — Looker Studio or in-app dashboard once BigQuery data is flowing
+15. **Short-term session mood** — Deferred design: recent meaningful behavior would modestly influence only the next newly generated feed, never reorder an existing Reader queue or overwrite long-term weights. It should reuse existing feedback strengths and later expose only a recent-window, minimum-signal, and capped-influence setting.
+16. **Lightweight personalized fallback feed** — Deferred design: when the ranking callable fails, retain seen filtering and apply local category preference/variety plus recency tie-breaking. This must remain a small safety net, not a second client-side ranking engine.
 
 
 

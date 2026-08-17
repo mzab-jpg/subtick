@@ -25,10 +25,19 @@ export interface UserProfile {
   includeArchivedArticles?: boolean; // Whether user opts-in to reading raw Substack URIs for old articles
   totalReadTimeMs?: number; // total active reading time in ms
   weightUpdatedAt?: number; // Watermark: timestamp of the last event processed by updateWeights
+  weightsDecayedAt?: number; // Timestamp of the last time preference decay was applied
+  quickExitCategorySignals?: Record<string, Record<string, number>>; // server-owned category -> distinct article IDs -> quick-exit timestamps
   lastUpdated: number;
 }
 
 // --- Article (Firestore: articles/{id}) ---
+export interface RecommendationContext {
+  /** Identifies the particular recommendation batch that contained this article. */
+  feedId: string;
+  /** Identifies this one article at this one position in that recommendation batch. */
+  impressionId: string;
+}
+
 export interface Article {
   id: string; // Generated hash of URL/title to prevent duplicates
   title: string;
@@ -57,6 +66,8 @@ export interface Article {
     removeCss?: string[];   // CSS selectors to hide (e.g. subscribe widgets, paywall overlays)
     injectCss?: string;     // Raw CSS to inject for per-publisher styling fixes
   };
+  /** Present only on articles returned by the ranked-feed callable. Never stored on articles. */
+  recommendationContext?: RecommendationContext;
 }
 
 // --- Behavior Event (Firestore: behavior_events/{id}) ---
@@ -72,9 +83,13 @@ export interface BehaviorEvent {
   sessionDuration: number; // ms spent in active session
   scrollDepth: number; // Max scroll percentage (0.0 - 1.0)
   actualWordCount?: number;
+  /** Present when this action came from a ranked recommendation. */
+  feedId?: string;
+  impressionId?: string;
 }
 
 export type BehaviorEventType =
+  | 'read_session' // Raw session telemetry; the backend assigns the final read outcome.
   | 'swipe_next'
   | 'swipe_not_interested'
   | 'like'
@@ -116,6 +131,9 @@ export interface PendingBehaviorEvent {
   sessionDuration: number;
   scrollDepth: number;
   actualWordCount?: number;
+  /** Present when this action came from a ranked recommendation. */
+  feedId?: string;
+  impressionId?: string;
   synced: boolean;
 }
 
@@ -167,7 +185,16 @@ export interface ThemeColors {
 export type RootStackParamList = {
   Dashboard: { onboardingSelections?: any };
   Onboarding: undefined;
-  Reader: { articleId: string; queueArticleIds?: string[]; startIndex?: number; userWpm?: number; mode?: 'feed' | 'history' | 'saved'; mockArticle?: Article };
+  Reader: {
+    articleId: string;
+    queueArticleIds?: string[];
+    /** Recommendation context by article ID; present only for a live ranked-feed queue. */
+    recommendationContexts?: Record<string, RecommendationContext>;
+    startIndex?: number;
+    userWpm?: number;
+    mode?: 'feed' | 'history' | 'saved';
+    mockArticle?: Article;
+  };
   Settings: undefined;
   History: undefined;
   SavedReads: undefined;

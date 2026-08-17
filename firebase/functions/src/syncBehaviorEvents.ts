@@ -4,9 +4,9 @@
 // publisher qualityScore dynamically in real-time.
 // ============================================================
 
-import { onCall } from 'firebase-functions/v2/https';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
-import { BehaviorEvent } from './types.js';
+import { BehaviorEvent, BehaviorEventType, UserProfile } from './types.js';
 import { updateWeights } from './weightUpdater.js';
 import { gaApiSecret, sendGAEvents } from './analytics.js';
 import { loadScoringConfig, prepareConfig, classifyRead, ScoringConfig } from './scoringConfig.js';
@@ -51,6 +51,42 @@ function getPublisherQualityIncrement(cfg: ScoringConfig, eventType: string): nu
   return typeof d === 'number' ? d : 0;
 }
 
+const EXPLICIT_EVENT_TYPES = new Set<BehaviorEventType>([
+  'swipe_not_interested', 'like', 'unlike', 'save', 'unsave',
+]);
+
+const READ_EVENT_TYPES = new Set<BehaviorEventType>([
+  'read_session', 'read_thorough', 'read_skim', 'read_shallow', 'quick_exit', 'swipe_next',
+]);
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function validateEvent(raw: unknown, userId: string): BehaviorEvent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const event = raw as Partial<BehaviorEvent>;
+  const validTypes = new Set<BehaviorEventType>([...EXPLICIT_EVENT_TYPES, ...READ_EVENT_TYPES]);
+  if (
+    typeof event.id !== 'string' || !event.id || event.id.length > 200 ||
+    typeof event.articleId !== 'string' || !event.articleId || event.articleId.length > 500 ||
+    !validTypes.has(event.eventType as BehaviorEventType) ||
+    typeof event.articleCategory !== 'string' || event.articleCategory.length > 100 ||
+    typeof event.lengthStyle !== 'string' || event.lengthStyle.length > 50 ||
+    (event.feedId !== undefined && (typeof event.feedId !== 'string' || event.feedId.length > 100)) ||
+    (event.impressionId !== undefined && (typeof event.impressionId !== 'string' || event.impressionId.length > 150)) ||
+    !isFiniteNumber(event.timestamp) || !isFiniteNumber(event.sessionDuration) ||
+    !isFiniteNumber(event.scrollDepth) ||
+    event.sessionDuration < 0 || event.sessionDuration > 24 * 60 * 60 * 1000 ||
+    event.scrollDepth < 0 || event.scrollDepth > 1 ||
+    (event.actualWordCount !== undefined && (!isFiniteNumber(event.actualWordCount) || event.actualWordCount < 0 || event.actualWordCount > 1_000_000)) ||
+    (event.publicationName !== undefined && (typeof event.publicationName !== 'string' || event.publicationName.length > 200))
+  ) {
+    return null;
+  }
+  return { ...event, userId } as BehaviorEvent;
+}
+
 export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (request) => {
   // P0 Security: Verify the caller is authenticated. Never trust client-supplied userId.
   if (!request.auth) {
@@ -63,11 +99,12 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
   // updateWeights so its analytics calls use the same id. Never fall back to the
   // Auth UID — analytics.ts will mint a random id if this is missing.
   const clientId = data.client_id || '';
-  let events = (data.events || []).map(e => ({
-    ...e,
-    // Overwrite any client-supplied userId with the verified auth UID
-    userId: authenticatedUserId,
-  }));
+  const submittedEvents = Array.isArray(data.events) ? data.events : [];
+  let invalidEvents = 0;
+  let events = submittedEvents.map(event => validateEvent(event, authenticatedUserId)).filter((event): event is BehaviorEvent => {
+    if (!event) invalidEvents++;
+    return event !== null;
+  });
 
   // Input size cap: prevent batch overflow (Firestore limits batches to 500 ops)
   // and rate-limit abuse. The high-fidelity matrix can send up to feedSize (≤100)
@@ -85,20 +122,34 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
   // Use a preview config override for this request if supplied; else load live.
   const cfg = prepareConfig(data.configOverride) ?? await loadScoringConfig();
 
-  // Optional server-authoritative read classification: re-decide read-family
-  // labels from raw scroll/duration/word-count using the config thresholds,
-  // instead of trusting the label the client guessed. OFF until enabled.
-  if (cfg.classification.enable) {
-    events = events.map((e) => {
-      if (typeof e.scrollDepth !== 'number' || typeof e.sessionDuration !== 'number') return e;
-      const family =
-        e.eventType === 'read_thorough' || e.eventType === 'read_skim' ||
-        e.eventType === 'read_shallow' || e.eventType === 'quick_exit' || e.eventType === 'swipe_next';
-      if (!family) return e;
-      const re = classifyRead(cfg, e.scrollDepth, e.sessionDuration, e.actualWordCount || 0, 200);
-      return re && re !== e.eventType ? { ...e, eventType: re } : e;
-    });
+  // The authenticated profile is the sole source of truth for reading pace.
+  // Fetch it once per batch, never trust a client-provided WPM value.
+  const profileDoc = await db.collection('users').doc(authenticatedUserId).get();
+  const profile = profileDoc.exists ? profileDoc.data() as UserProfile & { isActive?: boolean } : undefined;
+  if (profile?.isActive === false) {
+    throw new HttpsError('permission-denied', 'This account has been disabled.');
   }
+  const userWpm = typeof profile?.averageWpm === 'number' && profile.averageWpm > 0
+    ? profile.averageWpm
+    : 200;
+
+  // Raw sessions are always classified on the backend. Existing clients may
+  // still send legacy read-family labels during rollout; reclassify them too.
+  events = events.map((event) => {
+    if (!READ_EVENT_TYPES.has(event.eventType) || EXPLICIT_EVENT_TYPES.has(event.eventType)) {
+      return event;
+    }
+    return {
+      ...event,
+      eventType: classifyRead(
+        cfg,
+        event.scrollDepth,
+        event.sessionDuration,
+        event.actualWordCount || 0,
+        userWpm
+      ),
+    };
+  });
 
   console.log(`[syncBehaviorEvents] Processing ${events.length} events into subcollections...`);
 
@@ -150,7 +201,7 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
   const publisherNames: Record<string, string> = {};
 
   let synced = 0;
-  let errors = 0;
+  let errors = invalidEvents;
   const batch = db.batch();
 
   // 2. Process events and queue real-time atomic updates
@@ -319,6 +370,8 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
       params: {
         user_id: event.userId,
         article_id: event.articleId,
+        feed_id: event.feedId || '',
+        impression_id: event.impressionId || '',
         publisher_id: pubName || '',
         category_id: event.articleCategory || '',
         read_duration_seconds: event.sessionDuration ? Math.round(event.sessionDuration / 1000) : 0,

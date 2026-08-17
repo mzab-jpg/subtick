@@ -48,6 +48,9 @@ export interface ScoringConfig {
     tailTrending: number;    // SCORE_WEIGHTS_TAIL.trending (0.43)
     tailRecency: number;     // SCORE_WEIGHTS_TAIL.recency (0.57)
     maxTrendingScore: number;// MAX_TRENDING_SCORE (50)
+    // Used only until a user has any stored interaction with a publisher.
+    publisherColdStartCategoryWeight: number; // 0.90
+    publisherColdStartPublisherWeight: number; // 0.10
   };
   feedback: Record<string, number>; // FEEDBACK_DELTAS (per action)
   learning: {
@@ -61,6 +64,8 @@ export interface ScoringConfig {
     defaultSelectedWeight: number;      // DEFAULT_SELECTED_WEIGHT (1.5)
     defaultNotInterestedWeight: number; // DEFAULT_NOT_INTERESTED_WEIGHT (0.2)
     defaultNeutralWeight: number;       // DEFAULT_NEUTRAL_WEIGHT (1.0)
+    repeatedQuickExitThreshold: number; // 3 distinct articles in one category
+    repeatedQuickExitLookbackDays: number; // 14
   };
   trending: {
     decayRate: number; // TRENDING_DECAY_RATE (0.9057) — used by the decay cron
@@ -81,9 +86,10 @@ export interface ScoringConfig {
     publisherCap: number;  // 5
     newUserThreshold: number; // 30 (below this → tail randomised)
     feedSize: number;      // 30 (RETURN_FEED_SIZE)
+    maxArticlesPerCategory: number; // 15, relaxed only when alternatives are exhausted
+    minDistinctCategories: number;  // 4, when eligible alternatives exist
   };
   classification: {
-    enable: boolean;            // OFF by default → live behaviour unchanged until switched on
     quickExitDepth: number;     // 0.2
     quickExitTimeoutSec: number;// 15
     thoroughDepth: number;      // 0.70
@@ -105,6 +111,8 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
     tailTrending: SCORE_WEIGHTS_TAIL.trending,
     tailRecency: SCORE_WEIGHTS_TAIL.recency,
     maxTrendingScore: MAX_TRENDING_SCORE,
+    publisherColdStartCategoryWeight: 0.90,
+    publisherColdStartPublisherWeight: 0.10,
   },
   feedback: { ...FEEDBACK_DELTAS },
   learning: {
@@ -118,6 +126,8 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
     defaultSelectedWeight: DEFAULT_SELECTED_WEIGHT,
     defaultNotInterestedWeight: DEFAULT_NOT_INTERESTED_WEIGHT,
     defaultNeutralWeight: DEFAULT_NEUTRAL_WEIGHT,
+    repeatedQuickExitThreshold: 3,
+    repeatedQuickExitLookbackDays: 14,
   },
   trending: {
     decayRate: TRENDING_DECAY_RATE,
@@ -138,9 +148,10 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
     publisherCap: 5,
     newUserThreshold: 30,
     feedSize: 30,
+    maxArticlesPerCategory: 15,
+    minDistinctCategories: 4,
   },
   classification: {
-    enable: false,
     quickExitDepth: 0.2,
     quickExitTimeoutSec: 15,
     thoroughDepth: 0.70,
@@ -171,12 +182,15 @@ export function deepMerge(base: any, overrides: any): any {
 const NUM_RANGES: Record<string, [number, number]> = {
   'scoring.personalization': [0, 1.5], 'scoring.trending': [0, 1.5], 'scoring.recency': [0, 1.5], 'scoring.quality': [0, 1.5],
   'scoring.tailTrending': [0, 1.5], 'scoring.tailRecency': [0, 1.5], 'scoring.maxTrendingScore': [1, 200],
+  'scoring.publisherColdStartCategoryWeight': [0, 1], 'scoring.publisherColdStartPublisherWeight': [0, 1],
   'learning.baseRate': [0, 1], 'learning.categoryMultiplier': [0, 5], 'learning.lengthMultiplier': [0, 5], 'learning.publisherMultiplier': [0, 5],
   'learning.minWeight': [0.01, 1], 'learning.maxWeight': [1, 10], 'learning.dailyDecayRate': [0.5, 1],
   'learning.defaultSelectedWeight': [1, 5], 'learning.defaultNotInterestedWeight': [0.01, 1], 'learning.defaultNeutralWeight': [0.5, 2],
+  'learning.repeatedQuickExitThreshold': [1, 20], 'learning.repeatedQuickExitLookbackDays': [1, 90],
   'trending.decayRate': [0.5, 1],
   'tranche.highThreshold': [0, 1], 'tranche.midThreshold': [0, 1], 'tranche.highSize': [1, 50], 'tranche.midSize': [1, 50], 'tranche.tailSize': [1, 50],
   'tranche.publisherCap': [1, 30], 'tranche.newUserThreshold': [0, 500], 'tranche.feedSize': [1, 100],
+  'tranche.maxArticlesPerCategory': [1, 100], 'tranche.minDistinctCategories': [1, 20],
   'classification.quickExitDepth': [0, 1], 'classification.quickExitTimeoutSec': [1, 120],
   'classification.thoroughDepth': [0, 1], 'classification.thoroughTimeFraction': [0.1, 2], 'classification.shallowDepth': [0, 1],
 };
@@ -202,7 +216,17 @@ export function clampConfig(cfg: any): any {
     }
     return out;
   };
-  return walk(cfg, '');
+  const clamped = walk(cfg, '');
+  const coldStart = clamped.scoring;
+  const coldStartTotal = coldStart.publisherColdStartCategoryWeight + coldStart.publisherColdStartPublisherWeight;
+  if (coldStartTotal > 0) {
+    coldStart.publisherColdStartCategoryWeight /= coldStartTotal;
+    coldStart.publisherColdStartPublisherWeight /= coldStartTotal;
+  } else {
+    coldStart.publisherColdStartCategoryWeight = 0.90;
+    coldStart.publisherColdStartPublisherWeight = 0.10;
+  }
+  return clamped;
 }
 
 // ------------------------------------------------------------------
@@ -259,8 +283,7 @@ export function invalidateConfigCache(): void {
 
 // ------------------------------------------------------------------
 // Read classification — answers "what counts as a skim / thorough read?"
-// Same thresholds as docs/system-patterns.md. Returns null when the
-// feature is disabled (then client-supplied labels are kept unchanged).
+// Every raw read_session is classified on the server using these live rules.
 // ------------------------------------------------------------------
 export function classifyRead(
   cfg: ScoringConfig,
@@ -268,9 +291,8 @@ export function classifyRead(
   sessionDurationMs: number,
   actualWordCount: number,
   wpm: number
-): ReadEventType | null {
+): ReadEventType {
   const c = cfg.classification;
-  if (!c.enable) return null;
 
   if (scrollDepth < c.quickExitDepth && sessionDurationMs < c.quickExitTimeoutSec * 1000) {
     return 'quick_exit';

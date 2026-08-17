@@ -4,22 +4,30 @@
 // ============================================================
 
 import { useRef, useCallback, useEffect } from 'react';
-import { BehaviorEventType } from '../types';
+import { AppState, AppStateStatus } from 'react-native';
+import { BehaviorEventType, RecommendationContext } from '../types';
 import { queueBehaviorEvent } from '../services/behaviorSync';
-import { QUICK_EXIT_MAX_DURATION_MS, QUICK_EXIT_MAX_SCROLL } from '../utils/constants';
+import {
+  createActiveSessionClock,
+  getActiveSessionDuration,
+  pauseActiveSession,
+  resumeActiveSession,
+} from '../utils/activeSessionTimer';
 
 interface UseBehaviorTrackerOptions {
   articleId: string;
   articleCategory: string;
   lengthStyle: string;
   publicationName?: string;
+  recommendationContext?: RecommendationContext;
   enabled: boolean;
 }
 
 interface UseBehaviorTrackerReturn {
   trackScrollDepth: (depth: number) => void;
+  trackActualWordCount: (count: number) => void;
   trackEvent: (eventType: BehaviorEventType, extraScrollDepth?: number, actualWordCount?: number) => void;
-  concludeSession: (expectedReadTimeMs: number, actualWordCount?: number) => void;
+  concludeSession: (actualWordCount?: number) => void;
   sessionStartTime: number;
 }
 
@@ -28,13 +36,15 @@ export function useBehaviorTracker({
   articleCategory,
   lengthStyle,
   publicationName,
+  recommendationContext,
   enabled,
 }: UseBehaviorTrackerOptions): UseBehaviorTrackerReturn {
   // Keep tracking state in a ref that resets when articleId changes
   const stateRef = useRef({
     articleId,
-    startTime: Date.now(),
+    ...createActiveSessionClock(Date.now()),
     maxDepth: 0,
+    actualWordCount: 0,
     concluded: false,
   });
 
@@ -42,8 +52,9 @@ export function useBehaviorTracker({
   if (stateRef.current.articleId !== articleId) {
     stateRef.current = {
       articleId,
-      startTime: Date.now(),
+      ...createActiveSessionClock(Date.now()),
       maxDepth: 0,
+      actualWordCount: 0,
       concluded: false,
     };
   }
@@ -61,11 +72,14 @@ export function useBehaviorTracker({
     articleId: string;
     articleCategory: string;
     startTime: number;
+    pausedAt: number | null;
     maxDepth: number;
+    actualWordCount: number;
     concluded: boolean;
   } | null>(null);
 
-  // Fallback cleanup to ensure quick_exit is recorded if they unmount the reader quickly.
+  // Fallback cleanup reports any unfinished session as raw telemetry. The server
+  // applies the active classification rules, so no client-side quick-exit guess is made.
   useEffect(() => {
     if (!enabled) return;
 
@@ -75,7 +89,9 @@ export function useBehaviorTracker({
       articleId,
       articleCategory,
       startTime: stateRef.current.startTime,
+      pausedAt: stateRef.current.pausedAt,
       maxDepth: stateRef.current.maxDepth,
+      actualWordCount: stateRef.current.actualWordCount,
       concluded: stateRef.current.concluded,
     };
 
@@ -85,27 +101,63 @@ export function useBehaviorTracker({
       // Read concluded from the shared snapshot — concludeSession() will have set
       // snapshot.concluded = true if it already fired for this article.
       if (!snapshot.concluded) {
-        const duration = Date.now() - snapshot.startTime;
-        // F5 Fix: Use named constants instead of magic numbers
-        if (duration < QUICK_EXIT_MAX_DURATION_MS && snapshot.maxDepth < QUICK_EXIT_MAX_SCROLL) {
-          queueBehaviorEvent(
-            snapshot.articleId,
-            'quick_exit',
-            snapshot.articleCategory,
-            lengthStyle,
-            publicationName,
-            duration,
-            snapshot.maxDepth
-          );
-        }
+        const duration = getActiveSessionDuration(snapshot, Date.now());
+        queueBehaviorEvent(
+          snapshot.articleId,
+          'read_session',
+          snapshot.articleCategory,
+          lengthStyle,
+          publicationName,
+          duration,
+          snapshot.maxDepth,
+          snapshot.actualWordCount || undefined,
+          recommendationContext
+        );
       }
     };
   }, [enabled, articleId, articleCategory]);
+
+  // Only time while the Reader is foreground-active. React Native reports
+  // inactive during transitions/calls and background after app switches/locks.
+  useEffect(() => {
+    if (!enabled) return;
+
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const now = Date.now();
+      if (nextState === 'active') {
+        resumeActiveSession(stateRef.current, now);
+        if (sessionSnapshotRef.current?.articleId === stateRef.current.articleId) {
+          resumeActiveSession(sessionSnapshotRef.current, now);
+        }
+      } else if (nextState === 'inactive' || nextState === 'background') {
+        pauseActiveSession(stateRef.current, now);
+        if (sessionSnapshotRef.current?.articleId === stateRef.current.articleId) {
+          pauseActiveSession(sessionSnapshotRef.current, now);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [enabled, articleId]);
 
   const trackScrollDepth = useCallback(
     (depth: number) => {
       if (!enabled) return;
       stateRef.current.maxDepth = Math.max(stateRef.current.maxDepth, depth);
+      if (sessionSnapshotRef.current?.articleId === stateRef.current.articleId) {
+        sessionSnapshotRef.current.maxDepth = stateRef.current.maxDepth;
+      }
+    },
+    [enabled]
+  );
+
+  const trackActualWordCount = useCallback(
+    (count: number) => {
+      if (!enabled || !Number.isFinite(count) || count <= 0) return;
+      stateRef.current.actualWordCount = Math.floor(count);
+      if (sessionSnapshotRef.current?.articleId === stateRef.current.articleId) {
+        sessionSnapshotRef.current.actualWordCount = stateRef.current.actualWordCount;
+      }
     },
     [enabled]
   );
@@ -120,45 +172,33 @@ export function useBehaviorTracker({
         articleCategory,
         lengthStyle,
         publicationName,
-        Date.now() - stateRef.current.startTime,
+        getActiveSessionDuration(stateRef.current, Date.now()),
         depth,
-        actualWordCount
+        actualWordCount,
+        recommendationContext
       );
     },
     [enabled, articleId, articleCategory, lengthStyle, publicationName]
   );
 
   const concludeSession = useCallback(
-    (expectedReadTimeMs: number, actualWordCount?: number) => {
+    (actualWordCount?: number) => {
       if (!enabled || stateRef.current.concluded) return;
-      
-      const duration = Date.now() - stateRef.current.startTime;
-      const depth = stateRef.current.maxDepth;
-      
-      let eventType: BehaviorEventType = 'swipe_next';
 
-      // F5 Fix: Use named constants instead of magic numbers
-      if (depth < QUICK_EXIT_MAX_SCROLL && duration < QUICK_EXIT_MAX_DURATION_MS) {
-        eventType = 'quick_exit';
-      } else if (depth >= 0.7) {
-        if (duration >= expectedReadTimeMs * 0.6) {
-          eventType = 'read_thorough';
-        } else {
-          eventType = 'read_skim';
-        }
-      } else if (depth >= 0.4) {
-        eventType = 'read_shallow';
-      }
+      const duration = getActiveSessionDuration(stateRef.current, Date.now());
+      const depth = stateRef.current.maxDepth;
+      const wordCount = actualWordCount || stateRef.current.actualWordCount || undefined;
 
       queueBehaviorEvent(
         articleId,
-        eventType,
+        'read_session',
         articleCategory,
         lengthStyle,
         publicationName,
         duration,
         depth,
-        actualWordCount
+        wordCount,
+        recommendationContext
       );
       
       stateRef.current.concluded = true;
@@ -168,11 +208,12 @@ export function useBehaviorTracker({
         sessionSnapshotRef.current.concluded = true;
       }
     },
-    [enabled, articleId, articleCategory, lengthStyle, publicationName]
+    [enabled, articleId, articleCategory, lengthStyle, publicationName, recommendationContext]
   );
 
   return {
     trackScrollDepth,
+    trackActualWordCount,
     trackEvent,
     concludeSession,
     sessionStartTime: stateRef.current.startTime,

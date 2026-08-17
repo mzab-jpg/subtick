@@ -115,7 +115,7 @@ export default function ReaderScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'Reader'>>();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
-  const { articleId, queueArticleIds, startIndex, userWpm, mode, mockArticle } = route.params;
+  const { articleId, queueArticleIds, recommendationContexts: initialRecommendationContexts, startIndex, userWpm, mode, mockArticle } = route.params;
   const currentWpm = userWpm || 250;
   const isHistoryMode = mode === 'history';
   const isSavedMode = mode === 'saved';
@@ -139,10 +139,13 @@ export default function ReaderScreen() {
   } = useReaderHUD();
 
   const {
-    activeQueueIds, currentIndex, hasNext, hasPrev,
+    activeQueueIds, recommendationContexts, currentIndex, hasNext, hasPrev,
     queueExhausted, preloading, setQueueExhausted, goToNext, goToPrev,
   } = useNavigationQueue({
-    queueArticleIds: queueArticleIds || [], startIndex: startIndex ?? 0, isRestrictedMode,
+    queueArticleIds: queueArticleIds || [],
+    recommendationContexts: initialRecommendationContexts,
+    startIndex: startIndex ?? 0,
+    isRestrictedMode,
     loadArticle, setIsSaved, setIsLiked, serverSeenIds,
   });
 
@@ -168,6 +171,7 @@ export default function ReaderScreen() {
     articleCategory: article?.category || 'misc',
     lengthStyle: article?.lengthStyle || 'medium',
     publicationName: article?.publicationName,
+    recommendationContext: recommendationContexts[article?.id || articleId],
     enabled: !!article && !loading && !isRestrictedMode,
   });
 
@@ -207,6 +211,7 @@ export default function ReaderScreen() {
           }
         } else if (data.type === 'wordCount' && typeof data.count === 'number') {
           actualWordCountRef.current = data.count;
+          behaviorTracker.trackActualWordCount(data.count);
         } else if (data.type === 'hud') {
           setHudVisible(data.visible);
           if (data.visible) {
@@ -290,8 +295,7 @@ export default function ReaderScreen() {
 
           if (dx < -SWIPE_THRESHOLD) {
             if (!isRestrictedMode) {
-              const expectedReadTimeMs = article?.wordCount ? (article.wordCount / currentWpm) * 60000 : 60000;
-              behaviorTracker.concludeSession(expectedReadTimeMs, actualWordCountRef.current);
+              behaviorTracker.concludeSession(actualWordCountRef.current);
               if (article?.id) markArticleSeen(article.id, article);
             }
             goToNext();
@@ -309,13 +313,13 @@ export default function ReaderScreen() {
     [goToNext, goToPrev, behaviorTracker, panX, article, isRestrictedMode, isSavedMode, isHistoryMode, currentWpm]
   );
 
-  // --- Escape HTML helper ---
+  // --- Escape RSS-controlled metadata before HTML interpolation ---
   const escapeHtml = (str: string): string => {
     return str
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   };
 

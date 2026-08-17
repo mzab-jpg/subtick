@@ -260,10 +260,17 @@ export default function DashboardScreen() {
     if (index < 0 || index >= feedArticles.length) return;
 
     // Build the Reader queue from all feed articles EXCEPT the tapped one.
+    // Recommendation context stays with each ID so later reading actions can be
+    // attributed to this exact feed impression.
     const remainingArticles = feedArticles.filter(a => a.id !== articleId);
     const shuffledQueue = [...remainingArticles]
       .sort(() => Math.random() - 0.5)
       .map(a => a.id);
+    const recommendationContexts = Object.fromEntries(
+      feedArticles
+        .filter((article) => !!article.recommendationContext)
+        .map((article) => [article.id, article.recommendationContext!])
+    );
 
     // Mark the tapped article + all shuffled-queue articles as consumed so
     // they are filtered out on the next Dashboard focus (after Reader is
@@ -276,6 +283,7 @@ export default function DashboardScreen() {
     navigation.navigate('Reader', {
       articleId,
       queueArticleIds: shuffledQueue,
+      recommendationContexts,
       startIndex: 0,
       userWpm: effectiveProfile?.averageWpm || 250,
       mode: 'feed',
