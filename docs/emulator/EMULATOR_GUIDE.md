@@ -156,12 +156,11 @@ whatever is already in the running emulator session.
 | `scripts/start_matrix.bat` | Serves the UI tools on `localhost:3000` |
 | `scripts/start_emulators.bat` | Plain emulator start (no sync — legacy) |
 
-> **Legacy / obsolete tools** (do not use for testing the real algorithm):
-> - `scripts/simulator.html` — self-contained local approximation; does **not**
->   read the live config or talk to the backend. It now shows a red banner.
-> - `scripts/Depracated_liveBotSimulator.js` — old headless bot script; can't
->   run as-is from `scripts/` (no `package.json`) and no longer matches the
->   current 9-category config. New banner notes this at runtime.
+> **Legacy / obsolete tools** live in `archive/legacy-tools/` and are not part of
+> the current testing workflow. `archive/legacy-tools/local-simulator/` is a
+> self-contained local approximation that does **not** read live configuration or
+> contact the backend. `legacy-live-bot-simulator.js` is an old headless bot
+> script that no longer matches the current nine-category configuration.
 
 ---
 

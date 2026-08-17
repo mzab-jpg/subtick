@@ -6,7 +6,9 @@
  * bot user personas.
  *
  * Usage:
- *   node scripts/liveBotSimulator.js [options]
+ *   node archive/legacy-tools/legacy-live-bot-simulator.js [options]
+ *
+ * This script is archived and unsupported; see archive/legacy-tools/README.md.
  *
  * Options:
  *   --target=emulator|live  (Default: emulator)

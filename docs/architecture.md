@@ -42,6 +42,7 @@
 ```
 2SubTick/
 ├── index.ts                        # Expo entry point — calls registerRootComponent(App)
+├── README.md                       # Public project overview, setup, and validation commands
 ├── App.tsx                         # Root: init auth → ensureUserProfile → startOfflineManager → render;
 │                                   #   wraps in SafeAreaProvider → UserProvider → ErrorBoundary;
 │                                   #   lazy-requires GoogleSignin
@@ -55,6 +56,7 @@
 ├── AGENTS.md                       # Developer instruction file
 │
 ├── assets/                         # Static app icons and splash screens
+├── archive/legacy-tools/           # Preserved obsolete simulator tooling; not part of current workflow
 │
 ├── firebase/
 │   ├── feeds.json                  # 42 verified full-RSS Substack feed URLs with qualityScores

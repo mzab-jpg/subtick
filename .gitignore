@@ -44,6 +44,8 @@ yarn-error.*
 firebase/functions/lib/
 firebase/functions/node_modules/
 firebase-debug.log
+firebase/*.log
+
 
 # Environment files (may contain secrets)
 .env
