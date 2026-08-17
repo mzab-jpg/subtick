@@ -88,6 +88,14 @@ export interface BehaviorEvent {
   impressionId?: string;
 }
 
+export interface ReaderSessionSummary {
+  timestamp: number;
+  sessionDuration: number;
+  scrollDepth: number;
+  actualWordCount?: number;
+  articleCategory: string;
+}
+
 export type BehaviorEventType =
   | 'read_session' // Raw session telemetry; the backend assigns the final read outcome.
   | 'swipe_next'

@@ -5,7 +5,7 @@
 
 import { useRef, useCallback, useEffect } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { BehaviorEventType, RecommendationContext } from '../types';
+import { BehaviorEventType, ReaderSessionSummary, RecommendationContext } from '../types';
 import { queueBehaviorEvent } from '../services/behaviorSync';
 import {
   createActiveSessionClock,
@@ -27,7 +27,7 @@ interface UseBehaviorTrackerReturn {
   trackScrollDepth: (depth: number) => void;
   trackActualWordCount: (count: number) => void;
   trackEvent: (eventType: BehaviorEventType, extraScrollDepth?: number, actualWordCount?: number) => void;
-  concludeSession: (actualWordCount?: number) => void;
+  concludeSession: (actualWordCount?: number) => Promise<ReaderSessionSummary | null>;
   sessionStartTime: number;
 }
 
@@ -182,14 +182,16 @@ export function useBehaviorTracker({
   );
 
   const concludeSession = useCallback(
-    (actualWordCount?: number) => {
-      if (!enabled || stateRef.current.concluded) return;
+    async (actualWordCount?: number) => {
+      if (!enabled || stateRef.current.concluded) return null;
 
       const duration = getActiveSessionDuration(stateRef.current, Date.now());
       const depth = stateRef.current.maxDepth;
       const wordCount = actualWordCount || stateRef.current.actualWordCount || undefined;
 
-      queueBehaviorEvent(
+      // Await the local write so callers can immediately flush the exact
+      // concluded session before returning to Dashboard.
+      await queueBehaviorEvent(
         articleId,
         'read_session',
         articleCategory,
@@ -200,13 +202,20 @@ export function useBehaviorTracker({
         wordCount,
         recommendationContext
       );
-      
+
       stateRef.current.concluded = true;
       // B2 Fix: Also mark the shared sessionSnapshotRef so the effect cleanup
       // sees concluded=true and does not fire a redundant quick_exit event.
       if (sessionSnapshotRef.current && sessionSnapshotRef.current.articleId === articleId) {
         sessionSnapshotRef.current.concluded = true;
       }
+      return {
+        timestamp: Date.now(),
+        sessionDuration: duration,
+        scrollDepth: depth,
+        actualWordCount: wordCount,
+        articleCategory,
+      };
     },
     [enabled, articleId, articleCategory, lengthStyle, publicationName, recommendationContext]
   );

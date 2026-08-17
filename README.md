@@ -95,21 +95,6 @@ npm run test:session-timer
 npm run test:classification
 ```
 
-## Security and configuration
-
-- No private credentials belong in this repository.
-- `.env.example` documents safe public/client configuration inputs.
-- Local environment files, service-account credentials, signing files, generated
-  native folders, dependencies, and Firebase log files are ignored by Git.
-- Firebase client configuration is intentionally public app configuration; access
-  control is enforced by Firestore security rules and authenticated Cloud Functions.
-- Keep local service-account keys outside the repository directory and rotate them
-  if they are ever exposed.
-
 ## Notes for reviewers
 
-Tangent is intentionally opinionated about recommendation quality and operational
-safety. The codebase includes detailed documentation because the product combines
-mobile UX, recommendation logic, scheduled ingestion, analytics, and Firebase
-security rules. Current limitations and planned work are documented rather than
-hidden in [`docs/audit-backlog.md`](docs/audit-backlog.md).
+Current limitations and planned work are documented in [`docs/audit-backlog.md`](docs/audit-backlog.md).

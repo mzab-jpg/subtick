@@ -24,6 +24,7 @@ import { auth } from '../services/firebase';
 import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
+import { getCachedDashboardFeed, setCachedDashboardFeed } from '../services/dashboardFeedCache';
 
 const PRELOAD_THRESHOLD = 5;
 
@@ -41,10 +42,6 @@ export default function DashboardScreen() {
   // In-memory only — resets on Dashboard unmount; articles reappear freely in future sessions.
   const sessionShownIds = useRef<Set<string>>(new Set());
 
-  // Track article IDs consumed (tapped) while the Reader was open.
-  // These are filtered out on the next Dashboard focus (after Reader is dismissed)
-  // so the feed update happens in the background, invisible to the user.
-  const consumedIdsRef = useRef<Set<string>>(new Set());
 
   // UserContext owns the one live profile subscription for every screen.
   const effectiveProfile = contextProfile;
@@ -57,45 +54,26 @@ export default function DashboardScreen() {
     if (contextLoading) return;
 
     const unsubscribe = navigation.addListener('focus', () => {
-      // Filter out any articles that were consumed while the Reader was open.
-      // This happens invisibly in the background — the user never sees cards
-      // shifting before the Reader modal opens.
-      if (consumedIdsRef.current.size > 0) {
-        setFeedArticles(prev => {
-          const filtered = prev.filter(a => !consumedIdsRef.current.has(a.id));
-          if (filtered.length === 0 && prev.length > 0) {
-            loadData(true);
-            // Keep stale articles visible while the background reload fetches.
-            return prev;
-          }
-          return filtered;
-        });
-        consumedIdsRef.current = new Set();
-      }
-
-      // Use the live profile's server-side seen IDs to avoid a redundant
-      // Firestore getDoc inside getSeenArticleIdsLocally().
-      const serverSeenIds = effectiveProfile?.seenArticleIds;
-      getSeenArticleIdsLocally(serverSeenIds).then(seenIds => {
-        if (seenIds.length > 0) {
-          setFeedArticles(prev => {
-            const filtered = prev.filter(a => !seenIds.includes(a.id));
-            if (filtered.length === 0 && prev.length > 0) {
-              loadData(true);
-              // Keep stale articles visible while the background reload fetches.
-              return prev;
-            }
-            return filtered;
-          });
-        }
-      }).catch(() => {});
+      // Keep the visible cards stable when Reader closes. An opened article is
+      // recorded in History, but it is excluded only when the user explicitly
+      // asks for another feed (Shuffle/Discover) or a fresh Dashboard session
+      // begins. Silently filtering it here caused the hero/row cards to change
+      // without the user pressing Shuffle.
 
       // Flush behavior events in background. UserContext receives resulting
       // profile changes through its one shared real-time listener.
       flushBehaviorQueue().catch(() => {});
     });
 
-    loadData(false);
+    const userId = auth.currentUser?.uid;
+    const cached = userId ? getCachedDashboardFeed(userId) : null;
+    if (cached?.articles.length) {
+      sessionShownIds.current = new Set(cached.shownIds);
+      setFeedArticles(cached.articles);
+      setLoading(false);
+    } else {
+      loadData(false);
+    }
     return unsubscribe;
   }, [navigation, contextLoading]);
 
@@ -139,11 +117,33 @@ export default function DashboardScreen() {
       const result = await getRankedFeed(allExcluded);
       const articles = result.articles.slice(0, MAX_FEED_ARTICLES);
       setFeedArticles(articles);
+      if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, articles, sessionShownIds.current);
       setFeedError(null);
     } catch (error) {
       console.error('[Dashboard] loadFeedArticles error:', error);
       setFeedArticles([]);
       setFeedError('Could not fetch articles. Check your connection and try again.');
+    }
+  };
+
+  const appendFeedArticles = async (profile: UserProfile | null, existingIds: string[]) => {
+    try {
+      const serverSeenIds = profile?.seenArticleIds;
+      const seenIds = await getSeenArticleIdsLocally(serverSeenIds);
+      const excludedIds = Array.from(new Set([...seenIds, ...sessionShownIds.current, ...existingIds]));
+      const result = await getRankedFeed(excludedIds);
+      const additions = result.articles.filter((article) => !excludedIds.includes(article.id));
+      if (additions.length === 0) return;
+
+      setFeedArticles((previous) => {
+        const currentIds = new Set(previous.map((article) => article.id));
+        const merged = [...previous, ...additions.filter((article) => !currentIds.has(article.id))];
+        if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, merged, sessionShownIds.current);
+        return merged;
+      });
+    } catch (error) {
+      // Replenishment is optional. Keep the visible cards intact if it fails.
+      console.warn('[Dashboard] appendFeedArticles failed:', error);
     }
   };
 
@@ -169,14 +169,15 @@ export default function DashboardScreen() {
 
 
   const handleShuffle = () => {
-    setFeedArticles(prev => {
-      prev.slice(0, 3).forEach(a => sessionShownIds.current.add(a.id));
-      const next = prev.slice(3);
-      if (next.length <= PRELOAD_THRESHOLD) {
-        loadFeedArticles(effectiveProfile).catch(() => {});
-      }
-      return next;
-    });
+    const shown = feedArticles.slice(0, 3);
+    const next = feedArticles.slice(3);
+    shown.forEach((article) => sessionShownIds.current.add(article.id));
+    setFeedArticles(next);
+    if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, next, sessionShownIds.current);
+    if (next.length <= PRELOAD_THRESHOLD) {
+      // Replenish behind the remaining cards; never replace them.
+      void appendFeedArticles(effectiveProfile, next.map((article) => article.id));
+    }
   };
 
   const handleSurpriseMe = () => {
@@ -208,9 +209,8 @@ export default function DashboardScreen() {
     // they are filtered out on the next Dashboard focus (after Reader is
     // dismissed). We do NOT call setFeedArticles here — that would cause a
     // visible re-render while the Reader modal is sliding up.
-    consumedIdsRef.current = new Set([articleId, ...shuffledQueue]);
     sessionShownIds.current.add(articleId);
-    shuffledQueue.forEach(id => sessionShownIds.current.add(id));
+    if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, feedArticles, sessionShownIds.current);
 
     navigation.navigate('Reader', {
       articleId,

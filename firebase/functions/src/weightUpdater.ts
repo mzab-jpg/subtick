@@ -228,41 +228,20 @@ export async function updateWeights(userId: string, clientId?: string, providedC
       readTimeUpdated = true;
     }
 
-    // A finished article is a server-classified deep read. Keep the WPM and
-    // completion gates aligned with the active dashboard classification rule.
-    if ((event.eventType === 'read_thorough' || event.eventType === 'read_skim') && event.scrollDepth >= cfg.classification.thoroughDepth && event.sessionDuration > 10000) {
+    // Completion remains tied to the server's read classification.
+    if (event.eventType === 'read_thorough' || event.eventType === 'read_skim') {
       newTotalArticlesFinished++;
       articlesFinishedUpdated = true;
+    }
 
-      // We use the exact word count extracted from the live WebView, falling back to DB only if missing
-      let wordCount = event.actualWordCount;
-
-      if (!wordCount || wordCount <= 0) {
-        try {
-          const articleDoc = await db.collection('articles').doc(event.articleId).get();
-          if (articleDoc.exists) {
-            const articleData = articleDoc.data();
-            // Discard WPM calculation if the RSS feed was truncated, as the db word count is false
-            if (!articleData?.isTruncatedFeed) {
-              wordCount = articleData?.wordCount;
-            }
-          }
-        } catch (e) {
-          console.warn('[weightUpdater] Failed to fetch article for WPM calculation', e);
-        }
-      }
-
-      if (wordCount && wordCount > 0) {
-        const minutesSpent = event.sessionDuration / 60000;
-        const sessionWpm = wordCount / minutesSpent;
-        
-        // Strict bounds check: Discard artifacts of speed skimming or left-open phones
-        if (sessionWpm >= 150 && sessionWpm <= 750) {
-          // Rolling average: 80% old, 20% new
-          newAverageWpm = Math.round((newAverageWpm * 0.8) + (sessionWpm * 0.2));
-          wpmUpdated = true;
-        }
-      }
+    // WPM is deliberately independent of reading classification: words divided
+    // by active foreground time. The client sends the rendered count when it has
+    // one and otherwise supplies the stored article count at Reader exit.
+    const wordCount = event.actualWordCount;
+    if (wordCount && wordCount > 0 && event.sessionDuration > 0) {
+      const sessionWpm = wordCount / (event.sessionDuration / 60_000);
+      newAverageWpm = Math.round((newAverageWpm * 0.8) + (sessionWpm * 0.2));
+      wpmUpdated = true;
     }
   }
 

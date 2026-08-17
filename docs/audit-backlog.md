@@ -25,6 +25,34 @@ The following audit items are no longer deferred:
 
 The remaining M8 entry below concerns only product copy and later tutorial design.
 
+### 17 August 2026 — Universal Reader exit, stable cards, provisional stats, and category-style metric selection batch
+
+- **History now covers every ordinary exit:** Reader owns one guarded finish route shared by the close button, Android/system back action, and queue-exhausted return. It prevents a duplicate session, writes History once, then navigates. Saved/history/sandbox browsing remains excluded.
+- **Dashboard cards survive a remount:** The active feed and shown IDs are now held in a UID-scoped memory cache. If Dashboard is recreated while the app remains on the same account, it restores the same cards instead of making a replacement feed call. The cache is cleared for sign-out, reset, and deletion. Shuffle, Discover, retry, and a new account/session remain deliberate replacement paths.
+- **Immediate local stat display with server correction:** The phone applies immediate display estimates after Reader exit. WPM is deliberately simple—positive article words divided by active foreground time—while completion/weekly-read metrics remain subject to server classification. Cloud Functions persist the final values and the next profile update replaces any local estimate, including after an offline delay.
+- **Metric selection now matches category preferences:** Dashboard Stats uses full-row state changes plus explicit “Shown on Dashboard” / “Not shown” labels, rather than a detached tick box. It remains a maximum-three multi-select control, so it is visually related to but not identical to the category preference control.
+- **Settings flash investigation:** The redundant focus-time profile refresh was removed. A zero-duration transition experiment was reverted because it worsened the visible Android flash; any remaining device flash needs focused loading-state investigation rather than another speculative transition change.
+- **Shuffle replenishment preserves remaining cards:** When the card queue becomes short, Tangent appends unseen articles after the remaining cards. It does not use the background request to replace those cards.
+
+### 17 August 2026 — Account-transition, immediate-stat, and toggle-consistency batch
+
+- **Account changes no longer expose stale screens:** Sign out, reset, and deletion now begin an app-wide transition screen, clear old profile/stat state, then the root app remounts navigation directly to onboarding once the fresh/reset account is ready. AccountScreen no longer races a stale manual profile refresh after those operations.
+- **Stats update without an avoidable queue delay:** Closing a live-feed Reader now waits for its raw session to be saved locally, immediately attempts the normal authenticated backend sync, and only then returns to Dashboard. The backend remains the source of truth for whether a session qualifies, so Tangent does not invent a finished-read count while offline or before classification.
+- **Consistent binary control:** Archived Articles now uses the reusable accessible `TangentToggle`, with the same controlled colours and short native animated thumb movement in every theme. It disables while its preference write is in progress and restores the previous visual value if saving fails.
+
+### 17 August 2026 — Reader close, stable Dashboard cards, and archive-preference batch
+
+- **Stable Dashboard return:** Opening Reader no longer treats its entire shuffled queue as consumed. Returning without using Shuffle/Discover leaves the visible hero and row cards in place; only the article actually opened is excluded from a later explicitly requested feed.
+- **History on close:** Closing a live-feed article now concludes its reading session and waits for its local History/seen metadata to be written before dismissing Reader. Browsing History, Saved Reads, and sandbox content remains excluded from this path.
+- **Archived Articles respected at display time:** If extraction of an otherwise current RSS article fails, Tangent records the device-local RSS failure. It loads a raw in-app publication webpage only when Archived Articles is enabled; otherwise it shows the existing recoverable error with browser escape.
+- **Scroll-depth rule confirmed:** Tangent intentionally retains maximum depth reached for read classification. Scrolling back upward does not erase that reading evidence; CSS theme updates use injected JavaScript, not a WebView reload.
+
+### 17 August 2026 — Highest-ranked opening-card batch
+
+- **Startup-card ranking:** Tangent now reserves the highest-scoring eligible article in its original High, Mid, or Tail tranche allocation and returns it as position 0 for the Dashboard hero. This gives the opening screen a strong personalised first impression without removing the deliberately mixed discovery allocation.
+- **Variety remains intentional:** The remaining cards continue through the existing random/tranche-balanced and category-aware ordering. Publisher caps, category caps, minimum-category variety, Tail discovery, and the no-avoidable-third-same-category rule remain in place. The reserved opening article is protected from later category-variety replacement.
+- **Regression coverage:** The backend regression script now verifies the opening anchor for High-only, Mid-only, and Tail-only candidate situations, alongside existing size, uniqueness, category-cap, and diversity checks.
+
 ---
 
 

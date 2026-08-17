@@ -318,6 +318,8 @@ export async function deleteAccount(): Promise<void> {
   await clearAllLocalData();
   // Sign out (clear auth state)
   await signOut(auth);
-  // Re-sign in anonymously (so the app still works)
-  await signInAnonymouslyIfNeeded();
+  // Re-sign in anonymously (so the app still works) and create the profile
+  // before navigation is allowed to render the new account.
+  const newUser = await signInAnonymouslyIfNeeded();
+  await ensureUserProfile(newUser);
 }

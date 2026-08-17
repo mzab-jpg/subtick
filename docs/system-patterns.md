@@ -1,6 +1,6 @@
 ﻿# Tangent — System Patterns
 
-> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
+> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -12,17 +12,17 @@
 |---|---|---|---|
 | Theme (light/dark/system) + computed color palette | `ThemeContext.tsx: ThemeProvider` | All screens via `useTheme()` | `AsyncStorage[@subtick_theme_preference]` + Firestore `users/{uid}.themePreference` |
 | Pre-compiled WebView CSS string | `ThemeContext.tsx: webViewCSS` computed in `useMemo` | `ReaderScreen.tsx` (initial load only — updates pushed via `injectJavaScript`) | Recomputed on theme change, never persisted |
-| User profile (UserProfile \| null) + rolling weekly read count | `UserContext.tsx: UserProvider` → `useUser()` | Dashboard, SettingsScreen, AccountScreen, DashboardStatsScreen, CategoryPreferencesScreen, ReaderScreen | One authenticated Firestore profile listener; a separate owner-scoped seven-day behavior-event listener supplies the live weekly count. `refreshProfile()` remains available for explicit recovery. |
+| User profile (UserProfile \| null) + rolling weekly read count | `UserContext.tsx: UserProvider` → `useUser()` | Dashboard, SettingsScreen, AccountScreen, DashboardStatsScreen, CategoryPreferencesScreen, ReaderScreen | One authenticated Firestore profile listener; a separate owner-scoped seven-day behavior-event listener supplies the live weekly count. Every auth change clears the preceding profile/count before attaching new listeners. `refreshProfile()` remains available for explicit recovery. |
 | Safe area insets (top/bottom) | Manual constants `src/utils/safeArea.ts` | All 11 screens via `topInset` / `bottomInset` (avoids `react-native-safe-area-context` Fabric crash on RN 0.86) | Hardcoded per-platform values |
 
 ### Local Component State
-- `DashboardScreen.tsx`: `feedArticles: Article[]`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Receives the shared live profile and rolling weekly count from `useUser()`; it has no separate profile listener. Focus listener only refetches when feed depleted (A5). Reader queue shuffled on tap (A5). Uses `topInset` for header padding.
-- `ReaderScreen.tsx` (orchestrator): Delegates state to feature hooks — `useArticleLoader` (article, resolvedHtml, fetchError, loading), `useNavigationQueue` (currentIndex, activeQueueIds, goToNext/Prev), `useReaderHUD` (hudVisible, isLiked, isSaved). Prefetches at most four upcoming items sequentially, immediate-next first, and cancels stale work. Retains own `scrollProgress` state and PanResponder refs. Uses `topInset` for HUD, `bottomInset` for progress bar.
+- `DashboardScreen.tsx`: `feedArticles: Article[]`, `loading: boolean`, `sessionShownIds: Set<string>` (in-memory, resets on unmount). Receives the shared live profile and rolling weekly count from `useUser()`; it has no separate profile listener. Its active cards and shown IDs are mirrored into a UID-scoped memory cache, so a remount restores the same feed instead of fetching replacements. On Reader return it deliberately leaves visible cards unchanged; only the opened ID is excluded from a later explicit Shuffle/Discover feed request. Reader queue is shuffled on tap (A5). Uses `topInset` for header padding.
+- `ReaderScreen.tsx` (orchestrator): Delegates state to feature hooks — `useArticleLoader` (article, resolvedHtml, fetchError, loading), `useNavigationQueue` (currentIndex, activeQueueIds, goToNext/Prev), `useReaderHUD` (hudVisible, isLiked, isSaved). Prefetches at most four upcoming items sequentially, immediate-next first, and cancels stale work. Its guarded finish path intercepts all normal removals (HUD close, Android/system back, queue-exhausted return), writes History once, queues/syncs the session, and supplies a provisional local stat summary. Retains own `scrollProgress` state and PanResponder refs. Uses `topInset` for HUD, `bottomInset` for progress bar.
 - `OnboardingScreen.tsx`: `chipStates: Record<string, ChipState>` remains local until Continue/Skip. It writes onboarding completion directly, disables duplicate taps while saving, and only navigates after the write succeeds. Uses shared `CategoryChipGrid`.
-- `SettingsScreen.tsx`: Profile from `useUser()`. Refreshes on focus. Optimistically updates on changes.
-- `AccountScreen.tsx`: Profile from `useUser()`. Covers Google link/unlink, sign out, reset, delete.
+- `SettingsScreen.tsx`: Profile from `useUser()` and no longer forces a focus-time profile refresh. Its Archived Articles preference uses the reusable `TangentToggle`: local value moves immediately, control disables during the Firestore write, and it restores the prior value on failure.
+- `AccountScreen.tsx`: Profile from `useUser()`. Covers Google link/unlink, sign out, reset, delete. The latter three use the application-level account-transition coordinator; root navigation remounts at Onboarding after the fresh/reset profile is ready.
 - `CategoryPreferencesScreen.tsx`: `selectedIds`, `notInterestedIds` derived from profile via `useUser()`. Auto-saves on tap via `updateCategoryWeights()` + `refreshProfile()`.
-- `DashboardStatsScreen.tsx`: `selectedMetricIds` from profile via `useUser()`. Optimistic toggle + `setDoc` merge.
+- `DashboardStatsScreen.tsx`: `selectedMetricIds` from profile via `useUser()`. Optimistic toggle + `setDoc` merge. It deliberately follows CategoryChipGrid's whole-row state language—selected/full-row inversion and an explicit state label—while retaining its distinct maximum-three multi-select behaviour.
 - `HistoryScreen.tsx` / `SavedReadsScreen.tsx`: 24-line wrappers — delegate all state to `ArticleListScreen`.
 - `FeedbackScreen.tsx` / `FeedRequestScreen.tsx`: Thin wrappers — delegate shell (header, subtitle, submit button, spinner) to shared `FormScreen` component.
 
@@ -173,7 +173,7 @@ swipe_not_interested: -0.010 / quick_exit: -0.005
 
 Diversity is not a scoring component. A hard per-publisher cap of **5 articles** is enforced during selection in `assembleFeedWithTranches()`. A configurable `maxArticlesPerCategory` limit is also applied during selection. Both limits relax only when the remaining eligible candidate pool cannot otherwise fill the requested feed.
 
-After normal selection, the backend attempts to meet configurable `minDistinctCategories`: it replaces the weakest removable article from an overrepresented category with the strongest unseen candidate from a missing category, provided that candidate respects the publisher cap. After selection, the final randomized feed is passed through `interleaveArticlesByCategory()`. It will not place a third consecutive card from the same category if any other category remains. These safeguards change membership/display order only: scoring formulas, tranches, and publisher-cap rules remain intact.
+After normal selection, the backend attempts to meet configurable `minDistinctCategories`: it replaces the weakest removable article from an overrepresented category with the strongest unseen candidate from a missing category, provided that candidate respects the publisher cap. The reserved startup anchor is never replaced. After selection, the remaining feed is passed through `interleaveArticlesByCategory()`. It will not place a third consecutive card from the same category if any other category remains. The reserved highest-scoring article is then moved to position 0; all other cards retain their category-varied order. These safeguards change membership/display order only: scoring formulas, tranches, and publisher-cap rules remain intact.
 
 ### 2g. Scoring Formulas by Tranche
 
@@ -195,11 +195,11 @@ Articles are scored with the 4-component `fullScore` and then bucketed:
 
 | Tranche | fullScore threshold | Target | Selection |
 |---|---|---|---|
-| High | > 0.40 | 12 | Random shuffle, max 5 per publisher |
-| Mid | > 0.20 | 8 | Random shuffle, max 5 per publisher |
-| Tail | ≤ 0.20 | 10 | Sorted by tailScore (T+R), max 5 per publisher; randomized for users with <30 reads |
+| High | > 0.40 | 12 | Random selection after any global startup anchor is reserved, max 5 per publisher |
+| Mid | > 0.20 | 8 | Random selection after any global startup anchor is reserved, max 5 per publisher |
+| Tail | ≤ 0.20 | 10 | Sorted by tailScore (T+R) after any global startup anchor is reserved, max 5 per publisher; randomized for users with <30 reads |
 
-Overflow cascades down. Final feed of 30 shuffled before return. Bucketing is by the full 4-component score, not P alone.
+Overflow cascades down. The highest eligible article, whether it falls in High, Mid, or Tail, is reserved in its normal tranche allocation and returned at position 0 for the Dashboard hero; the other selected cards retain their randomized/category-varied order. Bucketing is by the full 4-component score, not P alone.
 
 ### 2i. Deferred Personalization Designs
 
@@ -262,15 +262,14 @@ A single `quick_exit` remains neutral for personal preference learning. The back
 
 ### 3g. WPM Calibration and Read-Time Estimates
 
-New user profiles begin at `averageWpm = 200`. For a qualifying server-classified `read_thorough` or `read_skim` event, the updater requires scroll depth at least `classification.thoroughDepth`, duration over 10 seconds, and a word count. It uses the live rendered count first; only if that is missing does it use the stored article count, and it refuses that fallback for `isTruncatedFeed` articles.
+New user profiles begin at `averageWpm = 200`. On every Reader exit with positive word count and positive active foreground time, the app uses the live WebView word count when available and otherwise the stored article count.
 
 ```text
 sessionWpm = wordCount / (sessionDurationMs / 60,000)
-accept only 150 <= sessionWpm <= 750
 newAverageWpm = round(oldAverageWpm × 0.80 + sessionWpm × 0.20)
 ```
 
-`averageWpm` drives the live Dashboard and Reader `min read` estimate: `max(1, ceil(wordCount / averageWpm))`. Stored article `estimatedReadMinutes` remains a separate ingestion-time generic estimate using fixed 250 WPM, primarily retained in saved/history metadata.
+WPM is independent of scroll depth and server read classification. `averageWpm` drives the live Dashboard and Reader `min read` estimate: `max(1, ceil(wordCount / averageWpm))`. Stored article `estimatedReadMinutes` remains a separate ingestion-time generic estimate using fixed 250 WPM, primarily retained in saved/history metadata.
 
 ### 3h. UI Sync Thresholds
 
@@ -345,7 +344,7 @@ Legacy client read-family labels are also reclassified during rollout. Right-swi
 | Operation | Timeout | Failure |
 |---|---|---|
 | `fetch(feedUrl)` | 15s (AbortController) | Throws; `feedSessionCache.delete(feedUrl)` for retry |
-| Article not found in feed | — | `markRssFailed(id)` in AsyncStorage; renders as archived |
+| Article not found in feed | — | `markRssFailed(id)` in AsyncStorage. With Archived Articles on, Reader may use the publication webpage; off, it shows the recoverable error/browser path instead. |
 | HTML sanitization | — | Only the matched article (C6 — lazy sanitize) |
 
 ### getRankedFeed Cloud Function
@@ -369,6 +368,7 @@ Legacy client read-family labels are also reclassified during rollout. Right-swi
 | Concurrent flush | `isSyncing` guard prevents double-flush |
 | Queue overflow | 500 cap; oldest events dropped |
 | Server input cap | 100 events max per call; malformed telemetry is rejected before persistence |
+| Normal Reader exit | HUD close, Android/system back, and queue-exhausted return share a guarded path: await local raw-session queue write, write History, apply provisional default-rule metrics, then immediately attempt normal authenticated flush. The next profile update replaces the estimate with authoritative backend classification. |
 | Synced events cleanup | Pruned after 5 min if `synced: true` |
 | Concurrent queue + flush | Both use `enqueueStorageOperation` mutex; network outside mutex (B6) |
 
@@ -433,7 +433,7 @@ Three mechanisms: keyword match (24 phrases), CSS class patterns, script pattern
 ```typescript
 const isTruncatedFeed = bodyHtml.length > 0 && (description.length / bodyHtml.length) > 0.9;
 ```
-Used in `weightUpdater.ts` to skip WPM calibration for truncated feeds. Removing this guard corrupts `averageWpm`.
+Retained as article-ingestion metadata. WPM calibration now uses the Reader's live rendered word count when available and otherwise the stored count by product decision; it is no longer skipped solely because this flag is set.
 
 ### Article ID Generation — `generateArticleId()` (`rssCollector.ts`)
 ```typescript

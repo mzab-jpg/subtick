@@ -1,6 +1,6 @@
 ﻿# Tangent — Progress & Status
 
-> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
+> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
 > All status claims are based on reading the actual code.
 
 ---
@@ -32,7 +32,7 @@
 - ✅ **peakTrendingScore tracking** — All-time high, never decays, same batch as trendingScore update
 - ✅ **Like/Unlike and Save/Unsave toggle** — Negative increments + per-user per-article dedup
 - ✅ **Normalized 4-component ranked feed** — All components [0,1]; two formulas (fullScore + tailScore). Diversity enforced by hard per-publisher cap of 5 during assembly.
-- ✅ **Tranche-based feed assembly** — 3 buckets: High/Mid random, Tail sorted by T+R; configurable category maximum/minimum-distinct safeguards apply when eligible alternatives exist; final category-aware interleave avoids a third same-category card whenever an alternative remains.
+- ✅ **Tranche-based feed assembly** — 3 buckets: the highest-scoring eligible article is reserved within its normal High/Mid/Tail allocation and placed first as the opening Dashboard card; remaining High/Mid slots are random, and Tail is sorted by T+R for established users; configurable category maximum/minimum-distinct safeguards apply when eligible alternatives exist; final category-aware interleave avoids a third same-category card whenever an alternative remains.
 - ✅ **Dynamic publisher quality** — `publishers` collection, 10-min TTL cache (C5), atomic increments
 - ✅ **Archive-safe feed retrieval** — The archived-article preference is honored by the normal candidate pool, backend on-the-fly fallback and cache, final server filter, and phone-side Functions-outage fallback; current-only client fallback uses the `isPaywalled + rssStatus + publishDate` index
 - ✅ **Idempotent event sync** — `event.id` as Firestore doc ID
@@ -46,17 +46,18 @@
 - ✅ **Background pause protection** — React Native `AppState` excludes `inactive`/`background` intervals from normal, explicit-action, and cleanup session durations, preventing interruption time from corrupting WPM or reading-time statistics.
 - ✅ **AsyncStorage behavior queue** — 500-item cap, mutex-serialized (via shared `asyncStorageMutex`) (B6)
 - ✅ **Flush race condition fixed** — Same mutex for read/write; network outside mutex (B6)
-- ✅ **Offline sync with retry** — `offlineManager.ts`, 30s cooldown
+- ✅ **Offline sync with retry** — `offlineManager.ts`, 30s cooldown. Normal Reader close awaits local session queueing and immediately attempts the existing authenticated flush, so server-authoritative stats update without an avoidable queue delay; offline sessions remain queued honestly until reconnect.
 - ✅ **Watermark-based weight update** — `weightUpdatedAt` prevents replay; separate `weightsDecayedAt` applies the configured daily decay for every full elapsed day across category, length, and publisher preferences.
 - ✅ **Repeated quick-exit learning** — A single quick exit remains neutral. Distinct quick exits in one category accumulate only within the configurable time window; meeting the configurable threshold applies the existing `feedback.quick_exit` value once to that category only. Positive reads/Likes/Saves clear pending evidence.
 - ✅ **Publisher cold-start balance** — No stored interaction for a publisher uses configurable 90% category / 10% publisher personalization; any stored publisher weight uses normal 60% / 40% weighting. A known negative publisher remains known and is not treated as unknown.
-- ✅ **WPM calibration** — Starts at 200; qualifying deep reads use rendered words first, safe stored-count fallback second, accept only 150–750 WPM, and update with an 80% old / 20% new rolling average. Stored-count fallback is skipped for truncated feeds.
+- ✅ **WPM calibration** — Starts at 200. Every Reader exit supplies the rendered word count when available, otherwise the article's stored word count; WPM is simply positive words divided by active foreground time and updates with an 80% old / 20% new rolling average, independent of read classification.
 - ✅ **Reading streak & weekly count** — `updateReadStats()` persists read/streak statistics; `UserContext` calculates the displayed weekly count from each user's actual rolling seven-day qualifying events so inactive users' old reads age out correctly.
+- ✅ **Immediate provisional stats** — On normal Reader exit, the phone applies a default-rule estimate for Finished, Weekly Reads, Hours Read, Streak, and eligible WPM before Dashboard returns. The next server profile update replaces that display estimate with backend classification under the live configuration; offline sessions remain provisional until reconnect.
 
 ### Reader Experience
 - ✅ **Live RSS article fetching** — `fetchAndExtractArticle()` with 15s timeout + Promise-level session cache
-- ✅ **Two-mode rendering** — Clean (sanitized HTML) vs Raw (archived URL). Automatic based on `rssStatus`
-- ✅ **RSS failure persistence** — AsyncStorage flag; future loads skip immediately
+- ✅ **Two-mode rendering** — Clean (sanitized HTML) vs Raw (archived URL). Raw publication pages are used only for explicitly archived content or when the user enables Archived Articles.
+- ✅ **RSS failure preference safety** — AsyncStorage flag prevents repeated failed extraction; with Archived Articles off, a failed current-RSS article shows a recoverable Reader error/browser escape rather than silently switching to a raw in-app webpage.
 - ✅ **HTML injection prevention** — `escapeHtml()` on title, publicationName, author (S1)
 - ✅ **Theme changes no reload** — CSS injected via `injectJavaScript()` (B9)
 - ✅ **Real-time preloader** — Triggers at 5 remaining; non-blocking behavior-event flush
@@ -75,19 +76,22 @@
 - ✅ **User profile bootstrap** — `ensureUserProfile()` creates default profile with neutral weights
 - ✅ **Onboarding flow** — 3-state chip grid (uses shared `CategoryChipGrid`). Users may select interests, mark dislikes, or skip for a broad first feed. Onboarding saves directly before navigation, shows a saving state, and remains available with a retry message if saving fails.
 - ✅ **`isOnboarded` gate** — Dashboard redirects to Onboarding only when the centrally subscribed profile is not complete.
+- ✅ **Live-feed Reader exits enter History** — HUD close, Android/system back, and the queue-exhausted return all share one guarded finish path that concludes the session and writes local History metadata before dismissal; history/saved/mock modes remain excluded.
+- ✅ **Account transition stability** — Sign out, reset, and deletion show a blocking preparation screen, clear old profile/weekly-stat state, and remount root navigation at Onboarding. Reset receives the same remount even though its UID does not change.
 - ✅ **Sign-out preserves stability** — Clears AsyncStorage → new anonymous session → fresh profile
 
 ### Screens & Navigation
-- ✅ **Dashboard** — Hero+row layout, stats pill, focus refetch guard (A5), queue shuffle (A5); receives one shared real-time profile source from `UserContext`.
-- ✅ **Settings** — ScrollView, __DEV__ gate for Developer Options, sections: Account / Library / Preferences / Support
+- ✅ **Dashboard** — Hero+row layout, stats pill, focus refetch guard (A5), queue shuffle (A5); receives one shared real-time profile source from `UserContext`. The current feed is cached per UID in memory so a Dashboard remount restores the same visible cards. When Shuffle leaves ≤5 cards, Tangent appends unseen replenishment behind those remaining cards rather than replacing them. Only an explicit Shuffle/Discover request, retry, or a new account/session changes the visible feed.
+- ✅ **Settings** — ScrollView, __DEV__ gate for Developer Options, sections: Account / Library / Preferences / Support. It no longer forces a redundant focus-time profile read. Navigation presentation remains the established modal/card mix; the remaining brief device transition flash needs focused loading-state investigation.
 - ✅ **History screen** — 24-line wrapper over `ArticleListScreen` + `getSeenArticleMetas(30)`
 - ✅ **Saved Reads screen** — 24-line wrapper over `ArticleListScreen` + `getSavedArticleMetas`
 - ✅ **CategoryPreferences** — Uses `CategoryChipGrid` + `useUser()`; auto-saves on tap
-- ✅ **DashboardStats** — Select ≤3 stats for dashboard pill; uses `useUser()`
+- ✅ **DashboardStats** — Select ≤3 stats for dashboard pill; uses `useUser()`. Uses the same whole-row state language as category preferences: selected rows invert the full row and say “Shown on Dashboard”; unselected rows say “Not shown” rather than using a separate checkbox.
 - ✅ **AccountScreen** — Google link/unlink, sign out, reset, delete; uses `useUser()`
 - ✅ **FeedbackScreen** — Thin wrapper over shared `FormScreen`; submit to Firestore `feedback`
 - ✅ **FeedRequestScreen** — Thin wrapper over shared `FormScreen`; submit to Firestore `feed_requests`
 - ✅ **Theme system** — Light/dark/system; pre-compiled WebView CSS; AsyncStorage + Firestore dual persistence
+- ✅ **Animated binary preference control** — Shared built-in-Animated `TangentToggle` now powers Archived Articles, with controlled theme colours, accessibility switch state, save-disable protection, and rollback on save failure.
 - ✅ **All 11 screens use safe area insets** — Manual `topInset` / `bottomInset` from `src/utils/safeArea.ts` (avoids `react-native-safe-area-context` Fabric crash on RN 0.86)
 
 ### Category Reorganisation

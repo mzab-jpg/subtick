@@ -4,9 +4,47 @@
 
 import React from 'react';
 import { Flame, CalendarDays, Clock, Gauge, BookCheck, BookHeart, BarChart3 } from 'lucide-react-native';
-import { BehaviorEvent, UserProfile } from '../types';
+import { BehaviorEvent, ReaderSessionSummary, UserProfile } from '../types';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type LocalReadOutcome = 'quick_exit' | 'read_shallow' | 'read_skim' | 'read_thorough' | 'swipe_next';
+
+/** WPM is simply words read divided by active foreground reading time. */
+export function calculateWpm(wordCount: number | undefined, sessionDurationMs: number): number | null {
+  if (!wordCount || wordCount <= 0 || sessionDurationMs <= 0) return null;
+  return wordCount / (sessionDurationMs / 60_000);
+}
+
+/**
+ * Immediate display estimate using Tangent's shipped default classification rules.
+ * Cloud Functions reclassify with the live server config before persisting anything.
+ */
+export function classifyLocalRead(summary: ReaderSessionSummary, averageWpm: number): LocalReadOutcome {
+  if (summary.scrollDepth < 0.20 && summary.sessionDuration < 15_000) return 'quick_exit';
+  if (summary.scrollDepth >= 0.70) {
+    const expectedMs = summary.actualWordCount && summary.actualWordCount > 0
+      ? (summary.actualWordCount / Math.max(50, averageWpm || 200)) * 60_000
+      : 0;
+    return expectedMs <= 0 || summary.sessionDuration >= expectedMs * 0.60
+      ? 'read_thorough'
+      : 'read_skim';
+  }
+  if (summary.scrollDepth >= 0.40) return 'read_shallow';
+  return 'swipe_next';
+}
+
+export function isQualifyingRead(outcome: LocalReadOutcome): boolean {
+  return outcome === 'read_thorough' || outcome === 'read_skim';
+}
+
+export function estimateNextStreak(lastReadDate: number, currentStreakDays: number, now: number): number {
+  const today = new Date(now).toDateString();
+  const last = new Date(lastReadDate || 0).toDateString();
+  if (last === today) return currentStreakDays || 1;
+  const yesterday = new Date(now - 24 * 60 * 60 * 1000).toDateString();
+  return last === yesterday ? Math.max(1, currentStreakDays + 1) : 1;
+}
 
 /**
  * Counts the only event types Tangent presents as completed reads in the

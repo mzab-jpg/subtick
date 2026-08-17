@@ -10,7 +10,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Switch,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
@@ -23,6 +22,7 @@ import { auth, db } from '../services/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useUser } from '../contexts/UserContext';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { TangentToggle } from '../components/TangentToggle';
 import {
   TEXT_XS,
   TEXT_SM,
@@ -60,14 +60,12 @@ export default function SettingsScreen() {
   const { colors, mode, setThemeMode } = useTheme();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { profile, loading, refreshProfile } = useUser();
+  const [archivedEnabled, setArchivedEnabled] = useState(false);
+  const [savingArchivedPreference, setSavingArchivedPreference] = useState(false);
 
-  // Re-load profile when returning from a sub-screen so counts update
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      if (!loading && profile) refreshProfile();
-    });
-    return unsubscribe;
-  }, [navigation, loading, profile, refreshProfile]);
+    setArchivedEnabled(profile?.includeArchivedArticles === true);
+  }, [profile?.includeArchivedArticles]);
 
   // --- Theme Selection ---
   const handleThemeChange = (newMode: ThemeMode) => {
@@ -250,16 +248,27 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-          <Switch
-            value={profile?.includeArchivedArticles || false}
+          <TangentToggle
+            value={archivedEnabled}
+            disabled={savingArchivedPreference}
+            colors={colors}
+            accessibilityLabel="Include archived articles"
             onValueChange={async (value) => {
-              if (!auth.currentUser) return;
-              const userRef = doc(db, 'users', auth.currentUser.uid);
-              await setDoc(userRef, { includeArchivedArticles: value, lastUpdated: Date.now() }, { merge: true });
-              refreshProfile();
+              if (!auth.currentUser || savingArchivedPreference) return;
+              const previousValue = archivedEnabled;
+              setArchivedEnabled(value);
+              setSavingArchivedPreference(true);
+              try {
+                const userRef = doc(db, 'users', auth.currentUser.uid);
+                await setDoc(userRef, { includeArchivedArticles: value, lastUpdated: Date.now() }, { merge: true });
+                await refreshProfile();
+              } catch (error) {
+                console.error('[Settings] Failed to save archived-article preference:', error);
+                setArchivedEnabled(previousValue);
+              } finally {
+                setSavingArchivedPreference(false);
+              }
             }}
-            trackColor={{ false: colors.surfaceSecondary, true: colors.primaryLight }}
-            thumbColor={profile?.includeArchivedArticles ? colors.primary : colors.textMuted}
           />
         </View>
       </View>

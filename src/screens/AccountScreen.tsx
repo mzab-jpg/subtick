@@ -29,6 +29,8 @@ import {
   deleteAccount,
 } from '../services/auth';
 import { useUser } from '../contexts/UserContext';
+import { beginAccountTransition, endAccountTransition } from '../services/accountTransition';
+import { clearCachedDashboardFeed } from '../services/dashboardFeedCache';
 import {
   TEXT_XS,
   TEXT_SM,
@@ -96,12 +98,14 @@ export default function AccountScreen() {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            beginAccountTransition();
+            clearCachedDashboardFeed(auth.currentUser?.uid);
             try {
               await signOutUser();
-              Alert.alert('Signed Out', 'You are now signed in anonymously.');
-              await refreshProfile();
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to sign out.');
+            } finally {
+              endAccountTransition();
             }
           },
         },
@@ -127,12 +131,14 @@ export default function AccountScreen() {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
+            beginAccountTransition();
+            clearCachedDashboardFeed(auth.currentUser?.uid);
             try {
               await resetAccount();
-              Alert.alert('Reset Complete', 'Your account data has been reset.');
-              await refreshProfile();
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to reset account.');
+            } finally {
+              endAccountTransition();
             }
           },
         },
@@ -151,12 +157,14 @@ export default function AccountScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            beginAccountTransition();
+            clearCachedDashboardFeed(auth.currentUser?.uid);
             try {
               await deleteAccount();
-              Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
-              await refreshProfile();
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to delete account.');
+            } finally {
+              endAccountTransition();
             }
           },
         },

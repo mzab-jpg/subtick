@@ -76,6 +76,8 @@ automatic ranking change.
 - Line or bar chart: `position` by meaningful engagement rate.
 - Scatter chart: `score_p` versus `is_meaningfully_engaged`.
 
+`position = 0` is intentionally the opening Dashboard card: Tangent reserves the highest-scoring eligible article in the returned feed for that position. Positions 1 onward retain the tranche-balanced, category-varied order. Compare position 0 with later positions as an opening-card diagnostic, but do not treat it as a neutral random-position experiment.
+
 ## What not to conclude too early
 
 Do not tune ranking defaults from emulator activity or from a few users. Wait for

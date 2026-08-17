@@ -632,16 +632,43 @@ export function assembleFeedWithTranches(
   let targetMid = midSize;
   let targetTail = tailSize;
 
-  // High Tranche — random selection respecting publisher cap
+  // Reserve the opening card for the strongest eligible article, regardless of
+  // tranche. Every other slot remains randomized/category-varied, so this keeps
+  // the intended discovery mix rather than making the feed deterministic.
+  let startupAnchorId: string | undefined;
+  const startupAnchor = [...scoredList].sort((a, b) => b.fullScore - a.fullScore)[0];
+  const pickedHigh: Article[] = [];
+  const pickedMid: Article[] = [];
+  const pickedTail: Article[] = [];
+  if (startupAnchor) {
+    const anchorArticle = startupAnchor.article;
+    const anchorCategory = anchorArticle.category || 'Uncategorized';
+    pubCountsInFeed.set(anchorArticle.publicationName, 1);
+    categoryCountsInFeed.set(anchorCategory, 1);
+    startupAnchorId = anchorArticle.id;
+
+    if (startupAnchor.fullScore > highThreshold && targetHigh > 0) {
+      pickedHigh.push(anchorArticle);
+      highBucket.splice(highBucket.indexOf(startupAnchor), 1);
+    } else if (startupAnchor.fullScore > midThreshold && targetMid > 0) {
+      pickedMid.push(anchorArticle);
+      midBucket.splice(midBucket.indexOf(startupAnchor), 1);
+    } else if (targetTail > 0) {
+      pickedTail.push(anchorArticle);
+      tailBucket.splice(tailBucket.indexOf(startupAnchor), 1);
+    }
+  }
+
+  // High Tranche — random selection for every remaining slot, respecting caps.
   shuffleArray(highBucket);
-  const pickedHigh = pickFromBucket(highBucket, targetHigh);
+  pickedHigh.push(...pickFromBucket(highBucket, Math.max(0, targetHigh - pickedHigh.length)));
   finalFeed.push(...pickedHigh);
   remainingCount -= pickedHigh.length;
   if (pickedHigh.length < targetHigh) targetMid += (targetHigh - pickedHigh.length);
 
-  // Mid Tranche — random selection respecting publisher cap
+  // Mid Tranche — random selection for every remaining slot, respecting caps.
   shuffleArray(midBucket);
-  const pickedMid = pickFromBucket(midBucket, targetMid);
+  pickedMid.push(...pickFromBucket(midBucket, Math.max(0, targetMid - pickedMid.length)));
   finalFeed.push(...pickedMid);
   remainingCount -= pickedMid.length;
   if (pickedMid.length < targetMid) targetTail += (targetMid - pickedMid.length);
@@ -652,7 +679,7 @@ export function assembleFeedWithTranches(
   } else {
     tailBucket.sort((a, b) => b.tailScore - a.tailScore);
   }
-  const pickedTail = pickFromBucket(tailBucket, targetTail);
+  pickedTail.push(...pickFromBucket(tailBucket, Math.max(0, targetTail - pickedTail.length)));
   finalFeed.push(...pickedTail);
   remainingCount -= pickedTail.length;
 
@@ -702,7 +729,7 @@ export function assembleFeedWithTranches(
     for (let index = 0; index < finalFeed.length; index += 1) {
       const article = finalFeed[index];
       const category = article.category || 'Uncategorized';
-      if ((categoryCounts.get(category) || 0) <= 1) continue;
+      if (article.id === startupAnchorId || (categoryCounts.get(category) || 0) <= 1) continue;
       const score = scoredList.find(s => s.article.id === article.id)?.fullScore ?? 0;
       if (score < replaceScore) {
         replaceScore = score;
@@ -730,9 +757,19 @@ export function assembleFeedWithTranches(
   // This only changes display order; selection, scores, and publisher caps are final.
   const categoryInterleavedFeed = interleaveArticlesByCategory(finalFeed);
 
+  // Interleaving is intentionally random/category-aware, but the Dashboard hero
+  // must make a strong first impression. Move the reserved highest-scoring card
+  // to index 0 after interleaving; every other card retains the varied order.
+  const anchorIndex = startupAnchorId
+    ? categoryInterleavedFeed.findIndex(article => article.id === startupAnchorId)
+    : -1;
+  const orderedFeed = anchorIndex > 0
+    ? [categoryInterleavedFeed[anchorIndex], ...categoryInterleavedFeed.filter((_, index) => index !== anchorIndex)]
+    : categoryInterleavedFeed;
+
   console.log(`[Tranche Selector] High: ${pickedHigh.length}, Mid: ${pickedMid.length}, Tail: ${pickedTail.length}`);
 
-  return categoryInterleavedFeed;
+  return orderedFeed;
 }
 
 /**

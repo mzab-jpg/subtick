@@ -1,6 +1,6 @@
 ﻿# Tangent — Architecture
 
-> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
+> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
 > Every claim below is traced to a specific file and function.
 
 ---
@@ -70,7 +70,7 @@
 │   ├── analytics/
 │   │   └── create_personalization_health_view.sql # One-time BigQuery view for Looker recommendation health
 │   ├── scripts/
-│   │   ├── test-classification.js  # Focused backend WPM/classification regression test
+│   │   ├── test-classification.js  # Focused backend classification, diversity, and startup-anchor regression test
 │   │   └── oneoff/                 # Spent migration scripts (READ BEFORE RE-RUNNING)
 │   │       ├── README.md
 │   │       ├── resetTrendingScores.js
@@ -181,13 +181,15 @@ cronCleanupOldArticles (every 3 days):
 ```
 DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id from getClientId()
   → Cloud Function: getOrUpdateCandidatePool → filter seen → 4-component scoring (P, T, R, Q)
-  → Tranche assembly: High 12 / Mid 8 / Tail 10 (random for High/Mid, sorted by tailScore for Tail)
+  → Tranche assembly: High 12 / Mid 8 / Tail 10; the highest-scoring eligible article is reserved in its own tranche, remaining High/Mid slots are random, and Tail is sorted by tailScore for established users
   → Archived Articles off → current-RSS-only candidate pool; on → mixed current/archived pool
   → Backend final safety filter again removes archived items when the setting is off
   → Hard per-publisher cap of 5 and configurable category maximum applied during picking; overflow cascades
   → Configurable minimum distinct categories is filled with eligible alternatives when available
   → Category-aware final interleave: avoids a third same-category card when another category remains
+  → Highest eligible article is reserved and returned first for the Dashboard hero; the remaining cards retain their varied order
   → return { articles: Article[30] }
+  → Phone retains the active 30-card Dashboard feed in a UID-scoped in-memory cache; screen remounts restore it instead of silently requesting a replacement feed
   → Client-side seen filter → slice(0,30) → setFeedArticles
   → Each returned article carries transient `{ feedId, impressionId }` context
   → [ANALYTICS] `feed_generated` + 30× `article_shown` include feed/impression IDs,
@@ -203,7 +205,8 @@ useArticleLoader.loadArticle(id):
   ├── isSavedMode → getSavedArticleHtml(id)
   ├── rssStatus='archived' → useDirectUri
   ├── has guid+feedUrl → fetchAndExtractArticle (lazy-sanitize — C6)
-  │     On failure → markRssFailed(id) in AsyncStorage
+  │     On failure → markRssFailed(id) in AsyncStorage; Archived Articles on → raw publication WebView,
+  │                  off → Reader error with optional OS-browser escape (never silent raw-WebView fallback)
   └── fallback → bodyHtml || ''
 → articleHTML built in ReaderScreen with escapeHtml + sanitized body (S1)
 → WebView renders client-side; theme CSS injects dynamically (no reload — B9)
@@ -215,7 +218,10 @@ useArticleLoader.loadArticle(id):
 ```
 ReaderScreen → behaviorTracker records foreground-only duration, maximum scroll, and rendered word count
   → AppState inactive/background intervals are excluded before raw-session telemetry is queued
-  → queueBehaviorEvent('read_session') → AsyncStorage queue (mutex-serialized)
+  → Any normal Reader exit (HUD close, Android/system back, or queue-exhausted exit) uses one guarded finish path:
+    queue raw session + write History + immediately attempt flushBehaviorQueue
+  → Phone applies a provisional default-rule stat estimate for instant display; the next server profile update replaces it with the authoritative live-config classification
+  → Swipe navigation stays non-blocking; AsyncStorage queue remains mutex-serialized and preserves offline sessions
   → syncBehaviorEvents Cloud Function (sends client_id):
       Auth: request.auth.uid enforced; request fields are validated
       Reads the authenticated user's stored averageWpm once per batch
@@ -226,8 +232,9 @@ ReaderScreen → behaviorTracker records foreground-only duration, maximum scrol
       Publisher quality aggregated (10-min TTL cache — C5)
       → updateWeights(userId, clientId, cfg) [watermark-based, no replay]
       → repeated quick exits from distinct articles may create one category-only weak signal after live threshold/window; positive category engagement clears pending evidence
-      → qualifying deep reads update completion/read-time statistics and WPM
-      → WPM accepts 150–750 session WPM and uses an 80% old / 20% new rolling average
+      → server-classified qualifying reads update completion/read-time statistics
+      → WPM is independent of read classification: positive article word count ÷ active foreground time,
+        then an 80% old / 20% new rolling average
       → [ANALYTICS] final event types + weight_updated/user-property events
 ```
 
@@ -249,9 +256,12 @@ Client → getClientId() → dotted format (XXXXXXXXXX.XXXXXXXXXX, cached in Asy
 ### 3g. Sign-Out Flow
 
 ```
-AccountScreen → signOutUser():
-  clearAllLocalData() → signOut(auth) → signInAnonymouslyIfNeeded()
-  → ensureUserProfile(newUser) → Dashboard redirects to Onboarding
+AccountScreen → begin account transition (blocking shell; old profile/stats hidden)
+  → signOutUser(): clearAllLocalData() → signOut(auth) → signInAnonymouslyIfNeeded()
+  → ensureUserProfile(newUser) → root navigation remounts at Onboarding
+
+Reset / Delete follow the same transition shell. Reset keeps its UID but still forces
+that root remount, so it cannot leave the old Account/Dashboard stack visible.
 ```
 
 ### 3h. Google Account Recovery + Orphan Cleanup

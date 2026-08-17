@@ -20,6 +20,8 @@ interface UseArticleLoaderParams {
   articleId: string;
   isSavedMode: boolean;
   isMockMode: boolean;
+  /** Raw publication pages are allowed only after the user opts in. */
+  allowArchivedFallback: boolean;
   mockArticle?: Article;
 }
 
@@ -39,6 +41,7 @@ export function useArticleLoader({
   articleId,
   isSavedMode,
   isMockMode,
+  allowArchivedFallback,
   mockArticle,
 }: UseArticleLoaderParams): UseArticleLoaderResult {
   const [article, setArticle] = useState<Article | null>(null);
@@ -80,6 +83,14 @@ export function useArticleLoader({
           const savedHtml = await getSavedArticleHtml(id);
           contentHtml = savedHtml || data.bodyHtml || '';
         } else if (data.rssStatus === 'archived') {
+          if (!allowArchivedFallback) {
+            // A stale queue can still contain an archived article after the
+            // preference is turned off. Do not bypass that choice at display time.
+            setArticle(data);
+            setResolvedHtml('');
+            setFetchError(true);
+            return;
+          }
           contentHtml = '';
         } else if (data.guid && data.feedUrl) {
           const alreadyFailed = await isRssFailed(id);
@@ -101,9 +112,18 @@ export function useArticleLoader({
         }
 
         if (needsFallback) {
+          await markRssFailed(id);
+          if (!allowArchivedFallback) {
+            // "Archived Articles" is off. Keep the metadata only so Reader can
+            // offer a clear error/open-in-browser path; never silently load the
+            // publication webpage inside Tangent's WebView.
+            setArticle(data);
+            setResolvedHtml('');
+            setFetchError(true);
+            return;
+          }
           data.rssStatus = 'archived';
           contentHtml = '';
-          await markRssFailed(id);
         }
 
         setResolvedHtml(contentHtml);
@@ -118,7 +138,7 @@ export function useArticleLoader({
     } finally {
       setLoading(false);
     }
-  }, [isSavedMode, isMockMode, mockArticle]);
+  }, [isSavedMode, isMockMode, allowArchivedFallback, mockArticle]);
 
   const prefetchArticles = useCallback(async (upcomingIds: string[]) => {
     // Work through a small queue one article at a time. This gives the immediate

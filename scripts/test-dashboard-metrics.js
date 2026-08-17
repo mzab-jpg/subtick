@@ -35,4 +35,40 @@ check('removes duplicate metric IDs and keeps the visual limit', normalizeDashbo
   'streak', 'streak', 'avgWpm', 'weeklyReads', 'totalRead',
 ]), ['streak', 'avgWpm', 'weeklyReads']);
 
+const fs = require('fs');
+const path = require('path');
+const appSource = fs.readFileSync(path.join(__dirname, '..', 'App.tsx'), 'utf8');
+const accountSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'AccountScreen.tsx'), 'utf8');
+const userContextSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'contexts', 'UserContext.tsx'), 'utf8');
+const dashboardSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'DashboardScreen.tsx'), 'utf8');
+const readerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'ReaderScreen.tsx'), 'utf8');
+const navigatorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'navigation', 'RootNavigator.tsx'), 'utf8');
+check('account changes use a blocking transition before onboarding',
+  appSource.includes('subscribeToAccountTransition')
+    && appSource.includes('if (initializing || accountTransitioning)')
+    && appSource.includes('Reset Account keeps the same UID')
+    && accountSource.includes('beginAccountTransition();')
+    && accountSource.includes('clearCachedDashboardFeed(auth.currentUser?.uid);')
+    && accountSource.includes('endAccountTransition();')
+    && !accountSource.includes('navigation.reset({ index: 0, routes: [{ name: \'Onboarding\' }] })'),
+  true);
+check('old profile and weekly stats clear at the start of an auth change',
+  userContextSource.includes('setProfile(null);') && userContextSource.includes('setWeeklyReadCount(0);'),
+  true);
+check('Dashboard restores a user-scoped feed cache instead of refetching after remount',
+  dashboardSource.includes('getCachedDashboardFeed') && dashboardSource.includes('setCachedDashboardFeed'),
+  true);
+check('Reader system navigation shares the guarded history/session exit path',
+  readerSource.includes("navigation.addListener('beforeRemove'") && readerSource.includes('finishAndExitReader'),
+  true);
+check('Settings navigation retains the established modal configuration',
+  navigatorSource.includes("name=\"Settings\"") && navigatorSource.includes("presentation: 'modal'"),
+  true);
+check('provisional WPM is calculated as words divided by active time',
+  userContextSource.includes('calculateWpm') && userContextSource.includes('sessionWpm === null') && userContextSource.includes('setProvisionalProfile'),
+  true);
+check('Shuffle replenishment appends instead of replacing remaining cards',
+  dashboardSource.includes('appendFeedArticles') && dashboardSource.includes('const merged = [...previous, ...additions') && !dashboardSource.includes('loadFeedArticles(effectiveProfile).catch(() => {})'),
+  true);
+
 process.exitCode = failed ? 1 : 0;

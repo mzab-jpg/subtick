@@ -28,7 +28,7 @@ import {
 } from '../utils/constants';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
-import { Check, Plus, Minus } from 'lucide-react-native';
+
 
 export default function DashboardStatsScreen() {
   const { colors } = useTheme();
@@ -109,40 +109,37 @@ export default function DashboardStatsScreen() {
           {DASHBOARD_METRIC_DEFS.map((metric, index) => {
             const isSelected = selectedMetricIds.includes(metric.id);
             const isLast = index === DASHBOARD_METRIC_DEFS.length - 1;
+            const selectionFull = selectedMetricIds.length >= 3;
+            const stateLabel = isSelected ? 'Shown on Dashboard' : selectionFull ? '3 selected' : 'Not shown';
+            const rowBackground = isSelected ? colors.chipSelectedBg : colors.background;
+            const textColor = isSelected ? colors.chipSelectedText : colors.text;
+            const mutedColor = isSelected ? colors.chipSelectedText : colors.textMuted;
             return (
               <TouchableOpacity
                 key={metric.id}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isSelected, disabled: !isSelected && selectionFull }}
+                disabled={!isSelected && selectionFull}
                 style={[
                   styles.row,
+                  { backgroundColor: rowBackground },
                   !isLast && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                  !isSelected && selectionFull && styles.rowDisabled,
                 ]}
                 onPress={() => toggleMetric(metric.id)}
                 activeOpacity={0.7}
               >
                 <View style={styles.rowLeft}>
-                  <View style={[styles.iconWrap, { backgroundColor: colors.surfaceSecondary }]}>
-                    {getMetricIcon(metric.id, isSelected ? colors.primary : colors.textMuted, 16)}
+                  <View style={styles.iconWrap}>
+                    {getMetricIcon(metric.id, mutedColor, 20)}
                   </View>
                   <View style={styles.metricInfo}>
-                    <Text style={[styles.metricLabel, { color: colors.text }]}>
+                    <Text style={[styles.metricLabel, { color: textColor }]}>
                       {metric.label}
                     </Text>
-                    <Text style={[styles.metricValue, { color: colors.textSecondary }]}>
-                      {getMetricValue(metric.id)}
+                    <Text style={[styles.metricValue, { color: mutedColor }]}>
+                      {stateLabel} · {getMetricValue(metric.id)}
                     </Text>
-                  </View>
-                </View>
-                <View style={styles.rowRight}>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      {
-                        borderColor: isSelected ? colors.primary : colors.border,
-                        backgroundColor: isSelected ? colors.primary : 'transparent',
-                      },
-                    ]}
-                  >
-                    {isSelected && <Check size={12} color={colors.background} strokeWidth={3} />}
                   </View>
                 </View>
               </TouchableOpacity>
@@ -168,24 +165,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Slim row inside the card
+  // Matches the category preference rows: state is communicated by the
+  // whole row plus explicit supporting text, not a separate checkbox.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 16,
   },
+  rowDisabled: { opacity: 0.45 },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     gap: 12,
-  },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   iconWrap: {
     width: 24,
@@ -195,13 +189,5 @@ const styles = StyleSheet.create({
   },
   metricInfo: { flex: 1 },
   metricLabel: { fontSize: TEXT_BASE, fontWeight: '500', marginBottom: 2 },
-  metricValue: { fontSize: TEXT_SM },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  metricValue: { fontSize: TEXT_SM, marginTop: 3 },
 });

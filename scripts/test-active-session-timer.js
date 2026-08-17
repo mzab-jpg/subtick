@@ -29,4 +29,16 @@ check('multiple pauses are all excluded', getActiveSessionDuration(multiplePause
 const activeOnly = createActiveSessionClock(1_000);
 check('active-only session retains wall-clock duration', getActiveSessionDuration(activeOnly, 26_000), 25_000);
 
+const fs = require('fs');
+const path = require('path');
+const trackerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'hooks', 'useBehaviorTracker.ts'), 'utf8');
+const readerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'ReaderScreen.tsx'), 'utf8');
+const immediateServerSync = trackerSource.includes('await queueBehaviorEvent(')
+  && readerSource.includes('const wordCountForSession = actualWordCountRef.current || article.wordCount || 0;')
+  && readerSource.includes('await behaviorTracker.concludeSession(wordCountForSession);')
+  && readerSource.includes('await flushBehaviorQueue();');
+check('closing Reader queues then immediately flushes the classified session', immediateServerSync, true);
+check('Reader supplies stored article words when WebView count has not arrived',
+  readerSource.includes('actualWordCountRef.current || article.wordCount || 0'), true);
+
 process.exitCode = failed ? 1 : 0;

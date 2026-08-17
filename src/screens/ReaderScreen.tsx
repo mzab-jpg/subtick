@@ -122,7 +122,8 @@ export default function ReaderScreen() {
   const isMockMode = !!mockArticle;
   const isRestrictedMode = isHistoryMode || isSavedMode || isMockMode;
 
-  const { profile: contextProfile } = useUser();
+  const { profile: contextProfile, applyProvisionalSession } = useUser();
+  const exitingReaderRef = useRef(false);
   const serverSeenIds = contextProfile?.seenArticleIds;
 
   // --- Feature hooks ---
@@ -130,7 +131,11 @@ export default function ReaderScreen() {
     article, resolvedHtml, fetchError, loading,
     rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles, cancelPrefetch,
   } = useArticleLoader({
-    articleId, isSavedMode, isMockMode, mockArticle,
+    articleId,
+    isSavedMode,
+    isMockMode,
+    allowArchivedFallback: contextProfile?.includeArchivedArticles === true,
+    mockArticle,
   });
 
   const {
@@ -297,7 +302,7 @@ export default function ReaderScreen() {
 
           if (dx < -SWIPE_THRESHOLD) {
             if (!isRestrictedMode) {
-              behaviorTracker.concludeSession(actualWordCountRef.current);
+              void behaviorTracker.concludeSession(actualWordCountRef.current);
               if (article?.id) markArticleSeen(article.id, article);
             }
             goToNext();
@@ -462,6 +467,35 @@ export default function ReaderScreen() {
   }, []);
 
   // --- HUD toggle handlers ---
+  const finishAndExitReader = useCallback(async (exit: () => void) => {
+    if (exitingReaderRef.current) return;
+    exitingReaderRef.current = true;
+    try {
+      if (!isRestrictedMode && article?.id) {
+        const wordCountForSession = actualWordCountRef.current || article.wordCount || 0;
+        const summary = await behaviorTracker.concludeSession(wordCountForSession);
+        applyProvisionalSession(summary);
+        // History represents every article opened from the live feed, no matter
+        // whether the person uses the close button, Android back, or catch-up exit.
+        await markArticleSeen(article.id, article);
+        await flushBehaviorQueue();
+      }
+      exit();
+    } finally {
+      exitingReaderRef.current = false;
+    }
+  }, [applyProvisionalSession, article, behaviorTracker, isRestrictedMode]);
+
+  const handleCloseReader = useCallback(() => {
+    void finishAndExitReader(() => navigation.goBack());
+  }, [finishAndExitReader, navigation]);
+
+  useEffect(() => navigation.addListener('beforeRemove', (event) => {
+    if (isRestrictedMode || exitingReaderRef.current) return;
+    event.preventDefault();
+    void finishAndExitReader(() => navigation.dispatch(event.data.action));
+  }), [finishAndExitReader, isRestrictedMode, navigation]);
+
   const handleLikeToggle = () => {
     const newVal = !isLiked;
     setIsLiked(newVal);
@@ -503,7 +537,7 @@ export default function ReaderScreen() {
           isSaved={isSaved}
           isRestrictedMode={isRestrictedMode}
           resolvedHtml={resolvedHtml}
-          onClose={() => navigation.goBack()}
+          onClose={handleCloseReader}
           onLikeToggle={handleLikeToggle}
           onSaveToggle={handleSaveToggle}
         />
@@ -538,7 +572,7 @@ export default function ReaderScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.catchUpButton, { backgroundColor: colors.primary }]}
-            onPress={() => navigation.goBack()}
+            onPress={handleCloseReader}
           >
             <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Back to Dashboard</Text>
           </TouchableOpacity>

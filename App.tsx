@@ -15,6 +15,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';
 import { startOfflineManager } from './src/services/offlineManager';
+import { subscribeToAccountTransition } from './src/services/accountTransition';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { auth } from './src/services/firebase';
@@ -36,8 +37,20 @@ function AppContent() {
   // Used as React key on RootNavigator; changing this destroys
   // and recreates the entire navigation tree with fresh subscriptions.
   const [navigationKey, setNavigationKey] = useState(0);
+  const [accountTransitioning, setAccountTransitioning] = useState(false);
 
   useEffect(() => {
+    const unsubscribeTransition = subscribeToAccountTransition((active) => {
+      setAccountTransitioning(active);
+      if (active) {
+        // Reset Account keeps the same UID, so it would not trigger the normal
+        // auth-change remount. Rebuild navigation for every account transition.
+        setInitialRoute('Onboarding');
+        navKey += 1;
+        setNavigationKey(navKey);
+      }
+    });
+
     initializeApp();
 
     // Listen for auth state changes. If the UID changes mid-session
@@ -52,7 +65,10 @@ function AppContent() {
         lastUserId = user.uid;
       }
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribeTransition();
+      unsubscribe();
+    };
   }, []);
 
   const initializeApp = async () => {
@@ -111,7 +127,7 @@ function AppContent() {
     }
   };
 
-  if (initializing) {
+  if (initializing || accountTransitioning) {
     return (
       <View style={[styles.splash, { backgroundColor: colors.background }]}>
         <Text style={styles.splashEmoji}>📖</Text>
@@ -122,7 +138,7 @@ function AppContent() {
           style={{ marginTop: 32 }}
         />
         <Text style={[styles.splashHint, { color: colors.textMuted }]}>
-          Connecting to your personalized feed...
+          {accountTransitioning ? 'Preparing your new account...' : 'Connecting to your personalized feed...'}
         </Text>
       </View>
     );

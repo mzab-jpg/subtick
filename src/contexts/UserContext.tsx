@@ -9,8 +9,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
-import { BehaviorEvent, UserProfile } from '../types';
-import { countWeeklyQualifyingReads } from '../utils/dashboardMetrics';
+import { BehaviorEvent, ReaderSessionSummary, UserProfile } from '../types';
+import { calculateWpm, classifyLocalRead, countWeeklyQualifyingReads, estimateNextStreak, isQualifyingRead } from '../utils/dashboardMetrics';
 import { auth, db } from '../services/firebase';
 
 interface UserContextValue {
@@ -19,6 +19,8 @@ interface UserContextValue {
   weeklyReadCount: number;
   loading: boolean;
   refreshProfile: () => Promise<void>;
+  /** Immediately display a locally calculated session result until server profile data confirms it. */
+  applyProvisionalSession: (summary: ReaderSessionSummary | null) => void;
 }
 
 const UserContext = createContext<UserContextValue>({
@@ -26,6 +28,7 @@ const UserContext = createContext<UserContextValue>({
   weeklyReadCount: 0,
   loading: true,
   refreshProfile: async () => {},
+  applyProvisionalSession: () => {},
 });
 
 export function useUser(): UserContextValue {
@@ -40,6 +43,28 @@ export function UserProvider({ children }: UserProviderProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [weeklyReadCount, setWeeklyReadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [provisionalProfile, setProvisionalProfile] = useState<UserProfile | null>(null);
+  const [provisionalWeeklyReads, setProvisionalWeeklyReads] = useState<number | null>(null);
+  const provisionalBaseUpdatedAtRef = React.useRef<number | null>(null);
+
+  const applyProvisionalSession = useCallback((summary: ReaderSessionSummary | null) => {
+    if (!summary || !profile) return;
+    const outcome = classifyLocalRead(summary, profile.averageWpm || 200);
+    const qualifies = isQualifyingRead(outcome);
+    const countsAsTime = outcome === 'read_thorough' || outcome === 'read_skim' || outcome === 'read_shallow';
+    const now = summary.timestamp;
+    const sessionWpm = calculateWpm(summary.actualWordCount, summary.sessionDuration);
+
+    provisionalBaseUpdatedAtRef.current = profile.lastUpdated || 0;
+    setProvisionalProfile({
+      ...profile,
+      totalArticlesRead: profile.totalArticlesRead + (qualifies ? 1 : 0),
+      totalReadTimeMs: (profile.totalReadTimeMs || 0) + (countsAsTime ? summary.sessionDuration : 0),
+      currentStreakDays: qualifies ? estimateNextStreak(profile.lastReadDate, profile.currentStreakDays, now) : profile.currentStreakDays,
+      averageWpm: sessionWpm === null ? profile.averageWpm : Math.round((profile.averageWpm || 200) * 0.8 + sessionWpm * 0.2),
+    });
+    if (qualifies) setProvisionalWeeklyReads(weeklyReadCount + 1);
+  }, [profile, weeklyReadCount]);
 
   const refreshProfile = useCallback(async () => {
     const user = auth.currentUser;
@@ -69,9 +94,15 @@ export function UserProvider({ children }: UserProviderProps) {
       unsubscribeWeeklyReads = undefined;
       weeklyReadRefreshTimer = undefined;
 
+      // Clear the old account immediately on every auth change. This prevents
+      // its stats/profile from being rendered during a sign-out/delete swap.
+      setProfile(null);
+      setWeeklyReadCount(0);
+      setProvisionalProfile(null);
+      setProvisionalWeeklyReads(null);
+      provisionalBaseUpdatedAtRef.current = null;
+
       if (!user) {
-        setProfile(null);
-        setWeeklyReadCount(0);
         setLoading(false);
         return;
       }
@@ -80,7 +111,13 @@ export function UserProvider({ children }: UserProviderProps) {
       unsubscribeProfile = onSnapshot(
         doc(db, 'users', user.uid),
         (snapshot) => {
-          setProfile(snapshot.exists() ? snapshot.data() as UserProfile : null);
+          const nextProfile = snapshot.exists() ? snapshot.data() as UserProfile : null;
+          setProfile(nextProfile);
+          if (nextProfile && provisionalBaseUpdatedAtRef.current !== null && nextProfile.lastUpdated > provisionalBaseUpdatedAtRef.current) {
+            setProvisionalProfile(null);
+            setProvisionalWeeklyReads(null);
+            provisionalBaseUpdatedAtRef.current = null;
+          }
           setLoading(false);
         },
         (error) => {
@@ -126,7 +163,13 @@ export function UserProvider({ children }: UserProviderProps) {
   }, []);
 
   return (
-    <UserContext.Provider value={{ profile, weeklyReadCount, loading, refreshProfile }}>
+    <UserContext.Provider value={{
+      profile: provisionalProfile || profile,
+      weeklyReadCount: provisionalWeeklyReads ?? weeklyReadCount,
+      loading,
+      refreshProfile,
+      applyProvisionalSession,
+    }}>
       {children}
     </UserContext.Provider>
   );

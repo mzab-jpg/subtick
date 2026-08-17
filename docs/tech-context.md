@@ -1,6 +1,6 @@
 ﻿# Tangent — Technical Context
 
-> **Last verified:** 16 August 2026 (launch-ready recommendation attribution and personalization-health analytics update).
+> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -65,6 +65,9 @@ A full user manual lives in [`docs/emulator/`](./emulator/README.md):
 - `src/components/` — Shared components: `ErrorBoundary.tsx`, `CategoryChipGrid.tsx`, `ArticleListScreen.tsx`, `FormScreen.tsx`, `ScreenHeader.tsx`
 - `src/features/reader/` — ReaderScreen decomposition: `useArticleLoader.ts`, `useNavigationQueue.ts`, `useReaderHUD.ts`, `ReaderHUD.tsx`, `ReaderProgressBar.tsx`
 - `src/services/asyncStorageMutex.ts` — Shared AsyncStorage concurrency mutex factory
+- `src/services/accountTransition.ts` — Small app-wide transition coordinator that blocks old-account UI during sign-out, reset, and deletion
+- `src/services/dashboardFeedCache.ts` — UID-scoped in-memory Dashboard feed cache; remounts restore current cards rather than silently fetching replacements
+- `src/components/TangentToggle.tsx` — Reusable built-in-Animated, accessible binary-preference control
 - Screens use `useUser()` from `UserContext`, which owns the single authenticated real-time profile subscription; Dashboard no longer retains a duplicate `onSnapshot` listener.
 - `HistoryScreen.tsx` and `SavedReadsScreen.tsx` are 24-line wrappers over `ArticleListScreen`
 - `FeedbackScreen.tsx` and `FeedRequestScreen.tsx` are thin wrappers over shared `FormScreen`
@@ -135,14 +138,14 @@ From `firebase/functions/src/index.ts`:
 | `linkedGoogleAccount` | `boolean` | True after `linkGoogleAccount()` completes successfully |
 | `userEmail` | `string?` | Email from linked Google account; written by `linkGoogleAccount()` |
 | `seenArticleIds` | `string[]?` | Cross-device seen article dedup array (capped at 1000); written via `arrayUnion` in `markArticleSeen()` |
-| `totalArticlesRead` | `number` | Incremented by `weightUpdater.ts` on qualifying reads — server-only write |
+| `totalArticlesRead` | `number` | Incremented by `weightUpdater.ts` on qualifying reads — server-only write. The phone may temporarily display a default-rule estimate immediately after Reader exit, but the next backend profile update is final. |
 | `weeklyReadCount` | `number` | Historical server-updated counter retained for compatibility. The displayed Dashboard value is calculated from the user's actual `read_thorough`/`read_skim` events in the rolling last seven days, so it remains accurate as events age out. |
 | `currentStreakDays` | `number` | Consecutive days with at least one read — server-only write |
 | `lastReadDate` | `number` | Unix ms of last read event |
-| `averageWpm` | `number` | Personalized rolling 80/20 reading-speed average; initialized to 200. Updated only from qualifying 150–750-WPM deep sessions — server-only write |
+| `averageWpm` | `number` | Personalized rolling 80/20 reading-speed average; initialized to 200. Updated from positive article word count ÷ active foreground time on Reader exit, independent of scroll depth/read classification; server persists the final value. |
 | `dashboardMetricIds` | `string[]` | Up to 3 metric IDs for Dashboard stats pill |
-| `includeArchivedArticles` | `boolean?` | User opt-in to `candidatePool_mixed` |
-| `totalReadTimeMs` | `number?` | Cumulative active reading time (ms) — server-only write |
+| `includeArchivedArticles` | `boolean?` | User opt-in to `candidatePool_mixed` and to the Reader's raw publication-WebView fallback after a current RSS extraction fails |
+| `totalReadTimeMs` | `number?` | Cumulative active reading time (ms) — server-only write. Reader close immediately attempts normal session sync so this profile value normally updates before Dashboard returns; offline classification remains pending until reconnect. |
 | `lastUpdated` | `number` | Unix ms of last profile write |
 
 ### WPM and Publisher Cold-Start Configuration
@@ -165,7 +168,7 @@ The server loads `system/scoringConfig`, merges it over compiled defaults, clamp
 
 The two cold-start shares are normalized to total 1.0. Once `publisherWeights` has any property for a publisher—including a negative one—the normal 0.60 category / 0.40 publisher blend applies.
 
-Feed assembly additionally uses a fixed display-order anti-fatigue guard after tranche selection: it avoids a third consecutive article from the same category whenever any other category remains in the selected feed. It is deliberately not a scoring-config slider; scoring, tranche membership, and the publisher cap remain unchanged.
+Feed assembly reserves the highest-scoring eligible article in its normal tranche allocation and returns it at position 0 for the Dashboard hero. The remaining selected cards use the fixed display-order anti-fatigue guard after tranche selection: it avoids a third consecutive article from the same category whenever any other category remains. This is deliberately not a scoring-config slider; scoring, tranche membership, discovery allocation, and the publisher cap remain unchanged.
 
 Reader timing uses the built-in React Native `AppState` API (no Expo package). `inactive` and `background` intervals are excluded from a Reader session; only `active` foreground time is sent as `sessionDuration`. This protects WPM calibration, server read classification, and total reading-time statistics from phone interruptions.
 
@@ -198,7 +201,7 @@ Reader timing uses the built-in React Native `AppState` API (no Expo package). `
 
 **Client-submittable event types:** `'read_session' | 'swipe_next' | 'swipe_not_interested' | 'like' | 'unlike' | 'save' | 'unsave' | 'read_thorough' | 'read_skim' | 'read_shallow' | 'quick_exit'`.
 
-`read_session` is raw telemetry only: the callable validates it and writes a final `'quick_exit' | 'read_shallow' | 'read_skim' | 'read_thorough' | 'swipe_next'` type. Legacy read-family types are reclassified while old app versions remain in use; explicit action types are unchanged. `feedId` and `impressionId`, when supplied by the live Reader queue, are validated and persisted with the final event so GA4/BigQuery can attribute the outcome to one exact recommendation appearance.
+`read_session` is raw telemetry only: the callable validates it and writes a final `'quick_exit' | 'read_shallow' | 'read_skim' | 'read_thorough' | 'swipe_next'` type. On normal Reader close the app waits until this raw event is locally queued, then immediately attempts its usual authenticated flush; it never locally declares the session a completed read. Legacy read-family types are reclassified while old app versions remain in use; explicit action types are unchanged. `feedId` and `impressionId`, when supplied by the live Reader queue, are validated and persisted with the final event so GA4/BigQuery can attribute the outcome to one exact recommendation appearance.
 
 **Security:** The normal mobile path is the authenticated callable, which overwrites userId and validates IDs, strings, finite timestamps/duration/depth, depth [0,1], duration ≤24h, and optional word count ≤1,000,000 before Admin-SDK persistence. Owner-only direct create/read remains rule-limited: path userId must match body userId, eventType is one of 11 whitelisted values, only approved fields are allowed, and size is capped at 2KB. Update/delete are disabled.
 

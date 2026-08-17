@@ -108,6 +108,38 @@ check('category cap is respected when alternatives exist', categoryCounts.Techno
 check('minimum distinct categories is reached when alternatives exist', Object.keys(categoryCounts).length >= 3, true);
 check('category limits preserve requested feed size', categoryLimitedFeed.length, 6);
 
+const anchoredStartupFeed = assembleFeedWithTranches([
+  scoredArticle('high_best', 'Technology', 0.95),
+  scoredArticle('high_other', 'Science', 0.80),
+  scoredArticle('high_third', 'Culture', 0.70),
+  scoredArticle('mid_discovery', 'History', 0.30),
+  scoredArticle('tail_discovery', 'Business', 0.10),
+], 5, 50, {
+  highThreshold: 0.4, midThreshold: 0.2, highSize: 3, midSize: 1, tailSize: 1,
+  publisherCap: 5, maxArticlesPerCategory: 5, minDistinctCategories: 1,
+});
+check('highest High-tranche article anchors the startup card', anchoredStartupFeed[0].id, 'high_best');
+check('startup anchor preserves all selected articles', new Set(anchoredStartupFeed.map((article) => article.id)).size, 5);
+
+const midOnlyStartupFeed = assembleFeedWithTranches([
+  scoredArticle('mid_best', 'Technology', 0.39),
+  scoredArticle('mid_other', 'Science', 0.30),
+  scoredArticle('tail_only', 'Culture', 0.10),
+], 3, 50, {
+  highThreshold: 0.4, midThreshold: 0.2, highSize: 1, midSize: 1, tailSize: 1,
+  publisherCap: 5, maxArticlesPerCategory: 5, minDistinctCategories: 1,
+});
+check('highest Mid-tranche article anchors startup when High is empty', midOnlyStartupFeed[0].id, 'mid_best');
+
+const tailOnlyStartupFeed = assembleFeedWithTranches([
+  scoredArticle('tail_best', 'Technology', 0.19),
+  scoredArticle('tail_other', 'Science', 0.10),
+], 2, 50, {
+  highThreshold: 0.4, midThreshold: 0.2, highSize: 0, midSize: 0, tailSize: 2,
+  publisherCap: 5, maxArticlesPerCategory: 5, minDistinctCategories: 1,
+});
+check('highest Tail-tranche article anchors startup when High and Mid are empty', tailOnlyStartupFeed[0].id, 'tail_best');
+
 const scarceCategoryFeed = assembleFeedWithTranches([
   ...Array.from({ length: 6 }, (_, id) => scoredArticle(`tech_scarce_${id}`, 'Technology', 0.8)),
   scoredArticle('science_scarce', 'Science', 0.7),
