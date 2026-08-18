@@ -70,13 +70,9 @@ export async function queueBehaviorEvent(
       queue.push(event);
       await AsyncStorage.setItem(BEHAVIOR_QUEUE_KEY, JSON.stringify(queue));
 
-      // If we have a batch ready, trigger an immediate flush
-      const unsynced = queue.filter((e) => !e.synced).length;
-      if (unsynced >= SYNC_BATCH_SIZE) {
-        flushBehaviorQueue().catch(() => {
-          // Silently fail — will retry on next network check
-        });
-      }
+      // Reaching a batch boundary does not start a Cloud Function upload during
+      // Reader interaction. Events remain safely queued and sync on Reader exit,
+      // reconnect, or the next application lifecycle flush.
     } catch (error) {
       console.error('[BehaviorSync] queueBehaviorEvent error:', error);
     }

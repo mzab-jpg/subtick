@@ -34,7 +34,7 @@ A full user manual lives in [`docs/emulator/`](./emulator/README.md):
 | `react-native-webview` | `13.16.1` | In-app article rendering (sanitized HTML + raw URL modes) |
 | `@react-native-async-storage/async-storage` | `2.2.0` | On-device key-value storage |
 | `@react-native-community/netinfo` | `^12.0.1` | Network connectivity detection |
-| `fast-xml-parser` | `^5.10.1` | Client-side RSS XML parsing |
+| `fast-xml-parser` | `^5.10.1` | JavaScript RSS XML fallback for iOS and Android builds made before the native module; Android Reader uses the local Kotlin streaming parser when available |
 | `xss` | `^1.0.15` | HTML sanitization (lazy — applied to matched article only) |
 | `expo-blur` | `~57.0.2` | Frosted-glass HUD effect |
 | `expo-status-bar` | `~57.0.1` | Status bar control |
@@ -67,12 +67,13 @@ A full user manual lives in [`docs/emulator/`](./emulator/README.md):
 - `src/services/asyncStorageMutex.ts` — Shared AsyncStorage concurrency mutex factory
 - `src/services/accountTransition.ts` — Small app-wide transition coordinator that blocks old-account UI during sign-out, reset, and deletion
 - `src/services/dashboardFeedCache.ts` — UID-scoped in-memory Dashboard feed cache; remounts restore current cards, and Reader removes only genuinely opened cards while background replenishment appends unseen replacements
+- `modules/tangent-rss-parser/` — Source-controlled Android local Expo module. A dedicated Kotlin worker streams RSS/Atom XML, retains a bounded raw process-memory cache, and supports Reader’s rolling five-upcoming-article buffer without parsing on the React Native UI/JavaScript workload. It is autolinked by Expo; native changes require a new APK.
 - `src/components/TangentToggle.tsx` — Reusable built-in-Animated, accessible binary-preference control
 - Screens use `useUser()` from `UserContext`, which owns the single authenticated real-time profile subscription; Dashboard no longer retains a duplicate `onSnapshot` listener.
 - `HistoryScreen.tsx` and `SavedReadsScreen.tsx` are 24-line wrappers over `ArticleListScreen`
 - `FeedbackScreen.tsx` and `FeedRequestScreen.tsx` are thin wrappers over shared `FormScreen`
 - `OnboardingScreen.tsx` uses shared `CategoryChipGrid` component
-- `ReaderScreen.tsx` is a 430-line orchestrator delegating to 3 hooks + 2 components; its sequential RSS warmer retains raw parsed RSS per publisher only in app-process memory, while article HTML is sanitized only when displayed
+- `ReaderScreen.tsx` is a 430-line orchestrator delegating to 3 hooks + 2 components; Android maintains a rolling five-upcoming-article native RSS buffer using at most two speculative workers, retains only raw publisher data in process memory, and sanitizes article HTML only when displayed. The Dashboard-tapped/current article is fixed; only completed bodies inside the five unseen positions may be promoted ahead of waiting cards.
 - Safe area insets via manual `topInset`/`bottomInset` constants (not `react-native-safe-area-context`)
 - Dead code removed: `getSeenArticleIds()` from `feedService.ts` (replaced by `getSeenArticleIdsLocally()`)
 
@@ -407,6 +408,27 @@ export const FIREBASE_EMULATOR_CONFIG = {
   functions: { host: 'localhost', port: 5001 },
 };
 ```
+
+### Android native RSS module build workflow
+
+`modules/tangent-rss-parser/` contains Android Kotlin code, so a JavaScript Fast Refresh cannot add or change it in an already-installed app.
+
+- After changing **Kotlin**, `expo-module.config.json`, native module Gradle configuration, or `app.json`, create and install a fresh Android build. For internal debugging: `eas build --platform android --profile development`.
+- After changing only TypeScript/React code, the existing development APK and normal Metro/Fast Refresh workflow remain sufficient.
+- Before deciding Reader performance is release-ready, install and test a non-development internal APK: `eas build --platform android --profile preview`. Development-client warning/log tooling can make scrolling feel less representative than a release-style build.
+- The module fetches directly from publishers; it does not use Firebase/Cloud Functions for article bodies. It keeps up to 16 ordinary-sized raw XML feeds in Android process memory (5 MB cache allowance each), plus extracted raw bodies only for the five upcoming Reader targets—not a parsed copy of every article body. A larger legitimate feed is stream-parsed directly to the requested target and not retained, so the cache allowance never blocks an article. Android discards all cache data when the app process ends.
+
+### Required iOS release work — native RSS parser parity
+
+The Kotlin implementation is **Android-only**. iOS currently falls back to JavaScript `fast-xml-parser`; do not describe iOS as having the smooth Android Reader preloader.
+
+Before any iOS release:
+
+1. Add `modules/tangent-rss-parser/ios/` with a Swift implementation exposing the same `preloadFeed`, `findArticle`, and `clearCache` API.
+2. Use `URLSession` and Foundation `XMLParser` (or another maintained streaming parser) on a non-main queue. Do not restore whole-feed JavaScript parsing as iOS background preloading.
+3. Match Android semantics exactly: HTTPS-only fetches, 15-second connect/read-equivalent timeouts, separate selected/preload serial lanes, raw-XML cache for ordinary-sized feeds plus extracted raw bodies for exactly the five-upcoming Reader targets, direct streaming extraction for larger legitimate feeds without retaining them, five-upcoming-article buffer, stale-target replacement after a swipe, and lazy sanitisation only for the displayed article.
+4. Run `npx expo prebuild --clean`/Pods as required after adding the Swift files, then create fresh iOS development and production-style builds. Test on a physical iPhone with multiple RSS and Atom publishers, repeated publishers, a large feed, offline mode, archived-content preference both on/off, fast swipes, app backgrounding, and app termination.
+5. Keep the JavaScript fallback only as a failure-safe path; do not enable iOS RSS preloading until physical-device performance/parity testing passes.
 
 ### Developer Options Gate
 `DeveloperOptionsScreen.tsx` is accessible from Settings but only rendered when `__DEV__` is true. In production builds it is completely hidden. Contains: sandbox reader, AsyncStorage reset tools. Sandbox reader now passes `mockArticle` only (loads live URL in WebView — `mockHtml` param removed as it was never needed for live-URL testing).

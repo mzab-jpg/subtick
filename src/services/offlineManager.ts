@@ -48,11 +48,15 @@ async function attemptFlush(): Promise<void> {
     return;
   }
 
+  // Claim the flush before any await. NetInfo can emit several online signals
+  // during startup; without this, each signal can pass the old check while the
+  // first one is still reading AsyncStorage.
+  isSyncing = true;
+
   try {
     const pending = await getPendingEventCount();
     if (pending === 0) return;
 
-    isSyncing = true;
     console.log(`[OfflineManager] Flushing ${pending} pending events...`);
     const synced = await flushBehaviorQueue();
     console.log(`[OfflineManager] Synced ${synced} events`);

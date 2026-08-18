@@ -10,6 +10,8 @@ import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc,
 import { Article, RankedFeedResult } from '../types';
 import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX } from '../utils/constants';
 import { XMLParser } from 'fast-xml-parser';
+import { Platform } from 'react-native';
+import NativeRssParser from '../../modules/tangent-rss-parser';
 import xss from 'xss';
 import { createStorageMutex } from './asyncStorageMutex';
 import { removeArticleFromCachedDashboardFeed } from './dashboardFeedCache';
@@ -22,10 +24,21 @@ export interface CachedFeedItem {
   rawHtml: string; // C6 Fix: raw content stored, sanitized lazily after find()
   link?: string;   // article-level permalink (item.link) for archived fallback
 }
-const feedSessionCache = new Map<string, Promise<CachedFeedItem[]>>();
 
-// This in-memory cache deliberately lasts for the app process. Android clears it
-// automatically when the app is closed/killed; it is never written to disk.
+/** A successfully parsed feed did not contain the requested article. */
+export class RssArticleNotFoundError extends Error {
+  constructor() {
+    super('Article not found in recent feed items.');
+    this.name = 'RssArticleNotFoundError';
+  }
+}
+
+const feedSessionCache = new Map<string, Promise<CachedFeedItem[]>>();
+const useNativeRssParser = Platform.OS === 'android' && NativeRssParser !== null;
+
+// The Android parser owns its raw feed cache in native process memory. The
+// JavaScript cache is retained as the iOS/old-development-APK fallback. Neither
+// cache is written to disk; Android clears both when the app process ends.
 
 const storageMutex = createStorageMutex();
 
@@ -67,12 +80,38 @@ export function sanitizeClientHtml(rawHtml: string): string {
   return cleaned;
 }
 
-/** Download and parse one publisher RSS feed, retaining raw items in app memory. */
+/**
+ * Download/parse one publisher RSS feed. Android uses bounded native workers,
+ * so Reader preloading never parses XML on the JavaScript/UI workload.
+ * The existing JavaScript path remains the iOS and old-development-APK fallback.
+ */
+export async function prepareArticle(feedUrl: string, guid: string, articleUrl?: string): Promise<void> {
+  if (useNativeRssParser) {
+    const startedAt = Date.now();
+    await NativeRssParser!.prepareArticle(feedUrl, guid, articleUrl);
+    if (__DEV__) console.log(`[RSS Native] prepared upcoming article in ${Date.now() - startedAt}ms: ${feedUrl}`);
+    return;
+  }
+
+  // The non-native fallback keeps raw feeds only. Pre-extracting five article
+  // bodies there would return XML parsing work to the JavaScript/UI workload.
+  await warmFeed(feedUrl);
+}
+
 export async function warmFeed(feedUrl: string): Promise<CachedFeedItem[]> {
+  if (useNativeRssParser) {
+    const startedAt = Date.now();
+    if (__DEV__) console.log(`[RSS Native] preparing ${feedUrl}`);
+    await NativeRssParser!.preloadFeed(feedUrl);
+    if (__DEV__) console.log(`[RSS Native] ready in ${Date.now() - startedAt}ms: ${feedUrl}`);
+    // The native cache intentionally retains the full raw feed. Preloading does
+    // not serialize article HTML back into JavaScript.
+    return [];
+  }
+
   try {
     let fetchPromise = feedSessionCache.get(feedUrl);
     if (!fetchPromise) {
-      console.log(`[feedService] Cache miss, fetching live feed: ${feedUrl}`);
       fetchPromise = (async () => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -97,8 +136,6 @@ export async function warmFeed(feedUrl: string): Promise<CachedFeedItem[]> {
         }
       })();
       feedSessionCache.set(feedUrl, fetchPromise);
-    } else {
-      console.log(`[feedService] Cache hit for feed: ${feedUrl}`);
     }
     return await fetchPromise;
   } catch (error) {
@@ -110,10 +147,24 @@ export async function warmFeed(feedUrl: string): Promise<CachedFeedItem[]> {
 /** Find and lazily sanitize only the article being displayed. */
 export async function fetchAndExtractArticle(feedUrl: string, guid: string, articleUrl?: string): Promise<{ html: string; link?: string }> {
   try {
+    if (useNativeRssParser) {
+      const startedAt = Date.now();
+      const matchedItem = await NativeRssParser!.findArticle(feedUrl, guid, articleUrl);
+      const lookupCompletedAt = Date.now();
+      if (__DEV__) console.log(`[RSS Native] active article lookup ${lookupCompletedAt - startedAt}ms: ${feedUrl}`);
+      if (!matchedItem) throw new RssArticleNotFoundError();
+      const sanitizationStartedAt = Date.now();
+      const html = sanitizeClientHtml(matchedItem.rawHtml);
+      if (__DEV__) {
+        console.log(`[Reader Timing] HTML sanitisation ${Date.now() - sanitizationStartedAt}ms (${matchedItem.rawHtml.length} chars): ${feedUrl}`);
+      }
+      return { html, link: matchedItem.link };
+    }
+
     const items = await warmFeed(feedUrl);
     const matchedItem = items.find((item) => item.guid === guid)
       || (articleUrl ? items.find((item) => item.link === articleUrl) : undefined);
-    if (!matchedItem) throw new Error('Article not found in recent feed items.');
+    if (!matchedItem) throw new RssArticleNotFoundError();
     return { html: sanitizeClientHtml(matchedItem.rawHtml), link: matchedItem.link };
   } catch (error) {
     console.error('[feedService] fetchAndExtractArticle error:', error);

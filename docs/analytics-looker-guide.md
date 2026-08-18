@@ -11,6 +11,13 @@ Connect Looker Studio to the BigQuery view named above. It contains one row per
 particular returned feed. It joins later actions to that exact impression through
 `impression_id`.
 
+**Reader loading-order note:** The backend records the original returned position.
+On Android, Tangent may move a fully prepared article earlier within the next five
+unseen Reader cards to avoid waiting for a slow publisher feed. The recommendation
+membership and `impression_id` do not change, but `position` remains the original
+server-returned ranking/display order rather than a later on-device loading-aware
+order. Use it as ranking context, not as an exact record of the final swipe order.
+
 Only rows where `analytics_environment = 'production'` belong in launch reports.
 Emulator rows are intentionally retained for pipeline testing but must be filtered
 out of real-user charts.

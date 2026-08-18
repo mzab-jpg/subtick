@@ -35,6 +35,8 @@
 **GA4 Measurement ID:** `G-4B3N8C8MR3` (`firebase/functions/.env`).
 **GA_API_SECRET:** Stored in Google Cloud Secret Manager; accessed via `defineSecret('GA_API_SECRET')`.
 
+**Android Reader performance module:** `modules/tangent-rss-parser/` is a local Expo module compiled into Android custom builds. It keeps direct publisher fetching on-device while moving RSS/Atom streaming parse work from React Native JavaScript to one Kotlin worker. A fresh native APK is required after changing this module; iOS requires a separate Swift implementation before its Reader preloading can be enabled.
+
 ---
 
 ## 2. Full Directory Tree
@@ -205,13 +207,14 @@ useArticleLoader.loadArticle(id):
   ├── isMockMode → setArticle(mockArticle), resolvedHtml = '' (loads live URL in WebView)
   ├── isSavedMode → getSavedArticleHtml(id)
   ├── rssStatus='archived' → useDirectUri
-  ├── has guid+feedUrl → finds the item in the raw in-memory RSS cache and lazily sanitizes only this displayed article (C6)
-  │     On failure → markRssFailed(id) in AsyncStorage; Archived Articles on → raw publication WebView,
-  │                  off → mark seen and silently advance (no raw WebView or browser escape)
+  ├── has guid+feedUrl → returns its native-prepared raw body when it is one of the next five Reader targets; otherwise finds it in raw in-memory RSS XML, then lazily sanitizes only this displayed article (C6)
+  │     Confirmed absent from a successfully loaded feed → remembered for this Reader session;
+  │       Archived Articles on → raw publication WebView, off → mark seen and silently advance
+  │     Temporary network/native/timeout failure → retryable error UI; never persisted as a failed article and never auto-skipped
   └── fallback → bodyHtml || ''
 → articleHTML built in ReaderScreen with escapeHtml + sanitized body (S1)
 → WebView renders client-side; theme CSS injects dynamically (no reload — B9)
-→ Reader warms only the next two raw RSS feeds, one at a time. Parsed raw feeds stay only in app-process memory, are reused across later Reader visits, and Android discards them automatically when the app closes. No cleaned article HTML is prefetched or retained. If Archived Articles is off and a live-RSS item is unavailable, Reader records it as seen and silently advances rather than exposing a raw webpage or browser escape.
+→ **Android native RSS pipeline:** `modules/tangent-rss-parser` downloads and streams RSS/Atom XML outside the React Native/Reader JavaScript workload. Lookahead caches raw XML for up to 16 ordinary-sized publisher feeds (5 MB cache allowance per feed) and separately extracts raw bodies for exactly the next five Reader targets (articles 2–6 while article 1 is open). It never prebuilds unrelated entries from a publisher feed. When an article is opened, native code returns its prepared raw body when available; otherwise it scans cached raw XML and returns only that matching item to JavaScript. A legitimate feed larger than the cache allowance remains readable: the selected-article lane stream-parses it directly without retaining the full feed. A selected active article uses its own serial native lane, while lookahead uses at most two bounded native workers, so the selected article never waits behind speculative work and one slow publisher does not block every later target. The tapped Dashboard/current Reader article and all past Reader articles are fixed. Only after an exact future body finishes preparation may Reader reorder the same five unseen targets: completed targets come first, stable original order breaks ties, and no recommendation is added, removed, or replaced. Reader targets a rolling five upcoming articles: opening article 1 queues 2–6; each advance adds only the newly exposed sixth position. JavaScript sanitises only the displayed article. The cache is never written to disk and is discarded when Android closes the app. iOS and pre-native development builds retain the JavaScript parser fallback. If Archived Articles is off and a live-RSS item is unavailable, Reader records it as seen and silently advances rather than exposing a raw webpage or browser escape.
 ```
 
 ### 3e. Behavior Event Pipeline (+ Analytics)
@@ -222,6 +225,8 @@ ReaderScreen → behaviorTracker records foreground-only duration, maximum scrol
   → Any normal Reader exit (HUD close, Android/system back, or queue-exhausted exit) uses one guarded finish path:
     queue raw session + write local History → navigate immediately; behavior sync continues in the background
   → Phone applies a provisional default-rule stat estimate for instant display; the next server profile update replaces it with the authoritative live-config classification
+  → A valid edge swipe requires horizontal direction and 40px distance; holding the finger still for more than 200 ms before release deliberately cancels it without navigating or recording behaviour
+  → Behavior events remain locally queued during active Reader use; backend batch sync occurs on Reader exit, reconnect, or other lifecycle flushes rather than at the 20-event threshold
   → Swipe navigation stays non-blocking; AsyncStorage queue remains mutex-serialized and preserves offline sessions
   → syncBehaviorEvents Cloud Function (sends client_id):
       Auth: request.auth.uid enforced; request fields are validated

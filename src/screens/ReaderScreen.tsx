@@ -47,6 +47,7 @@ import { ReaderProgressBar } from '../features/reader/ReaderProgressBar';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 45;
 const SWIPE_THRESHOLD = 40;
+const SWIPE_PAUSE_THRESHOLD_MS = 200;
 // Extreme edge band: a swipe starting here reveals the system bars
 // (status + nav) so the user can use the native back gesture, without
 // advancing to the next article or firing any weighting events.
@@ -125,17 +126,24 @@ export default function ReaderScreen() {
   const { profile: contextProfile, applyProvisionalSession } = useUser();
   const exitingReaderRef = useRef(false);
   const serverSeenIds = contextProfile?.seenArticleIds;
+  // The loader is created before the queue, so use a stable ref to let a
+  // completed background preparation notify the current queue implementation.
+  const prioritizePreparedArticleRef = useRef<(articleId: string) => void>(() => {});
+  const handleArticlePrepared = useCallback((preparedArticleId: string) => {
+    prioritizePreparedArticleRef.current(preparedArticleId);
+  }, []);
 
   // --- Feature hooks ---
   const {
-    article, resolvedHtml, fetchError, unavailableFromRss, loading,
-    rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles, cancelPrefetch,
+    article, resolvedHtml, fetchError, unavailableFromRss, loading, slowLoading,
+    articleTimingRef, rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles, cancelPrefetch,
   } = useArticleLoader({
     articleId,
     isSavedMode,
     isMockMode,
     allowArchivedFallback: contextProfile?.includeArchivedArticles === true,
     mockArticle,
+    onArticlePrepared: handleArticlePrepared,
   });
 
   const {
@@ -145,7 +153,7 @@ export default function ReaderScreen() {
 
   const {
     activeQueueIds, recommendationContexts, currentIndex, hasNext, hasPrev,
-    queueExhausted, preloading, setQueueExhausted, goToNext, goToPrev,
+    queueExhausted, preloading, setQueueExhausted, prioritizePreparedArticle, goToNext, goToPrev,
   } = useNavigationQueue({
     queueArticleIds: queueArticleIds || [],
     recommendationContexts: initialRecommendationContexts,
@@ -153,6 +161,8 @@ export default function ReaderScreen() {
     isRestrictedMode,
     loadArticle, setIsSaved, setIsLiked, serverSeenIds,
   });
+  const activeArticleId = activeQueueIds[currentIndex] || articleId;
+  prioritizePreparedArticleRef.current = prioritizePreparedArticle;
 
   // Skip an unavailable live-RSS item when raw webpages are disabled. It is
   // recorded as seen so Dashboard will not suggest it again, then Reader moves
@@ -168,9 +178,8 @@ export default function ReaderScreen() {
   const actualWordCountRef = useRef<number>(0);
   const webViewInitialLoadRef = useRef<boolean>(true);
   const webViewRef = useRef<WebView>(null);
-  const swipeLastMoveTimeRef = useRef<number>(0);
-  const SWIPE_PAUSE_THRESHOLD_MS = 200;
-  const panX = useRef(0);
+  const swipeLastMoveTimeRef = useRef(0);
+  const swipePanXRef = useRef(0);
   const swipeStartXRef = useRef(0);
 
   // Reset webview initial load guard whenever article changes
@@ -197,15 +206,13 @@ export default function ReaderScreen() {
     }
   }, [articleId]);
 
-  // Warm only the next two articles. This keeps the immediate reading path
-  // responsive instead of downloading/parsing a long queue of publisher feeds.
+  // Maintain a five-article upcoming buffer. Android's native module handles
+  // one publisher feed at a time away from the Reader JavaScript/UI workload.
   useEffect(() => {
-    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 3);
-    if (upcomingIds.length > 0) prefetchArticles(upcomingIds);
+    const upcomingIds = activeQueueIds.slice(currentIndex + 1, currentIndex + 6);
+    if (upcomingIds.length > 0) void prefetchArticles(upcomingIds);
   }, [currentIndex, activeQueueIds, prefetchArticles]);
 
-  // Stop only this Reader's warming work on dismissal. Raw publisher RSS stays
-  // in app memory and is automatically discarded when Android closes the app.
   useEffect(() => () => {
     cancelPrefetch();
   }, [cancelPrefetch]);
@@ -276,30 +283,31 @@ export default function ReaderScreen() {
           if (isHistoryMode) return false;
           const x = evt.nativeEvent.locationX;
           swipeStartXRef.current = x;
+          swipePanXRef.current = 0;
+          swipeLastMoveTimeRef.current = Date.now();
           return x <= EDGE_ZONE_WIDTH || x >= SCREEN_WIDTH - EDGE_ZONE_WIDTH;
         },
         onMoveShouldSetPanResponder: (evt, gestureState) => {
           return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         },
         onPanResponderMove: (evt, gestureState) => {
-          // Track frame-to-frame delta rather than cumulative dx so that
-          // a pause (finger stationary) correctly ages the pause timer.
-          // gestureState.dx is cumulative and stays > 5 forever once crossed,
-          // which would prevent the abort check in onPanResponderRelease.
-          const delta = Math.abs(gestureState.dx - panX.current);
-          panX.current = gestureState.dx;
+          // Use frame-to-frame movement rather than cumulative dx: cumulative
+          // dx remains large after the finger stops, which would defeat the
+          // deliberate pause-to-cancel gesture.
+          const delta = Math.abs(gestureState.dx - swipePanXRef.current);
+          swipePanXRef.current = gestureState.dx;
           if (delta > 2) {
             swipeLastMoveTimeRef.current = Date.now();
           }
         },
         onPanResponderRelease: (evt, gestureState) => {
           const dx = gestureState.dx;
-          panX.current = 0;
+          swipePanXRef.current = 0;
 
+          // A brief hold before release is an intentional cancellation gesture.
+          // It must not navigate or record Reader behaviour.
           const timeSinceLastMove = Date.now() - swipeLastMoveTimeRef.current;
-          if (timeSinceLastMove > SWIPE_PAUSE_THRESHOLD_MS) {
-            return;
-          }
+          if (timeSinceLastMove > SWIPE_PAUSE_THRESHOLD_MS) return;
 
           // Extreme-edge swipe: show system bars so the user can use the
           // native back gesture. Don't advance the article or fire events.
@@ -328,7 +336,7 @@ export default function ReaderScreen() {
           }
         },
       }),
-    [goToNext, goToPrev, behaviorTracker, panX, article, isRestrictedMode, isSavedMode, isHistoryMode, currentWpm]
+    [goToNext, goToPrev, behaviorTracker, article, isRestrictedMode, isSavedMode, isHistoryMode, currentWpm]
   );
 
   // --- Escape RSS-controlled metadata before HTML interpolation ---
@@ -399,6 +407,25 @@ export default function ReaderScreen() {
       </html>
     `;
   }, [article, resolvedHtml, currentWpm]);
+
+  const logWebViewLoadStart = useCallback(() => {
+    const timing = articleTimingRef.current;
+    if (__DEV__ && timing && article?.id === timing.id) {
+      console.log(`[Reader Timing] WebView load started ${Date.now() - timing.startedAt}ms: ${timing.id}`);
+    }
+  }, [article?.id, articleTimingRef]);
+
+  const logWebViewLoadEnd = useCallback(() => {
+    webViewInitialLoadRef.current = false;
+    const timing = articleTimingRef.current;
+    if (__DEV__ && timing && article?.id === timing.id) {
+      const now = Date.now();
+      const stateToVisible = timing.contentReadyAt ? now - timing.contentReadyAt : undefined;
+      console.log(
+        `[Reader Timing] WebView load complete ${now - timing.startedAt}ms total${stateToVisible !== undefined ? `; ${stateToVisible}ms after content state` : ''}: ${timing.id}`
+      );
+    }
+  }, [article?.id, articleTimingRef]);
 
   const rawWebpageInjectedScript = useMemo(() => {
     const frontendRules = article?.frontendRules;
@@ -573,7 +600,7 @@ export default function ReaderScreen() {
       )}
 
       {/* Content */}
-      {loading || unavailableFromRss ? (
+      {unavailableFromRss ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -594,21 +621,25 @@ export default function ReaderScreen() {
       ) : fetchError ? (
         <View style={styles.errorContainer}>
           <AlertCircle size={48} color={colors.textMuted} style={styles.emptyIcon} />
-          <Text style={[styles.catchUpTitle, { color: colors.text }]}>Article failed to load</Text>
+          <Text style={[styles.catchUpTitle, { color: colors.text }]}>Article is taking longer than expected</Text>
           <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
-            This article may have been removed or is temporarily unavailable.
+            Check your connection and try this article again.
           </Text>
-          {contextProfile?.includeArchivedArticles === true && archivedArticleUrl ? (
-            <TouchableOpacity
-              style={[styles.catchUpButton, { backgroundColor: colors.primary, marginTop: 16 }]}
-              onPress={() => Linking.openURL(archivedArticleUrl)}
-            >
-              <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Open in Browser</Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            style={[styles.catchUpButton, { backgroundColor: colors.primary, marginTop: 16 }]}
+            onPress={() => void loadArticle(activeArticleId)}
+          >
+            <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Try Again</Text>
+          </TouchableOpacity>
         </View>
       ) : article ? (
-        useDirectUri ? (
+        <>
+        {slowLoading && (
+          <View style={[styles.slowLoadingOverlay, { backgroundColor: colors.background + 'D9' }]} pointerEvents="none">
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        )}
+        {useDirectUri ? (
           <View style={{ flex: 1, paddingTop: 3 }}>
             <View style={[styles.archivedHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.archivedTitle, { color: colors.text }]}>{article.title}</Text>
@@ -622,7 +653,8 @@ export default function ReaderScreen() {
               source={{ uri: archivedArticleUrl }}
               onMessage={handleWebViewMessage}
               onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
-              onLoadEnd={() => { webViewInitialLoadRef.current = false; }}
+              onLoadStart={logWebViewLoadStart}
+              onLoadEnd={logWebViewLoadEnd}
               onError={(syntheticEvent) => {
                 console.error('[Reader] WebView load error:', syntheticEvent.nativeEvent);
               }}
@@ -644,6 +676,8 @@ export default function ReaderScreen() {
             style={[styles.webview, { backgroundColor: 'transparent' }]}
             originWhitelist={['*']}
             source={{ html: articleHTML }}
+            onLoadStart={logWebViewLoadStart}
+            onLoadEnd={logWebViewLoadEnd}
             onMessage={handleWebViewMessage}
             onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
             javaScriptEnabled
@@ -654,7 +688,12 @@ export default function ReaderScreen() {
             overScrollMode="never"
             scalesPageToFit={false}
           />
-        )
+        )}
+        </>
+      ) : loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       ) : (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.textSecondary }]}>Article could not be loaded.</Text>
@@ -667,6 +706,7 @@ export default function ReaderScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  slowLoadingOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', zIndex: 3 },
   webview: { flex: 1, marginTop: 0 },
   catchUpContainer: {
     flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32,

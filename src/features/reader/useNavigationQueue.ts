@@ -5,7 +5,6 @@
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { flushBehaviorQueue } from '../../services/behaviorSync';
 import { getRankedFeed, getSeenArticleIdsLocally, getSavedArticleIds } from '../../services/feedService';
 import { RecommendationContext } from '../../types';
 
@@ -30,6 +29,8 @@ interface UseNavigationQueueResult {
   queueExhausted: boolean;
   preloading: boolean;
   setQueueExhausted: (v: boolean) => void;
+  /** Promotes a ready unseen item only within the next five Reader positions. */
+  prioritizePreparedArticle: (articleId: string) => void;
   goToNext: () => void;
   goToPrev: () => void;
 }
@@ -51,9 +52,33 @@ export function useNavigationQueue({
   const [preloading, setPreloading] = useState(false);
 
   const preloadingRef = useRef(false);
+  const preparedArticleIdsRef = useRef<Set<string>>(new Set());
 
   const hasNext = currentIndex < activeQueueIds.length - 1;
   const hasPrev = currentIndex > 0;
+
+  const prioritizePreparedArticle = useCallback((articleId: string) => {
+    preparedArticleIdsRef.current.add(articleId);
+    setQueueIds((previous) => {
+      // The selected/current article and every previously displayed article are
+      // fixed. Inside only the next five, completed preparations come first.
+      // Stable filtering preserves original ranking order when readiness matches.
+      const windowStart = currentIndex + 1;
+      const windowEnd = Math.min(previous.length, windowStart + 5);
+      const futureWindow = previous.slice(windowStart, windowEnd);
+      if (!futureWindow.includes(articleId)) return previous;
+
+      const ready = futureWindow.filter((id) => preparedArticleIdsRef.current.has(id));
+      const waiting = futureWindow.filter((id) => !preparedArticleIdsRef.current.has(id));
+      const reorderedWindow = [...ready, ...waiting];
+      if (futureWindow.every((id, index) => id === reorderedWindow[index])) return previous;
+
+      const next = [...previous];
+      next.splice(windowStart, futureWindow.length, ...reorderedWindow);
+      if (__DEV__) console.log(`[Reader Queue] prioritized ${ready.length} prepared future article(s)`);
+      return next;
+    });
+  }, [currentIndex]);
 
   const preloadNextArticles = useCallback(async () => {
     if (preloadingRef.current) return;
@@ -61,8 +86,8 @@ export function useNavigationQueue({
     setPreloading(true);
 
     try {
-      flushBehaviorQueue().catch((e) => console.warn('[Preloader] Flush failed silently:', e));
-
+      // Recommendation replenishment must not start a behavior Cloud Function
+      // upload while the person is actively swiping through Reader.
       const historicalSeen = await getSeenArticleIdsLocally(serverSeenIds);
       const combinedSeenIds = Array.from(new Set([...historicalSeen, ...activeQueueIds]));
       const result = await getRankedFeed(combinedSeenIds);
@@ -130,6 +155,7 @@ export function useNavigationQueue({
     queueExhausted,
     preloading,
     setQueueExhausted,
+    prioritizePreparedArticle,
     goToNext,
     goToPrev,
   };

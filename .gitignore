@@ -39,6 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+# Generated build output from source-controlled local Expo modules.
+/modules/**/android/build/
+/modules/**/android/.gradle/
 
 # Firebase
 firebase/functions/lib/
