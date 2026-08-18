@@ -5,7 +5,7 @@
 // Reads events from nested subcollections: users/{userId}/behavior_events
 // ============================================================
 
-import * as admin from 'firebase-admin';
+import { db } from './firebaseAdmin.js';
 import { BehaviorEvent, UserProfile } from './types.js';
 import {
   FEEDBACK_DELTAS,
@@ -18,8 +18,6 @@ import {
 } from './constants.js';
 import { sendGAEvents, sendGAUserProperties } from './analytics.js';
 import { loadScoringConfig, ScoringConfig } from './scoringConfig.js';
-
-const db = admin.firestore();
 
 /**
  * Update category weights for a user based on their recent behavior events.

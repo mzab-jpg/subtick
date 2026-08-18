@@ -83,7 +83,7 @@ A full user manual lives in [`docs/emulator/`](./emulator/README.md):
 
 | Package | Confirmed by |
 |---|---|
-| `firebase-admin` | `index.ts:6` — `import * as admin from 'firebase-admin'` |
+| `firebase-admin` | `firebaseAdmin.ts` — one safe `admin.apps.length`-guarded initialisation; shared `db`/`auth` exports prevent import-order startup failures |
 | `firebase-functions` | `rssCollector.ts` — `import { onSchedule } from 'firebase-functions/v2/scheduler'`; `getRankedFeed.ts` — `import { onCall } from 'firebase-functions/v2/https'` |
 
 **Removed (D7 fix):** `sanitize-html` and `uuid` were listed but had zero imports in the functions codebase.
@@ -169,7 +169,7 @@ The server loads `system/scoringConfig`, merges it over compiled defaults, clamp
 
 The two cold-start shares are normalized to total 1.0. Once `publisherWeights` has any property for a publisher—including a negative one—the normal 0.60 category / 0.40 publisher blend applies.
 
-Feed assembly reserves the highest-scoring eligible article in its normal tranche allocation and returns it at position 0 for the Dashboard hero. The remaining selected cards use the fixed display-order anti-fatigue guard after tranche selection: it avoids a third consecutive article from the same category whenever any other category remains. This is deliberately not a scoring-config slider; scoring, tranche membership, discovery allocation, and the publisher cap remain unchanged.
+Feed assembly reserves the highest-scoring eligible article in its normal tranche allocation and returns it at position 0 for the Dashboard hero. The remaining selected cards are randomized, then use fixed display-order anti-fatigue guards: no third consecutive category where another category remains, and no repeat publisher within the preceding three cards where another publisher remains. The Reader retains this backend order; a tapped card opens at its own position. These guards are deliberately not scoring-config sliders; scoring, tranche membership, discovery allocation, and the publisher cap remain unchanged.
 
 Reader timing uses the built-in React Native `AppState` API (no Expo package). `inactive` and `background` intervals are excluded from a Reader session; only `active` foreground time is sent as `sessionDuration`. This protects WPM calibration, server read classification, and total reading-time statistics from phone interruptions.
 

@@ -4,17 +4,12 @@
 // ============================================================
 
 import * as admin from 'firebase-admin';
+import { db, auth } from './firebaseAdmin.js';
 import { timingSafeEqual } from 'crypto';
 import Parser from 'rss-parser';
 import { collectRssFeeds } from './rssCollector.js';
 import { FeedSource } from './types.js';
 import { normalizeFeedUrl } from './feedValidation.js';
-
-// Initialize Firebase Admin (singleton)
-admin.initializeApp();
-
-const db = admin.firestore();
-const auth = admin.auth();
 
 import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
 import {

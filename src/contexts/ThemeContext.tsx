@@ -172,7 +172,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         a {
           color: ${c.primary} !important;
           text-decoration: none;
-          border-bottom: 1px solid ${c.border};
+          border-bottom: 1px solid ${c.textSecondary};
         }
         img {
           max-width: 100%;

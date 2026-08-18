@@ -212,31 +212,28 @@ export default function DashboardScreen() {
   const navigateToReader = (articleId: string, index: number) => {
     if (index < 0 || index >= feedArticles.length) return;
 
-    // Build the Reader queue from all feed articles EXCEPT the tapped one.
-    // Recommendation context stays with each ID so later reading actions can be
-    // attributed to this exact feed impression.
-    const remainingArticles = feedArticles.filter(a => a.id !== articleId);
-    const shuffledQueue = [...remainingArticles]
-      .sort(() => Math.random() - 0.5)
-      .map(a => a.id);
+    // The backend has already randomized and then repaired this feed's order
+    // for category and publisher variety. Preserve it in Reader. The tapped
+    // card opens at its actual position instead of being reordered away.
+    const orderedQueue = feedArticles.map((article) => article.id);
     const recommendationContexts = Object.fromEntries(
       feedArticles
         .filter((article) => !!article.recommendationContext)
         .map((article) => [article.id, article.recommendationContext!])
     );
 
-    // Mark the tapped article + all shuffled-queue articles as consumed so
-    // they are filtered out on the next Dashboard focus (after Reader is
-    // dismissed). We do NOT call setFeedArticles here — that would cause a
+    // Mark the tapped article as consumed so it is filtered out on the next
+    // Dashboard focus after Reader is dismissed. We do NOT call
+    // setFeedArticles here — that would cause a
     // visible re-render while the Reader modal is sliding up.
     sessionShownIds.current.add(articleId);
     if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, feedArticles, sessionShownIds.current);
 
     navigation.navigate('Reader', {
       articleId,
-      queueArticleIds: shuffledQueue,
+      queueArticleIds: orderedQueue,
       recommendationContexts,
-      startIndex: 0,
+      startIndex: index,
       userWpm: effectiveProfile?.averageWpm || 200,
       mode: 'feed',
     });

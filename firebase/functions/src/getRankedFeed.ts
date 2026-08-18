@@ -6,6 +6,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
+import { db } from './firebaseAdmin.js';
 import { randomUUID } from 'crypto';
 import { Article, ArticleScoreDetail, RankedFeedResult, UserProfile } from './types.js';
 import {
@@ -15,8 +16,6 @@ import {
 } from './constants.js';
 import { gaApiSecret, sendGAEvents } from './analytics.js';
 import { loadScoringConfig, prepareConfig, ScoringConfig } from './scoringConfig.js';
-
-const db = admin.firestore();
 
 // --- Configuration ---
 const CACHE_LIFETIME_MS = 10 * 60 * 1000; // 10 minutes memory cache
@@ -556,6 +555,38 @@ export function interleaveArticlesByCategory<T extends { category: string }>(art
   return result;
 }
 
+/**
+ * Keeps the already-randomized feed varied without changing its membership.
+ * The optional first article is fixed (the Dashboard hero). Every following
+ * position prefers a publisher that was not used in the preceding `spacing`
+ * cards. If every remaining card would repeat a recent publisher, the earliest
+ * remaining card is used so a publisher-skewed pool can still be fully served.
+ */
+export function spaceArticlesByPublisher<T extends { id: string; publicationName: string }>(
+  articles: T[],
+  spacing = 3,
+  fixedFirstArticleId?: string
+): T[] {
+  if (articles.length <= 1 || spacing < 1) return [...articles];
+
+  const remaining = [...articles];
+  const result: T[] = [];
+  if (fixedFirstArticleId) {
+    const fixedIndex = remaining.findIndex((article) => article.id === fixedFirstArticleId);
+    if (fixedIndex >= 0) result.push(remaining.splice(fixedIndex, 1)[0]);
+  }
+
+  while (remaining.length > 0) {
+    const recentPublishers = new Set(
+      result.slice(Math.max(0, result.length - spacing)).map((article) => article.publicationName)
+    );
+    const eligibleIndex = remaining.findIndex((article) => !recentPublishers.has(article.publicationName));
+    result.push(remaining.splice(eligibleIndex >= 0 ? eligibleIndex : 0, 1)[0]);
+  }
+
+  return result;
+}
+
 export function assembleFeedWithTranches(
   scoredList: { article: Article; fullScore: number; tailScore: number }[],
   totalSize = 30,
@@ -759,13 +790,14 @@ export function assembleFeedWithTranches(
 
   // Interleaving is intentionally random/category-aware, but the Dashboard hero
   // must make a strong first impression. Move the reserved highest-scoring card
-  // to index 0 after interleaving; every other card retains the varied order.
+  // to index 0, then repair publisher repetition without changing membership.
   const anchorIndex = startupAnchorId
     ? categoryInterleavedFeed.findIndex(article => article.id === startupAnchorId)
     : -1;
-  const orderedFeed = anchorIndex > 0
+  const heroFirstFeed = anchorIndex > 0
     ? [categoryInterleavedFeed[anchorIndex], ...categoryInterleavedFeed.filter((_, index) => index !== anchorIndex)]
     : categoryInterleavedFeed;
+  const orderedFeed = spaceArticlesByPublisher(heroFirstFeed, 3, startupAnchorId);
 
   console.log(`[Tranche Selector] High: ${pickedHigh.length}, Mid: ${pickedMid.length}, Tail: ${pickedTail.length}`);
 

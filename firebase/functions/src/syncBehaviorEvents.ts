@@ -5,13 +5,11 @@
 // ============================================================
 
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import * as admin from 'firebase-admin';
+import { db } from './firebaseAdmin.js';
 import { BehaviorEvent, BehaviorEventType, UserProfile } from './types.js';
 import { updateWeights } from './weightUpdater.js';
 import { gaApiSecret, sendGAEvents } from './analytics.js';
 import { loadScoringConfig, prepareConfig, classifyRead, ScoringConfig } from './scoringConfig.js';
-
-const db = admin.firestore();
 
 // --- Configuration ---
 const DEFAULT_PUBLISHER_QUALITY = 0.8;

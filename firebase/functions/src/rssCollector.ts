@@ -4,7 +4,7 @@
 // ============================================================
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import * as admin from 'firebase-admin';
+import { db } from './firebaseAdmin.js';
 import Parser from 'rss-parser';
 import { createHash } from 'crypto';
 import { SUBSTACK_FEEDS, PAYWALL_KEYWORDS } from './constants.js';
@@ -14,8 +14,6 @@ const parser = new Parser({
   timeout: 15000,
   headers: { 'User-Agent': 'SubTick/1.0 RSS Collector' },
 });
-
-const db = admin.firestore();
 
 interface OgMetadata {
   headerImageUrl?: string;

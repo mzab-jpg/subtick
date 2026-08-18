@@ -100,8 +100,57 @@ function makeReaderScript(frontendRules?: { removeCss?: string[]; injectCss?: st
       }
       window.addEventListener('scroll', reportScroll, { passive: true });
 
+      var tapStartX = 0;
+      var tapStartY = 0;
+      var tapMoved = false;
+      var tapOnLink = false;
+      var lastTapAt = 0;
+      var lastTapX = 0;
+      var lastTapY = 0;
+      var suppressClickUntil = 0;
+
+      document.body.addEventListener('touchstart', function(e) {
+        if (!e.touches || e.touches.length !== 1) return;
+        var touch = e.touches[0];
+        tapStartX = touch.clientX;
+        tapStartY = touch.clientY;
+        tapMoved = false;
+        tapOnLink = !!(e.target && e.target.closest && e.target.closest('a'));
+      }, { passive: true });
+
+      document.body.addEventListener('touchmove', function(e) {
+        if (!e.touches || e.touches.length !== 1) return;
+        var touch = e.touches[0];
+        if (Math.abs(touch.clientX - tapStartX) > 12 || Math.abs(touch.clientY - tapStartY) > 12) {
+          tapMoved = true;
+        }
+      }, { passive: true });
+
+      document.body.addEventListener('touchend', function(e) {
+        if (tapMoved || tapOnLink || !e.changedTouches || e.changedTouches.length !== 1) return;
+        var touch = e.changedTouches[0];
+        var now = Date.now();
+        var isDoubleTap = now - lastTapAt <= 280
+          && Math.abs(touch.clientX - lastTapX) <= 24
+          && Math.abs(touch.clientY - lastTapY) <= 24;
+
+        if (isDoubleTap) {
+          // The first normal click may already have toggled the HUD. Suppress the
+          // second one, then explicitly reveal it alongside the like feedback.
+          suppressClickUntil = now + 100;
+          lastTapAt = 0;
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'doubleTapLike' }));
+          return;
+        }
+
+        lastTapAt = now;
+        lastTapX = touch.clientX;
+        lastTapY = touch.clientY;
+      }, { passive: true });
+
       document.body.addEventListener('click', function(e) {
-        if (e.target.tagName !== 'A') {
+        if (Date.now() < suppressClickUntil) return;
+        if (!(e.target && e.target.closest && e.target.closest('a'))) {
           var scrollTop = window.scrollY || document.documentElement.scrollTop;
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'hudToggle', autoHide: scrollTop > 50 }));
         }
@@ -156,6 +205,8 @@ export default function ReaderScreen() {
     isLiked, isSaved, hudVisible, hudTimeoutRef,
     setIsLiked, setIsSaved, setHudVisible, handleHudAutoHide,
   } = useReaderHUD();
+  const [heartPulseKey, setHeartPulseKey] = useState(0);
+  const likeToggleRef = useRef<(() => void) | null>(null);
 
   const {
     activeQueueIds, recommendationContexts, currentIndex, hasNext, hasPrev,
@@ -243,6 +294,16 @@ export default function ReaderScreen() {
         } else if (data.type === 'wordCount' && typeof data.count === 'number') {
           actualWordCountRef.current = data.count;
           behaviorTracker.trackActualWordCount(data.count);
+        } else if (data.type === 'doubleTapLike') {
+          // The WebView has already ruled out scroll movement and links. Reuse the
+          // normal control path so offline queueing, recommendation attribution,
+          // and like/unlike learning remain exactly the same.
+          if (!isRestrictedMode && likeToggleRef.current) {
+            setHudVisible(true);
+            handleHudAutoHide(true, 2500);
+            setHeartPulseKey((previous) => previous + 1);
+            likeToggleRef.current();
+          }
         } else if (data.type === 'hud') {
           setHudVisible(data.visible);
           if (data.visible) {
@@ -271,7 +332,7 @@ export default function ReaderScreen() {
         // Ignore non-JSON messages
       }
     },
-    [behaviorTracker, scrollProgress, handleHudAutoHide, setHudVisible, hudTimeoutRef]
+    [behaviorTracker, scrollProgress, handleHudAutoHide, setHudVisible, hudTimeoutRef, isRestrictedMode]
   );
 
   const showSystemBars = () => {
@@ -555,6 +616,10 @@ export default function ReaderScreen() {
     }
   };
 
+  // Keep the latest state-aware action available to the earlier WebView callback
+  // without moving its message handler or creating a second like implementation.
+  likeToggleRef.current = handleLikeToggle;
+
   const handleSaveToggle = () => {
     const newVal = !isSaved;
     setIsSaved(newVal);
@@ -584,6 +649,7 @@ export default function ReaderScreen() {
           isSaved={isSaved}
           isRestrictedMode={isRestrictedMode}
           resolvedHtml={resolvedHtml}
+          heartPulseKey={heartPulseKey}
           onClose={handleCloseReader}
           onLikeToggle={handleLikeToggle}
           onSaveToggle={handleSaveToggle}
@@ -592,18 +658,6 @@ export default function ReaderScreen() {
 
       {/* Progress Bar */}
       <ReaderProgressBar scrollProgress={scrollProgress} colors={colors} />
-
-      {/* Swipe Zone Indicators */}
-      {!isRestrictedMode && (
-        <View style={[styles.edgeHintLeft, { backgroundColor: colors.surfaceSecondary + '20' }]}>
-          <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>◂</Text>
-        </View>
-      )}
-      {!isHistoryMode && (
-        <View style={[styles.edgeHintRight, { backgroundColor: colors.surfaceSecondary + '20' }]}>
-          <Text style={[styles.edgeHintText, { color: colors.textMuted }]}>▸</Text>
-        </View>
-      )}
 
       {/* Content */}
       {unavailableFromRss ? (
@@ -721,15 +775,6 @@ const styles = StyleSheet.create({
   catchUpButtonText: { fontSize: TEXT_BASE, fontWeight: '700' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   errorText: { fontSize: TEXT_BASE },
-  edgeHintLeft: {
-    position: 'absolute', left: 0, top: '40%', bottom: '40%',
-    width: EDGE_ZONE_WIDTH, zIndex: 50, justifyContent: 'center', alignItems: 'center',
-  },
-  edgeHintRight: {
-    position: 'absolute', right: 0, top: '40%', bottom: '40%',
-    width: EDGE_ZONE_WIDTH, zIndex: 50, justifyContent: 'center', alignItems: 'center',
-  },
-  edgeHintText: { fontSize: TEXT_SM, opacity: 0.2 },
   archivedHeader: {
     paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, borderBottomWidth: 1,
   },

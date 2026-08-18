@@ -43,7 +43,7 @@ The remaining M8 entry below concerns only product copy and later tutorial desig
 
 ### 17 August 2026 — Reader close, stable Dashboard cards, and archive-preference batch
 
-- **Stable Dashboard return:** Opening Reader no longer treats its entire shuffled queue as consumed. Returning without using Shuffle/Discover leaves the visible hero and row cards in place; only the article actually opened is excluded from a later explicitly requested feed.
+- **Stable Dashboard return:** Opening Reader no longer treats its entire Reader queue as consumed. Returning without using Shuffle/Discover leaves the visible hero and row cards in place; only the article actually opened is excluded from a later explicitly requested feed.
 - **History on close:** Closing a live-feed article now concludes its reading session and waits for its local History/seen metadata to be written before dismissing Reader. Browsing History, Saved Reads, and sandbox content remains excluded from this path.
 - **Archived Articles respected at display time:** If extraction of an otherwise current RSS article fails, Tangent records the device-local RSS failure. It loads a raw in-app publication webpage only when Archived Articles is enabled; otherwise it silently records the unavailable item as seen and advances without exposing a raw webpage or browser escape.
 - **Scroll-depth rule confirmed:** Tangent intentionally retains maximum depth reached for read classification. Scrolling back upward does not erase that reading evidence; CSS theme updates use injected JavaScript, not a WebView reload.

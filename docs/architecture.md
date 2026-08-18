@@ -85,6 +85,7 @@
 │       ├── tsconfig.json           # NodeNext, ES2022, strict mode
 │       └── src/
 │           ├── index.ts            # Exports 14 Cloud Functions, protected dashboard actions, and addRssFeed
+│           ├── firebaseAdmin.ts    # Safe one-time Firebase Admin initialisation + shared db/auth exports
 │           ├── types.ts            # Shared interfaces (UserProfile, Article, etc.)
 │           ├── constants.ts        # Scoring constants, FEEDBACK_DELTAS, etc.
 │           ├── analytics.ts        # GA4 Measurement Protocol (sendGAEvents, sendGAUserProperties)
@@ -189,7 +190,8 @@ DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id fr
   → Hard per-publisher cap of 5 and configurable category maximum applied during picking; overflow cascades
   → Configurable minimum distinct categories is filled with eligible alternatives when available
   → Category-aware final interleave: avoids a third same-category card when another category remains
-  → Highest eligible article is reserved and returned first for the Dashboard hero; the remaining cards retain their varied order
+  → Highest eligible article is reserved and returned first for the Dashboard hero; a final publisher-spacing pass then keeps each later publisher at least three cards apart whenever another publisher remains
+  → Reader preserves this backend order; a specifically tapped Dashboard card opens at its own position rather than triggering a second client-side shuffle
   → return { articles: Article[30] }
   → Phone retains the active 30-card Dashboard feed in a UID-scoped in-memory cache; screen remounts restore it instead of silently requesting a replacement feed
   → Client-side seen filter → slice(0,30) → setFeedArticles
@@ -227,6 +229,7 @@ ReaderScreen → behaviorTracker records foreground-only duration, maximum scrol
     queue raw session + write local History → navigate immediately; behavior sync continues in the background
   → Phone applies a provisional default-rule stat estimate for instant display; the next server profile update replaces it with the authoritative live-config classification
   → A valid edge swipe requires horizontal direction and 40px distance; holding the finger still for more than 200 ms before release deliberately cancels it without navigating or recording behaviour
+  → A stationary double tap within rendered live Reader content reuses the normal Like/Unlike event path, reveals the HUD, and pulses the heart; touch movement and links are excluded so reading scroll and external-link handling remain unaffected
   → Behavior events remain locally queued during active Reader use; backend batch sync occurs on Reader exit, reconnect, or other lifecycle flushes rather than at the 20-event threshold
   → Concurrent lifecycle flush requests share one in-progress upload, preventing duplicate sends of the same queued batch
   → Swipe navigation stays non-blocking; AsyncStorage queue remains mutex-serialized and preserves offline sessions

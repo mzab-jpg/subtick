@@ -10,7 +10,7 @@
 // Control Dashboard and the live algorithm always agree.
 // ============================================================
 
-import * as admin from 'firebase-admin';
+import { db } from './firebaseAdmin.js';
 import {
   SCORE_WEIGHTS,
   SCORE_WEIGHTS_TAIL,
@@ -25,8 +25,6 @@ import {
   DEFAULT_NOT_INTERESTED_WEIGHT,
   DEFAULT_NEUTRAL_WEIGHT,
 } from './constants.js';
-
-const db = admin.firestore();
 
 // ------------------------------------------------------------------
 // Types

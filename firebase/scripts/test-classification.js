@@ -10,7 +10,7 @@ const {
   classifyRead,
   prepareConfig,
 } = require('../functions/lib/scoringConfig.js');
-const { interleaveArticlesByCategory, assembleFeedWithTranches } = require('../functions/lib/getRankedFeed.js');
+const { interleaveArticlesByCategory, spaceArticlesByPublisher, assembleFeedWithTranches } = require('../functions/lib/getRankedFeed.js');
 const { normalizeFeedUrl } = require('../functions/lib/feedValidation.js');
 const { applyDecay } = require('../functions/lib/weightUpdater.js');
 
@@ -67,6 +67,16 @@ function hasAvoidableThirdRun(feed) {
   return false;
 }
 
+function hasPublisherSpacingViolation(feed, spacing = 3) {
+  for (let index = 0; index < feed.length; index += 1) {
+    const recentPublishers = new Set(
+      feed.slice(Math.max(0, index - spacing), index).map((article) => article.publicationName)
+    );
+    if (recentPublishers.has(feed[index].publicationName)) return true;
+  }
+  return false;
+}
+
 const mixedTopics = [
   ...Array.from({ length: 8 }, (_, id) => ({ id: `tech_${id}`, category: 'Technology' })),
   ...Array.from({ length: 5 }, (_, id) => ({ id: `science_${id}`, category: 'Science' })),
@@ -83,6 +93,33 @@ const unavoidableSkew = [
 const interleavedSkew = interleaveArticlesByCategory(unavoidableSkew);
 check('skewed interleave preserves every selected article', new Set(interleavedSkew.map((article) => article.id)).size, unavoidableSkew.length);
 check('skewed interleave only exceeds two after alternatives are exhausted', hasAvoidableThirdRun(interleavedSkew), false);
+
+const publisherMixedFeed = [
+  { id: 'a_1', publicationName: 'Alpha' },
+  { id: 'a_2', publicationName: 'Alpha' },
+  { id: 'a_3', publicationName: 'Alpha' },
+  { id: 'b_1', publicationName: 'Beta' },
+  { id: 'c_1', publicationName: 'Charlie' },
+  { id: 'd_1', publicationName: 'Delta' },
+  { id: 'e_1', publicationName: 'Echo' },
+  { id: 'f_1', publicationName: 'Foxtrot' },
+  { id: 'g_1', publicationName: 'Golf' },
+];
+const publisherSpacedFeed = spaceArticlesByPublisher(publisherMixedFeed, 3, 'a_1');
+check('publisher spacing preserves the hero article', publisherSpacedFeed[0].id, 'a_1');
+check('publisher spacing preserves every selected article', new Set(publisherSpacedFeed.map((article) => article.id)).size, publisherMixedFeed.length);
+check('publisher spacing prevents repeats within three cards when alternatives exist', hasPublisherSpacingViolation(publisherSpacedFeed), false);
+
+const publisherSkewedFeed = [
+  { id: 'a_1', publicationName: 'Alpha' },
+  { id: 'a_2', publicationName: 'Alpha' },
+  { id: 'a_3', publicationName: 'Alpha' },
+  { id: 'a_4', publicationName: 'Alpha' },
+  { id: 'b_1', publicationName: 'Beta' },
+];
+const publisherSkewedResult = spaceArticlesByPublisher(publisherSkewedFeed, 3, 'a_1');
+check('publisher-skewed feed still preserves every article', new Set(publisherSkewedResult.map((article) => article.id)).size, publisherSkewedFeed.length);
+check('publisher-skewed feed completes when spacing is unavoidable', publisherSkewedResult.length, publisherSkewedFeed.length);
 
 checkClose('one-day decay preserves existing rate', applyDecay({ Technology: 2 }, 0.995).Technology, 1.995);
 checkClose('thirty-day decay applies rate thirty times', applyDecay({ Technology: 2 }, Math.pow(0.995, 30)).Technology, 1 + Math.pow(0.995, 30));

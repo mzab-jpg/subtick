@@ -137,6 +137,19 @@ const failedFutureRssCardsSkipBeforeDisplay = loaderSource.includes('onFutureArt
 console.log(`${failedFutureRssCardsSkipBeforeDisplay ? '✓' : '✗'} Failed future RSS cards leave this Reader session before they can block a swipe`);
 if (!failedFutureRssCardsSkipBeforeDisplay) failed = true;
 
+const readerDoubleTapLikeFeedback = source.includes("type: 'doubleTapLike'")
+  && source.includes("if (!isRestrictedMode && likeToggleRef.current)")
+  && source.includes('handleHudAutoHide(true, 2500);')
+  && source.includes('setHeartPulseKey((previous) => previous + 1);')
+  && source.includes('likeToggleRef.current();')
+  && source.includes('tapMoved || tapOnLink')
+  && source.includes('suppressClickUntil')
+  && source.includes('heartPulseKey={heartPulseKey}')
+  && fs.readFileSync(path.join(__dirname, '..', 'src', 'features', 'reader', 'ReaderHUD.tsx'), 'utf8').includes('Animated.sequence')
+  && fs.readFileSync(path.join(__dirname, '..', 'src', 'features', 'reader', 'ReaderHUD.tsx'), 'utf8').includes('useNativeDriver: true');
+console.log(`${readerDoubleTapLikeFeedback ? '✓' : '✗'} Reader double tap reuses like state, reveals HUD, and pulses the heart without treating scrolls or links as taps`);
+if (!readerDoubleTapLikeFeedback) failed = true;
+
 const readerKeepsSequentialRankedOrder = navigationQueueSource.includes('const nextIndex = currentIndex + 1;')
   && navigationQueueSource.includes('const nextId = activeQueueIds[nextIndex];')
   && !navigationQueueSource.includes('const readyIndex = activeQueueIds.findIndex(');

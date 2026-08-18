@@ -3,8 +3,8 @@
 // Frosted-glass overlay with back button, title, like/save.
 // ============================================================
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { X, Bookmark, Heart } from 'lucide-react-native';
 import { ThemeColors } from '../../types';
@@ -20,6 +20,8 @@ interface ReaderHUDProps {
   isSaved: boolean;
   isRestrictedMode: boolean;
   resolvedHtml: string;
+  /** Increments after an explicit like/unlike action to replay the heart confirmation. */
+  heartPulseKey: number;
   onClose: () => void;
   onLikeToggle: () => void;
   onSaveToggle: () => void;
@@ -33,10 +35,23 @@ export function ReaderHUD({
   isSaved,
   isRestrictedMode,
   resolvedHtml,
+  heartPulseKey,
   onClose,
   onLikeToggle,
   onSaveToggle,
 }: ReaderHUDProps) {
+  const heartScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (heartPulseKey === 0) return;
+    heartScale.stopAnimation();
+    heartScale.setValue(1);
+    Animated.sequence([
+      Animated.timing(heartScale, { toValue: 1.18, duration: 110, useNativeDriver: true }),
+      Animated.timing(heartScale, { toValue: 1, duration: 150, useNativeDriver: true }),
+    ]).start();
+  }, [heartPulseKey, heartScale]);
+
   return (
     <View style={styles.hudContainer}>
       <BlurView
@@ -59,12 +74,19 @@ export function ReaderHUD({
           </Text>
 
           <View style={styles.hudActions}>
-            <TouchableOpacity onPress={onLikeToggle} style={styles.hudIconButton}>
-              <Heart
-                size={24}
-                color={isLiked ? colors.accent : colors.text}
-                fill={isLiked ? colors.accent : 'transparent'}
-              />
+            <TouchableOpacity
+              onPress={onLikeToggle}
+              style={styles.hudIconButton}
+              accessibilityRole="button"
+              accessibilityLabel={isLiked ? 'Remove like' : 'Like article'}
+            >
+              <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+                <Heart
+                  size={24}
+                  color={isLiked ? colors.accent : colors.text}
+                  fill={isLiked ? colors.accent : 'transparent'}
+                />
+              </Animated.View>
             </TouchableOpacity>
             <TouchableOpacity onPress={onSaveToggle} style={styles.hudIconButton}>
               <Bookmark
