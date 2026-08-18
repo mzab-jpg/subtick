@@ -29,6 +29,7 @@ import {
   unmarkArticleSaved,
 } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
+import { removeArticleFromCachedDashboardFeed } from '../services/dashboardFeedCache';
 import { Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -127,11 +128,16 @@ export default function ReaderScreen() {
   const exitingReaderRef = useRef(false);
   const serverSeenIds = contextProfile?.seenArticleIds;
   // The loader is created before the queue, so use a stable ref to let a
-  // completed background preparation notify the current queue implementation.
-  const prioritizePreparedArticleRef = useRef<(articleId: string) => void>(() => {});
-  const handleArticlePrepared = useCallback((preparedArticleId: string) => {
-    prioritizePreparedArticleRef.current(preparedArticleId);
-  }, []);
+  // failed background preparation remove only its future Reader card.
+  const removeUnavailableFutureArticleRef = useRef<(articleId: string) => void>(() => {});
+  const handleFutureArticleUnavailable = useCallback((unavailableArticleId: string) => {
+    removeUnavailableFutureArticleRef.current(unavailableArticleId);
+    // Avoid immediately re-suggesting a card whose background RSS request has
+    // failed on this device/network. This is only the mounted Dashboard cache:
+    // do not write History/seen state for something the person never opened.
+    const userId = contextProfile?.userId;
+    if (userId) removeArticleFromCachedDashboardFeed(userId, unavailableArticleId);
+  }, [contextProfile?.userId]);
 
   // --- Feature hooks ---
   const {
@@ -143,7 +149,7 @@ export default function ReaderScreen() {
     isMockMode,
     allowArchivedFallback: contextProfile?.includeArchivedArticles === true,
     mockArticle,
-    onArticlePrepared: handleArticlePrepared,
+    onFutureArticleUnavailable: handleFutureArticleUnavailable,
   });
 
   const {
@@ -153,7 +159,7 @@ export default function ReaderScreen() {
 
   const {
     activeQueueIds, recommendationContexts, currentIndex, hasNext, hasPrev,
-    queueExhausted, preloading, setQueueExhausted, prioritizePreparedArticle, goToNext, goToPrev,
+    queueExhausted, preloading, setQueueExhausted, removeUnavailableFutureArticle, goToNext, goToPrev,
   } = useNavigationQueue({
     queueArticleIds: queueArticleIds || [],
     recommendationContexts: initialRecommendationContexts,
@@ -162,7 +168,7 @@ export default function ReaderScreen() {
     loadArticle, setIsSaved, setIsLiked, serverSeenIds,
   });
   const activeArticleId = activeQueueIds[currentIndex] || articleId;
-  prioritizePreparedArticleRef.current = prioritizePreparedArticle;
+  removeUnavailableFutureArticleRef.current = removeUnavailableFutureArticle;
 
   // Skip an unavailable live-RSS item when raw webpages are disabled. It is
   // recorded as seen so Dashboard will not suggest it again, then Reader moves
@@ -601,7 +607,7 @@ export default function ReaderScreen() {
 
       {/* Content */}
       {unavailableFromRss ? (
-        <View style={styles.loadingContainer}>
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : queueExhausted ? (
@@ -619,7 +625,7 @@ export default function ReaderScreen() {
           </TouchableOpacity>
         </View>
       ) : fetchError ? (
-        <View style={styles.errorContainer}>
+        <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
           <AlertCircle size={48} color={colors.textMuted} style={styles.emptyIcon} />
           <Text style={[styles.catchUpTitle, { color: colors.text }]}>Article is taking longer than expected</Text>
           <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
@@ -632,13 +638,15 @@ export default function ReaderScreen() {
             <Text style={[styles.catchUpButtonText, { color: colors.background }]}>Try Again</Text>
           </TouchableOpacity>
         </View>
+      ) : loading ? (
+        // The old WebView is unmounted as soon as a new article is requested.
+        // This opaque surface prevents a native publisher webpage flashing under
+        // the delayed spinner during Android transition composition.
+        <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+          {slowLoading && <ActivityIndicator size="small" color={colors.primary} />}
+        </View>
       ) : article ? (
         <>
-        {slowLoading && (
-          <View style={[styles.slowLoadingOverlay, { backgroundColor: colors.background + 'D9' }]} pointerEvents="none">
-            <ActivityIndicator size="small" color={colors.primary} />
-          </View>
-        )}
         {useDirectUri ? (
           <View style={{ flex: 1, paddingTop: 3 }}>
             <View style={[styles.archivedHeader, { borderBottomColor: colors.border }]}>
@@ -673,7 +681,7 @@ export default function ReaderScreen() {
         ) : (
           <WebView
             ref={webViewRef}
-            style={[styles.webview, { backgroundColor: 'transparent' }]}
+            style={[styles.webview, { backgroundColor: colors.background }]}
             originWhitelist={['*']}
             source={{ html: articleHTML }}
             onLoadStart={logWebViewLoadStart}
@@ -690,12 +698,8 @@ export default function ReaderScreen() {
           />
         )}
         </>
-      ) : loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
       ) : (
-        <View style={styles.errorContainer}>
+        <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
           <Text style={[styles.errorText, { color: colors.textSecondary }]}>Article could not be loaded.</Text>
         </View>
       )}
@@ -706,7 +710,6 @@ export default function ReaderScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  slowLoadingOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', zIndex: 3 },
   webview: { flex: 1, marginTop: 0 },
   catchUpContainer: {
     flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32,

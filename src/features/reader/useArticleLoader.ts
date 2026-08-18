@@ -22,8 +22,8 @@ interface UseArticleLoaderParams {
   /** Raw publication pages are allowed only after the user opts in. */
   allowArchivedFallback: boolean;
   mockArticle?: Article;
-  /** Called only after an exact future article body is fully prepared. */
-  onArticlePrepared?: (articleId: string) => void;
+  /** A future RSS request failed before display; remove it only from this Reader session. */
+  onFutureArticleUnavailable?: (articleId: string) => void;
 }
 
 interface UseArticleLoaderResult {
@@ -50,7 +50,7 @@ export function useArticleLoader({
   isMockMode,
   allowArchivedFallback,
   mockArticle,
-  onArticlePrepared,
+  onFutureArticleUnavailable,
 }: UseArticleLoaderParams): UseArticleLoaderResult {
   const [article, setArticle] = useState<Article | null>(null);
   const [resolvedHtml, setResolvedHtml] = useState<string>('');
@@ -77,10 +77,15 @@ export function useArticleLoader({
     if (__DEV__) console.log(`[Reader Timing] requested ${id}`);
     const isCurrentLoad = () => generation === loadGenerationRef.current;
     if (slowLoadingTimerRef.current) clearTimeout(slowLoadingTimerRef.current);
+    // Unmount the previous native WebView before a new request begins. Android
+    // WebViews can briefly composite above React overlays, exposing an old
+    // publisher page beneath a spinner during an article transition.
+    setArticle(null);
+    setResolvedHtml('');
     setLoading(true);
     setSlowLoading(false);
-    // Do not flash a loading UI for cache-ready transitions. The existing Reader
-    // remains visible until a request is genuinely slow.
+    // Keep the opaque transition surface spinner-free for quick loads. A spinner
+    // appears only after a request is genuinely slow.
     slowLoadingTimerRef.current = setTimeout(() => {
       if (isCurrentLoad()) setSlowLoading(true);
     }, 180);
@@ -239,13 +244,18 @@ export function useArticleLoader({
           // and cleaned HTML remain unprepared.
           await prepareArticle(data.feedUrl, data.guid, data.publicationUrl);
           if (prefetchGeneration !== prefetchGenerationRef.current) return;
-          // This is a completed preparation, not a prediction. Reader may now
-          // safely bring it forward inside its bounded unseen window.
-          onArticlePrepared?.(id);
-        } catch {
-          // Speculative preparation may fail due to temporary network or feed
-          // conditions. The active request remains authoritative and retryable;
-          // do not poison this article as unavailable before it is opened.
+          // Prepared bodies stay in native memory for an immediate normal-order
+          // transition. Preparation never changes the Reader's ranked order.
+        } catch (error) {
+          // A future card whose RSS connection already failed should never become
+          // a visible Reader error/loading stop. This removal is session-only:
+          // the Dashboard-selected/current card always remains retryable, and a
+          // later Reader session can retry after a transient network/DNS issue.
+          if (prefetchGeneration === prefetchGenerationRef.current) {
+            rssUnavailableIdsRef.current.add(id);
+            if (__DEV__) console.warn(`[Reader Prefetch] removing unavailable future article ${id}:`, error);
+            onFutureArticleUnavailable?.(id);
+          }
         }
       }
     };
@@ -263,7 +273,7 @@ export function useArticleLoader({
       pendingPrefetchIdsRef.current = null;
       if (pendingIds) void prefetchArticles(pendingIds);
     }
-  }, [isSavedMode, isMockMode, onArticlePrepared]);
+  }, [isSavedMode, isMockMode, onFutureArticleUnavailable]);
 
   const cancelPrefetch = useCallback(() => {
     prefetchGenerationRef.current += 1;

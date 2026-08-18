@@ -13,6 +13,9 @@ import { auth } from './firebase';
 import { createStorageMutex } from './asyncStorageMutex';
 
 const storageMutex = createStorageMutex();
+// Several lifecycle locations may request a flush at the same time. They must
+// share one upload so they cannot all send the same unsynced batch.
+let flushInFlight: Promise<number> | null = null;
 
 /**
  * Generate a simple UUID for event IDs.
@@ -90,7 +93,7 @@ export async function queueBehaviorEvent(
  * The network call (syncFn) is deliberately kept outside the mutex so it doesn't
  * block new events from being queued while the upload is in-flight.
  */
-export async function flushBehaviorQueue(): Promise<number> {
+async function flushBehaviorQueueOnce(): Promise<number> {
   try {
     // Step 1: Read and extract the batch to send — serialized via mutex.
     const { batch, queueSnapshot } = await storageMutex.enqueue(async () => {
@@ -138,6 +141,18 @@ export async function flushBehaviorQueue(): Promise<number> {
     console.error('[BehaviorSync] flushBehaviorQueue error:', error);
     return 0;
   }
+}
+
+/**
+ * Starts one upload at a time. Concurrent callers join the same Promise rather
+ * than reading and uploading the same AsyncStorage batch independently.
+ */
+export function flushBehaviorQueue(): Promise<number> {
+  if (flushInFlight) return flushInFlight;
+  flushInFlight = flushBehaviorQueueOnce().finally(() => {
+    flushInFlight = null;
+  });
+  return flushInFlight;
 }
 
 /**

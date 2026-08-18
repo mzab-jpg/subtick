@@ -33,6 +33,7 @@ The remaining M8 entry below concerns only product copy and later tutorial desig
 - **Metric selection now matches category preferences:** Dashboard Stats uses full-row state changes plus explicit “Shown on Dashboard” / “Not shown” labels, rather than a detached tick box. It remains a maximum-three multi-select control, so it is visually related to but not identical to the category preference control.
 - **Settings flash reduction:** The redundant focus-time profile refresh was removed. A zero-duration transition experiment was reverted because it worsened the visible Android flash. Settings, Account, Category Preferences, Dashboard Stats, History, and Saved Reads now keep their normal themed page shell/header mounted while data settles, showing only a small inline spinner instead of replacing the entire screen with a full-page loader.
 - **Shuffle replenishment preserves remaining cards:** When the card queue becomes short, Tangent appends unseen articles after the remaining cards. It does not use the background request to replace those cards.
+- **Reader visual isolation and duplicate sync:** Loading, unavailable, slow-loading, and error states now paint an opaque theme surface; the clean RSS WebView also uses that surface, so an old native webpage cannot show beneath a spinner or error. Concurrent lifecycle sync callers now join one in-progress behavior upload, preventing repeated uploads of the same queued 20-event batch.
 
 ### 17 August 2026 — Account-transition, immediate-stat, and toggle-consistency batch
 
@@ -113,6 +114,20 @@ The backend checks that someone is signed in, but cannot reliably prove the old 
 ---
 
 ## Deferred architecture and release work
+
+### Large-feed single-stream extraction — requires a dedicated native redesign
+
+**What is happening:** For an RSS file that exceeds the 5 MB raw-memory allowance, Android currently stops retaining the raw file and then opens a stream to find the one requested article. A massive feed with several selected articles can therefore be downloaded/scanned more than once during one Reader session.
+
+**Current mitigation:** Reader keeps the ranked order sequential and prepares the next five targets with at most two native workers. If a future lookahead request genuinely fails before display, its card is omitted from only that Reader session and the mounted Dashboard cache; it is not marked seen or recorded in History. Most importantly, background preparation and active display of the same exact article now join one native operation. If a large feed scan is already underway when the person reaches that article, the active request waits for the existing scan instead of opening a second identical download.
+
+**Why it still matters:** A publisher such as Dan Luu can still produce a multi-second wait when its first large-feed scan has not finished and there is no cached raw XML to reuse. The mitigation removes duplicated work but cannot make an uncompleted first remote download instantaneous or safely retain a huge full archive.
+
+**Required future outcome:** Replace the native RSS path with one counted, streaming connection. While the stream remains small, retain raw XML normally. If it crosses the allowance, discard the partial raw copy but continue parsing that same open response; extract only article bodies whose metadata appears in the current selected 30-card Reader session, hold those bodies temporarily under a total phone-memory budget, and discard the huge XML itself. Concurrent requests for that publisher must join the same scan. No article body may be stored on Tangent's backend or disk.
+
+**Why deferred:** This replaces the central Android stream/cache coordination and needs dedicated native test coverage for feeds with and without content-length headers, repeated selected articles, cancellation, errors, and memory limits. Do not implement it as an incremental patch to the present raw-cache fallback.
+
+**Timing:** Prioritise before broad Android release if massive publishers remain in the active feed directory.
 
 ### C4 — Android build setup must remain reproducible
 

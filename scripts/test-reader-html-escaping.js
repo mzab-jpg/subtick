@@ -65,11 +65,11 @@ const androidNativeFiveArticleBuffer = !loaderSource.includes('preparedContentRe
   && loaderSource.includes('await prepareArticle(data.feedUrl, data.guid, data.publicationUrl);')
   && loaderSource.includes('Promise.all([prepareNextTarget(), prepareNextTarget()])')
   && loaderSource.includes('sameTargets')
-  && navigationQueueSource.includes('preparedArticleIdsRef')
-  && navigationQueueSource.includes('const windowStart = currentIndex + 1;')
-  && navigationQueueSource.includes('windowStart + 5')
-  && navigationQueueSource.includes('const ready = futureWindow.filter')
-  && source.includes('prioritizePreparedArticleRef')
+  && navigationQueueSource.includes('const nextIndex = currentIndex + 1;')
+  && navigationQueueSource.includes('const nextId = activeQueueIds[nextIndex];')
+  && !navigationQueueSource.includes('const readyIndex = activeQueueIds.findIndex(')
+  && loaderSource.includes('onFutureArticleUnavailable?.(id);')
+  && source.includes('removeUnavailableFutureArticleRef')
   && source.includes('activeQueueIds.slice(currentIndex + 1, currentIndex + 6)')
   && source.includes('prefetchArticles(upcomingIds)')
   && source.includes('cancelPrefetch();')
@@ -88,6 +88,9 @@ const androidNativeFiveArticleBuffer = !loaderSource.includes('preparedContentRe
   && nativeModuleSource.includes('MAX_PREPARED_ARTICLES = 5')
   && nativeModuleSource.includes('preparedArticles.remove(key)')
   && nativeModuleSource.includes('prepared article hit')
+  && nativeModuleSource.includes('AsyncFunction("preloadFeed")')
+  && nativeModuleSource.includes('AsyncFunction("prepareArticle")')
+  && nativeModuleSource.includes('AsyncFunction("findArticle")')
   && nativeModuleSource.includes('prepareSelectedArticle')
   && nativeModuleSource.includes('findSelectedArticle')
   && nativeModuleSource.includes('findItemInFeed')
@@ -102,8 +105,10 @@ const readerTransitionReliability = source.includes('const SWIPE_PAUSE_THRESHOLD
   && source.includes('if (timeSinceLastMove > SWIPE_PAUSE_THRESHOLD_MS) return;')
   && loaderSource.includes('setTimeout(() => {')
   && loaderSource.includes('}, 180);')
-  && source.includes('slowLoading &&')
-  && source.includes('...StyleSheet.absoluteFill')
+  && source.includes(') : loading ? (')
+  && source.includes('{slowLoading && <ActivityIndicator size="small" color={colors.primary} />}')
+  && loaderSource.includes('setArticle(null);')
+  && loaderSource.includes("setResolvedHtml('');")
   && loaderSource.includes('loadGenerationRef')
   && !behaviorSyncSource.includes('if (unsynced >= SYNC_BATCH_SIZE)')
   && !navigationQueueSource.includes('flushBehaviorQueue()')
@@ -114,9 +119,43 @@ const readerTransitionReliability = source.includes('const SWIPE_PAUSE_THRESHOLD
   && source.includes('onPress={() => void loadArticle(activeArticleId)}')
   && loaderSource.includes('[Reader Timing] content state ready')
   && feedServiceSource.includes('[Reader Timing] HTML sanitisation')
-  && source.includes('[Reader Timing] WebView load complete');
-console.log(`${readerTransitionReliability ? '✓' : '✗'} Reader keeps pause-to-cancel swipes, avoids fast-load spinner flashes, and defers sync during reading`);
+  && source.includes('[Reader Timing] WebView load complete')
+  && source.includes("style={[styles.webview, { backgroundColor: colors.background }]}")
+  && source.includes("style={[styles.loadingContainer, { backgroundColor: colors.background }]}")
+  && source.includes("style={[styles.errorContainer, { backgroundColor: colors.background }]}");
+console.log(`${readerTransitionReliability ? '✓' : '✗'} Reader keeps pause-to-cancel swipes, opaque loading states, and defers sync during reading`);
 if (!readerTransitionReliability) failed = true;
+
+const failedFutureRssCardsSkipBeforeDisplay = loaderSource.includes('onFutureArticleUnavailable?: (articleId: string) => void;')
+  && loaderSource.includes('rssUnavailableIdsRef.current.add(id);')
+  && loaderSource.includes('onFutureArticleUnavailable?.(id);')
+  && navigationQueueSource.includes('const removeUnavailableFutureArticle = useCallback')
+  && navigationQueueSource.includes('if (articleIndex <= currentIndex) return previous;')
+  && navigationQueueSource.includes('return previous.filter((id) => id !== articleId);')
+  && source.includes('removeArticleFromCachedDashboardFeed(userId, unavailableArticleId);')
+  && !source.includes('markArticleSeen(unavailableArticleId');
+console.log(`${failedFutureRssCardsSkipBeforeDisplay ? '✓' : '✗'} Failed future RSS cards leave this Reader session before they can block a swipe`);
+if (!failedFutureRssCardsSkipBeforeDisplay) failed = true;
+
+const readerKeepsSequentialRankedOrder = navigationQueueSource.includes('const nextIndex = currentIndex + 1;')
+  && navigationQueueSource.includes('const nextId = activeQueueIds[nextIndex];')
+  && !navigationQueueSource.includes('const readyIndex = activeQueueIds.findIndex(');
+console.log(`${readerKeepsSequentialRankedOrder ? '✓' : '✗'} Reader keeps sequential ranked order instead of jumping ahead to ready cards`);
+if (!readerKeepsSequentialRankedOrder) failed = true;
+
+const exactNativeArticlePreparationIsShared = nativeModuleSource.includes('private val articleInFlight')
+  && nativeModuleSource.includes('resolveArticleSingleFlight(feedUrl, guid, articleUrl, isActive = false)')
+  && nativeModuleSource.includes('resolveArticleSingleFlight(feedUrl, guid, articleUrl, isActive = true)')
+  && nativeModuleSource.includes('joined exact')
+  && nativeModuleSource.includes('articleInFlight.remove(key)');
+console.log(`${exactNativeArticlePreparationIsShared ? '✓' : '✗'} Active Reader requests join matching in-progress native RSS preparation`);
+if (!exactNativeArticlePreparationIsShared) failed = true;
+
+const behaviorSyncIsShared = behaviorSyncSource.includes('let flushInFlight: Promise<number> | null = null;')
+  && behaviorSyncSource.includes('if (flushInFlight) return flushInFlight;')
+  && behaviorSyncSource.includes('flushInFlight = flushBehaviorQueueOnce().finally');
+console.log(`${behaviorSyncIsShared ? '✓' : '✗'} Behavior sync coalesces concurrent flush requests`);
+if (!behaviorSyncIsShared) failed = true;
 
 const animatedToggleIsUsed = settingsSource.includes("import { TangentToggle } from '../components/TangentToggle';")
   && settingsSource.includes('<TangentToggle')

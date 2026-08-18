@@ -27,6 +27,7 @@ private const val MAX_CACHEABLE_FEED_BYTES = 5 * 1024 * 1024
 private const val LOG_TAG = "TangentRss"
 
 private class CacheLimitReachedException : IOException()
+private class ArticleNotFoundException : IOException("Article not found in RSS feed.")
 private data class RssItem(val guid: String, val rawHtml: String, val link: String?)
 
 /** Android-only process-memory RSS cache. I/O/XML parsing use one native thread. */
@@ -47,6 +48,10 @@ class TangentRssParserModule : Module() {
     override fun removeEldestEntry(entry: MutableMap.MutableEntry<String, ByteArray>?) = size > MAX_CACHED_FEEDS
   }
   private val inFlight = mutableMapOf<String, MutableList<(Result<ByteArray>) -> Unit>>()
+  // A large feed cannot retain raw XML, so feed-level cache sharing is not enough.
+  // This second single-flight map lets an active request join the exact article
+  // already being prepared instead of scanning/downloading the same large feed again.
+  private val articleInFlight = mutableMapOf<String, MutableList<(Result<RssItem?>) -> Unit>>()
   // Only exact Reader targets are retained here; unrelated RSS entries are never
   // extracted or held as article bodies.
   private val preparedArticles = object : LinkedHashMap<String, RssItem>(MAX_PREPARED_ARTICLES, 0.75f, true) {
@@ -94,7 +99,7 @@ class TangentRssParserModule : Module() {
     OnDestroy {
       activeExecutor.shutdownNow()
       preloadExecutor.shutdownNow()
-      synchronized(lock) { cache.clear(); preparedArticles.clear(); inFlight.clear() }
+      synchronized(lock) { cache.clear(); preparedArticles.clear(); inFlight.clear(); articleInFlight.clear() }
     }
   }
 
@@ -129,18 +134,18 @@ class TangentRssParserModule : Module() {
       }
     }
 
-    resolveArticle(feedUrl, guid, articleUrl, isActive = false) { result ->
+    resolveArticleSingleFlight(feedUrl, guid, articleUrl, isActive = false) { result ->
       result.fold(
         onSuccess = { item ->
-          if (item != null) {
+          if (item == null) {
+            callback(Result.failure(ArticleNotFoundException()))
+          } else {
             synchronized(lock) { preparedArticles[key] = item }
+            debug("prepared exact upcoming article: ${URI(feedUrl).host}")
+            callback(Result.success(Unit))
           }
-          debug("prepared exact upcoming article: ${URI(feedUrl).host}")
-          callback(Result.success(Unit))
         },
-        onFailure = { error ->
-          callback(Result.failure(error))
-        }
+        onFailure = { error -> callback(Result.failure(error)) }
       )
     }
   }
@@ -156,7 +161,30 @@ class TangentRssParserModule : Module() {
         return
       }
     }
-    resolveArticle(feedUrl, guid, articleUrl, isActive = true, callback)
+    resolveArticleSingleFlight(feedUrl, guid, articleUrl, isActive = true) { result ->
+      // If this active request joined a background preparation, its callback may
+      // run after the preloader stored the body. The active Reader consumes it.
+      synchronized(lock) { preparedArticles.remove(key) }
+      callback(result)
+    }
+  }
+
+  private fun resolveArticleSingleFlight(feedUrl: String, guid: String, articleUrl: String?, isActive: Boolean, callback: (Result<RssItem?>) -> Unit) {
+    val key = articleKey(feedUrl, guid, articleUrl)
+    synchronized(lock) {
+      articleInFlight[key]?.let {
+        debug("joined exact ${if (isActive) "active" else "preload"} article: ${URI(feedUrl).host}")
+        it.add(callback)
+        return
+      }
+      articleInFlight[key] = mutableListOf(callback)
+    }
+
+    resolveArticle(feedUrl, guid, articleUrl, isActive) { result ->
+      val callbacks: List<(Result<RssItem?>) -> Unit>
+      synchronized(lock) { callbacks = articleInFlight.remove(key) ?: emptyList() }
+      callbacks.forEach { it(result) }
+    }
   }
 
   private fun resolveArticle(feedUrl: String, guid: String, articleUrl: String?, isActive: Boolean, callback: (Result<RssItem?>) -> Unit) {

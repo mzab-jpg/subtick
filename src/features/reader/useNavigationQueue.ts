@@ -29,8 +29,8 @@ interface UseNavigationQueueResult {
   queueExhausted: boolean;
   preloading: boolean;
   setQueueExhausted: (v: boolean) => void;
-  /** Promotes a ready unseen item only within the next five Reader positions. */
-  prioritizePreparedArticle: (articleId: string) => void;
+  /** Removes a failed future RSS card from this Reader session only. */
+  removeUnavailableFutureArticle: (articleId: string) => void;
   goToNext: () => void;
   goToPrev: () => void;
 }
@@ -52,30 +52,24 @@ export function useNavigationQueue({
   const [preloading, setPreloading] = useState(false);
 
   const preloadingRef = useRef(false);
-  const preparedArticleIdsRef = useRef<Set<string>>(new Set());
 
   const hasNext = currentIndex < activeQueueIds.length - 1;
   const hasPrev = currentIndex > 0;
 
-  const prioritizePreparedArticle = useCallback((articleId: string) => {
-    preparedArticleIdsRef.current.add(articleId);
+  const removeUnavailableFutureArticle = useCallback((articleId: string) => {
     setQueueIds((previous) => {
-      // The selected/current article and every previously displayed article are
-      // fixed. Inside only the next five, completed preparations come first.
-      // Stable filtering preserves original ranking order when readiness matches.
-      const windowStart = currentIndex + 1;
-      const windowEnd = Math.min(previous.length, windowStart + 5);
-      const futureWindow = previous.slice(windowStart, windowEnd);
-      if (!futureWindow.includes(articleId)) return previous;
-
-      const ready = futureWindow.filter((id) => preparedArticleIdsRef.current.has(id));
-      const waiting = futureWindow.filter((id) => !preparedArticleIdsRef.current.has(id));
-      const reorderedWindow = [...ready, ...waiting];
-      if (futureWindow.every((id, index) => id === reorderedWindow[index])) return previous;
-
-      const next = [...previous];
-      next.splice(windowStart, futureWindow.length, ...reorderedWindow);
-      if (__DEV__) console.log(`[Reader Queue] prioritized ${ready.length} prepared future article(s)`);
+      const articleIndex = previous.indexOf(articleId);
+      // Never replace the current/tapped card or alter Reader history. This is
+      // only a current-session removal for a future card whose RSS preparation
+      // has already failed before it can block a swipe.
+      if (articleIndex <= currentIndex) return previous;
+      if (__DEV__) console.log(`[Reader Queue] removed unavailable future article: ${articleId}`);
+      return previous.filter((id) => id !== articleId);
+    });
+    setRecommendationContexts((previous) => {
+      if (!(articleId in previous)) return previous;
+      const next = { ...previous };
+      delete next[articleId];
       return next;
     });
   }, [currentIndex]);
@@ -115,17 +109,18 @@ export function useNavigationQueue({
       setQueueExhausted(true);
       return;
     }
-    const nextIdx = currentIndex + 1;
-    setCurrentIndex(nextIdx);
 
+    const nextIndex = currentIndex + 1;
+    const nextId = activeQueueIds[nextIndex];
+    setCurrentIndex(nextIndex);
     setIsLiked(false);
-    loadArticle(activeQueueIds[nextIdx]);
+    void loadArticle(nextId);
 
-    if (!isRestrictedMode && activeQueueIds.length - nextIdx <= 5 && !preloadingRef.current) {
-      preloadNextArticles();
+    if (!isRestrictedMode && activeQueueIds.length - nextIndex <= 5 && !preloadingRef.current) {
+      void preloadNextArticles();
     }
 
-    getSavedArticleIds().then((saved) => setIsSaved(saved.includes(activeQueueIds[nextIdx])));
+    getSavedArticleIds().then((saved) => setIsSaved(saved.includes(nextId)));
   }, [hasNext, currentIndex, activeQueueIds, loadArticle, preloadNextArticles, isRestrictedMode, setIsSaved, setIsLiked]);
 
   const goToPrev = useCallback(() => {
@@ -155,7 +150,7 @@ export function useNavigationQueue({
     queueExhausted,
     preloading,
     setQueueExhausted,
-    prioritizePreparedArticle,
+    removeUnavailableFutureArticle,
     goToNext,
     goToPrev,
   };
