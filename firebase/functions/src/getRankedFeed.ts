@@ -914,12 +914,14 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
   // GA4 web-stream client_id (32-hex UUID generated client-side). Never fall back
   // to the Auth UID — analytics.ts will mint a random id if this is missing.
   const clientId = client_id || '';
+  const requestStartedAt = Date.now();
   console.log(`[getRankedFeed] userId: ${userId}, seen limit: ${(seenArticleIds || []).length}`);
 
   // Single source of truth for all tunable values (cached ~60s per instance).
   // If the caller supplied a preview config override, use it for THIS request only
   // (no Firestore read, no cache touch). Otherwise load the live cached config.
   const cfg = prepareConfig(configOverride) ?? await loadScoringConfig();
+  const configReadyAt = Date.now();
 
   let categoryWeights: Record<string, number> = {};
   let categoryLengthWeights: Record<string, number> = {};
@@ -945,15 +947,23 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
     if (err instanceof HttpsError) throw err;
     console.warn('[getRankedFeed] Could not fetch user profile');
   }
+  const profileReadyAt = Date.now();
 
   try {
+    const candidateCacheWasWarm = (includeArchivedArticles ? candidateCacheMixed : candidateCacheCurrent).length > 0
+      && (Date.now() - (includeArchivedArticles ? cacheTimestampMixed : cacheTimestampCurrent)) < CACHE_LIFETIME_MS;
     const pool = await getOrUpdateCandidatePool(includeArchivedArticles);
+    const poolReadyAt = Date.now();
 
     if (pool.length === 0) {
+      console.log(`[Feed Timing] config=${configReadyAt - requestStartedAt}ms profile=${profileReadyAt - configReadyAt}ms pool=${poolReadyAt - profileReadyAt}ms poolWarm=${candidateCacheWasWarm} total=${poolReadyAt - requestStartedAt}ms empty=true`);
       return { articles: [], generatedAt: Date.now(), remainingCount: 0 };
     }
 
+    const publisherCacheWasWarm = Object.keys(publisherQualityCache).length > 0
+      && (Date.now() - publisherCacheTimestamp) < CACHE_LIFETIME_MS;
     const publisherQualities = await getOrUpdatePublisherQualities();
+    const publisherReadyAt = Date.now();
     const generatedAt = Date.now();
     const feedId = randomUUID();
     const userStage = getUserStage(totalArticlesRead, lastReadDate, generatedAt);
@@ -1001,6 +1011,7 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       maxArticlesPerCategory: cfg.tranche.maxArticlesPerCategory,
       minDistinctCategories: cfg.tranche.minDistinctCategories,
     });
+    const selectionReadyAt = Date.now();
 
     // B2 Fix: Gate detailed score logging behind the emulator flag so production
     // doesn't ship article titles (PII) and score breakdowns to billable logs.
@@ -1146,7 +1157,9 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
 
     // Fire-and-forget — analytics events don't block the response
     sendGAEvents(clientId, feedArticleShownEvents).catch(() => {});
+    const responsePreparedAt = Date.now();
 
+    console.log(`[Feed Timing] config=${configReadyAt - requestStartedAt}ms profile=${profileReadyAt - configReadyAt}ms pool=${poolReadyAt - profileReadyAt}ms publisher=${publisherReadyAt - poolReadyAt}ms selection=${selectionReadyAt - publisherReadyAt}ms response=${responsePreparedAt - selectionReadyAt}ms total=${responsePreparedAt - requestStartedAt}ms poolWarm=${candidateCacheWasWarm} publisherWarm=${publisherCacheWasWarm} pool=${pool.length} unseen=${unseenArticles.length} returned=${finalFeed.length}`);
     console.log(`[getRankedFeed] Returning ${finalFeed.length} articles to client (pool size: ${pool.length})`);
 
     // Add transient recommendation context to the callable response. It is never

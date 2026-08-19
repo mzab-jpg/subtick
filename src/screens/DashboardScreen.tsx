@@ -10,7 +10,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUser } from '../contexts/UserContext';
@@ -22,9 +21,20 @@ import { User, Inbox, Shuffle, AlertTriangle } from 'lucide-react-native';
 import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_XL, TEXT_2XL } from '../utils/constants';
 import { auth } from '../services/firebase';
 import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
+import {
+  getInitialDashboardFeedRequest,
+  takeInitialDashboardFeedResult,
+} from '../services/initialDashboardFeed';
 import { flushBehaviorQueue } from '../services/behaviorSync';
+import { HomeLoadingState } from '../components/HomeLoadingState';
 import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
-import { getCachedDashboardFeed, setCachedDashboardFeed, subscribeToCachedDashboardFeed } from '../services/dashboardFeedCache';
+import {
+  getCachedDashboardFeed,
+  restoreCachedDashboardFeed,
+  setCachedDashboardFeed,
+  stageDashboardFeedForNextLaunch,
+  subscribeToCachedDashboardFeed,
+} from '../services/dashboardFeedCache';
 
 const PRELOAD_THRESHOLD = 5;
 
@@ -33,15 +43,20 @@ export default function DashboardScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { profile: contextProfile, weeklyReadCount, loading: contextLoading } = useUser();
 
-  const [feedArticles, setFeedArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
+  // App.tsx may prepare this UID's cards before Dashboard mounts. Read that
+  // synchronous memory cache during state creation, not in a later effect, so
+  // Home's first rendered frame already contains cards instead of Loading|.
+  const initialCachedFeedRef = useRef(getCachedDashboardFeed(auth.currentUser?.uid || ''));
+  const [feedArticles, setFeedArticles] = useState<Article[]>(() => initialCachedFeedRef.current?.articles ?? []);
+  const [loading, setLoading] = useState(() => !initialCachedFeedRef.current?.articles.length);
   const [feedError, setFeedError] = useState<string | null>(null);
 
   // Accumulates every article ID shown this session (fetched OR shuffled away).
   // Passed to getRankedFeed as exclusions so we never recycle cards within a session.
   // In-memory only — resets on Dashboard unmount; articles reappear freely in future sessions.
-  const sessionShownIds = useRef<Set<string>>(new Set());
+  const sessionShownIds = useRef<Set<string>>(new Set(initialCachedFeedRef.current?.shownIds ?? []));
   const replenishingRef = useRef(false);
+  const startupLoadHandledRef = useRef(false);
 
 
   // UserContext owns the one live profile subscription for every screen.
@@ -62,36 +77,45 @@ export default function DashboardScreen() {
     });
   }, [effectiveProfile]);
 
-  // --- Load on mount; refresh seen filter silently on focus ---
+  // --- Restore local cards first; Firebase profile/feed verification continues behind them. ---
   useEffect(() => {
-    // Wait until UserContext has finished loading the profile before doing
-    // the initial data load. This prevents the "onboarding shown even when
-    // user is already onboarded" race.
-    if (contextLoading) return;
+    let active = true;
+    const userId = auth.currentUser?.uid;
 
+    const restoreOrLoad = async () => {
+      if (!userId || startupLoadHandledRef.current) return;
+      const cached = getCachedDashboardFeed(userId)
+        ?? await restoreCachedDashboardFeed(userId, await getSeenArticleIdsLocally());
+      if (!active) return;
+
+      if (cached?.articles.length) {
+        startupLoadHandledRef.current = true;
+        sessionShownIds.current = new Set(cached.shownIds);
+        setFeedArticles(cached.articles);
+        setLoading(false);
+        // Fresh recommendations are saved for the next launch. They never replace
+        // cards already visible on this Dashboard.
+        void refreshNextLaunchFeed(userId, cached.articles.map((article) => article.id));
+        return;
+      }
+
+      // First launch/cache miss: wait for the verified profile before normal feed work.
+      if (contextLoading) return;
+      startupLoadHandledRef.current = true;
+      void loadData(false);
+    };
+
+    void restoreOrLoad();
+    return () => { active = false; };
+  }, [contextLoading]);
+
+  useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Keep the visible cards stable when Reader closes. An opened article is
-      // recorded in History, but it is excluded only when the user explicitly
-      // asks for another feed (Shuffle/Discover) or a fresh Dashboard session
-      // begins. Silently filtering it here caused the hero/row cards to change
-      // without the user pressing Shuffle.
-
-      // Flush behavior events in background. UserContext receives resulting
-      // profile changes through its one shared real-time listener.
+      // Keep visible cards stable after Reader closes; sync never blocks navigation.
       flushBehaviorQueue().catch(() => {});
     });
-
-    const userId = auth.currentUser?.uid;
-    const cached = userId ? getCachedDashboardFeed(userId) : null;
-    if (cached?.articles.length) {
-      sessionShownIds.current = new Set(cached.shownIds);
-      setFeedArticles(cached.articles);
-      setLoading(false);
-    } else {
-      loadData(false);
-    }
     return unsubscribe;
-  }, [navigation, contextLoading]);
+  }, [navigation]);
 
 
   const loadData = async (silent = false) => {
@@ -130,7 +154,16 @@ export default function DashboardScreen() {
       const serverSeenIds = profile?.seenArticleIds;
       const seenIds = await getSeenArticleIdsLocally(serverSeenIds);
       const allExcluded = Array.from(new Set([...seenIds, ...sessionShownIds.current]));
-      const result = await getRankedFeed(allExcluded);
+      const startedAt = Date.now();
+      if (__DEV__) console.log('[Startup Timing] first ranked feed requested');
+      const initialResult = auth.currentUser
+        ? takeInitialDashboardFeedResult(auth.currentUser.uid)
+        : null;
+      const initialRequest = auth.currentUser
+        ? getInitialDashboardFeedRequest(auth.currentUser.uid)
+        : null;
+      const result = initialResult ?? await (initialRequest ?? getRankedFeed(allExcluded));
+      if (__DEV__) console.log(`[Startup Timing] ranked feed returned in ${Date.now() - startedAt}ms (${result.articles.length} articles)`);
       const articles = result.articles.slice(0, MAX_FEED_ARTICLES);
       setFeedArticles(articles);
       if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, articles, sessionShownIds.current);
@@ -139,6 +172,18 @@ export default function DashboardScreen() {
       console.error('[Dashboard] loadFeedArticles error:', error);
       setFeedArticles([]);
       setFeedError('Could not fetch articles. Check your connection and try again.');
+    }
+  };
+
+  const refreshNextLaunchFeed = async (userId: string, visibleIds: string[]) => {
+    try {
+      const seenIds = await getSeenArticleIdsLocally(effectiveProfile?.seenArticleIds);
+      const excludedIds = Array.from(new Set([...seenIds, ...sessionShownIds.current, ...visibleIds]));
+      const result = await getRankedFeed(excludedIds);
+      const articles = result.articles.filter((article) => !excludedIds.includes(article.id)).slice(0, MAX_FEED_ARTICLES);
+      if (articles.length > 0) stageDashboardFeedForNextLaunch(userId, articles, []);
+    } catch {
+      // Visible cached cards remain useful if background freshness fails.
     }
   };
 
@@ -239,10 +284,13 @@ export default function DashboardScreen() {
     });
   };
 
-  if (loading || contextLoading) {
+  // Profile/stat verification must not hide already-prepared Dashboard cards.
+  // A returning user can read immediately; the small stats row fills in once
+  // UserContext's live profile arrives.
+  if (loading) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.text} />
+        <HomeLoadingState />
       </View>
     );
   }

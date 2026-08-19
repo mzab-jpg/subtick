@@ -94,6 +94,11 @@ export async function linkGoogleAccount(): Promise<User> {
   try {
     // Dynamic import to avoid crash if package isn't installed in web/dev
     const { GoogleSignin, isSuccessResponse } = await import('@react-native-google-signin/google-signin');
+    // Startup config is intentionally deferred for faster Home cards. Configure
+    // again at the moment it is needed so a fast Settings visit remains reliable.
+    GoogleSignin.configure({
+      webClientId: process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID || '859600771798-bco64ngenl3l5b349mcgr29pp868chjn.apps.googleusercontent.com',
+    });
 
     if (__DEV__) console.log('[Auth] GoogleSignin module loaded, checking Play Services...');
 

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050">
+<rect width="1600" height="1050" fill="#F8F7F4"/>
+<text x="90" y="90" fill="#111111" font-family="Georgia, serif" font-size="50" font-weight="700">Impossible T</text><text x="90" y="130" fill="#666666" font-family="Arial, sans-serif" font-size="23">A geometric T that passes in front of and behind itself: unexpected connections made visible.</text>
+<text x="90" y="210" fill="#666666" font-family="Arial" font-size="19" font-weight="700" letter-spacing="2">APP ICON — LARGE TEST</text>
+<rect x="90" y="245" width="540" height="540" rx="130" fill="#111111"/>
+<!-- Back crossbar --> <path d="M184 410 H536" stroke="#F8F7F4" stroke-width="74" stroke-linecap="round"/>
+<!-- Stem with centre interruption --> <path d="M360 390 V662" stroke="#F8F7F4" stroke-width="76" stroke-linecap="round"/>
+<!-- Front crossbar segment creates the weave --> <path d="M300 410 H420" stroke="#111111" stroke-width="20"/><path d="M300 410 H420" stroke="#F8F7F4" stroke-width="74" stroke-linecap="butt"/>
+<path d="M360 372 V448" stroke="#111111" stroke-width="18"/><circle cx="360" cy="410" r="8" fill="#B63A3A"/>
+<text x="360" y="850" text-anchor="middle" fill="#111111" font-family="Arial" font-size="24" font-weight="700">A single T with an impossible overlap</text>
+<text x="810" y="210" fill="#666666" font-family="Arial" font-size="19" font-weight="700" letter-spacing="2">STARTUP SCREEN</text>
+<rect x="810" y="245" width="440" height="630" rx="34" fill="#F8F7F4" stroke="#E8E5E1" stroke-width="3"/>
+<path d="M930 480 H1130" stroke="#111111" stroke-width="45" stroke-linecap="round"/><path d="M1030 465 V660" stroke="#111111" stroke-width="46" stroke-linecap="round"/><path d="M995 480 H1065" stroke="#F8F7F4" stroke-width="45"/><path d="M1030 455 V505" stroke="#F8F7F4" stroke-width="11"/><circle cx="1030" cy="480" r="5" fill="#B63A3A"/>
+<text x="1030" y="755" text-anchor="middle" fill="#111111" font-family="Arial" font-size="33" font-weight="800" letter-spacing="9">TANGENT</text>
+<text x="1330" y="210" fill="#666666" font-family="Arial" font-size="19" font-weight="700" letter-spacing="2">LOADER</text>
+<rect x="1330" y="245" width="190" height="190" rx="32" fill="#FFFFFF" stroke="#E8E5E1" stroke-width="3"/>
+<path d="M1365 330 H1485" stroke="#111111" stroke-width="25" stroke-linecap="round"/><path d="M1425 320 V405" stroke="#111111" stroke-width="26" stroke-linecap="round"/><path d="M1408 330 H1442" stroke="#FFFFFF" stroke-width="25"/><circle cx="1425" cy="330" r="4" fill="#B63A3A"/>
+<rect x="810" y="920" width="440" height="55" rx="27" fill="#121212"/><text x="835" y="957" fill="#F5F5F5" font-family="Arial" font-size="21">Wild card: memorable, but must be simplified after small-size testing.</text>
+</svg>

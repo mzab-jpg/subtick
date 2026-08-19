@@ -11,7 +11,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Dimensions,
   PanResponder,
 } from 'react-native';
@@ -44,6 +43,7 @@ import { useNavigationQueue } from '../features/reader/useNavigationQueue';
 import { useReaderHUD } from '../features/reader/useReaderHUD';
 import { ReaderHUD } from '../features/reader/ReaderHUD';
 import { ReaderProgressBar } from '../features/reader/ReaderProgressBar';
+import { LoadingCursor } from '../components/LoadingCursor';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 45;
@@ -662,7 +662,7 @@ export default function ReaderScreen() {
       {/* Content */}
       {unavailableFromRss ? (
         <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <LoadingCursor />
         </View>
       ) : queueExhausted ? (
         <View style={styles.catchUpContainer}>
@@ -697,7 +697,7 @@ export default function ReaderScreen() {
         // This opaque surface prevents a native publisher webpage flashing under
         // the delayed spinner during Android transition composition.
         <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-          {slowLoading && <ActivityIndicator size="small" color={colors.primary} />}
+          {slowLoading && <LoadingCursor />}
         </View>
       ) : article ? (
         <>
@@ -763,7 +763,7 @@ export default function ReaderScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingContainer: { flex: 1, paddingTop: topInset + 28, paddingHorizontal: 28 },
   webview: { flex: 1, marginTop: 0 },
   catchUpContainer: {
     flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32,

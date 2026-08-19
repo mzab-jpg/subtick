@@ -40,15 +40,26 @@ nothing you do locally touches your live app or its users.
    firebase --version
    ```
 
-3. **Local secret for the emulator** — `firebase/functions/.env` must contain:
+3. **Local emulator values** — keep deploy-safe, non-secret settings in
+   `firebase/functions/.env`:
    ```bash
    GA_MEASUREMENT_ID=G-4B3N8C8MR3
    GA_DEBUG=false
+   ```
+
+   Put emulator-only dummy secrets in `firebase/functions/.env.local` instead:
+   ```bash
    GA_API_SECRET=dummy_local_secret_for_testing
    CONTROL_DASHBOARD_SECRET=local_dashboard_secret
-
    ```
-   The Functions declare secrets for analytics and protected Control Dashboard actions. The emulator needs dummy values or the affected callables fail with `internal`. In production, set a strong non-dummy dashboard value with `firebase functions:secrets:set CONTROL_DASHBOARD_SECRET`; enter that value in the dashboard only for save, preview, or feed-add actions.
+
+   The Functions declare secrets for analytics and protected Control Dashboard
+   actions. The emulator needs dummy values or the affected callables fail with
+   `internal`. In production, set a strong non-dummy dashboard value with
+   `firebase functions:secrets:set CONTROL_DASHBOARD_SECRET`; enter that value in
+   the dashboard only for save, preview, or feed-add actions. Do not put either
+   secret in `.env`: production Functions receive those names from Google Secret
+   Manager, and Cloud Run rejects a duplicate plain environment value.
 
 ---
 

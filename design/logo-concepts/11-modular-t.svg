@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050">
+<rect width="1600" height="1050" fill="#F8F7F4"/>
+<text x="90" y="90" fill="#111111" font-family="Arial, sans-serif" font-size="50" font-weight="700">Modular T</text><text x="90" y="130" fill="#666666" font-family="Arial, sans-serif" font-size="23">Two neutral blocks form a T only in the space between them. More ownable than a literal monogram.</text>
+<text x="90" y="210" fill="#666666" font-family="Arial" font-size="19" font-weight="700" letter-spacing="2">APP ICON — LARGE TEST</text>
+<rect x="90" y="245" width="540" height="540" rx="130" fill="#111111"/>
+<!-- Negative T is formed by space between three blocks -->
+<rect x="190" y="345" width="160" height="160" rx="35" fill="#F8F7F4"/><rect x="370" y="345" width="160" height="160" rx="35" fill="#F8F7F4"/><rect x="280" y="525" width="160" height="160" rx="35" fill="#F8F7F4"/>
+<text x="360" y="850" text-anchor="middle" fill="#111111" font-family="Arial" font-size="24" font-weight="700">A T appears only when the parts are together</text>
+<text x="810" y="210" fill="#666666" font-family="Arial" font-size="19" font-weight="700" letter-spacing="2">STARTUP SCREEN</text>
+<rect x="810" y="245" width="440" height="630" rx="34" fill="#F8F7F4" stroke="#E8E5E1" stroke-width="3"/>
+<rect x="905" y="430" width="110" height="110" rx="24" fill="#111111"/><rect x="1045" y="430" width="110" height="110" rx="24" fill="#111111"/><rect x="975" y="570" width="110" height="110" rx="24" fill="#111111"/>
+<text x="1030" y="760" text-anchor="middle" fill="#111111" font-family="Arial" font-size="33" font-weight="800" letter-spacing="9">TANGENT</text>
+<text x="1330" y="210" fill="#666666" font-family="Arial" font-size="19" font-weight="700" letter-spacing="2">LOADER</text>
+<rect x="1330" y="245" width="190" height="190" rx="32" fill="#FFFFFF" stroke="#E8E5E1" stroke-width="3"/><rect x="1370" y="300" width="54" height="54" rx="12" fill="#111111"/><rect x="1430" y="300" width="54" height="54" rx="12" fill="#111111"/><rect x="1400" y="360" width="54" height="54" rx="12" fill="#111111"/>
+<text x="1425" y="475" text-anchor="middle" fill="#666666" font-family="Arial" font-size="17">Blocks assemble</text>
+<rect x="810" y="920" width="440" height="55" rx="27" fill="#121212"/><text x="835" y="957" fill="#F5F5F5" font-family="Arial" font-size="21">Utility-first, but needs small-size testing: the T is intentionally subtle.</text>
+</svg>

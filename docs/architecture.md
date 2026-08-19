@@ -37,6 +37,8 @@
 
 **Android Reader performance module:** `modules/tangent-rss-parser/` is a local Expo module compiled into Android custom builds. It keeps direct publisher fetching on-device while moving RSS/Atom streaming parse work from React Native JavaScript to one Kotlin worker. A fresh native APK is required after changing this module; iOS requires a separate Swift implementation before its Reader preloading can be enabled.
 
+**React startup identity:** After Android's operating-system splash hands control to React, `src/components/StartupScreen.tsx` uses the same top-left, system-font `TANGENT` title language as Home and types lowercase `sapere aude` at a calm 120 ms per character with a literal blinking red `|` cursor. Startup remains visible until both typing and the next screen's first returning-user card preparation are complete. Once prepared cards exist, Dashboard renders them immediately; the later cloud profile/stat verification updates quietly and never inserts a Home loader between startup and those cards. The Home and Reader loading surfaces use the same top-left red `Loading|` treatment only when their actual content is unavailable, instead of generic circles. The earlier native Android splash remains unchanged until its icon/background are redesigned to match; that later native asset/configuration change requires a new APK.
+
 ---
 
 ## 2. Full Directory Tree
@@ -45,9 +47,9 @@
 2SubTick/
 ├── index.ts                        # Expo entry point — calls registerRootComponent(App)
 ├── README.md                       # Public project overview, setup, and validation commands
-├── App.tsx                         # Root: init auth → ensureUserProfile → startOfflineManager → render;
-│                                   #   wraps in SafeAreaProvider → UserProvider → ErrorBoundary;
-│                                   #   lazy-requires GoogleSignin
+├── App.tsx                         # Root: restore Firebase identity → use matching local startup snapshot
+│                                   #   for immediate route → verify profile/cloud in background;
+│                                   #   defers Google setup + offline sync until route is visible
 ├── app.json                        # Expo config (name: Tangent, package: com.tangent.app)
 ├── eas.json                        # EAS Build profiles (preview APK + production)
 ├── package.json                    # Client-side dependencies
@@ -193,7 +195,8 @@ DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id fr
   → Highest eligible article is reserved and returned first for the Dashboard hero; a final publisher-spacing pass then keeps each later publisher at least three cards apart whenever another publisher remains
   → Reader preserves this backend order; a specifically tapped Dashboard card opens at its own position rather than triggering a second client-side shuffle
   → return { articles: Article[30] }
-  → Phone retains the active 30-card Dashboard feed in a UID-scoped in-memory cache; screen remounts restore it instead of silently requesting a replacement feed
+  → Phone retains the active 30-card Dashboard feed in a UID-scoped in-memory cache and a non-sensitive, 24-hour AsyncStorage cache. After Firebase restores the exact UID, a matching cached route/cards can render before cloud profile verification and a fresh request finish.
+  → Client-side seen filter removes locally opened cards before cached cards render; fresh background results are staged for the next launch rather than replacing visible cards.
   → Client-side seen filter → slice(0,30) → setFeedArticles
   → When Reader opens an article, only that article is removed from the mounted Dashboard cache; background replenishment appends unseen replacements after remaining unread cards.
   → Each returned article carries transient `{ feedId, impressionId }` context
@@ -324,6 +327,8 @@ AccountScreen → linkGoogleAccount():
 | Pending behavior events | `AsyncStorage[@subtick_behavior_queue]` until flushed |
 | Failed RSS feed flags | `AsyncStorage[@subtick_rss_failed_{articleId}]` per device |
 | GA4 client_id | `AsyncStorage[@subtick_app_instance_id]` — stable per-install dotted format UUID |
+| Startup route snapshot | `AsyncStorage[@subtick_startup_snapshot_{uid}]` — non-sensitive, UID-bound last-confirmed onboarding state; display shortcut only, never authorisation |
+| Dashboard card cache | `AsyncStorage[@subtick_dashboard_feed_{uid}]` — non-sensitive, UID-bound latest unread recommendation cards/shown IDs; expires after 24 hours and is filtered against local seen IDs before display |
 
 
 

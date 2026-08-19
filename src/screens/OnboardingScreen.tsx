@@ -18,6 +18,9 @@ import { RootStackParamList } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { auth } from '../services/firebase';
 import { completeOnboarding } from '../services/auth';
+import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
+import { stageDashboardFeedForNextLaunch } from '../services/dashboardFeedCache';
+import { requestInitialDashboardFeed } from '../services/initialDashboardFeed';
 import { CategoryChipGrid, type ChipState } from '../components/CategoryChipGrid';
 import {
   TEXT_XS,
@@ -64,9 +67,28 @@ export default function OnboardingScreen() {
     if (!userId || saving) return;
 
     try {
+      const startedAt = Date.now();
+      if (__DEV__) console.log('[Onboarding Timing] category save started');
       setSaving(true);
       setSaveError(null);
       await completeOnboarding(userId, selectedIds, notInterestedIds);
+      if (__DEV__) console.log(`[Onboarding Timing] category save confirmed in ${Date.now() - startedAt}ms`);
+      // The save is committed, so ranking can begin immediately while Dashboard
+      // mounts; it does not wait for the profile listener to echo these choices.
+      void (async () => {
+        try {
+          if (__DEV__) console.log('[Startup Timing] first ranked feed requested after onboarding save');
+          const result = await requestInitialDashboardFeed(userId, async () => {
+            const seenIds = await getSeenArticleIdsLocally();
+            return getRankedFeed(seenIds);
+          });
+          if (result.articles.length > 0) stageDashboardFeedForNextLaunch(userId, result.articles, []);
+          if (__DEV__) console.log(`[Startup Timing] onboarding ranked feed returned in ${Date.now() - startedAt}ms (${result.articles.length} articles)`);
+        } catch {
+          // Dashboard uses its normal request path if this early request fails.
+        }
+      })();
+      if (__DEV__) console.log(`[Onboarding Timing] navigating to Dashboard at ${Date.now() - startedAt}ms`);
       navigation.replace('Dashboard');
     } catch (error) {
       console.error('[Onboarding] Failed to save selections:', error);

@@ -47,6 +47,12 @@ const settingsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screen
 const categoryPreferencesSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'CategoryPreferencesScreen.tsx'), 'utf8');
 const dashboardStatsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'DashboardStatsScreen.tsx'), 'utf8');
 const articleListSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'ArticleListScreen.tsx'), 'utf8');
+const startupScreenSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'StartupScreen.tsx'), 'utf8');
+const homeLoadingStateSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'HomeLoadingState.tsx'), 'utf8');
+const loadingCursorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'LoadingCursor.tsx'), 'utf8');
+const startupCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'startupCache.ts'), 'utf8');
+const dashboardCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'dashboardFeedCache.ts'), 'utf8');
+const initialDashboardFeedSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'initialDashboardFeed.ts'), 'utf8');
 check('account changes use a blocking transition before onboarding',
   appSource.includes('subscribeToAccountTransition')
     && appSource.includes('if (initializing || accountTransitioning)')
@@ -59,8 +65,12 @@ check('account changes use a blocking transition before onboarding',
 check('old profile and weekly stats clear at the start of an auth change',
   userContextSource.includes('setProfile(null);') && userContextSource.includes('setWeeklyReadCount(0);'),
   true);
-check('Dashboard restores a user-scoped feed cache instead of refetching after remount',
-  dashboardSource.includes('getCachedDashboardFeed') && dashboardSource.includes('setCachedDashboardFeed'),
+check('Dashboard reads a prepared user-scoped feed cache during first state creation instead of flashing Loading',
+  dashboardSource.includes('initialCachedFeedRef = useRef(getCachedDashboardFeed(auth.currentUser?.uid || \'\'))')
+    && dashboardSource.includes('useState<Article[]>(() => initialCachedFeedRef.current?.articles ?? [])')
+    && dashboardSource.includes('useState(() => !initialCachedFeedRef.current?.articles.length)')
+    && dashboardSource.includes('new Set(initialCachedFeedRef.current?.shownIds ?? [])')
+    && dashboardSource.includes('setCachedDashboardFeed'),
   true);
 check('Reader system navigation shares the guarded history/session exit path',
   readerSource.includes("navigation.addListener('beforeRemove'") && readerSource.includes('finishAndExitReader'),
@@ -85,6 +95,67 @@ check('Settings-family routes retain their page shell during loading',
     && categoryPreferencesSource.includes('styles.inlineLoading')
     && dashboardStatsSource.includes('styles.inlineLoading')
     && articleListSource.includes('styles.inlineLoading'),
+  true);
+check('development timing markers cover startup, onboarding, and first-feed handoffs',
+  appSource.includes('[Startup Timing] authentication ready')
+    && appSource.includes('[Startup Timing] initial profile ready')
+    && appSource.includes('[Startup Timing] React startup screen dismissed')
+    && userContextSource.includes('[Startup Timing] shared profile listener ready')
+    && dashboardSource.includes('[Startup Timing] first ranked feed requested')
+    && dashboardSource.includes('[Startup Timing] ranked feed returned')
+    && fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'OnboardingScreen.tsx'), 'utf8').includes('[Onboarding Timing] category save confirmed'),
+  true);
+check('startup cache is UID-bound, expires, filters seen cards, and never stores credentials',
+  startupCacheSource.includes('snapshot.userId === userId')
+    && startupCacheSource.includes('MAX_DASHBOARD_CACHE_AGE_MS')
+    && startupCacheSource.includes('feed.userId !== userId')
+    && dashboardCacheSource.includes('restoreCachedDashboardFeed')
+    && dashboardCacheSource.includes('clearPersistentStartupCache')
+    && !startupCacheSource.includes('token')
+    && !startupCacheSource.includes('password'),
+  true);
+check('returning startup restores only after Firebase identity and refreshes without replacing visible cards',
+  appSource.includes('getStartupSnapshot(user.uid)')
+    && appSource.includes('Background profile verification failed')
+    && appSource.includes('restoreCachedDashboardFeed(user.uid, seenIds)')
+    && appSource.includes('setCachedDashboardFeed(user.uid, result.articles, [])')
+    && dashboardSource.includes('restoreCachedDashboardFeed(userId, await getSeenArticleIdsLocally())')
+    && dashboardSource.includes('stageDashboardFeedForNextLaunch')
+    && dashboardSource.includes('Fresh recommendations are saved for the next launch'),
+  true);
+check('onboarding and Dashboard share one first ranked-feed request',
+  initialDashboardFeedSource.includes('const requests = new Map')
+    && initialDashboardFeedSource.includes('takeInitialDashboardFeedResult')
+    && dashboardSource.includes('getInitialDashboardFeedRequest')
+    && dashboardSource.includes('takeInitialDashboardFeedResult')
+    && initialDashboardFeedSource.includes('Register the shared promise before even a local-storage read begins')
+    && fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'OnboardingScreen.tsx'), 'utf8').includes('requestInitialDashboardFeed'),
+  true);
+check('Dashboard uses the minimal Loading cursor only while cards themselves are unavailable',
+  dashboardSource.includes('if (loading) {')
+    && !dashboardSource.includes('if (loading || contextLoading)')
+    && dashboardSource.includes('<HomeLoadingState />')
+    && !dashboardSource.includes('ActivityIndicator')
+    && homeLoadingStateSource.includes('<LoadingCursor />')
+    && loadingCursorSource.includes('>Loading</Text>')
+    && loadingCursorSource.includes('>|</Animated.Text>')
+    && loadingCursorSource.includes('alignSelf: \'flex-start\'')
+    && startupScreenSource.includes('const TYPE_INTERVAL_MS = 120')
+    && startupScreenSource.includes('>TANGENT</Text>')
+    && startupScreenSource.includes('Animated.loop'),
+  true);
+check('startup uses the Home-consistent system-font TANGENT/Sapere aude cursor rather than an emoji spinner',
+  appSource.includes("import { StartupScreen } from './src/components/StartupScreen';")
+    && appSource.includes('<StartupScreen')
+    && appSource.includes('onTypingComplete={() => setStartupTypingComplete(true)}')
+    && startupScreenSource.includes("const MOTTO = 'sapere aude';")
+    && startupScreenSource.includes('onTypingComplete')
+    && appSource.includes('startupPreparationComplete')
+    && appSource.includes('startupTypingComplete')
+    && startupScreenSource.includes('>TANGENT</Text>')
+    && !startupScreenSource.includes("fontFamily: 'Georgia'")
+    && startupScreenSource.includes('Animated.loop')
+    && !appSource.includes('Connecting to your personalized feed...'),
   true);
 
 process.exitCode = failed ? 1 : 0;

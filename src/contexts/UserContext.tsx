@@ -12,6 +12,7 @@ import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/fire
 import { BehaviorEvent, ReaderSessionSummary, UserProfile } from '../types';
 import { calculateWpm, classifyLocalRead, countWeeklyQualifyingReads, estimateNextStreak, isQualifyingRead } from '../utils/dashboardMetrics';
 import { auth, db } from '../services/firebase';
+import { saveStartupSnapshot } from '../services/startupCache';
 
 interface UserContextValue {
   profile: UserProfile | null;
@@ -113,6 +114,8 @@ export function UserProvider({ children }: UserProviderProps) {
         (snapshot) => {
           const nextProfile = snapshot.exists() ? snapshot.data() as UserProfile : null;
           setProfile(nextProfile);
+          if (nextProfile) void saveStartupSnapshot(nextProfile);
+          if (__DEV__) console.log(`[Startup Timing] shared profile listener ready (${nextProfile?.isOnboarded ? 'onboarded' : 'onboarding'})`);
           if (nextProfile && provisionalBaseUpdatedAtRef.current !== null && nextProfile.lastUpdated > provisionalBaseUpdatedAtRef.current) {
             setProvisionalProfile(null);
             setProvisionalWeeklyReads(null);

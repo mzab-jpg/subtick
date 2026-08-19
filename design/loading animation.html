@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tangent — Typewriter Motto Loader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400;1,6..72,600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #FBF9F5;
+            --dark: #121212;
+            --accent: #C8372D;
+            --border: #E2DDD5;
+            --font-editorial: "Newsreader", "Georgia", serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--dark);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .card {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 56px 72px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+        }
+
+        .brand-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .wordmark {
+            font-family: var(--font-editorial);
+            font-size: 44px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            color: var(--dark);
+            line-height: 1;
+            user-select: none;
+        }
+
+        /* Typewriter line container locked strictly to text baseline */
+        .motto-row {
+            margin-top: 10px;
+            display: inline-flex;
+            align-items: baseline;
+            height: 20px;
+        }
+
+        .typed-text {
+            font-family: var(--font-editorial);
+            font-style: italic;
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--accent);
+            letter-spacing: 0.2px;
+            white-space: pre;
+        }
+
+        /* Cursor height and vertical position locked exactly to x-height of font */
+        .cursor {
+            display: inline-block;
+            width: 2px;
+            height: 14px;
+            background-color: var(--accent);
+            margin-left: 2px;
+            transform: translateY(1px);
+        }
+
+        .cursor.blink {
+            animation: cursorBlink 0.5s infinite alternate;
+        }
+
+        @keyframes cursorBlink {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        button {
+            margin-top: 36px;
+            background: var(--dark);
+            color: #FFF;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div class="brand-container">
+            <span class="wordmark">tangent</span>
+            <div class="motto-row">
+                <span class="typed-text" id="typedText"></span>
+                <span class="cursor blink" id="cursor"></span>
+            </div>
+        </div>
+    </div>
+
+    <button onclick="startTyping()">Simulate Load</button>
+
+    <script>
+        const phrase = "Sapere aude";
+        let typingTimeout;
+
+        function startTyping() {
+            clearTimeout(typingTimeout);
+            const typedText = document.getElementById('typedText');
+            const cursor = document.getElementById('cursor');
+
+            typedText.textContent = "";
+            cursor.classList.add('blink');
+            cursor.style.opacity = '1';
+
+            let charIndex = 0;
+
+            function typeNextChar() {
+                if (charIndex < phrase.length) {
+                    typedText.textContent += phrase.charAt(charIndex);
+                    charIndex++;
+
+                    // Simulate slight variation in typing speed during content stream
+                    const delay = Math.floor(Math.random() * 60) + 70;
+                    typingTimeout = setTimeout(typeNextChar, delay);
+                } else {
+                    // Loading complete: cursor blinks 3 times then disappears
+                    setTimeout(() => {
+                        cursor.classList.remove('blink');
+                        cursor.style.opacity = '0';
+                    }, 1200);
+                }
+            }
+
+            typeNextChar();
+        }
+
+        window.onload = startTyping;
+    </script>
+</body>
+</html>

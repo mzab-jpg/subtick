@@ -20,11 +20,15 @@ emulator at `http://127.0.0.1:9099` is not reachable.
 **Cause:** The Cloud Functions declare `secrets: [gaApiSecret]`; FieldValue.increment replaced with absolute writes; missing articles skipped to prevent batch failure (see
 `firebase/functions/src/index.ts`). The emulator cannot inject the secret, so
 every callable throws `internal`.
-**Fix:** `firebase/functions/.env` must include:
+**Fix:** `firebase/functions/.env.local` must include:
 ```
 GA_API_SECRET=dummy_local_secret_for_testing
 ```
-Then **restart the emulators** (the env file is read at startup). Also verify `test-emulator-e2e.js` passes.
+Keep `GA_MEASUREMENT_ID` and `GA_DEBUG` in `firebase/functions/.env`. Do not put
+`GA_API_SECRET` in `.env`: deployed Functions receive that name from Google Secret
+Manager, and Cloud Run rejects a duplicate plain environment value. Then **restart
+the emulators** (environment files are read at startup). Also verify
+`test-emulator-e2e.js` passes.
 
 ---
 
@@ -98,8 +102,10 @@ endpoint, gets rejected (HTTP 4xx), and the error is swallowed
 (`.catch(() => {})`) — so nothing is ingested. The Matrix results and scoring
 are unaffected (they come from Firestore, not GA4).
 
-> ⚠️ Never put the **real** `GA_API_SECRET` in `firebase/functions/.env`:
-> emulator runs would then send real events to your live GA4 property.
+> ⚠️ Never put the **real** `GA_API_SECRET` in
+> `firebase/functions/.env.local`:
+> emulator runs would then send real events to your live GA4 property. The production
+> secret belongs only in Google Secret Manager, never in either local environment file.
 
 ---
 

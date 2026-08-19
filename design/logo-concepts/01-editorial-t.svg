@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="980" viewBox="0 0 1440 980">
+  <rect width="1440" height="980" fill="#F8F7F4"/>
+  <text x="80" y="86" fill="#111111" font-family="Georgia, serif" font-size="46" font-weight="700">Tangent — Editorial T</text>
+  <text x="80" y="125" fill="#666666" font-family="Arial, sans-serif" font-size="22">A quiet typographic mark. Most closely aligned with the current reader interface.</text>
+  <!-- App icon -->
+  <text x="80" y="205" fill="#666666" font-family="Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="2">APP ICON</text>
+  <rect x="80" y="235" width="300" height="300" rx="72" fill="#111111"/>
+  <text x="230" y="455" text-anchor="middle" fill="#F8F7F4" font-family="Georgia, serif" font-size="270" font-weight="700">T</text>
+  <circle cx="320" cy="445" r="11" fill="#B63A3A"/>
+  <!-- Splash -->
+  <text x="515" y="205" fill="#666666" font-family="Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="2">STARTUP SCREEN</text>
+  <rect x="515" y="235" width="420" height="560" rx="30" fill="#F8F7F4" stroke="#E8E5E1" stroke-width="3"/>
+  <text x="725" y="510" text-anchor="middle" fill="#111111" font-family="Georgia, serif" font-size="225" font-weight="700">T</text>
+  <circle cx="802" cy="502" r="9" fill="#B63A3A"/>
+  <text x="725" y="610" text-anchor="middle" fill="#111111" font-family="Arial, sans-serif" font-size="34" font-weight="800" letter-spacing="9">TANGENT</text>
+  <!-- Loader -->
+  <text x="1065" y="205" fill="#666666" font-family="Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="2">LOADING MARK</text>
+  <rect x="1065" y="235" width="295" height="220" rx="28" fill="#FFFFFF" stroke="#E8E5E1" stroke-width="3"/>
+  <text x="1210" y="380" text-anchor="middle" fill="#111111" font-family="Georgia, serif" font-size="112" font-weight="700">T</text>
+  <circle cx="1250" cy="376" r="6" fill="#B63A3A"/>
+  <text x="1210" y="425" text-anchor="middle" fill="#666666" font-family="Arial, sans-serif" font-size="17">Small pulse could animate the dot</text>
+  <!-- Dark preview -->
+  <text x="80" y="650" fill="#666666" font-family="Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="2">DARK MODE PREVIEW</text>
+  <rect x="80" y="680" width="280" height="220" rx="50" fill="#121212"/>
+  <text x="220" y="835" text-anchor="middle" fill="#F5F5F5" font-family="Georgia, serif" font-size="160" font-weight="700">T</text>
+  <circle cx="273" cy="830" r="8" fill="#C94B4B"/>
+  <text x="410" y="735" fill="#111111" font-family="Georgia, serif" font-size="28" font-weight="700">Character</text>
+  <text x="410" y="778" fill="#666666" font-family="Arial, sans-serif" font-size="23">Editorial, confident, minimal.</text>
+  <text x="410" y="817" fill="#666666" font-family="Arial, sans-serif" font-size="23">Safest choice at tiny icon sizes.</text>
+</svg>

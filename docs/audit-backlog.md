@@ -25,6 +25,12 @@ The following audit items are no longer deferred:
 
 The remaining M8 entry below concerns only product copy and later tutorial design.
 
+### 19 August 2026 — Returning startup and first-Home-card cache
+
+- **First Home cards no longer wait for every cloud check:** After Firebase securely restores the account identity, Tangent reads only that UID’s non-sensitive local route snapshot and latest unread Dashboard cards. A returning person can see cached cards while Firestore verifies the profile and the backend prepares a fresh feed.
+- **Safety boundary:** The phone cache is a display shortcut, not proof of account ownership or permission. It contains no passwords, auth tokens, or secrets; Firebase must restore the exact UID before it is read, the cached feed expires after 24 hours, local seen IDs are removed before display, and profile/function checks remain authoritative. Sign-out, reset, deletion, UID changes, and cache mismatches clear or ignore it.
+- **No duplicate first feed after onboarding:** Once category saving succeeds, onboarding starts the one shared ranked-feed request while Dashboard opens. Dashboard consumes it if still running; otherwise it uses its completed stored result.
+
 ### 17 August 2026 — Universal Reader exit, stable cards, provisional stats, and category-style metric selection batch
 
 - **History now covers every ordinary exit:** Reader owns one guarded finish route shared by the close button, Android/system back action, and queue-exhausted return. It prevents a duplicate session, writes History once, then navigates. Saved/history/sandbox browsing remains excluded.
@@ -56,6 +62,18 @@ The remaining M8 entry below concerns only product copy and later tutorial desig
 
 ---
 
+
+## Brand / startup follow-up
+
+### Native splash must be redesigned to match the trial startup identity
+
+The current trial changes only the React screen that appears **after** Android has launched Tangent's JavaScript. Android still briefly shows the existing native splash assets: a white background and the old blue icon. The app then hands over to the new themed system-font `TANGENT` / typed red `sapere aude|` startup screen. This is safe for testing the identity and does not hold the app open beyond preparing the next returning-user screen, but the two screens will not yet look like one continuous experience.
+
+**Future outcome:** If the trial is approved, replace the native splash image/background in `assets/` and `app.json` with matching flat Tangent artwork, then test a fresh Android build. Native splash changes cannot arrive through the JavaScript development server and must be included in an APK. Keep the native artwork static; the type-in/cursor remains React-level motion after launch.
+
+**Timing:** After the React startup trial is approved, before a public Android release.
+
+---
 
 ## High priority before broad public growth
 

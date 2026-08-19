@@ -13,6 +13,7 @@ const {
 const { interleaveArticlesByCategory, spaceArticlesByPublisher, assembleFeedWithTranches } = require('../functions/lib/getRankedFeed.js');
 const { normalizeFeedUrl } = require('../functions/lib/feedValidation.js');
 const { applyDecay } = require('../functions/lib/weightUpdater.js');
+const rankedFeedSource = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions', 'src', 'getRankedFeed.ts'), 'utf8');
 
 let failed = false;
 function check(label, actual, expected) {
@@ -26,6 +27,18 @@ function checkClose(label, actual, expected) {
   console.log(`${pass ? '✓' : '✗'} ${label}: ${actual}${pass ? '' : ` (expected ${expected})`}`);
   if (!pass) failed = true;
 }
+
+check('feed timing logs cover configuration, profile, pool, publisher, selection, response, and total',
+  rankedFeedSource.includes('[Feed Timing] config=')
+    && rankedFeedSource.includes('profile=')
+    && rankedFeedSource.includes('pool=')
+    && rankedFeedSource.includes('publisher=')
+    && rankedFeedSource.includes('selection=')
+    && rankedFeedSource.includes('response=')
+    && rankedFeedSource.includes('total=')
+    && rankedFeedSource.includes('poolWarm=')
+    && rankedFeedSource.includes('publisherWarm='),
+  true);
 
 const cfg = prepareConfig({
   classification: {
