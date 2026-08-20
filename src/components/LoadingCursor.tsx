@@ -22,7 +22,15 @@ export function LoadingCursor() {
   return (
     <View style={styles.container} accessibilityRole="progressbar" accessibilityLabel="Loading">
       <Text style={[styles.label, { color: colors.accent }]}>Loading</Text>
-      <Animated.Text style={[styles.cursor, { color: colors.accent, opacity: cursorOpacity }]}>|</Animated.Text>
+      <Animated.View
+        style={[
+          styles.cursor,
+          {
+            backgroundColor: colors.accent,
+            opacity: cursorOpacity,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -30,5 +38,10 @@ export function LoadingCursor() {
 const styles = StyleSheet.create({
   container: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center' },
   label: { fontSize: TEXT_BASE, fontWeight: '700', letterSpacing: -0.2 },
-  cursor: { fontSize: TEXT_BASE, fontWeight: '700', marginLeft: 2 },
+  cursor: {
+    width: 2,
+    height: 16,
+    borderRadius: 1,
+    marginLeft: 1,
+  },
 });

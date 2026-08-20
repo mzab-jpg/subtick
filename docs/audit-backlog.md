@@ -133,6 +133,16 @@ The backend checks that someone is signed in, but cannot reliably prove the old 
 
 ## Deferred architecture and release work
 
+### Instant local Dashboard statistic values — product/stat reconciliation design
+
+**What is happening:** Returning users can now see their cached article cards immediately while Tangent quietly waits for the cloud profile and rolling-read calculation. To prevent the page from jumping, the stats bar reserves its normal space from the first frame and shows neutral placeholder marks until verified values arrive. It does not invent or reuse old statistic numbers.
+
+**Why this is deferred:** Showing real numbers before cloud confirmation would require Tangent to keep a local copy of each displayed statistic, define how long each is trustworthy, update it correctly after every local reading session, and replace it safely when the server disagrees. Some values, such as weekly reads and streaks, change with time even while the app is closed. A rushed cache could make the app look fast while showing stale or inaccurate progress.
+
+**Future outcome:** Define a small, versioned local stats snapshot with per-metric freshness rules. Update it on-device immediately after a read, calculate time-based metrics locally where reliable, and reconcile it with the authoritative profile/events after reconnecting. The UI may then show last-known values instantly with a subtle non-disruptive refresh.
+
+**Timing:** Defer until the planned broader stats project. The current placeholder preserves visual stability without compromising accuracy.
+
 ### Large-feed single-stream extraction — requires a dedicated native redesign
 
 **What is happening:** For an RSS file that exceeds the 5 MB raw-memory allowance, Android currently stops retaining the raw file and then opens a stream to find the one requested article. A massive feed with several selected articles can therefore be downloaded/scanned more than once during one Reader session.
@@ -146,6 +156,16 @@ The backend checks that someone is signed in, but cannot reliably prove the old 
 **Why deferred:** This replaces the central Android stream/cache coordination and needs dedicated native test coverage for feeds with and without content-length headers, repeated selected articles, cancellation, errors, and memory limits. Do not implement it as an incremental patch to the present raw-cache fallback.
 
 **Timing:** Prioritise before broad Android release if massive publishers remain in the active feed directory.
+
+### Native splash and system-bar release verification
+
+**What is happening:** Tangent's React startup composition hides the Android status bar briefly for a clean `TANGENT` / `sapere aude` presentation. Before React begins, the `expo-splash-screen` native plugin now chooses Tangent's light `#F8F7F4` background or dark `#121212` background according to the phone's dark-mode setting.
+
+**Why it still needs release verification:** Native splash behaviour is generated into an APK and can differ between Metro reloads, debug clients, preview APKs, Android versions, and phone manufacturers. Android only knows the phone theme before React starts—not a separate Tangent-only theme selection—so a person who forces Tangent dark while keeping their phone light may still see the light native splash briefly.
+
+**Future outcome:** Before Android release, verify a fresh preview/production APK on a physical device in phone light mode, phone dark mode, and a deliberately different in-app theme. Confirm that the status bar is hidden only during the React startup animation, restored on Home/Onboarding, and that no white flash remains for phone-dark users.
+
+**Timing:** Required before Android production release; test now on the next fresh debug/preview APK.
 
 ### C4 — Android build setup must remain reproducible
 

@@ -244,6 +244,21 @@ export default function ReaderScreen() {
     webViewInitialLoadRef.current = true;
   }, [currentIndex, articleId]);
 
+  // Navigating to another article (swipe to next/prev, unavailable-skip) must
+  // immediately clear the HUD. Clearing the pending timer prevents the previous
+  // article's HUD from lingering for the rest of its 2.5s visibility window.
+  // Deliberately depends only on currentIndex so a tap-to-show on the current
+  // article never immediately re-hides it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!hudVisible) return;
+    if (hudTimeoutRef.current) {
+      clearTimeout(hudTimeoutRef.current);
+      hudTimeoutRef.current = null;
+    }
+    setHudVisible(false);
+  }, [currentIndex]);
+
   // --- Behavior tracker hook ---
   const behaviorTracker = useBehaviorTracker({
     articleId: article?.id || articleId,

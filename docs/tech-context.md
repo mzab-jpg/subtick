@@ -384,6 +384,7 @@ From `firebase/firestore.rules` (updated with S2–S5 fixes):
 - **Expo slug/owner:** `tangent` / `tangent_mb123`
 - **Predictive back gesture:** Disabled
 - **iOS tablet support:** Yes
+- **Native splash backgrounds:** The `expo-splash-screen` plugin uses `#F8F7F4` normally and `#121212` when the phone is in dark mode, preventing a white launch flash before React reads Tangent's own saved theme. This is native build configuration: rebuild/install an Android APK after changing it. A user who deliberately forces Tangent dark while their phone is light can still briefly receive the phone-light native splash before React reads that separate app preference.
 
 ---
 

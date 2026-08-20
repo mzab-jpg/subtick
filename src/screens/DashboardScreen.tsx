@@ -112,7 +112,7 @@ export default function DashboardScreen() {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       // Keep visible cards stable after Reader closes; sync never blocks navigation.
-      flushBehaviorQueue().catch(() => {});
+      flushBehaviorQueue().catch(() => { });
     });
     return unsubscribe;
   }, [navigation]);
@@ -302,7 +302,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.inner, { paddingTop: topInset + 16 }]}>
+      <View style={[styles.inner, { paddingTop: topInset + 28 }]}>
 
         {/* ── Header ── */}
         <View style={styles.headerRow}>
@@ -313,19 +313,29 @@ export default function DashboardScreen() {
         </View>
 
         {/* ── Stats Pill ── */}
-        {metrics.length > 0 && (
-          <View style={[styles.statsPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-            {metrics.map((metric, i) => (
-              <React.Fragment key={metric.id}>
-                <View style={styles.statItem}>
-                  {getMetricIcon(metric.id, colors.textMuted)}
-                  <Text style={[styles.statValue, { color: colors.text }]}>{metric.value}</Text>
-                </View>
-                {i < metrics.length - 1 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
-              </React.Fragment>
-            ))}
-          </View>
-        )}
+        <View
+          style={[styles.statsPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
+          accessibilityElementsHidden={metrics.length === 0}
+        >
+          {metrics.length > 0 ? metrics.map((metric, i) => (
+            <React.Fragment key={metric.id}>
+              <View style={styles.statItem}>
+                {getMetricIcon(metric.id, colors.textMuted)}
+                <Text style={[styles.statValue, { color: colors.text }]}>{metric.value}</Text>
+              </View>
+              {i < metrics.length - 1 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
+            </React.Fragment>
+          )) : (
+            <View style={styles.statsPlaceholderRow}>
+              {[0, 1, 2].map((item) => (
+                <React.Fragment key={item}>
+                  <View style={[styles.statPlaceholder, { backgroundColor: colors.border }]} />
+                  {item < 2 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
+                </React.Fragment>
+              ))}
+            </View>
+          )}
+        </View>
 
         {/* ── Articles (flex:1 — fills all space between stats and button) ── */}
         <View style={styles.articles}>
@@ -445,6 +455,8 @@ const styles = StyleSheet.create({
   },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statValue: { fontSize: TEXT_BASE, fontWeight: '600', letterSpacing: -0.5 },
+  statsPlaceholderRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  statPlaceholder: { width: 42, height: 14, borderRadius: 7 },
   statDivider: { width: 1, height: 16 },
   articles: { flex: 1, justifyContent: 'flex-start' },
   heroCard: { marginBottom: 24 },

@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F8F7F4"
     },
     "ios": {
       "supportsTablet": true
@@ -45,7 +45,19 @@
           "iosUrlScheme": "com.googleusercontent.apps.YOUR_IOS_CLIENT_ID"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F8F7F4",
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#121212",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ]
     ],
     "owner": "tangent_mb123"
   }

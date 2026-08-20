@@ -107,6 +107,7 @@ const readerTransitionReliability = source.includes('const SWIPE_PAUSE_THRESHOLD
   && loaderSource.includes('}, 180);')
   && source.includes(') : loading ? (')
   && source.includes('{slowLoading && <LoadingCursor />}')
+  && fs.readFileSync(path.join(__dirname, '..', 'src', 'features', 'reader', 'ReaderHUD.tsx'), 'utf8').includes('paddingTop: topInset + 8')
   && source.includes('<LoadingCursor />')
   && !source.includes('ActivityIndicator')
   && loaderSource.includes('setArticle(null);')

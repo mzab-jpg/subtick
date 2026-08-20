@@ -53,6 +53,7 @@ const loadingCursorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'c
 const startupCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'startupCache.ts'), 'utf8');
 const dashboardCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'dashboardFeedCache.ts'), 'utf8');
 const initialDashboardFeedSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'initialDashboardFeed.ts'), 'utf8');
+const appConfigSource = fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8');
 check('account changes use a blocking transition before onboarding',
   appSource.includes('subscribeToAccountTransition')
     && appSource.includes('if (initializing || accountTransitioning)')
@@ -140,9 +141,28 @@ check('Dashboard uses the minimal Loading cursor only while cards themselves are
     && loadingCursorSource.includes('>Loading</Text>')
     && loadingCursorSource.includes('>|</Animated.Text>')
     && loadingCursorSource.includes('alignSelf: \'flex-start\'')
-    && startupScreenSource.includes('const TYPE_INTERVAL_MS = 120')
+    && startupScreenSource.includes('const OPENING_CURSOR_MS = 850')
+    && startupScreenSource.includes('const LETTER_INTERVAL_MS = 200')
+    && startupScreenSource.includes('const BETWEEN_WORD_PAUSE_MS = 500')
+    && startupScreenSource.includes('const CURSOR_BLINK_HALF_CYCLE_MS = 500')
+    && startupScreenSource.includes('<StatusBar hidden animated />')
+    && startupScreenSource.includes("setTypingPhase('betweenWords')")
+    && startupScreenSource.includes('const onTypingCompleteRef = useRef(onTypingComplete)')
+    && startupScreenSource.includes('onTypingCompleteRef.current?.()')
+    && startupScreenSource.includes('}, [accountTransitioning]);')
+    && startupScreenSource.includes('typeFirstWord')
+    && startupScreenSource.includes('typeSecondWord')
+    && dashboardSource.includes('accessibilityElementsHidden={metrics.length === 0}')
+    && dashboardSource.includes('statsPlaceholderRow')
     && startupScreenSource.includes('>TANGENT</Text>')
     && startupScreenSource.includes('Animated.loop'),
+  true);
+check('startup hides the status bar and native splash provides Tangent light/dark backgrounds',
+  startupScreenSource.includes("import { StatusBar } from 'expo-status-bar'")
+    && startupScreenSource.includes('<StatusBar hidden animated />')
+    && appConfigSource.includes('"backgroundColor": "#F8F7F4"')
+    && appConfigSource.includes('"backgroundColor": "#121212"')
+    && appConfigSource.includes('"expo-splash-screen"'),
   true);
 check('startup uses the Home-consistent system-font TANGENT/Sapere aude cursor rather than an emoji spinner',
   appSource.includes("import { StartupScreen } from './src/components/StartupScreen';")
