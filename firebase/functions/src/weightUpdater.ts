@@ -244,6 +244,17 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   }
 
   // 9. Update Firestore — advance the watermark to the most recent processed event
+  // Audit fix: bound seenArticleIds growth. The array is append-ordered, so
+  // keeping the tail preserves the newest entries. Only rewritten when over
+  // the cap, with 1,000 slots of headroom so a concurrent client-side
+  // arrayUnion can never be lost by the trim.
+  let prunedSeenArticleIds: string[] | null = null;
+  if (Array.isArray(profile.seenArticleIds) && profile.seenArticleIds.length > 5000) {
+    const trimmedSeenIds = profile.seenArticleIds.slice(-4000);
+    prunedSeenArticleIds = trimmedSeenIds;
+    console.log(`[weightUpdater] Pruned seenArticleIds from ${profile.seenArticleIds.length} to ${prunedSeenArticleIds.length}`);
+  }
+
   await userRef.update({
     categoryWeights: newCategoryWeights,
     categoryLengthWeights: newCategoryLengthWeights,
@@ -258,6 +269,7 @@ export async function updateWeights(userId: string, clientId?: string, providedC
     ...(wpmUpdated && { averageWpm: newAverageWpm }),
     ...(readTimeUpdated && { totalReadTimeMs: newTotalReadTimeMs }),
     ...(articlesFinishedUpdated && { totalArticlesRead: newTotalArticlesFinished }),
+    ...(prunedSeenArticleIds && { seenArticleIds: prunedSeenArticleIds }),
     lastUpdated: now,
   });
 

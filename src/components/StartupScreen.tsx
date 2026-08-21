@@ -6,10 +6,10 @@ import { topInset } from '../utils/safeArea';
 import { TEXT_BASE, TEXT_XL } from '../utils/constants';
 
 const MOTTO = 'sapere aude';
-const OPENING_CURSOR_MS = 850;
-const LETTER_INTERVAL_MS = 200;
-const BETWEEN_WORD_PAUSE_MS = 500;
-const FINISHED_TYPING_HOLD_MS = 1250;
+const OPENING_CURSOR_MS = 600;
+const LETTER_INTERVAL_MS = 180;
+const BETWEEN_WORD_PAUSE_MS = 400;
+const FINISHED_TYPING_HOLD_MS = 850;
 const CURSOR_BLINK_HALF_CYCLE_MS = 500;
 
 type TypingPhase = 'opening' | 'typing' | 'betweenWords' | 'complete';

@@ -49,6 +49,14 @@
         { "fieldPath": "publishDate", "order": "ASCENDING" },
         { "fieldPath": "peakTrendingScore", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "articles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isFresh", "order": "ASCENDING" },
+        { "fieldPath": "publishDate", "order": "ASCENDING" }
+      ]
     }
   ]
 }

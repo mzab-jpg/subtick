@@ -33,6 +33,8 @@ export { syncBehaviorEvents } from './syncBehaviorEvents.js';
 import { onCall } from 'firebase-functions/v2/https';
 import { HttpsError } from 'firebase-functions/v2/https';
 
+// CONTRACT: this category list must stay in sync with the client copy in
+// src/utils/constants.ts. Update both together when categories change.
 const DASHBOARD_CATEGORIES = new Set([
   'Politics', 'Business', 'Finance', 'Technology', 'Science',
   'History', 'Culture', 'Lifestyle', 'Entertainment',
@@ -95,8 +97,7 @@ export const resetAccount = onCall(async (request) => {
 
   // Reset profile to defaults (keep userId, isOnboarded, themePreference, dashboardMetricIds)
   const defaultCategoryWeights: Record<string, number> = {};
-  const CATEGORIES = ['Politics', 'Business', 'Finance', 'Technology', 'Science', 'History', 'Culture', 'Lifestyle', 'Entertainment'];
-  CATEGORIES.forEach((cat) => { defaultCategoryWeights[cat] = 1.0; });
+  DASHBOARD_CATEGORIES.forEach((cat) => { defaultCategoryWeights[cat] = 1.0; });
 
   await db.doc(`users/${uid}`).update({
     // Reset personalization weights
@@ -165,9 +166,12 @@ export const deleteOrphanProfile = onCall(async (request) => {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
 
-  const { orphanUid } = request.data;
+  const { orphanUid, transferToken } = request.data as { orphanUid?: unknown; transferToken?: unknown };
   if (!orphanUid || typeof orphanUid !== 'string') {
     throw new HttpsError('invalid-argument', 'Missing or invalid orphanUid.');
+  }
+  if (!transferToken || typeof transferToken !== 'string') {
+    throw new HttpsError('invalid-argument', 'Missing or invalid transferToken.');
   }
 
   // Safety: never allow deleting the caller's own profile
@@ -176,12 +180,31 @@ export const deleteOrphanProfile = onCall(async (request) => {
   }
 
   try {
+    // Ownership proof (audit fix): the caller must present the one-time token
+    // that the device signed in as this UID stamped into the profile. Only an
+    // authenticated session of that UID could have written the stored value,
+    // so a match proves the caller legitimately controlled the orphan account.
+    const orphanSnap = await db.doc(`users/${orphanUid}`).get();
+    if (!orphanSnap.exists) {
+      return { success: true, deleted: orphanUid, alreadyGone: true };
+    }
+    const storedToken = orphanSnap.get('orphanTransferToken');
+    if (typeof storedToken !== 'string' || storedToken.length === 0) {
+      throw new HttpsError('permission-denied', 'Ownership verification failed.');
+    }
+    const suppliedBytes = Buffer.from(transferToken);
+    const storedBytes = Buffer.from(storedToken);
+    if (suppliedBytes.length !== storedBytes.length || !timingSafeEqual(suppliedBytes, storedBytes)) {
+      throw new HttpsError('permission-denied', 'Ownership verification failed.');
+    }
+
     await db.doc(`users/${orphanUid}`).delete();
-    console.log(`[deleteOrphanProfile] Deleted orphan profile: ${orphanUid}`);
+    console.log(`[deleteOrphanProfile] Deleted verified orphan profile: ${orphanUid}`);
     return { success: true, deleted: orphanUid };
   } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
     console.error(`[deleteOrphanProfile] Failed to delete ${orphanUid}:`, error);
-    // If the doc doesn't exist, that's fine — treat as success
+    // If the doc doesn't exist, that's fine - treat as success
     if (error.code === 5) {
       return { success: true, deleted: orphanUid, alreadyGone: true };
     }
@@ -286,34 +309,11 @@ export const updateScoringConfig = onCall({ secrets: [gaApiSecret, controlDashbo
     };
   }
 
-  // --- Legacy single-field mode ---
-  const { field, old_value, new_value } = data;
-  if (!field || typeof field !== 'string') {
-    throw new HttpsError('invalid-argument', 'Missing or invalid field.');
-  }
-  if (typeof old_value !== 'number' && typeof old_value !== 'string') {
-    throw new HttpsError('invalid-argument', 'Missing or invalid old_value.');
-  }
-  if (typeof new_value !== 'number' && typeof new_value !== 'string') {
-    throw new HttpsError('invalid-argument', 'Missing or invalid new_value.');
-  }
-
-  await docRef.set({ [field]: new_value, lastUpdated: Date.now(), lastUpdatedBy: adminUserId }, { merge: true });
-  sendGAEvents(clientId, [
-    {
-      name: 'config_changed',
-      params: {
-        user_id: adminUserId,
-        field,
-        old_value: old_value.toString(),
-        new_value: new_value.toString(),
-      },
-    },
-  ]).catch(() => {});
-  console.log(`[updateScoringConfig] ${adminUserId} changed ${field}: ${old_value} → ${new_value}`);
-  invalidateConfigCache();
-
-  return { success: true, field, old_value: old_value.toString(), new_value: new_value.toString() };
+  // Legacy single-field mode removed (audit fix): it accepted an unchecked
+  // field name and wrote it directly into system/scoringConfig. Nothing in
+  // the dashboard or app ever called it; requests without a config object
+  // are now rejected outright.
+  throw new HttpsError('invalid-argument', 'config object is required.');
 });
 
 // ============================================================

@@ -6,6 +6,7 @@
 
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { flushBehaviorQueue, getPendingEventCount } from './behaviorSync';
+import { flushPendingSaveMirrors } from './feedService';
 
 let unsubscribe: (() => void) | null = null;
 let isSyncing = false;
@@ -55,11 +56,15 @@ async function attemptFlush(): Promise<void> {
 
   try {
     const pending = await getPendingEventCount();
-    if (pending === 0) return;
+    if (pending > 0) {
+      console.log(`[OfflineManager] Flushing ${pending} pending events...`);
+      const synced = await flushBehaviorQueue();
+      console.log(`[OfflineManager] Synced ${synced} events`);
+    }
 
-    console.log(`[OfflineManager] Flushing ${pending} pending events...`);
-    const synced = await flushBehaviorQueue();
-    console.log(`[OfflineManager] Synced ${synced} events`);
+    // Audit fix: also retry queued save-mirror writes on reconnect.
+    await flushPendingSaveMirrors();
+
     lastFailureTime = 0; // Reset on success
   } catch (error) {
     console.error('[OfflineManager] Flush error:', error);

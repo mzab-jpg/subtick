@@ -17,6 +17,7 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from './firebase';
+import { GOOGLE_WEB_CLIENT_ID } from '../config/googleConfig';
 import {
   CATEGORIES,
   DEFAULT_SELECTED_WEIGHT,
@@ -97,7 +98,7 @@ export async function linkGoogleAccount(): Promise<User> {
     // Startup config is intentionally deferred for faster Home cards. Configure
     // again at the moment it is needed so a fast Settings visit remains reliable.
     GoogleSignin.configure({
-      webClientId: process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID || '859600771798-bco64ngenl3l5b349mcgr29pp868chjn.apps.googleusercontent.com',
+      webClientId: GOOGLE_WEB_CLIENT_ID,
     });
 
     if (__DEV__) console.log('[Auth] GoogleSignin module loaded, checking Play Services...');
@@ -140,6 +141,26 @@ export async function linkGoogleAccount(): Promise<User> {
         if (__DEV__) console.log('[Auth] Credential already in use — signing in as existing Google-linked user');
         // Save the orphan anonymous UID before signing out so we can clean it up
         const oldAnonymousUid = auth.currentUser?.uid;
+        // Stamp a one-time ownership token into the anonymous profile while we
+        // still hold that UID's session. Only this device could write it, so
+        // presenting it to deleteOrphanProfile later proves custody of the account.
+        let orphanTransferToken: string | null = null;
+        if (oldAnonymousUid) {
+          try {
+            // React Native has no crypto.randomUUID - build ~96 bits of entropy.
+            const hex = (len: number) => Array.from({ length: len }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+            orphanTransferToken = `${hex(24)}-${hex(24)}`;
+            await setDoc(
+              doc(db, 'users', oldAnonymousUid),
+              { orphanTransferToken, lastUpdated: Date.now() },
+              { merge: true }
+            );
+          } catch (tokenErr) {
+            // Non-fatal: without the token the server refuses cleanup (safe default).
+            orphanTransferToken = null;
+            console.warn('[Auth] Could not stamp orphan transfer token:', tokenErr);
+          }
+        }
         // Sign out of current anonymous, sign in as the Google-linked user
         await signOut(auth);
         result = await signInWithCredential(auth, credential);
@@ -152,11 +173,15 @@ export async function linkGoogleAccount(): Promise<User> {
         // by Firebase after 30 days of inactivity.
         if (oldAnonymousUid && oldAnonymousUid !== result.user.uid) {
           try {
-            const deleteOrphanFn = httpsCallable<{ orphanUid: string }, { success: boolean }>(
-              functions,
-              'deleteOrphanProfile'
-            );
-            await deleteOrphanFn({ orphanUid: oldAnonymousUid });
+            if (!orphanTransferToken) {
+              console.warn('[Auth] No transfer token available - skipping orphan cleanup.');
+            } else {
+              const deleteOrphanFn = httpsCallable<{ orphanUid: string; transferToken: string }, { success: boolean }>(
+                functions,
+                'deleteOrphanProfile'
+              );
+              await deleteOrphanFn({ orphanUid: oldAnonymousUid, transferToken: orphanTransferToken });
+            }
             if (__DEV__) console.log('[Auth] Deleted orphan Firestore profile:', oldAnonymousUid);
           } catch (cleanupErr) {
             console.warn('[Auth] Could not delete orphan Firestore profile:', cleanupErr);

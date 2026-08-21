@@ -28,6 +28,7 @@ import {
   TEXT_LG,
 } from '../utils/constants';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ScreenEntrance } from '../components/ScreenEntrance';
 import { TerminalSquare, Trash2 } from 'lucide-react-native';
 
 export default function DeveloperOptionsScreen() {
@@ -96,7 +97,7 @@ export default function DeveloperOptionsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1 }}
     >
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenEntrance style={[styles.container, { backgroundColor: colors.background }]}>
         <ScreenHeader title="Developer Options" onBack={() => navigation.goBack()} />
 
         <ScrollView
@@ -166,7 +167,7 @@ export default function DeveloperOptionsScreen() {
 
           <View style={{ height: 48 }} />
         </ScrollView>
-      </View>
+      </ScreenEntrance>
     </KeyboardAvoidingView>
   );
 }

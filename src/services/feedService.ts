@@ -8,7 +8,7 @@ import { functions, db, auth, getClientId } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { Article, RankedFeedResult } from '../types';
-import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX } from '../utils/constants';
+import { SEEN_ARTICLES_KEY, SAVED_ARTICLES_KEY, SEEN_ARTICLES_META_KEY, SAVED_ARTICLES_META_KEY, MAX_FEED_ARTICLES, RSS_FAILED_KEY_PREFIX, PENDING_SAVE_MIRRORS_KEY } from '../utils/constants';
 import { XMLParser } from 'fast-xml-parser';
 import { Platform } from 'react-native';
 import NativeRssParser from '../../modules/tangent-rss-parser';
@@ -35,6 +35,8 @@ export class RssArticleNotFoundError extends Error {
 
 const feedSessionCache = new Map<string, Promise<CachedFeedItem[]>>();
 const useNativeRssParser = Platform.OS === 'android' && NativeRssParser !== null;
+// DECISION (audit #20, kept): iOS shipping is planned, so this JS parser and
+// fast-xml-parser stay as the Expo Go / web / iOS fallback path.
 
 // The Android parser owns its raw feed cache in native process memory. The
 // JavaScript cache is retained as the iOS/old-development-APK fallback. Neither
@@ -458,7 +460,32 @@ export async function markArticleSaved(articleId: string, extractedHtml: string,
               });
             }
           } catch (firestoreErr) {
-            // Firestore write is best-effort — AsyncStorage is the primary store
+            // Audit fix: queue the failed mirror for automatic retry on reconnect
+            // instead of failing silently (the local save is unaffected).
+            try {
+              const outRaw = await AsyncStorage.getItem(PENDING_SAVE_MIRRORS_KEY);
+              const outbox: Array<Record<string, unknown>> = outRaw ? JSON.parse(outRaw) : [];
+              const payload: Record<string, unknown> = {
+                id: articleId,
+                title: article.title,
+                author: article.author,
+                publicationName: article.publicationName,
+                publicationUrl: article.publicationUrl,
+                feedUrl: article.feedUrl,
+                category: article.category,
+                lengthStyle: article.lengthStyle,
+                description: article.description,
+                publishDate: article.publishDate,
+                wordCount: article.wordCount,
+                estimatedReadMinutes: article.estimatedReadMinutes,
+              };
+              const filtered = outbox.filter((entry) => entry.id !== articleId);
+              filtered.push(payload);
+              await AsyncStorage.setItem(PENDING_SAVE_MIRRORS_KEY, JSON.stringify(filtered));
+              console.warn('[FeedService] Save mirror queued for retry (offline or transient error).');
+            } catch (outboxErr) {
+              console.warn('[FeedService] Failed to queue pending save mirror:', outboxErr);
+            }
             console.warn('[FeedService] Failed to write saved article to Firestore:', firestoreErr);
           }
         }
@@ -467,6 +494,48 @@ export async function markArticleSaved(articleId: string, extractedHtml: string,
       console.error('[FeedService] markArticleSaved error:', error);
     }
   });
+}
+
+/**
+ * Audit fix: retry queued save-mirror writes (created when a save's Firestore
+ * copy failed while offline). Called from offlineManager on reconnect.
+ * Entries for articles un-saved in the meantime are dropped.
+ */
+export async function flushPendingSaveMirrors(): Promise<number> {
+  try {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return 0;
+    const outRaw = await AsyncStorage.getItem(PENDING_SAVE_MIRRORS_KEY);
+    if (!outRaw) return 0;
+    const outbox = JSON.parse(outRaw) as Array<Record<string, unknown>>;
+    if (outbox.length === 0) return 0;
+
+    const savedRaw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
+    const savedIds: string[] = savedRaw ? JSON.parse(savedRaw) : [];
+
+    const remaining: Array<Record<string, unknown>> = [];
+    let synced = 0;
+    for (const entry of outbox) {
+      if (!savedIds.includes(String(entry.id))) continue; // un-saved since queueing
+      try {
+        await setDoc(
+          doc(db, 'users', userId, 'saved_articles', String(entry.id)),
+          { ...entry, savedAt: entry.savedAt ?? Date.now() }
+        );
+        synced++;
+      } catch {
+        remaining.push(entry);
+      }
+    }
+    await AsyncStorage.setItem(PENDING_SAVE_MIRRORS_KEY, JSON.stringify(remaining));
+    if (synced > 0) {
+      console.log(`[FeedService] Flushed ${synced} pending save mirror(s) to Firestore.`);
+    }
+    return synced;
+  } catch (error) {
+    console.warn('[FeedService] flushPendingSaveMirrors error:', error);
+    return 0;
+  }
 }
 
 /**
@@ -507,6 +576,19 @@ export async function unmarkArticleSaved(articleId: string): Promise<void> {
         saved.splice(index, 1);
         await AsyncStorage.setItem(SAVED_ARTICLES_KEY, JSON.stringify(saved));
         await AsyncStorage.removeItem(`@subtick_saved_html_${articleId}`);
+        // Audit fix: also drop any queued mirror retry for this article.
+        try {
+          const outRaw = await AsyncStorage.getItem(PENDING_SAVE_MIRRORS_KEY);
+          if (outRaw) {
+            const outbox = JSON.parse(outRaw) as Array<Record<string, unknown>>;
+            const filtered = outbox.filter((entry) => entry.id !== articleId);
+            if (filtered.length !== outbox.length) {
+              await AsyncStorage.setItem(PENDING_SAVE_MIRRORS_KEY, JSON.stringify(filtered));
+            }
+          }
+        } catch (mirrorErr) {
+          console.warn('[FeedService] Failed to update pending save mirror queue:', mirrorErr);
+        }
         // Also clean up cached metadata
         const metaRaw = await AsyncStorage.getItem(SAVED_ARTICLES_META_KEY);
         if (metaRaw) {

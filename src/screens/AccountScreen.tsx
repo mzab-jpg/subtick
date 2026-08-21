@@ -21,6 +21,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { auth } from '../services/firebase';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ScreenEntrance } from '../components/ScreenEntrance';
 import {
   linkGoogleAccount,
   unlinkGoogleAccount,
@@ -177,7 +178,7 @@ export default function AccountScreen() {
   const userEmail = profile?.userEmail || '';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenEntrance style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Account" onBack={() => navigation.goBack()} />
 
       {loading ? (
@@ -281,7 +282,7 @@ export default function AccountScreen() {
         <View style={{ height: 48 }} />
       </ScrollView>
       )}
-    </View>
+    </ScreenEntrance>
   );
 }
 

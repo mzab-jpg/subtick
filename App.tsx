@@ -23,6 +23,7 @@ import { subscribeToAccountTransition } from './src/services/accountTransition';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { auth } from './src/services/firebase';
+import { GOOGLE_WEB_CLIENT_ID } from './src/config/googleConfig';
 
 // Unique key to remount the entire navigation tree when the auth
 // user changes mid-session (e.g. Google account recovery swaps
@@ -162,7 +163,7 @@ function AppContent() {
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const { GoogleSignin } = require('@react-native-google-signin/google-signin');
           GoogleSignin.configure({
-            webClientId: process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID || '859600771798-bco64ngenl3l5b349mcgr29pp868chjn.apps.googleusercontent.com',
+            webClientId: GOOGLE_WEB_CLIENT_ID,
           });
         } catch {
           console.log('[SubTick] Google Sign-In native module not available (Expo Go — use dev client to test Google Sign-In)');
@@ -172,10 +173,12 @@ function AppContent() {
     } catch (error: any) {
       console.error('[SubTick] Init error:', error);
       // If Firebase Emulators aren't running, this will fail gracefully
+      // Audit fix: emulator guidance is developer-only; production users get a
+      // plain connectivity message.
       setAuthError(
-        error.message?.includes('network')
+        __DEV__ && error.message?.includes('network')
           ? 'Could not connect to server. Is the Firebase Emulator running?'
-          : error.message || 'An unexpected error occurred.'
+          : 'Could not connect. Check your internet and tap to retry.'
       );
     } finally {
       setStartupPreparationComplete(true);

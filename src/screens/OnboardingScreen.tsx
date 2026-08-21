@@ -22,6 +22,7 @@ import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService
 import { stageDashboardFeedForNextLaunch } from '../services/dashboardFeedCache';
 import { requestInitialDashboardFeed } from '../services/initialDashboardFeed';
 import { CategoryChipGrid, type ChipState } from '../components/CategoryChipGrid';
+import { ScreenEntrance } from '../components/ScreenEntrance';
 import {
   TEXT_XS,
   TEXT_SM,
@@ -99,7 +100,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <ScreenEntrance style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -122,7 +123,7 @@ export default function OnboardingScreen() {
         <TouchableOpacity
           style={[
             styles.continueButton,
-            { backgroundColor: hasMadeSelection ? colors.primary : colors.surfaceSecondary },
+            { backgroundColor: colors.primary },
             saving && styles.continueButtonDisabled,
           ]}
           onPress={handleContinue}
@@ -132,14 +133,15 @@ export default function OnboardingScreen() {
           <Text
             style={[
               styles.continueText,
-              { color: hasMadeSelection ? colors.background : colors.textMuted },
+              { color: colors.background },
             ]}
           >
             {saving ? 'Saving…' : hasMadeSelection ? 'Start Reading →' : 'Skip selection'}
           </Text>
         </TouchableOpacity>
+        <Text style={[styles.reassurance, { color: colors.textMuted }]}>You can change these anytime.</Text>
       </View>
-    </View>
+    </ScreenEntrance>
   );
 }
 
@@ -168,5 +170,6 @@ const styles = StyleSheet.create({
   },
   continueText: { fontSize: TEXT_BASE, fontWeight: '700' },
   continueButtonDisabled: { opacity: 0.7 },
+  reassurance: { fontSize: TEXT_SM, textAlign: 'center', marginTop: 10 },
   saveError: { fontSize: TEXT_SM, textAlign: 'center', lineHeight: 18, marginBottom: 10 },
 });

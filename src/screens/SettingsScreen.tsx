@@ -23,6 +23,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { useUser } from '../contexts/UserContext';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TangentToggle } from '../components/TangentToggle';
+import { ScreenEntrance } from '../components/ScreenEntrance';
 import {
   TEXT_XS,
   TEXT_SM,
@@ -81,7 +82,7 @@ export default function SettingsScreen() {
   const isLinked = !!profile?.linkedGoogleAccount;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenEntrance style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Settings" onBack={() => navigation.goBack()} />
 
       {/* Keep the shell/header mounted while the shared profile settles. */}
@@ -341,7 +342,7 @@ export default function SettingsScreen() {
       <View style={{ height: 48 }} />
       </ScrollView>
       )}
-    </View>
+    </ScreenEntrance>
   );
 }
 

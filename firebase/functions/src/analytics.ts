@@ -13,13 +13,10 @@
 import { defineSecret } from 'firebase-functions/params';
 import * as crypto from 'crypto';
 
-// Runtime interface for firebase-functions/params defineSecret return type.
-// SecretParam is an internal type not exported by the public API, so we declare
-// the minimal shape needed to pass to onCall({ secrets: [...] }) and call .value().
-interface SecretParam {
-  value(): string;
-  name: string;
-}
+// Audit fix (firebase-functions v7): derive the secret parameter type directly
+// from defineSecret instead of hand-declaring it - the hand-declared shape no
+// longer satisfies onCall({ secrets: [...] }) under v7 typings.
+type SecretParam = ReturnType<typeof defineSecret>;
 
 // GA_API_SECRET is stored in Google Cloud Secret Manager and set via:
 //   firebase functions:secrets:set GA_API_SECRET

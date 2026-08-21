@@ -47,7 +47,8 @@ service cloud.firestore {
           'includeArchivedArticles',
           'seenArticleIds',
           'userEmail',
-          'lastUpdated'
+          'lastUpdated',
+          'orphanTransferToken'
         ]);
 
       allow delete: if false; // Never allow deletion

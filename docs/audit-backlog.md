@@ -1,4 +1,4 @@
-﻿# Tangent — Deferred Audit Backlog
+# Tangent — Deferred Audit Backlog
 
 > **Created:** 17 August 2026 from the code, security, cost, Android-release, and user-experience audit.
 >
@@ -9,6 +9,48 @@
 - For a **small, private Android test**, the high-priority items can normally wait while you learn whether people enjoy the product.
 - Before **broad public growth**, revisit every high-priority item.
 - If an item creates a real user problem now, bring it forward regardless of its suggested timing.
+
+---
+
+## 21 August 2026 - Security/cost audit batch (deployed)
+
+Completed and live in production (recorded so the deferred list stays accurate):
+
+- **Orphan-profile deletion now requires ownership proof** - supersedes C2 below.
+  The device still signed in as the anonymous account stamps a one-time token into
+  its own profile before Google recovery switches accounts; deleteOrphanProfile
+  deletes only on an exact timing-safe token match.
+- **Legacy single-field scoring-config write mode removed** - requests without a
+  full config object are rejected outright.
+- **Paywalled articles skipped at ingestion** - never written, so they cost
+  nothing to store, read back, or purge.
+- **isFresh sticker field added to articles** - stamped at ingestion and via
+  one-off backfill, refreshed by the daily cron, and used by the pool sampler so
+  freshness filtering runs server-side (about 1x instead of 3x fetch). Includes
+  an automatic legacy fallback during rollout and a bounded daily pass that
+  expires stickers on low-engagement articles (composite index isFresh +
+  publishDate required and added).
+- **Weekly-reads counter recomputes locally each hour** from events already held
+  in memory (was: tear down and re-download the whole seven-day window hourly).
+- **seenArticleIds pruned server-side** - trimmed to the newest 4,000 whenever it
+  exceeds 5,000, riding profile writes that happen anyway.
+- **Candidate-pool RAM cache stamps load time** - the 10-minute memory cache now
+  works as designed instead of re-reading the stored pool nearly every request.
+- **getRankedFeed throws a proper unauthenticated HttpsError** (was a raw error
+  surfacing as internal).
+- **Functions platform refresh** - Node.js 22 runtime, firebase-functions v7.3.2
+  (SecretParam type now derived from defineSecret).
+
+---
+
+## Deferred: remove the paywalled-purge step from cronCleanupOldArticles
+
+Since 21 August the collector never writes paywalled articles, so Step 1 of the
+cleanup cron finds nothing on every run. **Keep the step until one cleanup cycle
+has logged its empty result ("No paywalled articles to delete.")**, which confirms
+any pre-deploy leftovers were collected. Then remove the purge block, run the
+typecheck, and redeploy functions. Keeping it meanwhile costs one tiny indexed
+query per 3-day run.
 
 ---
 
@@ -254,3 +296,13 @@ Google identifies Android apps partly through the certificate used to sign the r
 Tangent is currently Android-focused. Before iOS release, replace the placeholder iOS Google login URL scheme in `app.json`, create/test an iOS production build on a physical phone, verify secure token storage through install/update/delete flows, and complete Apple privacy disclosures. Android work does not automatically make Google login work on iOS.
 
 **Reader preloading is also platform-specific:** Android uses `modules/tangent-rss-parser`, a Kotlin worker that streams RSS/Atom XML away from the Reader JavaScript/UI workload. This does not exist on iOS. Before enabling iOS preloading, add a matching Swift local-module implementation using off-main-thread `URLSession` plus streaming XML parsing. It must match Android’s HTTPS/timeout limits, one-feed-at-a-time queue, cached/in-flight publisher deduplication, raw-memory-only cache bounds, rolling five-upcoming-article buffer, stale-work replacement, and lazy sanitisation. Test it on physical iPhone development and production-style builds across RSS and Atom sources, large feeds, repeated publishers, fast swipes, offline mode, archive preference, backgrounding, and app termination. Until that parity work passes, iOS must retain the safe JavaScript fallback and must not claim Android-equivalent Reader smoothness.
+
+## 21 Aug (evening batch) - Hygiene fixes #16-#21
+
+- #16 resetAccount now iterates DASHBOARD_CATEGORIES (was duplicate inline array). Contract comments added to both category lists (functions index.ts + src/utils/constants.ts).
+- #17 Google web client ID consolidated into src/config/googleConfig.ts; auth.ts and App.tsx import it.
+- #18 VERIFIED NON-ISSUE: dist/, functions/lib/, logs, Keys/ already untracked + gitignored.
+- #19 VERIFIED NON-ISSUE: no unused onSchedule import in functions index.ts; shuffleArray is used 6x in getRankedFeed.ts.
+- #20 DECISION: KEEP. iOS is on the roadmap, so the JS RSS fallback (fast-xml-parser) stays for Expo Go / web / iOS. Decision noted in feedService.ts next to useNativeRssParser.
+- #21 DONE: rssCollector paywall check moved BEFORE the OG-scrape block so paywalled articles never trigger webpage fetches.
+- #22 VERIFIED NON-ISSUE: weightUpdater watermark advances only past processed events; >100 events between syncs queue and drain across syncs, nothing lost. No change made.

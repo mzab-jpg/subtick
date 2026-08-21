@@ -27,6 +27,7 @@ import {
 } from '../services/initialDashboardFeed';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { HomeLoadingState } from '../components/HomeLoadingState';
+import { ScreenEntrance } from '../components/ScreenEntrance';
 import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
 import {
   getCachedDashboardFeed,
@@ -301,7 +302,7 @@ export default function DashboardScreen() {
   const showEmptyState = !feedError && feedArticles.length === 0;
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+    <ScreenEntrance style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.inner, { paddingTop: topInset + 28 }]}>
 
         {/* ── Header ── */}
@@ -438,7 +439,7 @@ export default function DashboardScreen() {
         )}
 
       </View>
-    </View>
+    </ScreenEntrance>
   );
 }
 

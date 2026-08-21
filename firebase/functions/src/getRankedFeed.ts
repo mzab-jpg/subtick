@@ -191,17 +191,20 @@ async function queryRandomSample(
   fresh: boolean,
   currentOnly: boolean,
   threshold: number,
-  limit: number
+  limit: number,
+  allowStickerFallback = true
 ): Promise<Article[]> {
   const now = Date.now();
   const fourWeeksAgo = now - 4 * 7 * 24 * 60 * 60 * 1000;
   const results: Article[] = [];
 
-  // Firestore limitation: cannot have range filters on multiple fields.
-  // We query by random_score only (single range filter), then filter
-  // publishDate (fresh vs old) in memory. Fetch 3x the limit to ensure
-  // enough articles survive the in-memory publishDate filter.
-  const fetchCap = limit * 3;
+  // Audit fix (isFresh sticker): articles carry an isFresh boolean stamped at
+  // ingestion and flipped daily, so the freshness filter runs server-side and
+  // we fetch only what we need (~1x instead of 3x). Until the one-off backfill
+  // has stamped legacy articles, a sticker query may legitimately return zero;
+  // allowStickerFallback reruns once with the original in-memory date filter.
+  const stickerMode = true;
+  const fetchCap = stickerMode ? limit : limit * 3;
 
   const runQuery = async (scoreMin: number, scoreMax: number | null, cap: number) => {
     try {
@@ -210,6 +213,9 @@ async function queryRandomSample(
         .where('random_score', '>=', scoreMin);
       if (scoreMax !== null) {
         q = (q as any).where('random_score', '<', scoreMax);
+      }
+      if (stickerMode) {
+        q = (q as any).where('isFresh', '==', fresh);
       }
       if (currentOnly) {
         q = (q as any).where('rssStatus', '==', 'current');
@@ -242,6 +248,9 @@ async function queryRandomSample(
         .where('isPaywalled', '==', false)
         .where('random_score', '>=', 0)
         .where('random_score', '<', threshold);
+      if (stickerMode) {
+        q = (q as any).where('isFresh', '==', fresh);
+      }
       if (currentOnly) {
         q = (q as any).where('rssStatus', '==', 'current');
       }
@@ -260,6 +269,15 @@ async function queryRandomSample(
       console.warn('[CandidatePool] Wrap-around query failed:', e);
     }
     results.push(...wrapResults);
+  }
+
+  // Audit fix (isFresh): legacy fallback - until every article carries the
+  // sticker (run firebase/scripts/oneoff/backfillIsFresh.js once after deploy),
+  // a sticker-mode query can match nothing. Detect that state and rerun once
+  // with the original in-memory date filtering so pools are never empty.
+  if (stickerMode && results.length === 0 && allowStickerFallback) {
+    console.warn('[CandidatePool] Sticker query empty (fresh=' + fresh + ', currentOnly=' + currentOnly + ') - falling back to legacy date filter.');
+    return queryRandomSample(fresh, currentOnly, threshold, limit, false);
   }
 
   // Trim to requested limit (we may have fetched more than needed)
@@ -328,8 +346,49 @@ export const cronUpdateCandidatePool = onSchedule('every 6 hours', async () => {
  * Rate: ×0.9057 per day — halves every 7 days (2^(-1/7) ≈ 0.9057).
  * Skips articles with trendingScore <= 0.1 (effectively zero).
  */
+/**
+ * Audit fix (isFresh): expire freshness stickers for quiet articles.
+ * The decay batch below only visits popular articles (trendingScore above 1),
+ * so low-engagement articles would otherwise keep isFresh=true forever after
+ * crossing the 28-day line, gradually polluting fresh pool queries with stale
+ * content. Bounded at about 2,000 flips per day; steady state touches only the
+ * handful of newly-crossed articles. Requires composite index
+ * (isFresh ASC, publishDate ASC) - see firestore.indexes.json.
+ */
+async function expireStaleStickers(): Promise<number> {
+  const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
+  let flipped = 0;
+  while (flipped < 2000) {
+    const snap = await db.collection('articles')
+      .where('isFresh', '==', true)
+      .where('publishDate', '<', cutoff)
+      .orderBy('publishDate', 'asc')
+      .limit(500)
+      .get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    snap.forEach(doc => batch.update(doc.ref, { isFresh: false }));
+    await batch.commit();
+    flipped += snap.size;
+  }
+  return flipped;
+}
+
 export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => {
   console.log('[Cron] Starting daily trendingScore decay...');
+
+  // Audit fix (isFresh): expire aged-out stickers FIRST so quiet articles are
+  // maintained even though the early-return below skips the decay batch when
+  // there are no hot articles.
+  try {
+    const expired = await expireStaleStickers();
+    if (expired > 0) {
+      console.log(`[Cron] Expired isFresh sticker on ${expired} aged-out article(s).`);
+    }
+  } catch (err) {
+    console.error('[Cron] Error expiring stale isFresh stickers:', err);
+  }
+
   const cfgDecay = await loadScoringConfig();
   const decayRate = cfgDecay.trending.decayRate;
   try {
@@ -358,7 +417,11 @@ export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => 
         // Refresh random_score on every daily decay pass at zero extra cost.
         // This ensures cronUpdateCandidatePool always picks a genuinely fresh,
         // non-repetitive random cross-section of the database on every run.
-        batch.update(doc.ref, { trendingScore: newScore, random_score: Math.random() });
+        // Audit fix (isFresh): hot articles also refresh their freshness sticker,
+        // so ones crossing the 28-day line stop matching fresh pool queries.
+        const dData = doc.data();
+        const stillFresh = Date.now() - (dData.publishDate || 0) < 28 * 24 * 60 * 60 * 1000;
+        batch.update(doc.ref, { trendingScore: newScore, random_score: Math.random(), isFresh: stillFresh });
         decayed++;
       });
       await batch.commit();
@@ -391,11 +454,11 @@ async function getOrUpdateCandidatePool(includeArchived: boolean): Promise<Artic
       if (data && Array.isArray(data.articles) && data.articles.length > 0) {
         if (includeArchived) {
           candidateCacheMixed = data.articles as Article[];
-          cacheTimestampMixed = data.generatedAt || now;
+          cacheTimestampMixed = now;
           return candidateCacheMixed;
         } else {
           candidateCacheCurrent = data.articles as Article[];
-          cacheTimestampCurrent = data.generatedAt || now;
+          cacheTimestampCurrent = now;
           return candidateCacheCurrent;
         }
       }
@@ -901,7 +964,7 @@ export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
 export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request): Promise<RankedFeedResult> => {
   // P0 Security: Always use the verified auth UID, never the client-supplied userId.
   if (!request.auth) {
-    throw new Error('unauthenticated');
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
   const userId = request.auth.uid;
   const { seenArticleIds, client_id, includeScores, configOverride } = request.data as {

@@ -22,6 +22,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { TEXT_SM, TEXT_BASE } from '../utils/constants';
 import { ScreenHeader } from './ScreenHeader';
+import { ScreenEntrance } from './ScreenEntrance';
 import type { LucideIcon } from 'lucide-react-native';
 
 interface FormScreenProps {
@@ -51,7 +52,7 @@ export function FormScreen({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1 }}
     >
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenEntrance style={[styles.container, { backgroundColor: colors.background }]}>
         <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
         <ScrollView
@@ -83,7 +84,7 @@ export function FormScreen({
 
           <View style={{ height: 48 }} />
         </ScrollView>
-      </View>
+      </ScreenEntrance>
     </KeyboardAvoidingView>
   );
 }

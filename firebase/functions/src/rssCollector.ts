@@ -161,10 +161,11 @@ function chunkArray<T>(array: T[], size: number): T[][] {
  * Collect all active feeds, or only the supplied feed(s) for an admin's immediate
  * first collection. The scheduled job and dashboard flow share this exact path.
  */
-export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ totalNew: number; totalErrors: number }> {
+export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ totalNew: number; totalErrors: number; totalPaywalledSkipped: number }> {
   console.log('[rssCollector] Starting RSS collection...');
   let totalNew = 0;
   let totalErrors = 0;
+  let totalPaywalledSkipped = 0;
 
   // 1. Use a supplied feed for immediate admin collection, otherwise load the
   // active Firestore directory used by the scheduled job.
@@ -241,6 +242,21 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
               let author = item.creator || item['dc:creator'] || 'Unknown';
               let headerImageUrl = extractFirstImage(bodyHtml);
 
+              const wordCount = calculateWordCount(bodyHtml);
+              let lengthStyle = 'medium';
+              if (wordCount < 800) lengthStyle = 'short';
+              else if (wordCount > 2000) lengthStyle = 'long';
+
+              const isPaywalled = checkIsPaywalled(title, description, bodyHtml);
+
+              // Audit fix: paywalled articles are never displayed and never enter
+              // candidate pools; skipping the write avoids paying to store them and
+              // to re-read and purge them later. Fix #21: this check runs BEFORE the
+              // OG scrape below so doomed articles never trigger a webpage fetch.
+              if (isPaywalled) {
+                totalPaywalledSkipped++;
+                continue;
+              }
               // 3. Automated Web-Scraping Fallback for incomplete/missing metadata
               if (!headerImageUrl || !description || author === 'Unknown' || title === 'Untitled') {
                 console.log(`[rssCollector] Missing metadata for "${title}". Scraping live webpage: ${link}`);
@@ -260,12 +276,6 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
                 }
               }
 
-              const wordCount = calculateWordCount(bodyHtml);
-              let lengthStyle = 'medium';
-              if (wordCount < 800) lengthStyle = 'short';
-              else if (wordCount > 2000) lengthStyle = 'long';
-
-              const isPaywalled = checkIsPaywalled(title, description, bodyHtml);
               
               // Self-check for truncated feed (if description is suspiciously close to full body)
               const isTruncatedFeed = bodyHtml.length > 0 && (description.length / bodyHtml.length) > 0.9;
@@ -273,6 +283,8 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
               // 4. Layout Rule Support: if feed is forced to archived or is web-only/truncated
               const shouldForceArchived = feed.forceArchived === true;
               const rssStatus = shouldForceArchived ? 'archived' : 'current';
+
+              const publishDate = item.pubDate ? new Date(item.pubDate).getTime() : Date.now();
 
               const article: Record<string, any> = {
                 id: articleId,
@@ -286,9 +298,12 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
                 guid,
                 isTruncatedFeed,
                 description,
-                publishDate: item.pubDate ? new Date(item.pubDate).getTime() : Date.now(),
+                publishDate,
                 cacheTimestamp: Date.now(),
                 isPaywalled,
+                // Audit fix (isFresh): freshness sticker for queryRandomSample -
+                // lets the freshness filter run server-side (was 3x over-fetch).
+                isFresh: Date.now() - publishDate < 28 * 24 * 60 * 60 * 1000,
                 wordCount,
                 estimatedReadMinutes: estimateReadMinutes(wordCount),
                 trendingScore: 0,
@@ -370,8 +385,8 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
     );
   }
 
-  console.log(`[rssCollector] Complete. New articles: ${totalNew}, Errors: ${totalErrors}`);
-  return { totalNew, totalErrors };
+  console.log(`[rssCollector] Complete. New articles: ${totalNew}, Errors: ${totalErrors}, Paywalled skipped: ${totalPaywalledSkipped}`);
+  return { totalNew, totalErrors, totalPaywalledSkipped };
 }
 
 export const rssCollector = onSchedule({ schedule: 'every 3 hours', memory: '512MiB' }, async () => {

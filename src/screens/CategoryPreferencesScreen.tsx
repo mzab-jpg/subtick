@@ -23,6 +23,7 @@ import {
   updateCategoryWeights,
 } from '../services/auth';
 import { useUser } from '../contexts/UserContext';
+import { ScreenEntrance } from '../components/ScreenEntrance';
 import {
   CATEGORIES,
   DEFAULT_SELECTED_WEIGHT,
@@ -108,7 +109,7 @@ export default function CategoryPreferencesScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenEntrance style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border, paddingTop: topInset + 8 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -133,7 +134,7 @@ export default function CategoryPreferencesScreen() {
           <View style={{ height: 48 }} />
         </ScrollView>
       )}
-    </View>
+    </ScreenEntrance>
   );
 }
 

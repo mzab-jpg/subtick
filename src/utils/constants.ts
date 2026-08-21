@@ -15,6 +15,8 @@ export const TEXT_2XL  = 28;  // Hero article headline
 import { CategoryDefinition } from '../types';
 
 // --- Category Definitions (9 categories) ---
+// CONTRACT: this list must stay in sync with DASHBOARD_CATEGORIES in
+// firebase/functions/src/index.ts. Update both together when categories change.
 export const CATEGORIES: CategoryDefinition[] = [
   {
     id: 'Politics',
@@ -115,4 +117,6 @@ export const SAVED_ARTICLES_META_KEY = '@subtick_saved_articles_meta';
 export const RSS_FAILED_KEY_PREFIX = '@subtick_rss_failed_';
 export const SYNC_BATCH_SIZE = 20;
 export const MAX_QUEUE_SIZE = 500;
+// Audit fix: outbox for save-mirror writes that failed while offline
+export const PENDING_SAVE_MIRRORS_KEY = '@subtick_pending_save_mirrors';
 

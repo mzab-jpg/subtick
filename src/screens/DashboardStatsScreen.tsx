@@ -27,6 +27,7 @@ import {
   TEXT_LG,
 } from '../utils/constants';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ScreenEntrance } from '../components/ScreenEntrance';
 import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
 
 
@@ -89,7 +90,7 @@ export default function DashboardStatsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScreenEntrance style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Dashboard Stats" onBack={() => navigation.goBack()} />
 
       {loading ? (
@@ -145,7 +146,7 @@ export default function DashboardStatsScreen() {
         </View>
       </ScrollView>
       )}
-    </View>
+    </ScreenEntrance>
   );
 }
 

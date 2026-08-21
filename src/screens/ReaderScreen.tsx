@@ -31,6 +31,7 @@ import { flushBehaviorQueue } from '../services/behaviorSync';
 import { removeArticleFromCachedDashboardFeed } from '../services/dashboardFeedCache';
 import { Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as Haptics from 'expo-haptics';
 import * as NavigationBar from 'expo-navigation-bar';
 import { topInset, bottomInset } from '../utils/safeArea';
 import { Platform } from 'react-native';
@@ -44,6 +45,7 @@ import { useReaderHUD } from '../features/reader/useReaderHUD';
 import { ReaderHUD } from '../features/reader/ReaderHUD';
 import { ReaderProgressBar } from '../features/reader/ReaderProgressBar';
 import { LoadingCursor } from '../components/LoadingCursor';
+import { articleFadeCss } from '../utils/motion';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const EDGE_ZONE_WIDTH = 45;
@@ -52,7 +54,7 @@ const SWIPE_PAUSE_THRESHOLD_MS = 200;
 // Extreme edge band: a swipe starting here reveals the system bars
 // (status + nav) so the user can use the native back gesture, without
 // advancing to the next article or firing any weighting events.
-const BACK_EDGE_WIDTH = 22;
+const BACK_EDGE_WIDTH = 32;
 
 // B3 Fix: Extract shared WebView reader script (scroll tracking, HUD toggling,
 // word counting, click handling) into a single constant. Previously duplicated
@@ -367,6 +369,14 @@ export default function ReaderScreen() {
           swipeStartXRef.current = x;
           swipePanXRef.current = 0;
           swipeLastMoveTimeRef.current = Date.now();
+          // Audit fix: haptic tick when a touch begins inside an advance zone so
+          // users feel the boundary before release (the back band stays silent).
+          const inAdvanceZone =
+            (x > BACK_EDGE_WIDTH && x <= EDGE_ZONE_WIDTH) ||
+            (x >= SCREEN_WIDTH - EDGE_ZONE_WIDTH && x < SCREEN_WIDTH - BACK_EDGE_WIDTH);
+          if (inAdvanceZone) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          }
           return x <= EDGE_ZONE_WIDTH || x >= SCREEN_WIDTH - EDGE_ZONE_WIDTH;
         },
         onMoveShouldSetPanResponder: (evt, gestureState) => {
@@ -478,12 +488,15 @@ export default function ReaderScreen() {
           ${frontendRules?.injectCss || ''}
         </style>
         ${webViewCSS}
+        ${articleFadeCss()}
       </head>
       <body>
+        <div id="tangent-article">
         ${authorBlock}
         ${titleBlock}
         ${metaBlock}
         ${resolvedHtml}
+        </div>
         <script>${makeReaderScript(frontendRules)}</script>
       </body>
       </html>

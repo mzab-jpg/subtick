@@ -47,6 +47,9 @@ export function UserProvider({ children }: UserProviderProps) {
   const [provisionalProfile, setProvisionalProfile] = useState<UserProfile | null>(null);
   const [provisionalWeeklyReads, setProvisionalWeeklyReads] = useState<number | null>(null);
   const provisionalBaseUpdatedAtRef = React.useRef<number | null>(null);
+  // Audit fix: fetched events kept in memory so the rolling weekly count can
+  // age entries out locally instead of re-subscribing to Firestore hourly.
+  const weeklyEventsRef = React.useRef<BehaviorEvent[]>([]);
 
   const applyProvisionalSession = useCallback((summary: ReaderSessionSummary | null) => {
     if (!summary || !profile) return;
@@ -99,6 +102,7 @@ export function UserProvider({ children }: UserProviderProps) {
       // its stats/profile from being rendered during a sign-out/delete swap.
       setProfile(null);
       setWeeklyReadCount(0);
+      weeklyEventsRef.current = [];
       setProvisionalProfile(null);
       setProvisionalWeeklyReads(null);
       provisionalBaseUpdatedAtRef.current = null;
@@ -130,31 +134,32 @@ export function UserProvider({ children }: UserProviderProps) {
         }
       );
 
-      // The stored profile counter only increases. This small, owner-scoped
-      // listener makes the home-screen value genuinely rolling: reads age out
-      // after seven days even when the user has not created a new event.
-      const subscribeToWeeklyReads = () => {
-        unsubscribeWeeklyReads?.();
+      weeklyEventsRef.current = [];
+      const recomputeWeeklyReads = () => {
         const windowStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        unsubscribeWeeklyReads = onSnapshot(
-          query(
-            collection(db, 'users', user.uid, 'behavior_events'),
-            where('timestamp', '>=', windowStart)
-          ),
-          (snapshot) => {
-            const events = snapshot.docs.map((event) => event.data() as BehaviorEvent);
-            setWeeklyReadCount(countWeeklyQualifyingReads(events));
-          },
-          (error) => {
-            console.error('[UserContext] weekly-read listener error:', error);
-            setWeeklyReadCount(0);
-          }
-        );
+        const recentEvents = weeklyEventsRef.current.filter(function (e) {
+          return e.timestamp >= windowStart;
+        });
+        setWeeklyReadCount(countWeeklyQualifyingReads(recentEvents));
       };
-      subscribeToWeeklyReads();
-      // Recreate the time-window query once an hour so reads also age out
-      // correctly during an unusually long uninterrupted app session.
-      weeklyReadRefreshTimer = setInterval(subscribeToWeeklyReads, 60 * 60 * 1000);
+      const windowStartFixed = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      unsubscribeWeeklyReads = onSnapshot(
+        query(
+          collection(db, 'users', user.uid, 'behavior_events'),
+          where('timestamp', '>=', windowStartFixed)
+        ),
+        (snapshot) => {
+          weeklyEventsRef.current = snapshot.docs.map((event) => event.data() as BehaviorEvent);
+          recomputeWeeklyReads();
+        },
+        (error) => {
+          console.error('[UserContext] weekly-read listener error:', error);
+          setWeeklyReadCount(0);
+        }
+      );
+      // Age expired reads out hourly using events already held in memory -
+      // no tear-down, no re-download, no flicker.
+      weeklyReadRefreshTimer = setInterval(recomputeWeeklyReads, 60 * 60 * 1000);
     });
 
     return () => {
