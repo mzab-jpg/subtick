@@ -1,4 +1,4 @@
-﻿# Tangent — Technical Context
+# Tangent — Technical Context
 
 > **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
@@ -114,7 +114,7 @@ From `firebase/functions/src/index.ts`:
 | `getScoringConfig` | HTTPS Callable | On demand | Returns effective, stored, and default scoring configuration to an authenticated caller. |
 | `resetAccount` | HTTPS Callable | On demand | Deletes known user subcollections in retry-safe pages; resets profile stats, weights, and category selections to defaults; sets `isOnboarded: false` |
 | `deleteAccount` | HTTPS Callable | On demand | Requires `confirmation: 'DELETE'`; deletes known user subcollections in retry-safe pages, then the profile document and Firebase Auth account. Permanent. |
-| `deleteOrphanProfile` | HTTPS Callable | On demand | Deletes a stale anonymous `users/{orphanUid}` Firestore document after Google credential recovery. Uses Admin SDK to bypass `allow delete: if false` security rule. Validates caller is authenticated and orphanUid ≠ caller's own UID. |
+| `deleteOrphanProfile` | HTTPS Callable | On demand | Deletes a stale anonymous `users/{orphanUid}` Firestore document after Google credential recovery. Uses Admin SDK to bypass `allow delete: if false` security rule. Validates caller is authenticated, orphanUid ≠ caller's own UID, and requires the one-time ownership token stamped into the orphan profile by its own device before recovery (timing-safe compare). |
 
 ---
 
@@ -345,6 +345,7 @@ From `firebase/firestore.indexes.json` — now deployed on every `firebase deplo
 | `articles` | `isPaywalled`, `rssStatus`, `random_score` | ASC, ASC, ASC | Used by `cronUpdateCandidatePool` Box 1 queries (active articles only) |
 | `articles` | `isPaywalled`, `random_score` | ASC, ASC | Used by `cronUpdateCandidatePool` Box 2 queries (any-status articles) |
 | `articles` | `publishDate`, `peakTrendingScore` | ASC, ASC | Used by `cronCleanupOldArticles` sampled query — returns worst 500 old articles without reading full collection |
+| articles | isFresh, publishDate | ASC, ASC | Used by the candidate-pool sampler freshness filter (isFresh sticker) and the daily sticker-expiry pass |
 
 `weightUpdater` queries `users/{id}/behavior_events` by `timestamp >` — Firestore auto-indexes single-field subcollection queries.
 

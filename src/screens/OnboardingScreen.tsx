@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
+import { topInset } from '../utils/safeArea';
 import { auth } from '../services/firebase';
 import { completeOnboarding } from '../services/auth';
 import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
@@ -102,7 +103,10 @@ export default function OnboardingScreen() {
   return (
     <ScreenEntrance style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: topInset + 28 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
@@ -148,7 +152,9 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   content: { paddingHorizontal: 28, paddingBottom: 48 },
-  header: { marginTop: 64, marginBottom: 24 },
+  // Header top spacing comes from topInset + 28 on the ScrollView's
+  // contentContainerStyle — matches DashboardScreen's header position.
+  header: { marginBottom: 24 },
   title: { fontSize: TEXT_2XL, fontWeight: '800', letterSpacing: -0.5 },
   subtitle: { fontSize: TEXT_SM, marginTop: 4 },
 

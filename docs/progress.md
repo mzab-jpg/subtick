@@ -1,4 +1,4 @@
-﻿# Tangent — Progress & Status
+# Tangent — Progress & Status
 
 > **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
 > All status claims are based on reading the actual code.
@@ -12,7 +12,7 @@
 - ✅ **User profile field whitelist (create + update)** — Firestore rules restrict both to safe fields (A4 + S2)
 - ✅ **feed_requests / feedback schema validation** (S3/S4) — URL format, field schema, size caps
 - ✅ **behavior-events validation** (S5 + A4) — Direct-write path match, 11-type whitelist, field whitelist, 2KB cap; callable also validates raw telemetry before persistence
-- ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json` (6 composite indexes)
+- ✅ **Firestore indexes deployed** — `firebase.json` points to `firestore.indexes.json` (7 composite indexes)
 - ✅ **Protected Control Dashboard mutations** — Server-held `CONTROL_DASHBOARD_SECRET` is required for live config changes, preview publishing, and feed addition; it is never stored by the browser
 - ✅ **syncBehaviorEvents input cap** — Server-side 100-event limit prevents overflow (was 50, doubled to support larger batch tests) (A4)
 - ✅ **ErrorBoundary** (Batch 1) — Render crash safety net wrapping RootNavigator

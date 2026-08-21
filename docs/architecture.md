@@ -37,7 +37,7 @@
 
 **Android Reader performance module:** `modules/tangent-rss-parser/` is a local Expo module compiled into Android custom builds. It keeps direct publisher fetching on-device while moving RSS/Atom streaming parse work from React Native JavaScript to one Kotlin worker. A fresh native APK is required after changing this module; iOS requires a separate Swift implementation before its Reader preloading can be enabled.
 
-**React startup identity:** After Android's operating-system splash hands control to React, `src/components/StartupScreen.tsx` uses the same top-left, system-font `TANGENT` title language as Home and types lowercase `sapere aude` as a staged typewriter line: an 850 ms cursor-only opening, 200 ms letters for each word, and a 500 ms cursor-blinking word pause. It holds the completed phrase for 1,250 ms. The completion callback is held separately, so parent re-renders cannot restart the sequence midway. Startup hides the Android status bar for an uncluttered composition; ThemeContext restores the normal themed status bar when Home or Onboarding mounts. Startup remains visible until both typing and the next screen's first returning-user card preparation are complete. Once prepared cards exist, Dashboard renders them immediately; the later cloud profile/stat verification updates quietly and never inserts a Home loader between startup and those cards. The Home and Reader loading surfaces use the same top-left red `Loading|` treatment only when their actual content is unavailable, instead of generic circles. The `expo-splash-screen` native plugin supplies light `#F8F7F4` and phone-dark-mode `#121212` launch backgrounds before React runs. Any native splash configuration change requires a fresh Android APK; it cannot be tested through Metro reload alone. The separate Android navigation-control region is intentionally left to native system configuration until a physical-build-tested Expo setting is selected; content itself retains safe offsets and does not hide phone controls.
+**React startup identity:** After Android's operating-system splash hands control to React, `src/components/StartupScreen.tsx` uses the same top-left, system-font `TANGENT` title language as Home and types lowercase `sapere aude` as a staged typewriter line: a 600 ms cursor-only opening, 180 ms letters for each word, and a 400 ms cursor-blinking word pause. It holds the completed phrase for 850 ms. The completion callback is held separately, so parent re-renders cannot restart the sequence midway. Startup hides the Android status bar for an uncluttered composition; ThemeContext restores the normal themed status bar when Home or Onboarding mounts. Startup remains visible until both typing and the next screen's first returning-user card preparation are complete. Once prepared cards exist, Dashboard renders them immediately; the later cloud profile/stat verification updates quietly and never inserts a Home loader between startup and those cards. The Home and Reader loading surfaces use the same top-left red `Loading|` treatment only when their actual content is unavailable, instead of generic circles. The `expo-splash-screen` native plugin supplies light `#F8F7F4` and phone-dark-mode `#121212` launch backgrounds before React runs. Any native splash configuration change requires a fresh Android APK; it cannot be tested through Metro reload alone. The separate Android navigation-control region is intentionally left to native system configuration until a physical-build-tested Expo setting is selected; content itself retains safe offsets and does not hide phone controls.
 
 ---
 
@@ -67,7 +67,7 @@
 │   ├── firebase.json               # Firebase project config + indexes pointer
 │   ├── .firebaserc                 # Project alias (default → subtick-bbd55)
 │   ├── firestore.rules             # Security rules: field whitelists + schema validation
-│   ├── firestore.indexes.json      # 5 composite indexes
+│   ├── firestore.indexes.json      # 7 composite indexes
 │   ├── seedFirestore.js            # One-time: writes seed articles to Firestore
 │   ├── seedFeeds.js                # One-time: writes feed documents
 │   ├── cleanFeeds.js               # One-time: deletes legacy hash-ID feed docs
@@ -159,7 +159,7 @@ TRIGGER: Firebase Scheduler — "every 3 hours"
         │      Reads active FeedSource documents.
         ├── 2. chunkArray(feedsList, 5) + Promise.allSettled(chunk.map(...))
         ├── 3. parser.parseURL(feed.url)  [rss-parser, 15s timeout]
-        ├── 4. Per feed: generateArticleId, batch existence check (C3), OG scrape, paywall check
+        ├── 4. Per feed: generateArticleId, batch existence check (C3), paywall check first (doomed articles skip out), then OG scrape
         ├── 5. db.collection('articles').doc(articleId).set(article) — bodyHtml NOT stored
         └── 6. Delta-driven archive update: query rssStatus='current' per feed → flip to 'archived' (C4)
 ```
@@ -295,7 +295,7 @@ AccountScreen → linkGoogleAccount():
 ### Security Fixes Applied
 - **getRankedFeed / syncBehaviorEvents** — `request.auth.uid` enforced
 - **Behavior event IDs** — Client-generated, used as document ID (idempotent retries)
-- **deleteOrphanProfile CF** — Admin SDK deletes stale anonymous profiles (security hardening deferred; see audit-backlog.md)
+- **deleteOrphanProfile CF** — Admin SDK deletes stale anonymous profiles only on an exact timing-safe one-time ownership token stamped into the profile by its own device before Google recovery switches accounts (21 Aug fix)
 - **User profile field whitelist** (S2 + A4) — Create/update restricted to whitelisted fields
 - **behavior_events validation** (S5 + A4) — Direct-write path match, 11-type event whitelist, field whitelist, 2KB cap; callable additionally validates raw telemetry before persistence
 - **feed_requests / feedback validation** (S3/S4) — Schema + size caps
