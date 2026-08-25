@@ -142,6 +142,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         h1 {
           font-size: 32px;
           line-height: 1.2;
+          /* M2 Fix: force h1 colour so theme switches mid-article recolour the
+             headline too — its inline style previously won over this sheet. */
+          color: ${c.text} !important;
           margin-top: 0.5em;
           margin-bottom: 0.5em !important;
         }

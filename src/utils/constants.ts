@@ -120,3 +120,12 @@ export const MAX_QUEUE_SIZE = 500;
 // Audit fix: outbox for save-mirror writes that failed while offline
 export const PENDING_SAVE_MIRRORS_KEY = '@subtick_pending_save_mirrors';
 
+// --- WPM Calibration Guardrails (WPM Fix) ---
+// Mirrors firebase/functions/src/constants.ts — keep both in sync.
+// Only sessions inside the human-plausibility band may recalibrate a user's
+// displayed reading speed; skims and abandoned opens are excluded.
+export const MIN_PLAUSIBLE_WPM = 80;   // below: idle/paused screen, not reading
+export const MAX_PLAUSIBLE_WPM = 600;  // above: scrolling/skimming, not reading
+// Sessions consuming fewer words than this carry no reliable pace signal.
+export const MIN_WPM_CALIBRATION_WORDS = 150;
+

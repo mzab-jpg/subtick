@@ -8,7 +8,7 @@ function countWeeklyQualifyingReads(events, now) {
   return events.filter((event) =>
     event.timestamp >= windowStart
     && event.timestamp <= now
-    && (event.eventType === 'read_thorough' || event.eventType === 'read_skim')
+    && (event.eventType === 'read_thorough' || event.eventType === 'read_shallow' || event.eventType === 'read_skim')
   ).length;
 }
 
@@ -24,13 +24,15 @@ function check(label, actual, expected) {
 }
 
 const now = 1_000_000_000;
-check('counts only qualifying reads in the rolling seven-day window', countWeeklyQualifyingReads([
+check('counts weekly-tier reads (70% finished-tier + 40% shallow-tier; retired skim honoured) in the rolling seven-day window', countWeeklyQualifyingReads([
   { eventType: 'read_thorough', timestamp: now - WEEK_MS },
-  { eventType: 'read_skim', timestamp: now - WEEK_MS + 1 },
-  { eventType: 'read_shallow', timestamp: now - 1 },
+  { eventType: 'read_shallow', timestamp: now - WEEK_MS + 1 },
+  { eventType: 'read_skim', timestamp: now - 1 },
+  { eventType: 'swipe_next', timestamp: now - 1 },
+  { eventType: 'quick_exit', timestamp: now - 1 },
   { eventType: 'read_thorough', timestamp: now - WEEK_MS - 1 },
-  { eventType: 'read_skim', timestamp: now + 1 },
-], now), 2);
+  { eventType: 'read_thorough', timestamp: now + 1 },
+], now), 3);
 check('removes duplicate metric IDs and keeps the visual limit', normalizeDashboardMetricIds([
   'streak', 'streak', 'avgWpm', 'weeklyReads', 'totalRead',
 ]), ['streak', 'avgWpm', 'weeklyReads']);
@@ -53,6 +55,7 @@ const loadingCursorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'c
 const startupCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'startupCache.ts'), 'utf8');
 const dashboardCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'dashboardFeedCache.ts'), 'utf8');
 const initialDashboardFeedSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'initialDashboardFeed.ts'), 'utf8');
+const weightUpdaterSource = fs.readFileSync(path.join(__dirname, '..', 'firebase', 'functions', 'src', 'weightUpdater.ts'), 'utf8');
 const appConfigSource = fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8');
 check('account changes use a blocking transition before onboarding',
   appSource.includes('subscribeToAccountTransition')
@@ -81,6 +84,17 @@ check('Settings navigation retains the established modal configuration',
   true);
 check('provisional WPM is calculated as words divided by active time',
   userContextSource.includes('calculateWpm') && userContextSource.includes('sessionWpm === null') && userContextSource.includes('setProvisionalProfile'),
+  true);
+check('WPM Fix: speed calibration is gated to genuine reads, consumed words, and the human-plausibility band (client + server)',
+  userContextSource.includes('MIN_PLAUSIBLE_WPM')
+    && userContextSource.includes('MAX_PLAUSIBLE_WPM')
+    && userContextSource.includes('MIN_WPM_CALIBRATION_WORDS')
+    && userContextSource.includes('consumedWords')
+    && weightUpdaterSource.includes('MIN_PLAUSIBLE_WPM')
+    && weightUpdaterSource.includes('MAX_PLAUSIBLE_WPM')
+    && weightUpdaterSource.includes('MIN_WPM_CALIBRATION_WORDS')
+    && weightUpdaterSource.includes('consumedWords')
+    && !weightUpdaterSource.includes('const sessionWpm = wordCount / (event.sessionDuration / 60_000)'),
   true);
 check('Shuffle replenishment appends instead of replacing remaining cards',
   dashboardSource.includes('appendFeedArticles') && dashboardSource.includes('const merged = [...previous, ...additions') && !dashboardSource.includes('loadFeedArticles(effectiveProfile).catch(() => {})'),
@@ -115,14 +129,14 @@ check('startup cache is UID-bound, expires, filters seen cards, and never stores
     && !startupCacheSource.includes('token')
     && !startupCacheSource.includes('password'),
   true);
-check('returning startup restores only after Firebase identity and refreshes without replacing visible cards',
+check('returning startup restores only after Firebase identity and stays cache-first (no background refetch)',
   appSource.includes('getStartupSnapshot(user.uid)')
     && appSource.includes('Background profile verification failed')
     && appSource.includes('restoreCachedDashboardFeed(user.uid, seenIds)')
     && appSource.includes('setCachedDashboardFeed(user.uid, result.articles, [])')
     && dashboardSource.includes('restoreCachedDashboardFeed(userId, await getSeenArticleIdsLocally())')
-    && dashboardSource.includes('stageDashboardFeedForNextLaunch')
-    && dashboardSource.includes('Fresh recommendations are saved for the next launch'),
+    && dashboardSource.includes('H4 Fix: cached cards ARE the launch feed')
+    && !dashboardSource.includes('refreshNextLaunchFeed'),
   true);
 check('onboarding and Dashboard share one first ranked-feed request',
   initialDashboardFeedSource.includes('const requests = new Map')

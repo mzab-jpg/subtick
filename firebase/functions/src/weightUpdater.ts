@@ -15,6 +15,9 @@ import {
   DAILY_DECAY_RATE,
   DEFAULT_SELECTED_WEIGHT,
   DEFAULT_NOT_INTERESTED_WEIGHT,
+  MIN_PLAUSIBLE_WPM,
+  MAX_PLAUSIBLE_WPM,
+  MIN_WPM_CALIBRATION_WORDS,
 } from './constants.js';
 import { sendGAEvents, sendGAUserProperties } from './analytics.js';
 import { loadScoringConfig, ScoringConfig } from './scoringConfig.js';
@@ -218,28 +221,47 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   let articlesFinishedUpdated = false;
 
   for (const event of events) {
-    // Accumulate total reading time for any valid read event
-    // Exclude toggle events (like/unlike/save/unsave) and non-reading swipes
-    if (event.eventType !== 'quick_exit' && event.eventType !== 'swipe_next' && event.eventType !== 'swipe_not_interested'
-        && event.eventType !== 'like' && event.eventType !== 'unlike' && event.eventType !== 'save' && event.eventType !== 'unsave') {
+    // Hours-read spec change: EVERY article visit's active time counts —
+    // including shallow reads, not-interested swipes past 15s, and quick
+    // exits. Only pure tap-actions (like/unlike/save/unsave/swipe-not-
+    // interested toggles) are excluded, because they would double-count
+    // seconds already recorded by that visit's main session record.
+    if (
+      event.eventType === 'read_thorough' || event.eventType === 'read_skim' ||
+      event.eventType === 'read_shallow' || event.eventType === 'swipe_next' ||
+      event.eventType === 'quick_exit'
+    ) {
       newTotalReadTimeMs += event.sessionDuration;
       readTimeUpdated = true;
     }
 
-    // Completion remains tied to the server's read classification.
+    // Completion spec: Finished requires 70%+ depth — labelled read_thorough
+    // by the classifier. The retired read_skim label stays accepted here so a
+    // legacy in-flight event can never be silently dropped during rollout.
     if (event.eventType === 'read_thorough' || event.eventType === 'read_skim') {
       newTotalArticlesFinished++;
       articlesFinishedUpdated = true;
     }
 
-    // WPM is deliberately independent of reading classification: words divided
-    // by active foreground time. The client sends the rendered count when it has
-    // one and otherwise supplies the stored article count at Reader exit.
-    const wordCount = event.actualWordCount;
-    if (wordCount && wordCount > 0 && event.sessionDuration > 0) {
-      const sessionWpm = wordCount / (event.sessionDuration / 60_000);
-      newAverageWpm = Math.round((newAverageWpm * 0.8) + (sessionWpm * 0.2));
-      wpmUpdated = true;
+    // WPM Fix — yardstick protection, now open to every visit per the stats
+    // spec ("WPM is always counted"). Label gates removed; corruption is
+    // prevented purely by the mechanical guards, which junk cannot pass:
+    //   1. Consumed words only — article length × furthest scroll reached.
+    //   2. Minimum-word floor — tiny snippets carry no pace signal.
+    //   3. Human-plausibility band [MIN, MAX] — an abandoned open of a long
+    //      article computes an absurd implied speed (e.g. ~10,000 WPM) and
+    //      excludes itself; accepted contributions are clamped.
+    if (event.sessionDuration > 0) {
+      const depthFraction = Math.min(1, Math.max(0, event.scrollDepth || 0));
+      const consumedWords = Math.round((event.actualWordCount || 0) * depthFraction);
+      if (consumedWords >= MIN_WPM_CALIBRATION_WORDS) {
+        const rawSessionWpm = consumedWords / (event.sessionDuration / 60_000);
+        if (rawSessionWpm >= MIN_PLAUSIBLE_WPM && rawSessionWpm <= MAX_PLAUSIBLE_WPM) {
+          const clampedSessionWpm = Math.min(MAX_PLAUSIBLE_WPM, rawSessionWpm);
+          newAverageWpm = Math.round((newAverageWpm * 0.8) + (clampedSessionWpm * 0.2));
+          wpmUpdated = true;
+        }
+      }
     }
   }
 
@@ -364,10 +386,15 @@ export function applyDecay(weights: Record<string, number>, rate: number = DAILY
 /**
  * Update reading stats: weekly count, streak, and last read date.
  *
- * B3 Fix: Accepts the already-fetched events from updateWeights instead of
- * running a second Firestore query. The existing profile.weeklyReadCount was
- * correct as of the last sync; we add the new reads from this batch to get
- * the updated weekly total. This eliminates one Firestore read per sync.
+ * H2 Fix: the server copy of weeklyReadCount is now RECOUNTED directly from
+ * this account's behavior_events history every sync instead of being
+ * accumulated incrementally. The old accumulate-only math never subtracted
+ * reads aging out of the 7-day window, so the stored value grew forever and
+ * was wrong on every device except through luck. Because events belong to
+ * the account (not any one phone), a recount keeps the server value accurate
+ * everywhere — including after switching phones. Only a genuine qualifying
+ * read in the current batch may advance the streak; non-reading actions
+ * (save/like/unlike/etc.) can no longer fake or extend one.
  */
 async function updateReadStats(
   userId: string,
@@ -377,44 +404,60 @@ async function updateReadStats(
   const now = Date.now();
   const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-  // Count new reads from the already-fetched events that fall within the 7-day window.
-  // The existing profile.weeklyReadCount was correct as of the last sync.
-  let newReadsThisWeek = 0;
-  for (const event of newEvents) {
-    if (
-      event.timestamp >= oneWeekAgo &&
-      (event.eventType === 'read_thorough' || event.eventType === 'read_skim')
-    ) {
-      newReadsThisWeek++;
+  // Single-field timestamp filter needs no composite index; the eventType
+  // split happens in memory. limit(1000) is a runaway safeguard — a heavy
+  // week of reading stays far below it, and exceeding it merely undercounts.
+  const weekSnapshot = await db
+    .collection('users')
+    .doc(userId)
+    .collection('behavior_events')
+    .where('timestamp', '>=', oneWeekAgo)
+    .limit(1000)
+    .get();
+
+  let weeklyReadCount = 0;
+  weekSnapshot.forEach((doc) => {
+    const eventType = doc.data().eventType;
+    // Weekly-reads spec: 40%+ depth qualifies — labelled read_thorough (70%+)
+    // or read_shallow (40–69%). The retired read_skim label stays accepted for
+    // legacy records created before this spec change.
+    if (eventType === 'read_thorough' || eventType === 'read_shallow' || eventType === 'read_skim') {
+      weeklyReadCount += 1;
     }
-  }
-  const weeklyReadCount = (profile.weeklyReadCount || 0) + newReadsThisWeek;
+  });
 
-  // Streak logic
+  // Streak advances when THIS batch contains a visit at least at the weekly
+  // bar (40%+ depth) — keeping "a reading day" consistent with weekly reads.
+  const hasQualifyingRead = newEvents.some(
+    (event) => event.eventType === 'read_thorough' || event.eventType === 'read_shallow'
+  );
+
   let streak = profile.currentStreakDays || 0;
-  const lastDate = new Date(profile.lastReadDate || 0);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  if (hasQualifyingRead) {
+    const lastDate = new Date(profile.lastReadDate || 0);
+    const today = new Date(now);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
 
-  if (lastDate.toDateString() === today.toDateString()) {
-    // Already read today — streak unchanged
-  } else if (lastDate.toDateString() === yesterday.toDateString()) {
-    // Read yesterday — increment streak
-    streak++;
-  } else {
-    // Streak broken — reset to 1
-    streak = 1;
+    if (lastDate.toDateString() === today.toDateString()) {
+      // Already read today — streak unchanged
+    } else if (lastDate.toDateString() === yesterday.toDateString()) {
+      // Read yesterday — increment streak
+      streak += 1;
+    } else {
+      // Streak broken — restart at 1
+      streak = 1;
+    }
   }
 
   await db.collection('users').doc(userId).update({
     weeklyReadCount,
-    currentStreakDays: streak,
-    lastReadDate: now,
+    ...(hasQualifyingRead && { currentStreakDays: streak }),
+    ...(hasQualifyingRead && { lastReadDate: now }),
     lastUpdated: now,
   });
 
-  console.log(`[weightUpdater] Stats: weekly=${weeklyReadCount}, streak=${streak}`);
+  console.log(`[weightUpdater] Stats: weekly=${weeklyReadCount}${hasQualifyingRead ? `, streak=${streak}` : ' (no qualifying read — streak untouched)'}`);
 }
 
 

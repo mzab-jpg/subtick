@@ -17,25 +17,25 @@ export function calculateWpm(wordCount: number | undefined, sessionDurationMs: n
 }
 
 /**
- * Immediate display estimate using Tangent's shipped default classification rules.
- * Cloud Functions reclassify with the live server config before persisting anything.
+ * Immediate display estimate using Tangent's shipped stats rules:
+ *   ≥70% depth → finished-tier read; ≥40% → weekly-tier read;
+ *   <20% under 15s → quick exit. Pace plays no role in labelling.
  */
-export function classifyLocalRead(summary: ReaderSessionSummary, averageWpm: number): LocalReadOutcome {
+export function classifyLocalRead(summary: ReaderSessionSummary): LocalReadOutcome {
   if (summary.scrollDepth < 0.20 && summary.sessionDuration < 15_000) return 'quick_exit';
-  if (summary.scrollDepth >= 0.70) {
-    const expectedMs = summary.actualWordCount && summary.actualWordCount > 0
-      ? (summary.actualWordCount / Math.max(50, averageWpm || 200)) * 60_000
-      : 0;
-    return expectedMs <= 0 || summary.sessionDuration >= expectedMs * 0.60
-      ? 'read_thorough'
-      : 'read_skim';
-  }
+  if (summary.scrollDepth >= 0.70) return 'read_thorough';
   if (summary.scrollDepth >= 0.40) return 'read_shallow';
   return 'swipe_next';
 }
 
+/** Finished-stat credit: 70%+ depth only. */
+export function isFinishedRead(outcome: LocalReadOutcome): boolean {
+  return outcome === 'read_thorough';
+}
+
+/** Weekly-reads & streak credit: 40%+ depth (thorough counts too). */
 export function isQualifyingRead(outcome: LocalReadOutcome): boolean {
-  return outcome === 'read_thorough' || outcome === 'read_skim';
+  return outcome === 'read_thorough' || outcome === 'read_shallow';
 }
 
 export function estimateNextStreak(lastReadDate: number, currentStreakDays: number, now: number): number {
@@ -47,8 +47,9 @@ export function estimateNextStreak(lastReadDate: number, currentStreakDays: numb
 }
 
 /**
- * Counts the only event types Tangent presents as completed reads in the
- * rolling seven-day dashboard metric. Kept pure for regression testing.
+ * Counts visits that meet the weekly-reads bar (40%+ depth → thorough or
+ * shallow; the retired read_skim label stays honoured for legacy records)
+ * in the rolling seven-day dashboard metric. Kept pure for regression testing.
  */
 export function countWeeklyQualifyingReads(
   events: Pick<BehaviorEvent, 'eventType' | 'timestamp'>[],
@@ -58,7 +59,7 @@ export function countWeeklyQualifyingReads(
   return events.filter((event) =>
     event.timestamp >= windowStart
     && event.timestamp <= now
-    && (event.eventType === 'read_thorough' || event.eventType === 'read_skim')
+    && (event.eventType === 'read_thorough' || event.eventType === 'read_shallow' || event.eventType === 'read_skim')
   ).length;
 }
 

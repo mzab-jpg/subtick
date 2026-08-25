@@ -14,7 +14,8 @@ import {
   SCORE_WEIGHTS_TAIL,
   MAX_TRENDING_SCORE,
 } from './constants.js';
-import { gaApiSecret, sendGAEvents } from './analytics.js';
+import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
+import { isControlDashboardAdmin } from './dashboardAuth.js';
 import { loadScoringConfig, prepareConfig, ScoringConfig } from './scoringConfig.js';
 
 // --- Configuration ---
@@ -961,7 +962,7 @@ export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
   }
 });
 
-export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request): Promise<RankedFeedResult> => {
+export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSecret] }, async (request): Promise<RankedFeedResult> => {
   // P0 Security: Always use the verified auth UID, never the client-supplied userId.
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
@@ -981,9 +982,11 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
   console.log(`[getRankedFeed] userId: ${userId}, seen limit: ${(seenArticleIds || []).length}`);
 
   // Single source of truth for all tunable values (cached ~60s per instance).
-  // If the caller supplied a preview config override, use it for THIS request only
-  // (no Firestore read, no cache touch). Otherwise load the live cached config.
-  const cfg = prepareConfig(configOverride) ?? await loadScoringConfig();
+  // H3 Fix: a preview configOverride is honored ONLY for Control Dashboard
+  // admins (valid dashboard_secret). Regular app users silently get the
+  // published config — any override they send is ignored.
+  const isAdminCaller = isControlDashboardAdmin(request);
+  const cfg = prepareConfig(isAdminCaller ? configOverride : undefined) ?? await loadScoringConfig();
   const configReadyAt = Date.now();
 
   let categoryWeights: Record<string, number> = {};
@@ -1143,7 +1146,7 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
       ];
       const dominantComponent = contributions.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
 
-      if (includeScores) {
+      if (isAdminCaller && includeScores) {
         scoreDetailById.set(article.id, {
           scoreP: compP,
           scoreT: compT,
@@ -1235,7 +1238,7 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret] }, async (request):
 
     // High-fidelity mode: attach each article's exact server-computed scores.
     // Articles are shallow-cloned so the shared candidate-pool cache is untouched.
-    if (includeScores) {
+    if (isAdminCaller && includeScores) {
       const enrichedArticles = responseArticles.map((article) => {
         const detail = scoreDetailById.get(article.id);
         return detail ? { ...article, _score: detail } : article;

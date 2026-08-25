@@ -43,19 +43,21 @@ check('feed timing logs cover configuration, profile, pool, publisher, selection
 const cfg = prepareConfig({
   classification: {
     thoroughDepth: 0.7,
-    thoroughTimeFraction: 0.6,
+    thoroughTimeFraction: 0.6, // retired: pace no longer influences labels
     quickExitDepth: 0.2,
     quickExitTimeoutSec: 15,
     shallowDepth: 0.4,
   },
 });
 
-// 200 words at 450 WPM has a 26.67s expected duration; 60% is 16s.
-check('450 WPM deep 35s session is thorough', classifyRead(cfg, 0.8, 35_000, 200, 450), 'read_thorough');
-// At 200 WPM the same session needs 36s for thorough, proving WPM affects outcome.
-check('200 WPM equivalent session is skim', classifyRead(cfg, 0.8, 35_000, 200, 200), 'read_skim');
+// Stats spec: Finished = 70%+, weekly reads = 40%+, hours/WPM always counted.
+// Pace plays no role in labelling — the WPM plausibility band in
+// weightUpdater guards speed calibration separately.
+check('70 percent depth is finished-tier regardless of pace', classifyRead(cfg, 0.8, 5_000, 5_000, 450), 'read_thorough');
+check('long-article regression: 60 percent of a big read earns weekly-tier shallow (previously nothing)', classifyRead(cfg, 0.6, 20_000, 200, 450), 'read_shallow');
+check('fast finish still counts as finished (pace judged by WPM band, not labels)', classifyRead(cfg, 1.0, 4_000, 3_000, 900), 'read_thorough');
 check('quick-exit boundary', classifyRead(cfg, 0.19, 14_999, 200, 450), 'quick_exit');
-check('shallow boundary', classifyRead(cfg, 0.4, 20_000, 200, 450), 'read_shallow');
+check('just past quick-exit but under the weekly bar is not-interested', classifyRead(cfg, 0.25, 16_000, 200, 450), 'swipe_next');
 
 const normalized = prepareConfig({
   scoring: {

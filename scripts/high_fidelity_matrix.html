@@ -363,6 +363,8 @@
         <span class="switch"><input type="checkbox" id="togglePreview"><span class="slider"></span></span>
       </div>
       <div class="hint" id="previewBanner" style="display:none;border:1px solid rgba(99,102,241,0.5);border-radius:8px;padding:8px 10px;margin-top:8px;background:rgba(99,102,241,0.08);color:#c7d2fe;"></div>
+      <label class="hint" for="hfmDashboardSecret" style="display:block;margin-top:8px;">🔐 Control Dashboard secret — required when Preview mode is ON so the backend honors the preview config; never stored.</label>
+      <input id="hfmDashboardSecret" type="password" autocomplete="off" placeholder="Enter CONTROL_DASHBOARD_SECRET value" style="width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid rgba(148,163,184,0.4);background:rgba(15,23,42,0.5);color:#e2e8f0;">
       <button class="btn-primary" id="btnRun" type="button">▶ Run real-user test on LIVE backend</button>
       <div class="hint">Runs each enabled user through N simulated days. Every feed call and behavior sync hits your live Cloud Functions and sends real GA4 events.</div>
     </div>
@@ -1205,6 +1207,14 @@
       running = false; btn.disabled = false; btn.innerText = '▶ Run real-user test on LIVE backend';
       return;
     }
+    // H3 Fix: the backend now honors configOverride/includeScores only for
+    // Control Dashboard admins. Preview runs therefore need the admin secret.
+    const adminSecret = ($('hfmDashboardSecret')?.value || '').trim();
+    if ($('togglePreview').checked && previewConfig && !adminSecret) {
+      log('Preview mode is ON — enter the Control Dashboard secret first, or turn Preview off to test the published config.', 'error');
+      running = false; btn.disabled = false; btn.innerText = '▶ Run real-user test on LIVE backend';
+      return;
+    }
     const days = parseInt($('inputDays').value, 10);
     const fpd = parseInt($('inputFeedsPerDay').value, 10);
     const pause = parseInt($('inputPause').value, 10);
@@ -1251,7 +1261,7 @@
           for (let f = 1; f <= fpd; f++) {
             let articles = [];
             try {
-              const res = await httpsCallable(fns, 'getRankedFeed')({ seenArticleIds: seen, client_id: gaClientId, includeScores: true, configOverride: previewConfig || undefined });
+              const res = await httpsCallable(fns, 'getRankedFeed')({ seenArticleIds: seen, client_id: gaClientId, includeScores: true, configOverride: previewConfig || undefined, dashboard_secret: adminSecret || undefined });
               articles = res.data?.articles || [];
               log(`    📅 Day ${d}/${days} - Feed ${f}/${fpd}: ${articles.length} articles ranked`, 'info');
             } catch (e) {
@@ -1271,7 +1281,7 @@
             const events = generateEvents(sc, enriched, uid, d, days, f, fpd, timeSpacing);
             if (events.length) {
               try {
-                const sres = await httpsCallable(fns, 'syncBehaviorEvents')({ events, client_id: gaClientId, configOverride: previewConfig || undefined });
+                const sres = await httpsCallable(fns, 'syncBehaviorEvents')({ events, client_id: gaClientId, configOverride: previewConfig || undefined, dashboard_secret: adminSecret || undefined });
                 const synced = sres.data?.synced ?? events.length;
                 rec.eventsSent += synced;
                 dayEventsCount += synced;

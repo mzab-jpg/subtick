@@ -280,27 +280,28 @@ export function invalidateConfigCache(): void {
 }
 
 // ------------------------------------------------------------------
-// Read classification — answers "what counts as a skim / thorough read?"
-// Every raw read_session is classified on the server using these live rules.
+// Read classification — answers "what counts as a read?"
+// Stats spec (user-defined):
+//   hours read & WPM  → every visit contributes (no label gates here)
+//   Finished          → scrollDepth >= thoroughDepth (70%)
+//   weekly reads      → scrollDepth >= shallowDepth  (40%)
+// Pace plays no role in labelling; the WPM plausibility band guards
+// speed calibration separately (see weightUpdater.ts).
 // ------------------------------------------------------------------
 export function classifyRead(
   cfg: ScoringConfig,
   scrollDepth: number,
-  sessionDurationMs: number,
-  actualWordCount: number,
-  wpm: number
+  _sessionDurationMs: number,
+  _actualWordCount: number,
+  _wpm: number
 ): ReadEventType {
   const c = cfg.classification;
 
-  if (scrollDepth < c.quickExitDepth && sessionDurationMs < c.quickExitTimeoutSec * 1000) {
+  if (scrollDepth < c.quickExitDepth && _sessionDurationMs < c.quickExitTimeoutSec * 1000) {
     return 'quick_exit';
   }
   if (scrollDepth >= c.thoroughDepth) {
-    const expectedMs = actualWordCount > 0 ? (actualWordCount / Math.max(50, wpm || 200)) * 60000 : 0;
-    if (expectedMs <= 0 || sessionDurationMs >= expectedMs * c.thoroughTimeFraction) {
-      return 'read_thorough';
-    }
-    return 'read_skim';
+    return 'read_thorough';
   }
   if (scrollDepth >= c.shallowDepth) {
     return 'read_shallow';

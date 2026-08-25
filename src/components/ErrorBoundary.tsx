@@ -6,6 +6,7 @@
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { reportCrash } from '../services/crashReporter';
 
 interface Props {
   children: ReactNode;
@@ -29,6 +30,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ErrorBoundary] Caught render error:', error, errorInfo.componentStack);
+    // Fire-and-forget crash report (M9 companion). Never blocks or throws.
+    reportCrash(error, errorInfo.componentStack ?? undefined);
   }
 
   handleRetry = () => {
@@ -48,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <Text style={styles.message}>
             An unexpected error occurred.{'\n'}Please try again.
           </Text>
-          {this.state.error && (
+          {__DEV__ && this.state.error && (
             <Text style={styles.errorDetail}>
               {this.state.error.message}
             </Text>

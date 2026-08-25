@@ -12,6 +12,7 @@ import { FeedSource } from './types.js';
 import { normalizeFeedUrl } from './feedValidation.js';
 
 import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
+import { requireDashboardAdmin } from './dashboardAuth.js';
 import {
   loadScoringConfig,
   DEFAULT_SCORING_CONFIG,
@@ -24,6 +25,7 @@ import {
 export { rssCollector } from './rssCollector.js';
 export { getRankedFeed, cronUpdateCandidatePool, cronDecayTrendingScores, cronCleanupOldArticles } from './getRankedFeed.js';
 export { syncBehaviorEvents } from './syncBehaviorEvents.js';
+export { reportCrash } from './crashReports.js';
 // weightUpdater is an internal helper, not exported as a Cloud Function directly,
 // but is called by syncBehaviorEvents.
 
@@ -39,22 +41,6 @@ const DASHBOARD_CATEGORIES = new Set([
   'Politics', 'Business', 'Finance', 'Technology', 'Science',
   'History', 'Culture', 'Lifestyle', 'Entertainment',
 ]);
-
-function requireDashboardAdmin(request: { auth?: unknown; data: unknown }): void {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'You must be signed in.');
-  }
-  const supplied = (request.data as { dashboard_secret?: unknown })?.dashboard_secret;
-  const expected = (controlDashboardSecret.value() || '').trim();
-  if (typeof supplied !== 'string' || !expected) {
-    throw new HttpsError('permission-denied', 'A valid Control Dashboard secret is required.');
-  }
-  const suppliedBytes = Buffer.from(supplied);
-  const expectedBytes = Buffer.from(expected);
-  if (suppliedBytes.length !== expectedBytes.length || !timingSafeEqual(suppliedBytes, expectedBytes)) {
-    throw new HttpsError('permission-denied', 'A valid Control Dashboard secret is required.');
-  }
-}
 
 function feedDocumentId(publicationName: string): string {
   const slug = publicationName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');

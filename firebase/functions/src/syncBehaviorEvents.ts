@@ -8,7 +8,8 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from './firebaseAdmin.js';
 import { BehaviorEvent, BehaviorEventType, UserProfile } from './types.js';
 import { updateWeights } from './weightUpdater.js';
-import { gaApiSecret, sendGAEvents } from './analytics.js';
+import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
+import { isControlDashboardAdmin } from './dashboardAuth.js';
 import { loadScoringConfig, prepareConfig, classifyRead, ScoringConfig } from './scoringConfig.js';
 
 // --- Configuration ---
@@ -85,10 +86,13 @@ function validateEvent(raw: unknown, userId: string): BehaviorEvent | null {
   return { ...event, userId } as BehaviorEvent;
 }
 
-export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (request) => {
+export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret, controlDashboardSecret] }, async (request) => {
   // P0 Security: Verify the caller is authenticated. Never trust client-supplied userId.
   if (!request.auth) {
-    throw new Error('unauthenticated');
+    // M1 Fix: report this as a proper HttpsError (like getRankedFeed) so clients
+    // see "unauthenticated" instead of a misleading internal server error, and
+    // logs stay free of false "internal" crash noise.
+    throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
   const authenticatedUserId = request.auth.uid;
 
@@ -117,8 +121,10 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret] }, async (requ
   }
 
   // Single source of truth for all tunable values (cached ~60s per instance).
-  // Use a preview config override for this request if supplied; else load live.
-  const cfg = prepareConfig(data.configOverride) ?? await loadScoringConfig();
+  // H3 Fix: a preview configOverride is honored ONLY for Control Dashboard
+  // admins (valid dashboard_secret). Regular app users silently get the
+  // published config — any override they send is ignored.
+  const cfg = prepareConfig(isControlDashboardAdmin(request) ? data.configOverride : undefined) ?? await loadScoringConfig();
 
   // The authenticated profile is the sole source of truth for reading pace.
   // Fetch it once per batch, never trust a client-provided WPM value.

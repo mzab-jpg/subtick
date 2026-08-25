@@ -151,6 +151,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+
+    // --- Crash reports: authenticated users can submit bounded crash reports; admin-only reads ---
+    match /crash_reports/{reportId} {
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 500
+        && request.resource.data.keys().hasOnly(['userId', 'message', 'stack', 'componentStack', 'screen', 'platform', 'appVersion', 'reportedAt'])
+        && request.resource.size() < 8000;
+      allow read: if false;   // Admin only — no client reads needed
+      allow update: if false;
+      allow delete: if false;
+    }
     // --- Default deny ---
     match /{document=**} {
       allow read, write: if false;

@@ -1,6 +1,6 @@
 // ============================================================
 // SubTick — Dashboard Screen
-// Non-scrollable full-screen flex layout:
+// Full-screen flex layout inside a pull-to-refresh scroll view:
 //   Header → Stats → Articles (flex:1) → Discover/Shuffle pill
 // ============================================================
 
@@ -10,6 +10,8 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUser } from '../contexts/UserContext';
@@ -33,7 +35,6 @@ import {
   getCachedDashboardFeed,
   restoreCachedDashboardFeed,
   setCachedDashboardFeed,
-  stageDashboardFeedForNextLaunch,
   subscribeToCachedDashboardFeed,
 } from '../services/dashboardFeedCache';
 
@@ -51,7 +52,7 @@ export default function DashboardScreen() {
   const [feedArticles, setFeedArticles] = useState<Article[]>(() => initialCachedFeedRef.current?.articles ?? []);
   const [loading, setLoading] = useState(() => !initialCachedFeedRef.current?.articles.length);
   const [feedError, setFeedError] = useState<string | null>(null);
-
+  const [refreshing, setRefreshing] = useState(false);
   // Accumulates every article ID shown this session (fetched OR shuffled away).
   // Passed to getRankedFeed as exclusions so we never recycle cards within a session.
   // In-memory only — resets on Dashboard unmount; articles reappear freely in future sessions.
@@ -94,9 +95,10 @@ export default function DashboardScreen() {
         sessionShownIds.current = new Set(cached.shownIds);
         setFeedArticles(cached.articles);
         setLoading(false);
-        // Fresh recommendations are saved for the next launch. They never replace
-        // cards already visible on this Dashboard.
-        void refreshNextLaunchFeed(userId, cached.articles.map((article) => article.id));
+        // H4 Fix: cached cards ARE the launch feed — no background re-fetch on a
+        // healthy cache. When the cache is missing or below MAX_FEED_ARTICLES,
+        // the subscriber effect makes exactly ONE ranked-feed request, and its
+        // merged result is saved as next launch's cache via setCachedDashboardFeed.
         return;
       }
 
@@ -119,7 +121,7 @@ export default function DashboardScreen() {
   }, [navigation]);
 
 
-  const loadData = async (silent = false) => {
+  const loadData = async (silent = false, forceFresh = false) => {
     try {
       if (!silent) setLoading(true);
       setFeedError(null);
@@ -139,7 +141,7 @@ export default function DashboardScreen() {
         navigation.replace('Onboarding');
         return;
       }
-      await loadFeedArticles(profile);
+      await loadFeedArticles(profile, { forceFresh });
     } catch (error) {
       console.error('[Dashboard] loadData error:', error);
       setFeedError('Something went wrong loading your feed. Please try again.');
@@ -148,7 +150,43 @@ export default function DashboardScreen() {
     }
   };
 
-  const loadFeedArticles = async (profile: UserProfile | null) => {
+  const onRefresh = async () => {
+    // M6 Fix: pull-to-refresh now performs a REAL fetch, matching universal
+    // pull-to-refresh expectations — same exclusions as the Try Again path
+    // (everything already seen plus everything currently on screen). The old
+    // behaviour secretly shuffled cards and held the spinner for a fabricated
+    // 350ms; both are gone.
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const user = auth.currentUser;
+      const profile = contextProfile;
+      if (!user || !profile || !profile.isOnboarded) return;
+
+      const serverSeenIds = profile.seenArticleIds;
+      const seenIds = await getSeenArticleIdsLocally(serverSeenIds);
+      const excludedIds = Array.from(new Set([
+        ...seenIds,
+        ...sessionShownIds.current,
+        ...feedArticles.map((article) => article.id),
+      ]));
+
+      const result = await getRankedFeed(excludedIds);
+      const articles = result.articles.slice(0, MAX_FEED_ARTICLES);
+      // A failed or empty refresh must never wipe visible cards.
+      if (articles.length > 0) {
+        setFeedArticles(articles);
+        setCachedDashboardFeed(user.uid, articles, sessionShownIds.current);
+        setFeedError(null);
+      }
+    } catch (error) {
+      console.warn('[Dashboard] Pull-to-refresh failed — keeping current cards:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const loadFeedArticles = async (profile: UserProfile | null, opts?: { forceFresh?: boolean }) => {
     try {
       // Use the shared live profile's server-side seen IDs to avoid the
       // getDoc inside getSeenArticleIdsLocally().
@@ -157,13 +195,23 @@ export default function DashboardScreen() {
       const allExcluded = Array.from(new Set([...seenIds, ...sessionShownIds.current]));
       const startedAt = Date.now();
       if (__DEV__) console.log('[Startup Timing] first ranked feed requested');
-      const initialResult = auth.currentUser
-        ? takeInitialDashboardFeedResult(auth.currentUser.uid)
-        : null;
-      const initialRequest = auth.currentUser
-        ? getInitialDashboardFeedRequest(auth.currentUser.uid)
-        : null;
-      const result = initialResult ?? await (initialRequest ?? getRankedFeed(allExcluded));
+      let result;
+      if (opts?.forceFresh) {
+        // Explicit user refresh/retry: hit the backend directly and exclude
+        // everything currently on screen so the pull visibly swaps the whole
+        // card set (unread-but-displayed cards would otherwise rank right
+        // back in and keep the hero persistent).
+        const visibleIds = feedArticles.map((article) => article.id);
+        result = await getRankedFeed(Array.from(new Set([...allExcluded, ...visibleIds])));
+      } else {
+        const initialResult = auth.currentUser
+          ? takeInitialDashboardFeedResult(auth.currentUser.uid)
+          : null;
+        const initialRequest = auth.currentUser
+          ? getInitialDashboardFeedRequest(auth.currentUser.uid)
+          : null;
+        result = initialResult ?? await (initialRequest ?? getRankedFeed(allExcluded));
+      }
       if (__DEV__) console.log(`[Startup Timing] ranked feed returned in ${Date.now() - startedAt}ms (${result.articles.length} articles)`);
       const articles = result.articles.slice(0, MAX_FEED_ARTICLES);
       setFeedArticles(articles);
@@ -171,20 +219,11 @@ export default function DashboardScreen() {
       setFeedError(null);
     } catch (error) {
       console.error('[Dashboard] loadFeedArticles error:', error);
-      setFeedArticles([]);
-      setFeedError('Could not fetch articles. Check your connection and try again.');
-    }
-  };
-
-  const refreshNextLaunchFeed = async (userId: string, visibleIds: string[]) => {
-    try {
-      const seenIds = await getSeenArticleIdsLocally(effectiveProfile?.seenArticleIds);
-      const excludedIds = Array.from(new Set([...seenIds, ...sessionShownIds.current, ...visibleIds]));
-      const result = await getRankedFeed(excludedIds);
-      const articles = result.articles.filter((article) => !excludedIds.includes(article.id)).slice(0, MAX_FEED_ARTICLES);
-      if (articles.length > 0) stageDashboardFeedForNextLaunch(userId, articles, []);
-    } catch {
-      // Visible cached cards remain useful if background freshness fails.
+      // A failed load must never wipe visible cards (they remain useful).
+      // The full error state appears only when there is nothing to show.
+      if (feedArticles.length === 0) {
+        setFeedError('Could not fetch articles. Check your connection and try again.');
+      }
     }
   };
 
@@ -303,7 +342,21 @@ export default function DashboardScreen() {
 
   return (
     <ScreenEntrance style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={[styles.inner, { paddingTop: topInset + 28 }]}>
+      <ScrollView
+        style={styles.inner}
+        contentContainerStyle={[styles.innerContent, { paddingTop: topInset + 28 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+            progressBackgroundColor={colors.background}
+            progressViewOffset={topInset}
+          />
+        }
+      >
 
         {/* ── Header ── */}
         <View style={styles.headerRow}>
@@ -349,7 +402,7 @@ export default function DashboardScreen() {
               </Text>
               <TouchableOpacity
                 style={[styles.retryButton, { borderColor: colors.primary }]}
-                onPress={() => loadData(false)}
+                onPress={() => loadData(false, true)}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.retryText, { color: colors.primary }]}>Try Again</Text>
@@ -438,14 +491,15 @@ export default function DashboardScreen() {
           </View>
         )}
 
-      </View>
+      </ScrollView>
     </ScreenEntrance>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  inner: { flex: 1, paddingHorizontal: 28, paddingBottom: 120 },
+  inner: { flex: 1, paddingHorizontal: 28 },
+  innerContent: { flexGrow: 1, paddingBottom: 120 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
   headerTitle: { fontSize: TEXT_XL, fontWeight: '800', letterSpacing: -1 },
   iconButton: { padding: 4 },

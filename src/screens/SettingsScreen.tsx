@@ -31,17 +31,17 @@ import {
   TEXT_LG,
 } from '../utils/constants';
 import {
+  BarChart3,
+  Bookmark,
   ChevronRight,
+  History,
+  MessageSquare,
+  Moon,
+  Rss,
   Smartphone,
   Sun,
-  Moon,
   Tag,
-  BarChart3,
-  MessageSquare,
-  Rss,
   TerminalSquare,
-  History,
-  Bookmark,
   UserCircle,
 } from 'lucide-react-native';
 

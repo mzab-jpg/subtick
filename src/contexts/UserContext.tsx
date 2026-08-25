@@ -10,7 +10,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { BehaviorEvent, ReaderSessionSummary, UserProfile } from '../types';
-import { calculateWpm, classifyLocalRead, countWeeklyQualifyingReads, estimateNextStreak, isQualifyingRead } from '../utils/dashboardMetrics';
+import { calculateWpm, classifyLocalRead, countWeeklyQualifyingReads, estimateNextStreak, isFinishedRead, isQualifyingRead } from '../utils/dashboardMetrics';
+import { MAX_PLAUSIBLE_WPM, MIN_PLAUSIBLE_WPM, MIN_WPM_CALIBRATION_WORDS } from '../utils/constants';
 import { auth, db } from '../services/firebase';
 import { saveStartupSnapshot } from '../services/startupCache';
 
@@ -53,21 +54,44 @@ export function UserProvider({ children }: UserProviderProps) {
 
   const applyProvisionalSession = useCallback((summary: ReaderSessionSummary | null) => {
     if (!summary || !profile) return;
-    const outcome = classifyLocalRead(summary, profile.averageWpm || 200);
-    const qualifies = isQualifyingRead(outcome);
-    const countsAsTime = outcome === 'read_thorough' || outcome === 'read_skim' || outcome === 'read_shallow';
+    // Stats spec: Finished = 70%+ depth; weekly reads & streak day = 40%+;
+    // hours read and WPM calibration accept every visit (guards below filter
+    // junk mechanically rather than by label).
+    const outcome = classifyLocalRead(summary);
+    const countsAsWeekly = isQualifyingRead(outcome);
+    const countsAsFinished = isFinishedRead(outcome);
     const now = summary.timestamp;
-    const sessionWpm = calculateWpm(summary.actualWordCount, summary.sessionDuration);
+    // WPM Fix (yardstick protection) — mirrors the server rules so the instant
+    // preview can never diverge from the authoritative record:
+    //   1. Only genuine reads (countsAsTime) may recalibrate speed.
+    //   2. Consumed words only (article words × furthest scroll), never the
+    //      full count for partially-read pieces.
+    //   3. Human-plausibility band [MIN, MAX] — skims and abandoned opens
+    //      (which could compute ~10,000 WPM on long articles) are excluded.
+    const consumedWords = Math.round(
+      (summary.actualWordCount || 0) * Math.min(1, Math.max(0, summary.scrollDepth || 0))
+    );
+    let sessionWpm: number | null = null;
+    if (
+      summary.sessionDuration > 0 &&
+      consumedWords >= MIN_WPM_CALIBRATION_WORDS
+    ) {
+      const rawSessionWpm = calculateWpm(consumedWords, summary.sessionDuration);
+      if (rawSessionWpm !== null && rawSessionWpm >= MIN_PLAUSIBLE_WPM && rawSessionWpm <= MAX_PLAUSIBLE_WPM) {
+        sessionWpm = rawSessionWpm;
+      }
+    }
 
     provisionalBaseUpdatedAtRef.current = profile.lastUpdated || 0;
     setProvisionalProfile({
       ...profile,
-      totalArticlesRead: profile.totalArticlesRead + (qualifies ? 1 : 0),
-      totalReadTimeMs: (profile.totalReadTimeMs || 0) + (countsAsTime ? summary.sessionDuration : 0),
-      currentStreakDays: qualifies ? estimateNextStreak(profile.lastReadDate, profile.currentStreakDays, now) : profile.currentStreakDays,
+      totalArticlesRead: profile.totalArticlesRead + (countsAsFinished ? 1 : 0),
+      // Hours-read spec: every visit's active time counts.
+      totalReadTimeMs: (profile.totalReadTimeMs || 0) + summary.sessionDuration,
+      currentStreakDays: countsAsWeekly ? estimateNextStreak(profile.lastReadDate, profile.currentStreakDays, now) : profile.currentStreakDays,
       averageWpm: sessionWpm === null ? profile.averageWpm : Math.round((profile.averageWpm || 200) * 0.8 + sessionWpm * 0.2),
     });
-    if (qualifies) setProvisionalWeeklyReads(weeklyReadCount + 1);
+    if (countsAsWeekly) setProvisionalWeeklyReads(weeklyReadCount + 1);
   }, [profile, weeklyReadCount]);
 
   const refreshProfile = useCallback(async () => {
