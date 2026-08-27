@@ -78,7 +78,11 @@ export default function RootNavigator({ initialRoute }: RootNavigatorProps) {
           name="Settings"
           component={SettingsScreen}
           options={{
-            presentation: 'modal',
+            // Settings is a card (not a modal) so that the sub-screens it
+            // pushes (Account, History, etc. — all cards) pop back onto it
+            // without the modal-under-card re-presentation flicker. This also
+            // unifies the Settings-family motion to the standard side slide.
+            presentation: 'card',
             gestureEnabled: true,
             gestureDirection: 'horizontal',
           }}
