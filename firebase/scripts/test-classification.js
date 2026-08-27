@@ -12,7 +12,7 @@ const {
 } = require('../functions/lib/scoringConfig.js');
 const { interleaveArticlesByCategory, spaceArticlesByPublisher, assembleFeedWithTranches } = require('../functions/lib/getRankedFeed.js');
 const { normalizeFeedUrl } = require('../functions/lib/feedValidation.js');
-const { applyDecay } = require('../functions/lib/weightUpdater.js');
+const { applyDecay, computeAttentionFactor } = require('../functions/lib/weightUpdater.js');
 const rankedFeedSource = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions', 'src', 'getRankedFeed.ts'), 'utf8');
 
 let failed = false;
@@ -58,6 +58,14 @@ check('long-article regression: 60 percent of a big read earns weekly-tier shall
 check('fast finish still counts as finished (pace judged by WPM band, not labels)', classifyRead(cfg, 1.0, 4_000, 3_000, 900), 'read_thorough');
 check('quick-exit boundary', classifyRead(cfg, 0.19, 14_999, 200, 450), 'quick_exit');
 check('just past quick-exit but under the weekly bar is not-interested', classifyRead(cfg, 0.25, 16_000, 200, 450), 'swipe_next');
+
+// Engagement-Credit Model — attention factor bands (wide-moat thresholds):
+const A_CFG = DEFAULT_SCORING_CONFIG;
+check('attention: genuine pace (400 WPM) gets full credit', computeAttentionFactor(0.8, 60_000, 500, A_CFG), 1);
+check('attention: skim band (1,200 WPM) discounted to 0.35', computeAttentionFactor(0.9, 90_000, 2_000, A_CFG), 0.35);
+check('attention: fling (15,000 WPM) is inert', computeAttentionFactor(1.0, 20_000, 5_000, A_CFG), 0);
+check('attention: missing word count defaults to full credit (raw-webpage edge)', computeAttentionFactor(0.8, 30_000, undefined, A_CFG), 1);
+check('attention: sub-floor consumption defaults to full credit (no pace signal)', computeAttentionFactor(0.3, 30_000, 100, A_CFG), 1);
 
 const normalized = prepareConfig({
   scoring: {

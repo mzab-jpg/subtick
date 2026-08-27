@@ -1,6 +1,6 @@
 # Tangent — Architecture
 
-> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
+> **Last verified:** 26 August 2026 (audit hardening, cache-first startup, attention-factor engagement model, geometry-only classification, WPM plausibility guards, body-relative scroll measurement, H2/H3/M1 fixes).
 > Every claim below is traced to a specific file and function.
 
 ---
@@ -87,6 +87,7 @@
 │       ├── tsconfig.json           # NodeNext, ES2022, strict mode
 │       └── src/
 │           ├── index.ts            # Exports 14 Cloud Functions, protected dashboard actions, and addRssFeed
+│           ├── dashboardAuth.ts    # Shared timing-safe CONTROL_DASHBOARD_SECRET check (isControlDashboardAdmin / requireDashboardAdmin)
 │           ├── firebaseAdmin.ts    # Safe one-time Firebase Admin initialisation + shared db/auth exports
 │           ├── types.ts            # Shared interfaces (UserProfile, Article, etc.)
 │           ├── constants.ts        # Scoring constants, FEEDBACK_DELTAS, etc.
@@ -196,7 +197,7 @@ DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id fr
   → Reader preserves this backend order; a specifically tapped Dashboard card opens at its own position rather than triggering a second client-side shuffle
   → return { articles: Article[30] }
   → Phone retains the active 30-card Dashboard feed in a UID-scoped in-memory cache and a non-sensitive, 24-hour AsyncStorage cache. After Firebase restores the exact UID, a matching cached route/cards can render before cloud profile verification and a fresh request finish.
-  → Client-side seen filter removes locally opened cards before cached cards render; fresh background results are staged for the next launch rather than replacing visible cards.
+  → **Cache-first startup (H4):** with a healthy cached feed (≥30 cards) there is NO background refetch on returning launch — the cached cards render immediately and the visible feed is the cached feed. The one ranked-feed request happens only when the cache is missing or short, and that same result is saved as next launch's cache. A fresh request (onboarding handoff, Shuffle/Discover, retry, or pull-to-refresh) excludes already-seen plus currently-shown IDs.
   → Client-side seen filter → slice(0,30) → setFeedArticles
   → When Reader opens an article, only that article is removed from the mounted Dashboard cache; background replenishment appends unseen replacements after remaining unread cards.
   → Each returned article carries transient `{ feedId, impressionId }` context
@@ -238,17 +239,19 @@ ReaderScreen → behaviorTracker records foreground-only duration, maximum scrol
   → Swipe navigation stays non-blocking; AsyncStorage queue remains mutex-serialized and preserves offline sessions
   → syncBehaviorEvents Cloud Function (sends client_id):
       Auth: request.auth.uid enforced; request fields are validated
-      Reads the authenticated user's stored averageWpm once per batch
       Loads active scoringConfig (per-instance cache: about 60s)
-      Reclassifies raw and legacy read events server-side as quick_exit, shallow,
-      skim, thorough, or swipe_next; explicit Like/Save/Not Interested actions stay unchanged
+      Classifies raw and legacy read events server-side with GEOMETRY-ONLY rules:
+      quick_exit (<20% & <15s), thorough (≥70%), shallow (≥40%), else swipe_next;
+      explicit Like/Save/Not Interested actions stay unchanged
       Stores the final event type; trending + peakTrendingScore update in one batch
+      Read-session trending/quality/weight deltas are scaled by the attention factor
+      A (≤600→1.0, 601–1750→0.35, >1750→0); deliberate actions unscaled
       Publisher quality aggregated (10-min TTL cache — C5)
       → updateWeights(userId, clientId, cfg) [watermark-based, no replay]
       → repeated quick exits from distinct articles may create one category-only weak signal after live threshold/window; positive category engagement clears pending evidence
-      → server-classified qualifying reads update completion/read-time statistics
-      → WPM is independent of read classification: positive article word count ÷ active foreground time,
-        then an 80% old / 20% new rolling average
+      → server-classified qualifying reads (≥40% depth) update completion/read-time/streak statistics
+      → WPM recalibrates on any visit but only from consumed words within the [80,600]
+        plausibility band (above a 150-word floor); independent of read classification
       → [ANALYTICS] final event types + weight_updated/user-property events
 ```
 
@@ -309,6 +312,8 @@ AccountScreen → linkGoogleAccount():
 - **Google Sign-In logs** — Gated behind `__DEV__` checks (production logs are clean)
 - **GA_API_SECRET** — Stored in Cloud Secret Manager; `.trim()` applied to strip trailing CRLF
 - **Control Dashboard mutations** — Saving live/preview scoring configuration and adding feeds require the server-held `CONTROL_DASHBOARD_SECRET`; read-only dashboard/matrix access remains available to authenticated users
+- **Admin-gated scoring overrides (H3)** — A client-supplied scoring override (`configOverride`) and score breakdown requests (`includeScores`) in `getRankedFeed` / `syncBehaviorEvents` are honored only when the request carries the admin `CONTROL_DASHBOARD_SECRET` (checked via the shared `dashboardAuth.ts` helper); regular users silently receive the published config
+- **Proper unauthenticated errors (M1)** — `syncBehaviorEvents` throws a real `HttpsError('unauthenticated', ...)` (matching `getRankedFeed`) so clients get a meaningful error code instead of a generic internal error
 - **Archived-content preference** — Enforced in normal ranking, backend emergency pool construction, a final server filter, and the phone-side Functions-outage fallback
 
 ---

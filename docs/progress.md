@@ -1,6 +1,6 @@
 # Tangent — Progress & Status
 
-> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
+> **Last verified:** 26 August 2026 (attention-factor engagement model, body-relative scroll measurement, WPM plausibility guards, geometry-only classification, stats-spec rewrite, M6 pull-to-refresh, M5 expo-constants, H2/H3/M1 audit fixes).
 > All status claims are based on reading the actual code.
 
 ---
@@ -42,7 +42,10 @@
 
 ### Personalization & Learning
 - ✅ **Backend-authoritative reading sessions** — Client sends raw `read_session` telemetry; backend validates it, applies live Dashboard thresholds, and stores the final read outcome. Legacy read-family events are reclassified during rollout; explicit Like/Save/Not Interested actions are preserved.
-- ✅ **Personalized server WPM classification** — Backend reads the authenticated profile's `averageWpm` once per sync batch rather than using fixed 200 WPM.
+- ✅ **Personalized server WPM classification** — Backend validates raw telemetry server-side using action thresholds, then stores a final outcome. Read classification is **geometry-only** (quick-exit / thorough ≥70% / shallow ≥40% / else swipe-next); pace is handled separately by the attention factor. `read_skim` is no longer emitted by the classifier.
+- ✅ **WPM plausibility guards** — WPM is calibrated on any Reader visit, independent of read classification, but only from **consumed** words (word count × scroll depth) within the human-plausibility band [80, 600] and above a 150-word floor. Skims/flings/abandoned opens that would compute absurd speeds (e.g. 10,000 WPM) never corrupt the baseline.
+- ✅ **Attention-factor engagement model** — Read-session weight/trending/quality deltas are scaled by an Attention Factor `A` from implied WPM: ≤600 → 1.00, 600–1,750 → 0.35, >1,750 → 0 (fling, inert). Deliberate like/save/unlike/unsave ship unscaled.
+- ✅ **Body-relative scroll measurement** — Depth and word count are measured against the article body (not the whole document + recommendation modules), live geometry, throttled to 200 ms with a final-position capture on exit.
 - ✅ **Quick-exit double-fire fix** — Shared `sessionSnapshotRef` prevents duplicate raw session reports; cleanup retains latest scroll depth and rendered word count.
 - ✅ **Background pause protection** — React Native `AppState` excludes `inactive`/`background` intervals from normal, explicit-action, and cleanup session durations, preventing interruption time from corrupting WPM or reading-time statistics.
 - ✅ **AsyncStorage behavior queue** — 500-item cap, mutex-serialized (via shared `asyncStorageMutex`) (B6)
@@ -51,8 +54,8 @@
 - ✅ **Watermark-based weight update** — `weightUpdatedAt` prevents replay; separate `weightsDecayedAt` applies the configured daily decay for every full elapsed day across category, length, and publisher preferences.
 - ✅ **Repeated quick-exit learning** — A single quick exit remains neutral. Distinct quick exits in one category accumulate only within the configurable time window; meeting the configurable threshold applies the existing `feedback.quick_exit` value once to that category only. Positive reads/Likes/Saves clear pending evidence.
 - ✅ **Publisher cold-start balance** — No stored interaction for a publisher uses configurable 90% category / 10% publisher personalization; any stored publisher weight uses normal 60% / 40% weighting. A known negative publisher remains known and is not treated as unknown.
-- ✅ **WPM calibration** — Starts at 200. Every Reader exit supplies the rendered word count when available, otherwise the article's stored word count; WPM is simply positive words divided by active foreground time and updates with an 80% old / 20% new rolling average, independent of read classification.
-- ✅ **Reading streak & weekly count** — `updateReadStats()` persists read/streak statistics; `UserContext` calculates the displayed weekly count from each user's actual rolling seven-day qualifying events so inactive users' old reads age out correctly.
+- ✅ **WPM calibration** — Starts at 200. Any Reader exit supplies consumed words (word count × furthest scroll); WPM is words consumed ÷ active foreground time and updates with an 80% old / 20% new rolling average **only when the implied speed falls in the human-plausibility band [80, 600] and clears a 150-consumed-word floor**. Independent of read classification. Skims and flings cannot inflate it.
+- ✅ **Reading streak & weekly count** — `updateReadStats()` recounts weekly reads from this account's `read_thorough`/`read_shallow`/legacy-`read_skim` events in the rolling seven days on every sync (H2 fix — accurate across phones, never inflates). A streak day is a visit at/above the 40% depth bar; a save/like day alone cannot extend a streak. `UserContext` displays the same qualifying-event rule locally.
 - ✅ **Immediate provisional stats** — On normal Reader exit, the phone applies a default-rule estimate for Finished, Weekly Reads, Hours Read, Streak, and eligible WPM before Dashboard returns. The next server profile update replaces that display estimate with backend classification under the live configuration; offline sessions remain provisional until reconnect.
 
 ### Reader Experience
@@ -164,7 +167,7 @@
 - **Status:** Submission complete. Review/approval not implemented. Requests accumulate as `status: 'pending'`.
 
 ### Personalization Health Reporting
-- **Status:** GA4 → BigQuery export is linked at `analytics_545741262`. Existing dashboard views expose raw ranking fields. The new canonical recommendation-to-outcome view is supplied in `firebase/analytics/create_personalization_health_view.sql`; it needs a one-time run in BigQuery Console because the connected MCP service account is read-only. Looker instructions are in `docs/analytics-looker-guide.md`.
+- **Status:** GA4 → BigQuery export is linked at `analytics_545741262`; the canonical `v_personalization_health` view has been created (26 August 2026). Looker instructions are in `docs/analytics-looker-guide.md`; the view SQL is at `firebase/analytics/create_personalization_health_view.sql`. Looker Studio reports themselves are not yet built. (Firestore → BigQuery catalog-state mirror also not yet built — see the `cronContentSnapshot` plan in `docs/audit-backlog.md`.)
 
 ---
 
@@ -176,7 +179,7 @@
 - **No cross-device saved HTML sync** — Saved article metadata syncs to Firestore, full HTML is device-local
 - **No content moderation** — Paywall detection only
 - **No rate limiting on `syncBehaviorEvents`** — Per-user per-article dedup only within single batch
-- **No pull-to-refresh** — Feed refresh by navigation focus + queue depletion only
+- ~~**No pull-to-refresh**~~ — ✅ Pull-to-refresh is implemented (M6). It performs a real ranked-feed fetch excluding everything already seen plus everything currently on screen, matching universal expectations — rather than the former secret shuffle with a fabricated 350 ms hold.
 
 ---
 

@@ -148,3 +148,6 @@ export const MIN_PLAUSIBLE_WPM = 80;   // below: idle/paused screen, not reading
 export const MAX_PLAUSIBLE_WPM = 600;  // above: scrolling/skimming, not reading
 // Sessions consuming fewer words than this carry no reliable pace signal.
 export const MIN_WPM_CALIBRATION_WORDS = 150;
+// Fling threshold (Engagement-Credit Model): implied reading speed above this
+// is physically impossible to absorb, so the visit is algorithmically inert.
+export const FLING_WPM = 1750;

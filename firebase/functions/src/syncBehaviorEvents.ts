@@ -7,7 +7,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db } from './firebaseAdmin.js';
 import { BehaviorEvent, BehaviorEventType, UserProfile } from './types.js';
-import { updateWeights } from './weightUpdater.js';
+import { updateWeights, computeAttentionFactor, READ_VISIT_TYPES } from './weightUpdater.js';
 import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
 import { isControlDashboardAdmin } from './dashboardAuth.js';
 import { loadScoringConfig, prepareConfig, classifyRead, ScoringConfig } from './scoringConfig.js';
@@ -216,8 +216,16 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret, controlDashboa
         continue;
       }
 
-      const trendingDelta = event.articleId ? getTrendingIncrement(cfg, event.eventType) : 0;
-      const qualityDelta = event.articleId ? getPublisherQualityIncrement(cfg, event.eventType) : 0;
+      // Engagement-Credit Model: trending & publisher-quality increments from
+      // read-session visits are scaled by the attention factor (flings become
+      // inert; skims discounted). Deliberate tap-actions keep full strength.
+      const isReadVisit = READ_VISIT_TYPES.has(event.eventType);
+      const attention = isReadVisit
+        ? computeAttentionFactor(event.scrollDepth, event.sessionDuration, event.actualWordCount, cfg)
+        : 1;
+
+      const trendingDelta = event.articleId ? getTrendingIncrement(cfg, event.eventType) * attention : 0;
+      const qualityDelta = event.articleId ? getPublisherQualityIncrement(cfg, event.eventType) * attention : 0;
 
       // P0 Optimization 1: Skip saving zero-impact events to Firestore to reduce write costs.
       // Zero-impact events (like swipe_next) have no trending increment, no publisher quality delta,

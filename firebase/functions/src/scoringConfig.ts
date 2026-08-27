@@ -24,6 +24,7 @@ import {
   DEFAULT_SELECTED_WEIGHT,
   DEFAULT_NOT_INTERESTED_WEIGHT,
   DEFAULT_NEUTRAL_WEIGHT,
+  FLING_WPM,
 } from './constants.js';
 
 // ------------------------------------------------------------------
@@ -91,8 +92,9 @@ export interface ScoringConfig {
     quickExitDepth: number;     // 0.2
     quickExitTimeoutSec: number;// 15
     thoroughDepth: number;      // 0.70
-    thoroughTimeFraction: number; // 0.60
+    thoroughTimeFraction: number; // 0.60 (retired — kept for stored-config compat)
     shallowDepth: number;       // 0.40
+    flingWpm: number;           // 1750 — implied speed above this = fling
   };
 }
 
@@ -153,8 +155,9 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
     quickExitDepth: 0.2,
     quickExitTimeoutSec: 15,
     thoroughDepth: 0.70,
-    thoroughTimeFraction: 0.60,
+    thoroughTimeFraction: 0.60, // retired — pace no longer influences labels
     shallowDepth: 0.40,
+    flingWpm: FLING_WPM,
   },
 };
 
@@ -191,6 +194,7 @@ const NUM_RANGES: Record<string, [number, number]> = {
   'tranche.maxArticlesPerCategory': [1, 100], 'tranche.minDistinctCategories': [1, 20],
   'classification.quickExitDepth': [0, 1], 'classification.quickExitTimeoutSec': [1, 120],
   'classification.thoroughDepth': [0, 1], 'classification.thoroughTimeFraction': [0.1, 2], 'classification.shallowDepth': [0, 1],
+  'classification.flingWpm': [600, 50000],
 };
 
 for (const key of Object.keys(FEEDBACK_DELTAS)) NUM_RANGES[`feedback.${key}`] = [-1, 1];

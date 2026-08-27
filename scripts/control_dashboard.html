@@ -499,6 +499,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     'classification.thoroughDepth':      "Scroll fraction at/above which a read can qualify as 'thorough'. Default 0.70.",
     'classification.thoroughTimeFraction': "Session time (as a fraction of expected read time for the article's length) needed to call a read 'thorough'. Default 0.60.",
     'classification.shallowDepth':       "Articles scrolled between shallowDepth and thoroughDepth, or not meeting thorough criteria, are 'shallow'. Default 0.40.",
+    'classification.flingWpm':           "Implied reading speed (words actually consumed ÷ active time) above this is a fling — the visit carries NO engagement signal. Speeds between 600 WPM and this value count as skims. Keep far from 600 so measurement noise cannot flip bands. Default 1750.",
   },
 };
 
@@ -609,6 +610,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     'classification.thoroughDepth': ['Thorough scroll depth (above)', 0, 1, 0.01],
     'classification.thoroughTimeFraction': ['Thorough time — fraction of expected', 0.1, 2, 0.01],
     'classification.shallowDepth': ['Shallow scroll depth (above)', 0, 1, 0.01],
+    'classification.flingWpm': ['Fling speed threshold (WPM above)', 600, 50000, 50],
     'trending.decayRate': ['Trending decay rate (daily ×)', 0.5, 1, 0.001],
   };
 

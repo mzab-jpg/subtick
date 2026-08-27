@@ -1,6 +1,6 @@
 # Tangent — System Patterns
 
-> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
+> **Last verified:** 26 August 2026 (attention-factor engagement model, body-relative scroll measurement, WPM plausibility guards, geometry-only classification, stats-spec, scroll/speed-band audit fixes).
 > All values, formulas, and constants are pulled directly from source code — no estimates.
 
 ---
@@ -102,6 +102,14 @@ For a publisher with **no stored publisher weight at all**, the configurable col
 
 Weights come from the user profile (3D matrix: category × category+length composite × publisher). Neutral = 1.0, max = 5.0, min = 0.1.
 
+**Known caveat (audit Point 1, not yet resolved):** `normalizeP` reads `MIN_W`/`MAX_W`
+hardcoded as 0.1/5.0 inline, duplicating the config's `learning.minWeight`/`maxWeight`.
+Today they agree (both default 0.1/5.0), so nothing is broken — but if you ever tune
+the weight range from the Control Dashboard (which permits changing those dials),
+the scorer would keep normalising against 0.1/5.0 while the true clamps changed,
+silently diluting the effect. Either wire `normalizeP` to read the config'd bounds
+or remove those dashboard dials. Tracked as an open decision.
+
 ### 2c. T — Trending [0, 1]
 
 Source: `getRankedFeed.ts: normalizeT()`, decay in `cronDecayTrendingScores`
@@ -124,6 +132,12 @@ Trending increments (`syncBehaviorEvents.ts`):
 | Read skim | +0.5 |
 | Read shallow | +0.2 |
 | Swipe past / exit | +0.0 |
+
+Read-visit increments are multiplied by the attention factor `A` (see §3a) — a
+fling contributes zero trending, a skim contributes 0.35×. Deliberate
+save/like/unlike/unsave are unscaled. `read_skim` is no longer emitted by the
+classifier (geometry-only labels); the increment row is retained for legacy
+records created before that change.
 
 **peakTrendingScore:** All-time high, never decays. Updated in the same batch as trendingScore. Used by `cronCleanupOldArticles` for deletion ranking (now via sampled query — 500 worst-scoring candidates, composite index on `publishDate` + `peakTrendingScore`).
 
@@ -170,6 +184,12 @@ Quality increments (`syncBehaviorEvents.ts`):
 save: +0.010 / like: +0.005 / read_thorough: +0.005 / read_skim: +0.001
 swipe_not_interested: -0.010 / quick_exit: -0.005
 ```
+
+Read-visit quality deltas are scaled by the attention factor `A` (flings → 0,
+skims → 0.35×); deliberate actions are unscaled. The clamp noted above is applied
+to **new** publisher writes at creation; an earlier audit found existing-publisher
+writes could drift above 1.0 (e.g. Dan Luu at 1.349 in storage), while ranking
+re-clamps to [0.2, 1.0] on read, so no live ranking impact.
 
 ### 2f. Diversity — Publisher Cap and Topic Anti-Fatigue
 
@@ -236,6 +256,23 @@ read_shallow: 0.00 / swipe_next: 0.00
 quick_exit: 0.00 / swipe_not_interested: -0.40
 ```
 
+**Attention factor (Engagement-Credit Model):** read-session deltas (`read_thorough`,
+`read_skim`, `read_shallow`, `swipe_next`) are multiplied by an Attention Factor `A`
+computed from the visit's implied reading speed (consumed words ÷ active minutes).
+Deliberate tap-actions (save/like/unlike/unsave/not-interested) ship unscaled at
+full strength — intent is not pace-measured.
+
+| Implied speed | A | Meaning |
+|---|---|---|
+| ≤ `MAX_PLAUSIBLE_WPM` (600) | 1.00 | genuine reading — full credit |
+| 600 – `FLING_WPM` (1750) | 0.35 | skimmed through — partial trust |
+| > `FLING_WPM` (1750) | 0 | fling — algorithmically inert |
+
+Visits without a usable word count (raw-webpage archived mode) default to `A = 1`;
+this is a documented, accepted edge. The two thresholds are wide-moat absolute
+constants — measurement noise (~±2×) is tiny compared to the gaps between reading,
+skimming, and scrolling, so sessions cannot accidentally cross a band.
+
 ### 3b. Dimension-Specific Learning Rates
 
 ```typescript
@@ -264,14 +301,35 @@ A single `quick_exit` remains neutral for personal preference learning. The back
 
 ### 3g. WPM Calibration and Read-Time Estimates
 
-New user profiles begin at `averageWpm = 200`. On every Reader exit with positive word count and positive active foreground time, the app uses the live WebView word count when available and otherwise the stored article count.
+New user profiles begin at `averageWpm = 200`. On every Reader exit with positive
+word count and positive active foreground time, the app uses the live WebView word
+count when available and otherwise the stored article count.
+
+**WPM is independent of read classification** — any visit may recalibrate speed —
+but it is guarded by a **human-plausibility band** so a single bad session can
+never corrupt the yardstick:
+
+- **Only consumed words count:** session words = article word count × furthest
+  scroll depth reached (never the full article length, so a partially-read essay
+  cannot compute a fantasy speed).
+- **Plausibility band:** calibrating sessions must imply 80–600 WPM
+  (`MIN_PLAUSIBLE_WPM` / `MAX_PLAUSIBLE_WPM`). Faster-than-human sessions (skims,
+  flings, abandoned opens — your observed 10,000 WPM case) are excluded from
+  calibration. Accepted sessions are clamped before blending.
+- **Word floor:** a session must consume at least `MIN_WPM_CALIBRATION_WORDS`
+  (150) words — tiny snippets carry no reliable pace signal.
 
 ```text
-sessionWpm = wordCount / (sessionDurationMs / 60,000)
-newAverageWpm = round(oldAverageWpm × 0.80 + sessionWpm × 0.20)
+sessionWpm = consumedWords / (sessionDurationMs / 60,000)   // consumedWords = words × depth
+newAverageWpm = round(oldAverageWpm × 0.80 + sessionWpm × 0.20)   // only if in [80, 600]
 ```
 
-WPM is independent of scroll depth and server read classification. `averageWpm` drives the live Dashboard and Reader `min read` estimate: `max(1, ceil(wordCount / averageWpm))`. Stored article `estimatedReadMinutes` remains a separate ingestion-time generic estimate using fixed 250 WPM, primarily retained in saved/history metadata.
+Because skims and flings can no longer inflate the baseline, `averageWpm` stays
+near truth — and since it feeds read classification / read-time estimates, the
+ruler cannot be stretched by the very activity it measures. WPM drives the live
+Dashboard and Reader `min read` estimate: `max(1, ceil(wordCount / averageWpm))`.
+Stored article `estimatedReadMinutes` remains a separate ingestion-time generic
+estimate using fixed 250 WPM, primarily retained in saved/history metadata.
 
 ### 3h. UI Sync Thresholds
 
@@ -312,19 +370,30 @@ Source: client `useBehaviorTracker.ts` plus server `syncBehaviorEvents.ts` / `sc
 
 The client is a sensor: on normal next swipe or unfinished Reader cleanup it sends a raw `'read_session'` containing foreground-active duration, maximum scroll depth, and the latest rendered word count when available. It does not decide whether the read was a skim or thorough. `useBehaviorTracker.ts` listens to React Native `AppState`: it pauses timing on `inactive` or `background` and resumes on `active`. Thus app switching, locking, calls, and multitasking time are excluded, including if Reader cleanup occurs while still paused.
 
-The backend validates the telemetry, loads the active `system/scoringConfig` and the authenticated user's server-owned `averageWpm` once per batch, then stores one final type:
+**Scroll depth and word count are measured against the ARTICLE BODY, not the whole
+document** (scroll-accuracy fix). The injected Reader script (`makeReaderScript` in
+`ReaderScreen.tsx`) locates a content root — `#tangent-article` in sanitized mode,
+or a selector heuristic (`article`, `main`, Substack's `.post-content`, etc.) in
+raw-webpage/archived mode, with `document.body` as last resort. Depth =
+section of the body whose bottom edge has crossed the viewport bottom, recomputed
+from live geometry on every scroll event (lazy-loaded images/embeds can't distort
+it; bodies shorter than one screen resolve naturally). Word count derives from the
+root's innerText. Scroll messages are throttled to 200 ms with an unconditional
+final-position capture on `pagehide`/`visibilitychange` so the deepest genuine
+position always lands. This prevents recommendation modules and page footers
+(which inflate both document depth and word count on Substack-style pages) from
+distorting classification, WPM calibration, or consumed-word math.
+
+The backend validates the telemetry, loads the active `system/scoringConfig` once per batch, then stores one final type. **Classification is geometry-only** — pace plays no role in labelling (the retired WPM-pace trial was removed); the attention factor handles pace scaling at weight/trending/quality time:
 
 ```
 if (scrollDepth < quickExitDepth AND duration < quickExitTimeoutSec) → 'quick_exit'
-else if (scrollDepth >= thoroughDepth):
-    expectedTime = actualWordCount / userWpm
-    if (duration >= expectedTime × thoroughTimeFraction) → 'read_thorough'
-    else → 'read_skim'
+else if (scrollDepth >= thoroughDepth) → 'read_thorough'
 else if (scrollDepth >= shallowDepth) → 'read_shallow'
 else → 'swipe_next'
 ```
 
-The default thresholds are 0.20 depth / 15 seconds for quick exit, 0.70 depth plus 60% of expected time for thorough, and 0.40 depth for shallow. The backend uses 200 WPM only if the profile has no valid `averageWpm`. If no positive live word count was captured, expected time is treated as unavailable and a deep session is classified as `read_thorough`; WPM calibration later attempts a safe stored article-count fallback. The config is cached for about 60 seconds per warm Function instance, so a Dashboard change is near-real-time rather than globally instantaneous.
+The default thresholds are 0.20 depth / 15 seconds for quick exit, 0.70 depth for thorough (Finished), and 0.40 depth for shallow (weekly-read / streak bar). The retired `thoroughTimeFraction` key remains in stored configs for compatibility only and is no longer consulted. `read_skim` is no longer emitted, but legacy records of that type remain honored in weekly counts and weight/trending math. The config is cached for about 60 seconds per warm Function instance, so a Dashboard change is near-real-time rather than globally instantaneous.
 
 Legacy client read-family labels are also reclassified during rollout. Right-swipe `'swipe_not_interested'` and explicit Like/Unlike/Save/Unsave events are never reclassified.
 

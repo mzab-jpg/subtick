@@ -1,8 +1,9 @@
 # Tangent — Personalization Health Reporting
 
-> **One-time setup:** Run `firebase/analytics/create_personalization_health_view.sql` in BigQuery Console. The connected MCP service account is read-only and cannot create the view.
-> **Data source:** `subtick-bbd55.analytics_545741262.v_personalization_health`
+> **Status:** The BigQuery view `v_personalization_health` is **created and live** at `subtick-bbd55.analytics_545741262` (26 August 2026). If it ever needs re-creating, run `firebase/analytics/create_personalization_health_view.sql` in BigQuery Console — the MCP service account is read-only and cannot create the view.
 > **Purpose:** Measure whether recommendations improve as Tangent learns about a user.
+
+> **Reading-behavior note (26 Aug):** Since the geometry-only classification change, `read_skim` is no longer emitted; reads are labelled `quick_exit` / `thorough` (≥70%) / `shallow` (≥40%) / else swipe-past, and pace is reflected by the attention factor at weight/trending time. Historical `read_skim` rows remain in the data. Treat `is_read_thorough` consistently across the change boundary; do not use the disappearance of `read_skim` as a volume drop.
 
 ## Use this view, not raw GA4 events
 

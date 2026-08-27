@@ -22,6 +22,37 @@ import {
 import { sendGAEvents, sendGAUserProperties } from './analytics.js';
 import { loadScoringConfig, ScoringConfig } from './scoringConfig.js';
 
+export const READ_VISIT_TYPES = new Set<string>(['read_thorough', 'read_skim', 'read_shallow', 'swipe_next']);
+
+/**
+ * Attention Factor (Engagement-Credit Model) — geometry classifies, attention scales.
+ *
+ * Implied speed = words actually consumed (article length × furthest scroll)
+ * ÷ active minutes, compared against two wide-moat absolute bands chosen so
+ * measurement noise cannot flip them:
+ *   ≤ MAX_PLAUSIBLE_WPM        → A = 1    (genuine reading)
+ *   MAX..FLING_WPM             → A = 0.35 (skimmed through — partial trust)
+ *   > FLING_WPM                → A = 0    (fling — algorithmically inert)
+ *
+ * Visits without a usable word count default to full strength; this is the
+ * documented raw-webpage edge and is accepted knowingly.
+ */
+export function computeAttentionFactor(
+  scrollDepth: number,
+  sessionDurationMs: number,
+  actualWordCount: number | undefined,
+  cfg: ScoringConfig
+): number {
+  if (!actualWordCount || actualWordCount <= 0 || sessionDurationMs <= 0) return 1;
+  const depthFraction = Math.min(1, Math.max(0, scrollDepth || 0));
+  const consumedWords = Math.round(actualWordCount * depthFraction);
+  if (consumedWords < MIN_WPM_CALIBRATION_WORDS) return 1;
+  const impliedWpm = consumedWords / (sessionDurationMs / 60_000);
+  if (impliedWpm > cfg.classification.flingWpm) return 0;
+  if (impliedWpm > MAX_PLAUSIBLE_WPM) return 0.35;
+  return 1;
+}
+
 /**
  * Update category weights for a user based on their recent behavior events.
  * Applies: Δ × L formula, clamps to [0.1, 5.0], and applies 0.5% daily decay.
@@ -119,7 +150,14 @@ export async function updateWeights(userId: string, clientId?: string, providedC
       continue;
     }
 
-    const delta = (cfg.feedback as any)[event.eventType] ?? 0;
+    // Engagement-Credit Model: read-session visits have their deltas scaled by
+    // the attention factor; deliberate tap-actions keep full strength by design.
+    const isReadVisit = READ_VISIT_TYPES.has(event.eventType);
+    const attention = isReadVisit
+      ? computeAttentionFactor(event.scrollDepth, event.sessionDuration, event.actualWordCount, cfg)
+      : 1;
+
+    const delta = ((cfg.feedback as any)[event.eventType] ?? 0) * attention;
     if (delta === 0) continue;
     updatedWeights[category] = (updatedWeights[category] ?? 1.0) + delta * categoryL;
     deltasByCategory[category] = (deltasByCategory[category] || 0) + delta * categoryL;

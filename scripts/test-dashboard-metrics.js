@@ -96,6 +96,12 @@ check('WPM Fix: speed calibration is gated to genuine reads, consumed words, and
     && weightUpdaterSource.includes('consumedWords')
     && !weightUpdaterSource.includes('const sessionWpm = wordCount / (event.sessionDuration / 60_000)'),
   true);
+check('Engagement-Credit Model: attention factor scales read visits on both update paths',
+  weightUpdaterSource.includes('computeAttentionFactor')
+    && weightUpdaterSource.includes('READ_VISIT_TYPES.has(event.eventType)')
+    && fs.readFileSync(path.join(__dirname, '..', 'firebase', 'functions', 'src', 'syncBehaviorEvents.ts'), 'utf8').includes('computeAttentionFactor')
+    && fs.readFileSync(path.join(__dirname, '..', 'firebase', 'functions', 'src', 'scoringConfig.ts'), 'utf8').includes('flingWpm: FLING_WPM'),
+  true);
 check('Shuffle replenishment appends instead of replacing remaining cards',
   dashboardSource.includes('appendFeedArticles') && dashboardSource.includes('const merged = [...previous, ...additions') && !dashboardSource.includes('loadFeedArticles(effectiveProfile).catch(() => {})'),
   true);

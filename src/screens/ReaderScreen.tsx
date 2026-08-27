@@ -76,17 +76,49 @@ function makeReaderScript(frontendRules?: { removeCss?: string[]; injectCss?: st
         console.warn('SubTick Rule Error: ' + e);
       }
 
-      var text = document.body.innerText || document.body.textContent || '';
+      // Scroll-accuracy fixes: measure against the ARTICLE BODY, not the whole
+      // document — recommendation modules, footers, and page chrome no longer
+      // count toward depth or word count.
+      function findArticleRoot() {
+        var el = document.getElementById('tangent-article');
+        if (!el) {
+          var selectors = ['article', '[role="main"]', '.post-content', '.entry-content', 'main'];
+          for (var i = 0; i < selectors.length; i++) {
+            var m = document.querySelector(selectors[i]);
+            if (m && m.offsetHeight > window.innerHeight * 0.5) return m;
+          }
+          el = document.body;
+        }
+        return el;
+      }
+      var articleRoot = findArticleRoot();
+
+      var text = articleRoot.innerText || articleRoot.textContent || '';
       var wordCount = text.trim().split(/\\s+/).length;
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'wordCount', count: wordCount }));
 
+      // Depth = how much of the article body has crossed the viewport bottom.
+      // Recomputed from live geometry on every event, so lazy-loaded images or
+      // embeds changing the page height can never distort the percentage; a
+      // body shorter than one screen resolves naturally instead of dividing by zero.
+      function computeDepth() {
+        var rootTop = articleRoot.getBoundingClientRect().top
+          + (window.scrollY || document.documentElement.scrollTop || 0);
+        var rootHeight = articleRoot.offsetHeight;
+        if (rootHeight <= 0) return 0;
+        var covered = (window.scrollY + window.innerHeight) - rootTop;
+        return Math.min(1, Math.max(0, covered / rootHeight));
+      }
+
       var maxDepth = 0;
       var lastScrollTop = 0;
-      function reportScroll() {
+      var lastEmitAt = 0;
+      function reportScroll(forceEmit) {
+        var nowMs = Date.now();
+        if (!forceEmit && nowMs - lastEmitAt < 200) return;
+        lastEmitAt = nowMs;
         var scrollTop = window.scrollY || document.documentElement.scrollTop;
-        var docHeight = document.documentElement.scrollHeight - window.innerHeight;
-        if (docHeight <= 0) return;
-        var depth = Math.min(1, Math.max(0, scrollTop / docHeight));
+        var depth = computeDepth();
         if (depth > maxDepth) { maxDepth = depth; }
 
         if (scrollTop > lastScrollTop + 15) {
@@ -100,7 +132,16 @@ function makeReaderScript(frontendRules?: { removeCss?: string[]; injectCss?: st
         }
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrollDepth', depth: maxDepth, currentDepth: depth }));
       }
-      window.addEventListener('scroll', reportScroll, { passive: true });
+      // HUD feedback stays unthrottled for responsiveness; only the scrollDepth
+      // bridge message is throttled to 200ms.
+      window.addEventListener('scroll', function() { reportScroll(false); }, { passive: true });
+      // Final capture bypasses the throttle so the deepest genuine position is
+      // never lost to a throttle gap when the reader exits quickly.
+      function emitFinalDepth() { reportScroll(true); }
+      window.addEventListener('pagehide', emitFinalDepth);
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') emitFinalDepth();
+      });
 
       var tapStartX = 0;
       var tapStartY = 0;

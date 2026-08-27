@@ -1,6 +1,6 @@
 # Tangent — Technical Context
 
-> **Last verified:** 17 August 2026 (audit hardening, reliable onboarding/startup flow, sequential Reader prefetch, rolling dashboard statistics, and highest-scoring opening-card update).
+> **Last verified:** 26 August 2026 (attention-factor engagement model, body-relative scroll measurement, WPM plausibility guards, geometry-only classification, stats-spec rewrite, M5 expo-constants, H2/H3 audits).
 > All versions are from actual `package.json` files. All schema fields are from actual Firestore write operations in code.
 
 ---
@@ -39,6 +39,7 @@ A full user manual lives in [`docs/emulator/`](./emulator/README.md):
 | `expo-blur` | `~57.0.2` | Frosted-glass HUD effect |
 | `expo-status-bar` | `~57.0.1` | Status bar control |
 | `expo-modules-autolinking` | `^57.0.8` | Expo native module linking |
+| `expo-constants` | `~57.0.13` | App identifier/version for crash reporting (`crashReporter.ts`). Added explicitly so it no longer arrives only transitively through `expo` (M5 fix) |
 | `react-native-gesture-handler` | `~2.32.0` | Touch gesture system (required by React Navigation) |
 | `react-native-screens` | `4.25.2` | Native screen primitives |
 | `react-native-svg` | `15.15.4` | SVG rendering (required by lucide) |
@@ -105,8 +106,8 @@ From `firebase/functions/src/index.ts`:
 | `cronUpdateCandidatePool` | Scheduled | Every 6 hours | Builds `system/candidatePool_current` and `candidatePool_mixed` |
 | `cronDecayTrendingScores` | Scheduled | Every 24 hours | Applies `trendingScore × 0.9057` to all articles with score **> 1.0** (raised from 0.1 — C1 fix) |
 | `cronCleanupOldArticles` | Scheduled | Every 3 days | Step 1: Delete all paywalled articles. Step 2: Query 500 worst-scoring articles >3 months old by `peakTrendingScore` ASC (composite index), delete bottom 3% of sample. Fixed 500-read ceiling. |
-| `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user. Sends `article_shown` + `feed_generated` analytics events via Measurement Protocol. |
-| `syncBehaviorEvents` | HTTPS Callable | On demand | Validates a behavior-event batch; classifies raw `read_session` and legacy read-family telemetry server-side using active config plus authenticated profile WPM; stores final event types; then updates trendingScore, publisher quality, user weights, and peakTrendingScore. Publisher list cached with 10-min TTL. Sends final behavior, `weight_updated`, and user-property analytics. |
+| `getRankedFeed` | HTTPS Callable | On demand | Returns personalized 30-article feed for authenticated user. Sends `article_shown` + `feed_generated` analytics events via Measurement Protocol. A client-supplied scoring override (`configOverride`/`includeScores`) is honored only when the request carries the admin `CONTROL_DASHBOARD_SECRET`; regular users silently receive the published config. |
+| `syncBehaviorEvents` | HTTPS Callable | On demand | Validates a behavior-event batch; classifies raw `read_session` and legacy read-family telemetry server-side using active config (geometry-only); stores final event types; then updates trendingScore (× attention factor for read visits), publisher quality, user weights and engineering stats. Sent attribution IDs are retained. Publisher list cached with 10-min TTL. A client-supplied config override requires the admin `CONTROL_DASHBOARD_SECRET`. Sends final behavior, `weight_updated`, and user-property analytics. |
 | `updateScoringConfig` | HTTPS Callable | On demand | Requires the server-held Control Dashboard secret; writes clamped configuration to `system/scoringConfig` and sends `config_changed` analytics. |
 | `addRssFeed` | HTTPS Callable | On demand | Requires the Control Dashboard secret; validates a unique HTTPS RSS/Atom feed, creates an active `feeds` record, then runs immediate first collection through the normal collector path. |
 | `setPreviewConfig` | HTTPS Callable | On demand | Requires the Control Dashboard secret; writes a non-live scoring-config preview for the High-Fidelity Matrix. |
@@ -143,10 +144,10 @@ From `firebase/functions/src/index.ts`:
 | `userEmail` | `string?` | Email from linked Google account; written by `linkGoogleAccount()` |
 | `seenArticleIds` | `string[]?` | Cross-device seen article dedup array (capped at 1000); written via `arrayUnion` in `markArticleSeen()` |
 | `totalArticlesRead` | `number` | Incremented by `weightUpdater.ts` on qualifying reads — server-only write. The phone may temporarily display a default-rule estimate immediately after Reader exit, but the next backend profile update is final. |
-| `weeklyReadCount` | `number` | Historical server-updated counter retained for compatibility. The displayed Dashboard value is calculated from the user's actual `read_thorough`/`read_skim` events in the rolling last seven days, so it remains accurate as events age out. |
-| `currentStreakDays` | `number` | Consecutive days with at least one read — server-only write |
+| `weeklyReadCount` | `number` | Historical server-updated counter retained for compatibility. Since the H2 fix the server RECOUNTS it from this account's `read_thorough`/`read_shallow`/`read_skim` (legacy) events in the rolling last seven days on every sync — so it is accurate across phones and never inflates. The displayed Dashboard value uses the same 40%-depth qualifying-event rule. |
+| `currentStreakDays` | `number` | Consecutive days with at least one 40%+ read — server-only write. Stats spec: a "reading day" is a visit at/above `shallowDepth` (40%); a save/like day alone cannot extend or start a streak. |
 | `lastReadDate` | `number` | Unix ms of last read event |
-| `averageWpm` | `number` | Personalized rolling 80/20 reading-speed average; initialized to 200. Updated from positive article word count ÷ active foreground time on Reader exit, independent of scroll depth/read classification; server persists the final value. |
+| `averageWpm` | `number` | Personalized rolling 80/20 reading-speed average; initialized to 200. Any Reader visit may recalibrate it (independent of read classification), but only inside the human-plausibility band [80, 600] and only from **consumed** words (word count × scroll depth) above a 150-word floor — so skims/flings/abandoned opens (which can compute absurd speeds like 10,000 WPM) never corrupt the baseline. Server persists the final value. |
 | `dashboardMetricIds` | `string[]` | Up to 3 metric IDs for Dashboard stats pill |
 | `includeArchivedArticles` | `boolean?` | User opt-in to `candidatePool_mixed` and to the Reader's raw publication-WebView fallback after a current RSS extraction fails |
 | `totalReadTimeMs` | `number?` | Cumulative active reading time (ms) — server-only write. Reader close immediately attempts normal session sync so this profile value normally updates before Dashboard returns; offline classification remains pending until reconnect. |
@@ -160,9 +161,10 @@ The server loads `system/scoringConfig`, merges it over compiled defaults, clamp
 |---|---:|---|
 | `classification.quickExitDepth` | `0.20` | Below this depth plus a short session is a quick exit |
 | `classification.quickExitTimeoutSec` | `15` | Quick-exit duration threshold in seconds |
-| `classification.thoroughDepth` | `0.70` | Minimum deep-read depth used for classification and WPM eligibility |
-| `classification.thoroughTimeFraction` | `0.60` | Fraction of WPM-based expected time required for thorough classification |
-| `classification.shallowDepth` | `0.40` | Minimum depth for shallow classification |
+| `classification.thoroughDepth` | `0.70` | Minimum deep-read depth — the "Finished" bar. Classification is geometry-only; pace no longer gates it |
+| `classification.thoroughTimeFraction` | `0.60` | **RETIRED** — retained in stored configs for compatibility, no longer consulted (the WPM-pace trial was removed from `classifyRead`) |
+| `classification.shallowDepth` | `0.40` | Minimum depth for shallow classification; also the weekly-read / streak bar |
+| `classification.flingWpm` | `1750` | Implied reading speed above this = a fling (attention factor `A = 0`). Wide-moat band against `MAX_PLAUSIBLE_WPM` (600); safe range [600, 50000] |
 | `scoring.publisherColdStartCategoryWeight` | `0.90` | Category share for a publisher with no stored user history |
 | `scoring.publisherColdStartPublisherWeight` | `0.10` | Publisher share for a publisher with no stored user history |
 | `learning.repeatedQuickExitThreshold` | `3` | Distinct quick exits in one category before weak category-only learning is inferred |
@@ -215,7 +217,7 @@ Reader timing uses the built-in React Native `AppState` API (no Expo package). `
 
 **GA4 property:** `subtick-bbd55` (`545741262`). The GA4 → BigQuery export is connected at `subtick-bbd55.analytics_545741262`; it contains GA4 intraday `events_intraday_YYYYMMDD` tables and pre-existing Looker-oriented views.
 
-For launch-ready recommendation analysis, run `firebase/analytics/create_personalization_health_view.sql` once in BigQuery Console. It creates `v_personalization_health`, a one-row-per-impression source which joins an exact `impression_id` to later outcomes. The MCP BigQuery service account is intentionally read-only, so it cannot create that view itself. See `docs/analytics-looker-guide.md` for the report setup.
+For launch-ready recommendation analysis, the canonical `v_personalization_health` view has been created (26 August 2026) in BigQuery at `subtick-bbd55.analytics_545741262` — a one-row-per-impression source which joins an exact `impression_id` to later outcomes. Its SQL still lives at `firebase/analytics/create_personalization_health_view.sql` for reference/re-creation. A read-only MCP BigQuery service account cannot create the view; use the BigQuery Console with an owning account. See `docs/analytics-looker-guide.md` for the report setup.
 
 New post-deployment analytics fields are `analytics_environment`, `feed_id`, `impression_id`, `user_stage`, `prior_qualifying_reads`, `days_since_last_read`, `profile_concentration`, `is_new_publisher`, and `is_new_category`. Only `analytics_environment = 'production'` belongs in real-user reporting. Existing pre-deployment events lack exact impression attribution and are suitable only for pipeline testing.
 

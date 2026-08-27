@@ -41,6 +41,33 @@ Completed and live in production (recorded so the deferred list stays accurate):
 - **Functions platform refresh** - Node.js 22 runtime, firebase-functions v7.3.2
   (SecretParam type now derived from defineSecret).
 
+## 26 August 2026 — Engagement-model, stats, scroll-measure, WPM, and hygiene batch
+
+Carried into the live code and docs (see system-patterns.md / tech-context.md for current contracts):
+
+- **H2 — server weekly-reads recount + streak safety.** `updateReadStats` (weightUpdater.ts) recounts
+  the server `weeklyReadCount` from this account's `read_thorough`/`read_shallow`/(legacy)`read_skim`
+  events in the last seven days every sync — accurate across phones and never inflates. A streak day
+  requires a genuine 40%+ read; a save/like day alone cannot start or extend one.
+- **H3 — admin-gated scoring overrides.** `configOverride`/`includeScores` in
+  `getRankedFeed`/`syncBehaviorEvents` are honoured only with the `CONTROL_DASHBOARD_SECRET`
+  via the new shared `dashboardAuth.ts`; ordinary users silently get published config.
+- **H4 — cache-first startup.** Removed the always-on background refresh; healthy-cache launches
+  render cached cards with zero ranked request and fetch only when empty/short, reusing one
+  request across the user and onboarding handoff.
+- **WPM plausibility guards.** Calibration uses consumed words (count × depth) inside the
+  [80, 600] WPM band above a 150-word floor; skims/flings can't corrupt the baseline.
+- **Stats-spec rewrite + geometry-only classifier.** Finished = ≥70% depth; weekly reads and
+  streak = ≥40%; hours always counted; WPM any-visit but guarded. The WPM-pace trial
+  is removed and `thoroughTimeFraction` retired (kept for stored-config compat).
+- **Attention-factor model.** Read-session weight/trending/quality deltas scaled by A
+  (≤600→1.0, 601–1750→0.35, >1750→0); deliberate like/save/unsave are unscaled.
+- **Scroll-measurement accuracy.** Depth/word count against the article body (not the whole
+  document + recommendation modules), live geometry, 200 ms throttle + final capture.
+- **M1** proper unauthenticated `HttpsError` in `syncBehaviorEvents`; **M2** mid-read theme recolor;
+  **M5** `expo-constants` pinned (~57.0.13); **M6** pull-to-refresh does a real fetch (the
+  fabricated 350 ms hold + secret shuffle removed; shuffle stays its own button).
+
 ---
 
 ## Deferred: remove the paywalled-purge step from cronCleanupOldArticles
