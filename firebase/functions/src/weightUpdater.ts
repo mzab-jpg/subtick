@@ -7,22 +7,96 @@
 
 import { db } from './firebaseAdmin.js';
 import { BehaviorEvent, UserProfile } from './types.js';
+import { DASHBOARD_CATEGORIES } from './categories.js';
 import {
   FEEDBACK_DELTAS,
-  LEARNING_RATE,
-  MIN_CATEGORY_WEIGHT,
-  MAX_CATEGORY_WEIGHT,
-  DAILY_DECAY_RATE,
-  DEFAULT_SELECTED_WEIGHT,
-  DEFAULT_NOT_INTERESTED_WEIGHT,
-  MIN_PLAUSIBLE_WPM,
-  MAX_PLAUSIBLE_WPM,
-  MIN_WPM_CALIBRATION_WORDS,
 } from './constants.js';
 import { sendGAEvents, sendGAUserProperties } from './analytics.js';
-import { loadScoringConfig, ScoringConfig } from './scoringConfig.js';
+import {
+  loadScoringConfig,
+  ScoringConfig,
+  sigmoid,
+  clampLatent,
+  computeEngagementIndex,
+} from './scoringConfig.js';
 
 export const READ_VISIT_TYPES = new Set<string>(['read_thorough', 'read_skim', 'read_shallow', 'swipe_next']);
+
+/**
+ * Threshold-based quick-exit rejection.
+ *
+ * A single quick exit (−0.6875, i.e. −2.5× a thorough read) punished all three
+ * preference axes at full strength, but it cannot distinguish "opened the wrong
+ * card and backed out" from "genuinely repelled by this content". That made
+ * accidental taps suppress a category as strongly as real dislike.
+ *
+ * Instead we COUNT quick exits per preference axis inside a rolling window and
+ * apply ONE capped penalty only once the axis's configured minimum is reached
+ * (`rejection.*` in DEFAULT_SCORING_CONFIG). A positive signal on the same axis
+ * clears the evidence, so a category is never permanently poisoned by a bad few
+ * taps. All knobs are configurable for the future Control Dashboard work.
+ */
+type RejectionEvidence = Record<string, { count: number; windowStart: number }>;
+
+const LENGTH_STYLES = ['short', 'medium', 'long'];
+
+function axisMinQuickExits(key: string, cfg: ScoringConfig): number {
+  const r = cfg.rejection;
+  if (key.startsWith('pub::')) return r.publisherMinQuickExits;
+  if (LENGTH_STYLES.includes(key)) return r.lengthMinQuickExits;
+  return r.categoryMinQuickExits;
+}
+
+/** Per-axis learning multiplier: how fast THIS axis's preference moves. */
+function axisLearningSensitivity(key: string, cfg: ScoringConfig): number {
+  if (key.startsWith('pub::')) return cfg.learning.publisherSensitivity;
+  if (LENGTH_STYLES.includes(key)) return cfg.learning.lengthSensitivity;
+  return cfg.learning.categorySensitivity;
+}
+
+/** Axis keys a quick exit touches: category, length-style, and publisher. */
+function quickExitAxisKeys(event: BehaviorEvent): string[] {
+  const keys: string[] = [event.articleCategory];
+  if (event.lengthStyle && LENGTH_STYLES.includes(event.lengthStyle)) keys.push(event.lengthStyle);
+  if (event.publicationName) keys.push(`pub::${event.publicationName}`);
+  return keys;
+}
+
+/**
+ * Record one quick exit and, when an axis first crosses its minimum within the
+ * window, apply a single capped penalty to that axis's latent.
+ */
+export function applyQuickExitRejection(
+  event: BehaviorEvent,
+  cfg: ScoringConfig,
+  evidence: RejectionEvidence,
+  latents: Record<string, number>,
+  deltas: Record<string, number>,
+  neutralLatent: number
+): void {
+  const windowMs = cfg.rejection.windowMs;
+  const basePenalty = cfg.rejection.maxCategoryPenalty;
+
+  for (const key of quickExitAxisKeys(event)) {
+    if (!key) continue;
+    const entry = evidence[key];
+    if (!entry || event.timestamp - entry.windowStart > windowMs) {
+      evidence[key] = { count: 0, windowStart: event.timestamp };
+    }
+    evidence[key].count += 1;
+
+    // Apply exactly once, when the threshold is first crossed (capped). The
+    // penalty scales by the rejection dial and by this axis's learning
+    // sensitivity, so certified rejections hit as hard as configured.
+    if (evidence[key].count === axisMinQuickExits(key, cfg)) {
+      const magnitude = basePenalty
+        * cfg.learning.rejectionSensitivity
+        * axisLearningSensitivity(key, cfg);
+      latents[key] = (latents[key] ?? neutralLatent) - magnitude;
+      deltas[key] = (deltas[key] || 0) - magnitude;
+    }
+  }
+}
 
 /**
  * Attention Factor (Engagement-Credit Model) — geometry classifies, attention scales.
@@ -35,27 +109,24 @@ export const READ_VISIT_TYPES = new Set<string>(['read_thorough', 'read_skim', '
  *   > FLING_WPM                → A = 0    (fling — algorithmically inert)
  *
  * Visits without a usable word count default to full strength; this is the
- * documented raw-webpage edge and is accepted knowingly.
+ * Engagement Index (E) — continuous trust for a read session, backed by
+ * computeEngagementIndex (see scoringConfig.ts). Deliberate actions pass
+ * unscaled; read visits scale by E = scrollDepth × pace-penalty.
  */
 export function computeAttentionFactor(
   scrollDepth: number,
   sessionDurationMs: number,
   actualWordCount: number | undefined,
-  cfg: ScoringConfig
+  cfg: ScoringConfig,
+  averageWpm?: number
 ): number {
-  if (!actualWordCount || actualWordCount <= 0 || sessionDurationMs <= 0) return 1;
-  const depthFraction = Math.min(1, Math.max(0, scrollDepth || 0));
-  const consumedWords = Math.round(actualWordCount * depthFraction);
-  if (consumedWords < MIN_WPM_CALIBRATION_WORDS) return 1;
-  const impliedWpm = consumedWords / (sessionDurationMs / 60_000);
-  if (impliedWpm > cfg.classification.flingWpm) return 0;
-  if (impliedWpm > MAX_PLAUSIBLE_WPM) return 0.35;
-  return 1;
+  return computeEngagementIndex(scrollDepth, sessionDurationMs, actualWordCount, averageWpm, cfg);
 }
 
 /**
  * Update category weights for a user based on their recent behavior events.
- * Applies: Δ × L formula, clamps to [0.1, 5.0], and applies 0.5% daily decay.
+ * Apply latent steps (δ) scaled by the Engagement Index E.
+ * Write-time clamped to ±latent.clamp; nightly drift pulls toward 0.0.
  *
  * NOTE: Reads directly from users/{userId}/behavior_events subcollection
  * which is inherently partitioned by user. Filters by timestamp in memory.
@@ -80,7 +151,7 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   // receive the same elapsed-day decay even when no new event touches them.
   const currentWeights: Record<string, number> = {
     ...profile.categoryWeights,
-    ...Object.fromEntries(Object.entries(profile.categoryLengthWeights || {})),
+    ...Object.fromEntries(Object.entries(profile.lengthWeights || {})),
     ...Object.fromEntries(Object.entries(profile.publisherWeights || {}).map(([publisher, weight]) => [`pub::${publisher}`, weight])),
   };
   const now = Date.now();
@@ -120,14 +191,14 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   console.log(`[weightUpdater] Processing ${events.length} new events for ${userId} (since ${new Date(watermark).toISOString()})`);
 
   // 4. Apply explicit/strong feedback deltas. A single quick exit stays
-  // neutral; repeated exits are handled below as category-only weak evidence.
-  const updatedWeights = { ...currentWeights };
+  // 4. Apply latent steps (δ) scaled by the Engagement Index for read visits;
+  // deliberate tap-actions keep full strength. A quick exit is a single
+  // asymmetric rejection step (δ_neg). No repeated-evidence counter.
+  const updatedLatents = { ...currentWeights };
   const deltasByCategory: Record<string, number> = {};
-  const quickExitSignals: Record<string, Record<string, number>> = { ...(profile.quickExitCategorySignals || {}) };
-  const quickExitCutoff = now - cfg.learning.repeatedQuickExitLookbackDays * 24 * 60 * 60 * 1000;
-  const categoryL = cfg.learning.baseRate * cfg.learning.categoryMultiplier;
-  const lengthL = cfg.learning.baseRate * cfg.learning.lengthMultiplier;
-  const publisherL = cfg.learning.baseRate * cfg.learning.publisherMultiplier;
+  const neutralLatent = cfg.latent.neutralLatent ?? 0;
+
+  const rejectionEvidence: RejectionEvidence = { ...(profile.rejectionEvidence || {}) };
 
   for (const event of events) {
     const category = event.articleCategory;
@@ -135,112 +206,105 @@ export async function updateWeights(userId: string, clientId?: string, providedC
       console.warn(`[weightUpdater] Event missing category: ${event.eventType}`);
       continue;
     }
-    if (['read_thorough', 'read_skim', 'like', 'save'].includes(event.eventType)) {
-      // Clear evidence accumulated before this clear positive signal. Any later
-      // quick exits in the same batch begin a fresh, chronological count.
-      delete quickExitSignals[category];
+
+    // Category-contract safety net: an unknown category means the client/server
+    // lists have drifted — surface it loudly instead of silently mis-ranking.
+    if (!DASHBOARD_CATEGORIES.has(category)) {
+      console.error(`[weightUpdater] Category "${category}" is not in DASHBOARD_CATEGORIES — client/server category lists have drifted?`);
     }
 
+    // Threshold-based rejection: quick exits are counted per axis and only apply
+    // once the configured minimum is reached within the window (accidental taps
+    // no longer hit at full strength).
     if (event.eventType === 'quick_exit') {
-      const signals = Object.fromEntries(
-        Object.entries(quickExitSignals[category] || {}).filter(([, timestamp]) => timestamp >= quickExitCutoff)
-      ) as Record<string, number>;
-      if (event.articleId) signals[event.articleId] = event.timestamp;
-      quickExitSignals[category] = signals;
+      applyQuickExitRejection(event, cfg, rejectionEvidence, updatedLatents, deltasByCategory, neutralLatent);
       continue;
     }
 
-    // Engagement-Credit Model: read-session visits have their deltas scaled by
-    // the attention factor; deliberate tap-actions keep full strength by design.
     const isReadVisit = READ_VISIT_TYPES.has(event.eventType);
-    const attention = isReadVisit
-      ? computeAttentionFactor(event.scrollDepth, event.sessionDuration, event.actualWordCount, cfg)
+    const engagement = isReadVisit
+      ? computeAttentionFactor(event.scrollDepth, event.sessionDuration, event.actualWordCount, cfg, profile.averageWpm)
       : 1;
 
-    const delta = ((cfg.feedback as any)[event.eventType] ?? 0) * attention;
-    if (delta === 0) continue;
-    updatedWeights[category] = (updatedWeights[category] ?? 1.0) + delta * categoryL;
-    deltasByCategory[category] = (deltasByCategory[category] || 0) + delta * categoryL;
+    const rawDelta = ((cfg.feedback as any)[event.eventType] ?? 0) * engagement;
+    if (rawDelta === 0) continue;
 
-    if (event.lengthStyle) {
-      const compKey = `${category}::${event.lengthStyle}`;
-      updatedWeights[compKey] = (updatedWeights[compKey] ?? profile.categoryLengthWeights?.[compKey] ?? 1.0) + delta * lengthL;
+    // Sensitivity: the global positive/rejection dial × this axis's learning
+    // multiplier decides how strongly this event moves each preference axis.
+    const direction = rawDelta > 0 ? cfg.learning.positiveSensitivity : cfg.learning.rejectionSensitivity;
+
+    // A positive signal clears that axis's rejection evidence — the category
+    // isn't actually disliked after all. (Cleared regardless of sensitivity —
+    // engaging positively proves the axis isn't disliked.)
+    if (rawDelta > 0) {
+      delete rejectionEvidence[category];
+      if (event.lengthStyle && LENGTH_STYLES.includes(event.lengthStyle)) delete rejectionEvidence[event.lengthStyle];
+      if (event.publicationName) delete rejectionEvidence[`pub::${event.publicationName}`];
+    }
+
+    const categoryDelta = rawDelta * direction * cfg.learning.categorySensitivity;
+    if (categoryDelta === 0) continue;
+
+    updatedLatents[category] = (updatedLatents[category] ?? neutralLatent) + categoryDelta;
+    deltasByCategory[category] = (deltasByCategory[category] || 0) + categoryDelta;
+
+    // Global length preference
+    if (event.lengthStyle && LENGTH_STYLES.includes(event.lengthStyle)) {
+      const lengthDelta = rawDelta * direction * cfg.learning.lengthSensitivity;
+      updatedLatents[event.lengthStyle] = (updatedLatents[event.lengthStyle] ?? neutralLatent) + lengthDelta;
     }
     if (event.publicationName) {
       const pubKey = `pub::${event.publicationName}`;
-      updatedWeights[pubKey] = (updatedWeights[pubKey] ?? profile.publisherWeights?.[event.publicationName] ?? 1.0) + delta * publisherL;
+      const pubDelta = rawDelta * direction * cfg.learning.publisherSensitivity;
+      updatedLatents[pubKey] = (updatedLatents[pubKey] ?? neutralLatent) + pubDelta;
     }
   }
 
-  // Reaching the threshold applies feedback.quick_exit exactly once to the
-  // category only. Positive events above have already cleared earlier evidence.
-  for (const category of Object.keys(quickExitSignals)) {
-    const signals = Object.fromEntries(
-      Object.entries(quickExitSignals[category]).filter(([, timestamp]) => timestamp >= quickExitCutoff)
-    ) as Record<string, number>;
-    if (Object.keys(signals).length >= cfg.learning.repeatedQuickExitThreshold) {
-      const weakDelta = (cfg.feedback as any).quick_exit ?? FEEDBACK_DELTAS.quick_exit ?? 0;
-      if (weakDelta !== 0) {
-        updatedWeights[category] = (updatedWeights[category] ?? 1.0) + weakDelta * categoryL;
-        deltasByCategory[category] = (deltasByCategory[category] || 0) + weakDelta * categoryL;
-      }
-      delete quickExitSignals[category];
-    } else if (Object.keys(signals).length > 0) {
-      quickExitSignals[category] = signals;
-    } else {
-      delete quickExitSignals[category];
-    }
+  // 5. Clamp latents to safe write-time band.
+  for (const key of Object.keys(updatedLatents)) {
+    updatedLatents[key] = clampLatent(updatedLatents[key], cfg);
   }
 
-  // 5. Clamp all weights to [MIN, MAX]
-  for (const cat of Object.keys(updatedWeights)) {
-    updatedWeights[cat] = Math.max(
-      cfg.learning.minWeight,
-      Math.min(cfg.learning.maxWeight, updatedWeights[cat])
-    );
-  }
-
-  // 6. Apply daily decay ONLY once per day — not on every sync.
-  // Check if at least 23 hours have passed since the last weight update.
+  // 6. Apply nightly latent drift toward 0.
   const decayReference = profile.weightsDecayedAt ?? profile.weightUpdatedAt ?? now;
   const elapsedDays = Math.floor(Math.max(0, now - decayReference) / (24 * 60 * 60 * 1000));
-  const effectiveDecayRate = Math.pow(cfg.learning.dailyDecayRate, elapsedDays);
-  const decayedWeights = elapsedDays > 0 ? applyDecay(updatedWeights, effectiveDecayRate) : updatedWeights;
+  const effectiveDecayRate = Math.pow(cfg.latent.nightlyDecay, elapsedDays);
+  const decayedLatents = elapsedDays > 0 ? applyLatentDrift(updatedLatents, effectiveDecayRate, cfg.latent.driftFloor) : updatedLatents;
   if (elapsedDays > 0) {
-    console.log(`[weightUpdater] Applying ${elapsedDays} day(s) of decay for ${userId}`);
+    console.log(`[weightUpdater] Applying ${elapsedDays} day(s) of latent drift for ${userId}`);
   }
 
-  // 7. Extract the 2D/3D weights back out of decayedWeights and Sync UI Arrays
+  // 7. Split latents back into category / length / publisher maps + Sync UI
   const newCategoryWeights: Record<string, number> = {};
-  const newCategoryLengthWeights: Record<string, number> = {};
+  const newLengthWeights: Record<string, number> = {};
   const newPublisherWeights: Record<string, number> = {};
 
   const newSelectedCategoryIds = new Set(profile.selectedCategoryIds || []);
   const newNotInterestedCategoryIds = new Set(profile.notInterestedCategoryIds || []);
   let uiArraysChanged = false;
 
-  for (const [key, val] of Object.entries(decayedWeights)) {
+  for (const [key, val] of Object.entries(decayedLatents)) {
     if (key.startsWith('pub::')) {
       newPublisherWeights[key.replace('pub::', '')] = val;
-    } else if (key.includes('::')) {
-      newCategoryLengthWeights[key] = val;
+    } else if (key === 'short' || key === 'medium' || key === 'long') {
+      newLengthWeights[key] = val;
     } else {
       newCategoryWeights[key] = val;
 
-      // Dynamic UI Sync: Adjust UI arrays based on algorithm confidence
-      if (val <= cfg.learning.defaultNotInterestedWeight) {
+      // Dynamic UI Sync: Adjust UI arrays based on latent confidence
+      if (val <= cfg.latent.notInterestedLatent) {
         if (!newNotInterestedCategoryIds.has(key)) {
           newNotInterestedCategoryIds.add(key);
           newSelectedCategoryIds.delete(key);
           uiArraysChanged = true;
         }
-      } else if (val >= cfg.learning.defaultSelectedWeight) {
+      } else if (val >= cfg.latent.selectedLatent) {
         if (!newSelectedCategoryIds.has(key)) {
           newSelectedCategoryIds.add(key);
           newNotInterestedCategoryIds.delete(key);
           uiArraysChanged = true;
         }
-      } else if (val > cfg.learning.defaultNotInterestedWeight && val < cfg.learning.defaultSelectedWeight && newNotInterestedCategoryIds.has(key)) {
+      } else if (val > cfg.latent.notInterestedLatent && val < cfg.latent.selectedLatent && newNotInterestedCategoryIds.has(key)) {
         newNotInterestedCategoryIds.delete(key);
         uiArraysChanged = true;
       }
@@ -292,10 +356,10 @@ export async function updateWeights(userId: string, clientId?: string, providedC
     if (event.sessionDuration > 0) {
       const depthFraction = Math.min(1, Math.max(0, event.scrollDepth || 0));
       const consumedWords = Math.round((event.actualWordCount || 0) * depthFraction);
-      if (consumedWords >= MIN_WPM_CALIBRATION_WORDS) {
+      if (consumedWords >= cfg.wpm.minCalibrationWords) {
         const rawSessionWpm = consumedWords / (event.sessionDuration / 60_000);
-        if (rawSessionWpm >= MIN_PLAUSIBLE_WPM && rawSessionWpm <= MAX_PLAUSIBLE_WPM) {
-          const clampedSessionWpm = Math.min(MAX_PLAUSIBLE_WPM, rawSessionWpm);
+        if (rawSessionWpm >= cfg.wpm.minPlausible && rawSessionWpm <= cfg.wpm.maxPlausible) {
+          const clampedSessionWpm = Math.min(cfg.wpm.maxPlausible, rawSessionWpm);
           newAverageWpm = Math.round((newAverageWpm * 0.8) + (clampedSessionWpm * 0.2));
           wpmUpdated = true;
         }
@@ -309,19 +373,23 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   // the cap, with 1,000 slots of headroom so a concurrent client-side
   // arrayUnion can never be lost by the trim.
   let prunedSeenArticleIds: string[] | null = null;
-  if (Array.isArray(profile.seenArticleIds) && profile.seenArticleIds.length > 5000) {
-    const trimmedSeenIds = profile.seenArticleIds.slice(-4000);
+  if (Array.isArray(profile.seenArticleIds) && profile.seenArticleIds.length > cfg.maintenance.seenTrimOver) {
+    const trimmedSeenIds = profile.seenArticleIds.slice(-cfg.maintenance.seenTrimKeep);
     prunedSeenArticleIds = trimmedSeenIds;
     console.log(`[weightUpdater] Pruned seenArticleIds from ${profile.seenArticleIds.length} to ${prunedSeenArticleIds.length}`);
   }
 
+  // Persist threshold-rejection evidence only when it changed (including when
+  // it was fully cleared by a positive signal).
+  const rejectionEvidenceChanged = JSON.stringify(profile.rejectionEvidence || {}) !== JSON.stringify(rejectionEvidence);
+
   await userRef.update({
     categoryWeights: newCategoryWeights,
-    categoryLengthWeights: newCategoryLengthWeights,
+    lengthWeights: newLengthWeights,
     publisherWeights: newPublisherWeights,
-    weightUpdatedAt: latestEventTimestamp, // P0 Fix: advance watermark so events are never replayed
+    weightUpdatedAt: latestEventTimestamp,
     weightsDecayedAt: elapsedDays > 0 ? now : (profile.weightsDecayedAt ?? profile.weightUpdatedAt ?? now),
-    quickExitCategorySignals: quickExitSignals,
+    ...(rejectionEvidenceChanged && { rejectionEvidence }),
     ...(uiArraysChanged && {
       selectedCategoryIds: Array.from(newSelectedCategoryIds),
       notInterestedCategoryIds: Array.from(newNotInterestedCategoryIds),
@@ -339,7 +407,7 @@ export async function updateWeights(userId: string, clientId?: string, providedC
     console.log(
       `[weightUpdater] Updated weights for ${userId}. ` +
       `Deltas: ${Object.entries(deltasByCategory).map(([k, v]) => `${k}${v >= 0 ? '+' : ''}${v.toFixed(3)}`).join(', ')}. ` +
-      `Result: ${Object.entries(decayedWeights).slice(0, 5).map(([k, v]) => `${k}=${v.toFixed(3)}`).join(', ')}`
+      `Result: ${Object.entries(decayedLatents).slice(0, 5).map(([k, v]) => `${k}=${v.toFixed(3)}`).join(', ')}`
     );
   }
 
@@ -347,8 +415,8 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   const weightUpdatedEvents: Array<{ name: string; params: Record<string, any> }> = [];
   const triggerEventType = events.length > 0 ? events[events.length - 1].eventType : 'decay';
 
-  for (const [key, val] of Object.entries(decayedWeights)) {
-    const previousVal = currentWeights[key] ?? 1.0;
+  for (const [key, val] of Object.entries(decayedLatents)) {
+    const previousVal = currentWeights[key] ?? 0;
     if (Math.abs(val - previousVal) < 0.001) continue; // skip unchanged weights
 
     let entityType: string;
@@ -356,8 +424,8 @@ export async function updateWeights(userId: string, clientId?: string, providedC
     if (key.startsWith('pub::')) {
       entityType = 'publisher';
       entityId = key.replace('pub::', '');
-    } else if (key.includes('::')) {
-      entityType = 'category_length';
+    } else if (key === 'short' || key === 'medium' || key === 'long') {
+      entityType = 'length';
       entityId = key;
     } else {
       entityType = 'category';
@@ -382,7 +450,7 @@ export async function updateWeights(userId: string, clientId?: string, providedC
   const categoryWeightsEntries = Object.entries(newCategoryWeights);
   const sortedByWeight = [...categoryWeightsEntries].sort((a, b) => b[1] - a[1]);
   const topCategoryWeight = sortedByWeight.length > 0 ? sortedByWeight[0][1] : 1.0;
-  const categoriesAtCeiling = categoryWeightsEntries.filter(([, w]) => w >= cfg.learning.maxWeight).length;
+  const categoriesAtCeiling = categoryWeightsEntries.filter(([, w]) => Math.abs(w) >= (cfg.latent.clamp || 20)).length;
 
   // Concentration score: Herfindahl-like metric — sum of squared fractions of total weight mass.
   const totalWeight = categoryWeightsEntries.reduce((sum, [, w]) => sum + w, 0);
@@ -408,17 +476,22 @@ export async function updateWeights(userId: string, clientId?: string, providedC
 }
 
 /**
- * Apply 0.5% daily decay to pull extreme weights back towards 1.0.
+ * Apply nightly latent drift toward a floor (default neutral 0.0).
+ * Each latent's MAGNITUDE is scaled by rate (rate = λ^elapsedDays, e.g. 0.95
+ * per day) but never crosses below `floor`, and the sign is preserved — so a
+ * strong preference sags toward ±floor over a long absence instead of
+ * collapsing to neutral, while active users re-earn full control via the same
+ * steep daily rate.
  */
-export function applyDecay(weights: Record<string, number>, rate: number = DAILY_DECAY_RATE): Record<string, number> {
-  const decayed: Record<string, number> = {};
-  for (const [cat, weight] of Object.entries(weights)) {
-    // Move weight towards 1.0 by the decay rate
-    decayed[cat] = 1.0 + (weight - 1.0) * rate;
-    // Re-clamp for safety
-    decayed[cat] = Math.max(MIN_CATEGORY_WEIGHT, Math.min(MAX_CATEGORY_WEIGHT, decayed[cat]));
+export function applyLatentDrift(latents: Record<string, number>, rate: number, floor = 0): Record<string, number> {
+  const f = Math.max(0, floor);
+  const drifted: Record<string, number> = {};
+  for (const [key, val] of Object.entries(latents)) {
+    const magnitude = Math.abs(val);
+    const newMagnitude = magnitude <= f ? magnitude : Math.max(f, magnitude * rate);
+    drifted[key] = (val < 0 ? -1 : 1) * newMagnitude;
   }
-  return decayed;
+  return drifted;
 }
 
 /**

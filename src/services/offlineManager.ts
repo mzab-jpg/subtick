@@ -45,7 +45,7 @@ async function attemptFlush(): Promise<void> {
   // Enforce cooldown after failures — don't retry too quickly on spotty networks
   const timeSinceLastFailure = Date.now() - lastFailureTime;
   if (lastFailureTime > 0 && timeSinceLastFailure < RETRY_COOLDOWN_MS) {
-    console.log(`[OfflineManager] Skipping flush — retry cooldown active (${Math.round((RETRY_COOLDOWN_MS - timeSinceLastFailure) / 1000)}s remaining)`);
+    if (__DEV__) console.log(`[OfflineManager] Skipping flush — retry cooldown active (${Math.round((RETRY_COOLDOWN_MS - timeSinceLastFailure) / 1000)}s remaining)`);
     return;
   }
 
@@ -57,9 +57,9 @@ async function attemptFlush(): Promise<void> {
   try {
     const pending = await getPendingEventCount();
     if (pending > 0) {
-      console.log(`[OfflineManager] Flushing ${pending} pending events...`);
+      if (__DEV__) console.log(`[OfflineManager] Flushing ${pending} pending events...`);
       const synced = await flushBehaviorQueue();
-      console.log(`[OfflineManager] Synced ${synced} events`);
+      if (__DEV__) console.log(`[OfflineManager] Synced ${synced} events`);
     }
 
     // Audit fix: also retry queued save-mirror writes on reconnect.

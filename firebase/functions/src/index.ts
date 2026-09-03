@@ -10,12 +10,14 @@ import Parser from 'rss-parser';
 import { collectRssFeeds } from './rssCollector.js';
 import { FeedSource } from './types.js';
 import { normalizeFeedUrl } from './feedValidation.js';
+import { DASHBOARD_CATEGORIES } from './categories.js';
 
 import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
 import { requireDashboardAdmin } from './dashboardAuth.js';
 import {
   loadScoringConfig,
   DEFAULT_SCORING_CONFIG,
+  NUM_RANGES,
   deepMerge,
   clampConfig,
   invalidateConfigCache,
@@ -36,11 +38,10 @@ import { onCall } from 'firebase-functions/v2/https';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 // CONTRACT: this category list must stay in sync with the client copy in
-// src/utils/constants.ts. Update both together when categories change.
-const DASHBOARD_CATEGORIES = new Set([
-  'Politics', 'Business', 'Finance', 'Technology', 'Science',
-  'History', 'Culture', 'Lifestyle', 'Entertainment',
-]);
+// src/utils/constants.ts. The canonical server copy now lives in
+// categories.ts (shared with weightUpdater) and is enforced by the
+// test:category-contract regression test. Update the one module together with
+// the client list when categories change.
 
 function feedDocumentId(publicationName: string): string {
   const slug = publicationName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -48,18 +49,17 @@ function feedDocumentId(publicationName: string): string {
   return `feed_${slug.slice(0, 120)}`;
 }
 
-const DELETE_BATCH_SIZE = 400;
-
 /**
  * Delete every document in one known user subcollection without exceeding
  * Firestore's 500-operation batch limit. Each committed page is safe to retry.
+ * Batch size comes from `maintenance.deleteBatchSize` in the scoring config.
  */
-async function deleteUserSubcollection(uid: string, subcollection: string): Promise<number> {
+async function deleteUserSubcollection(uid: string, subcollection: string, batchSize: number): Promise<number> {
   const collectionRef = db.collection('users').doc(uid).collection(subcollection);
   let deleted = 0;
 
   while (true) {
-    const snapshot = await collectionRef.limit(DELETE_BATCH_SIZE).get();
+    const snapshot = await collectionRef.limit(batchSize).get();
     if (snapshot.empty) return deleted;
 
     const batch = db.batch();
@@ -78,8 +78,9 @@ export const resetAccount = onCall(async (request) => {
 
   // Delete user-owned subcollections in bounded batches. A long-term reader can
   // easily exceed Firestore's 500-operation limit in behavior_events.
-  await deleteUserSubcollection(uid, 'behavior_events');
-  await deleteUserSubcollection(uid, 'saved_articles');
+  const cfg = await loadScoringConfig();
+  await deleteUserSubcollection(uid, 'behavior_events', cfg.maintenance.deleteBatchSize);
+  await deleteUserSubcollection(uid, 'saved_articles', cfg.maintenance.deleteBatchSize);
 
   // Reset profile to defaults (keep userId, isOnboarded, themePreference, dashboardMetricIds)
   const defaultCategoryWeights: Record<string, number> = {};
@@ -88,11 +89,11 @@ export const resetAccount = onCall(async (request) => {
   await db.doc(`users/${uid}`).update({
     // Reset personalization weights
     categoryWeights: defaultCategoryWeights,
-    categoryLengthWeights: admin.firestore.FieldValue.delete(),
+    lengthWeights: admin.firestore.FieldValue.delete(),
     publisherWeights: admin.firestore.FieldValue.delete(),
     weightUpdatedAt: admin.firestore.FieldValue.delete(),
     weightsDecayedAt: admin.firestore.FieldValue.delete(),
-    quickExitCategorySignals: admin.firestore.FieldValue.delete(),
+    rejectionEvidence: admin.firestore.FieldValue.delete(),
     // Reset category selections — forces re-onboarding
     isOnboarded: false,
     selectedCategoryIds: [],
@@ -129,8 +130,9 @@ export const deleteAccount = onCall(async (request) => {
 
   // Delete known user-owned subcollections in bounded batches before removing
   // the profile and Auth account. This remains safe if a request must be retried.
-  await deleteUserSubcollection(uid, 'behavior_events');
-  await deleteUserSubcollection(uid, 'saved_articles');
+  const cfg = await loadScoringConfig();
+  await deleteUserSubcollection(uid, 'behavior_events', cfg.maintenance.deleteBatchSize);
+  await deleteUserSubcollection(uid, 'saved_articles', cfg.maintenance.deleteBatchSize);
 
   // Delete the user profile document
   await db.doc(`users/${uid}`).delete();
@@ -397,6 +399,7 @@ export const getScoringConfig = onCall({ secrets: [gaApiSecret] }, async (reques
   return {
     config: effective,
     defaults: DEFAULT_SCORING_CONFIG,
+    ranges: NUM_RANGES,
     stored,
     source: stored ? 'firestore' : 'defaults',
     updatedAt: stored?.lastUpdated ?? null,

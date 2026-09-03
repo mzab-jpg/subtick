@@ -7,10 +7,10 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { X, Bookmark, Heart } from 'lucide-react-native';
-import { ThemeColors } from '../../types';
+import { ThemeColors , Article } from '../../types';
 import { topInset } from '../../utils/safeArea';
 import { TEXT_SM } from '../../utils/constants';
-import { Article } from '../../types';
+
 
 interface ReaderHUDProps {
   article: Article | null;

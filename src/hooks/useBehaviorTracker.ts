@@ -71,6 +71,9 @@ export function useBehaviorTracker({
   const sessionSnapshotRef = useRef<{
     articleId: string;
     articleCategory: string;
+    lengthStyle: string;
+    publicationName?: string;
+    recommendationContext?: RecommendationContext;
     startTime: number;
     pausedAt: number | null;
     maxDepth: number;
@@ -88,6 +91,9 @@ export function useBehaviorTracker({
     sessionSnapshotRef.current = {
       articleId,
       articleCategory,
+      lengthStyle,
+      publicationName,
+      recommendationContext,
       startTime: stateRef.current.startTime,
       pausedAt: stateRef.current.pausedAt,
       maxDepth: stateRef.current.maxDepth,
@@ -106,16 +112,29 @@ export function useBehaviorTracker({
           snapshot.articleId,
           'read_session',
           snapshot.articleCategory,
-          lengthStyle,
-          publicationName,
+          snapshot.lengthStyle,
+          snapshot.publicationName,
           duration,
           snapshot.maxDepth,
           snapshot.actualWordCount || undefined,
-          recommendationContext
+          snapshot.recommendationContext
         );
       }
     };
   }, [enabled, articleId, articleCategory]);
+
+  // Keep optional session metadata current without re-running the snapshot
+  // effect above: its cleanup queues a read_session event, so re-running it
+  // mid-article would queue a duplicate. The snapshot object is shared and
+  // mutable, so updating fields in place is safe.
+  useEffect(() => {
+    const snapshot = sessionSnapshotRef.current;
+    if (snapshot && snapshot.articleId === articleId) {
+      snapshot.lengthStyle = lengthStyle;
+      snapshot.publicationName = publicationName;
+      snapshot.recommendationContext = recommendationContext;
+    }
+  }, [articleId, lengthStyle, publicationName, recommendationContext]);
 
   // Only time while the Reader is foreground-active. React Native reports
   // inactive during transitions/calls and background after app switches/locks.
@@ -178,7 +197,7 @@ export function useBehaviorTracker({
         recommendationContext
       );
     },
-    [enabled, articleId, articleCategory, lengthStyle, publicationName]
+    [enabled, articleId, articleCategory, lengthStyle, publicationName, recommendationContext]
   );
 
   const concludeSession = useCallback(

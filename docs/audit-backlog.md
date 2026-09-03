@@ -61,7 +61,7 @@ Carried into the live code and docs (see system-patterns.md / tech-context.md fo
   streak = ≥40%; hours always counted; WPM any-visit but guarded. The WPM-pace trial
   is removed and `thoroughTimeFraction` retired (kept for stored-config compat).
 - **Attention-factor model.** Read-session weight/trending/quality deltas scaled by A
-  (≤600→1.0, 601–1750→0.35, >1750→0); deliberate like/save/unsave are unscaled.
+  (≤1.25×→1.0, 2.0×→0.50, ≥3.0×→0.0 (personalized)); deliberate like/save/unsave are unscaled.
 - **Scroll-measurement accuracy.** Depth/word count against the article body (not the whole
   document + recommendation modules), live geometry, 200 ms throttle + final capture.
 - **M1** proper unauthenticated `HttpsError` in `syncBehaviorEvents`; **M2** mid-read theme recolor;
@@ -125,7 +125,7 @@ The remaining M8 entry below concerns only product copy and later tutorial desig
 
 ### 17 August 2026 — Highest-ranked opening-card batch
 
-- **Startup-card ranking:** Tangent now reserves the highest-scoring eligible article in its original High, Mid, or Tail tranche allocation and returns it as position 0 for the Dashboard hero. This gives the opening screen a strong personalised first impression without removing the deliberately mixed discovery allocation.
+- **Startup-card ranking:** Tangent now reserves the highest-scoring eligible article in its original High, Mid, or exploration tier allocation and returns it as position 0 for the Dashboard hero. This gives the opening screen a strong personalised first impression without removing the deliberately mixed discovery allocation.
 - **Variety remains intentional:** The remaining cards continue through the existing random/tranche-balanced and category-aware ordering. Publisher caps, category caps, minimum-category variety, Tail discovery, and the no-avoidable-third-same-category rule remain in place. The reserved opening article is protected from later category-variety replacement.
 - **Regression coverage:** The backend regression script now verifies the opening anchor for High-only, Mid-only, and Tail-only candidate situations, alongside existing size, uniqueness, category-cap, and diversity checks.
 

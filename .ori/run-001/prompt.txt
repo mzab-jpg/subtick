@@ -1,0 +1,74 @@
+Ori — I want three separate model comparisons for editing the 2SubTick / Tangent repo. It's an Expo SDK 57 / React Native 0.86 / React 19 / TypeScript mobile reader with Firebase Functions v2 backend, deterministic RSS ranking, and a Kotlin native module. There is no LLM in the product runtime; this is purely about picking the right coding agent.
+
+Run the eval three times, once per task category, and return a table for each. Vary the candidate set per task — a model good at full-file refactors is often not the right model for surgical bug patches, and the candidate pool should reflect that. Keep each table sorted the way the task's success criteria demand (see below).
+
+**Repo context the candidate needs to know:**
+- `AGENTS.md` at the repo root is mandatory first read (Expo SDK 57 versioned-docs rule).
+- `docs/architecture.md` and `docs/system-patterns.md` describe the system.
+- The deterministic ranking lives in `firebase/functions/src/getRankedFeed.ts` and `weightUpdater.ts`. The double-sided preference sigmoid, the 70%+ depth = read_thorough classifier threshold, the 40%+ = qualifying-read threshold, and the per-publisher candidate-pool rules are not negotiable.
+- The Control Dashboard and High-Fidelity Matrix live under `scripts/` (HTML simulators) and the dashboard metrics under `scripts/test-dashboard-metrics.js`.
+- `src/services/firebase.ts` has a documented credential-fallback pattern. Don't break it.
+- `modules/tangent-rss-parser/` is a local Kotlin Expo module; don't touch it unless the task is specifically about it.
+- `archive/`, `firebase/firestore.rules`, `Keys/`, `.env*`, and `firebase/functions/lib/` (build output) are off-limits in every task.
+
+**Reuse, don't duplicate:** the existing `scripts/test-*.js` and `firebase/scripts/test-classification.js` are the regression fixtures. The eval should reuse them where it can, not re-implement them.
+
+---
+
+### Task A — Complete refactoring
+
+**Type of work:** large, multi-file refactors. Examples that would qualify: extracting a shared RSS-fetch helper, porting the weight updater to use the new latent-preference model, splitting `getRankedFeed.ts` into a pure ranking module + a Firestore I/O module, restructuring the dashboard metrics pipeline.
+
+**What to grade:**
+1. Typecheck clean (`npm run typecheck`).
+2. All focused regression scripts pass.
+3. Refactor does not change observable behaviour: for a fixed seed, the ranking output, the dashboard metrics, and the session-timer behaviour are byte-identical to the pre-refactor fixtures.
+4. Refactor preserves the patterns called out in `docs/system-patterns.md` and the credential-fallback pattern in `src/services/firebase.ts`.
+5. No new third-party dependencies.
+6. No new lint warnings (`npm run lint`).
+7. The diff is genuinely a refactor — net line count is smaller or equal, no dead code left behind, no commented-out blocks.
+
+**Sort the table by:** `catch` (pass rate) descending, then by total cost ascending (refactors are big-ticket; cost matters here).
+
+---
+
+### Task B — Edits to the algorithm and config dashboard
+
+**Type of work:** small-to-medium edits that change the ranking formula, weight updates, scoring config, or the Control Dashboard / High-Fidelity Matrix itself. Examples: tuning the double-sided sigmoid steepness, adding a new publisher-quality weight, wiring a new metric into the dashboard, adjusting the trending-score decay.
+
+**What to grade:**
+1. The edit preserves the invariants in `tangent-streamlined-flow-v2(1).md` (the sigmoid math, the cohort sizing, the 70/40 depth thresholds, the diversity rules).
+2. Typecheck clean.
+3. Focused regression scripts pass.
+4. The dashboard surface (`scripts/high_fidelity_matrix.html`, `scripts/curve_playground.html`, and the metrics the dashboard reads) is internally consistent after the change — no metric that's still wired in the HTML is no longer computed, no metric that's computed is missing from the HTML.
+5. Algorithm changes include a new test case in `firebase/scripts/test-classification.js` or a new focused `scripts/test-*.js` covering the change.
+6. No new third-party dependencies.
+
+**Sort the table by:** `catch` (pass rate) descending, then by `p50` ascending (these edits are interactive — I want the model that gets it right fastest).
+
+---
+
+### Task C — Bug finding and patching
+
+**Type of work:** take a known-shaped bug (or a failing focused test) and produce the smallest possible diff that fixes it without regressing anything else. Examples: a race condition in the reader session timer, an off-by-one in the dashboard metrics selection, a sanitizer gap in the RSS HTML escape, a Firestore rule that's too permissive on one path.
+
+**What to grade:**
+1. The diff is the smallest possible change that makes the failing test pass. Bonus for not touching unrelated lines.
+2. Typecheck clean.
+3. All focused regression scripts pass (including the one that was failing — the candidate must add it or run it before the fix).
+4. The fix includes a regression test in `scripts/test-*.js` or `firebase/scripts/test-classification.js` that would have caught the original bug.
+5. The fix doesn't broaden scope: it doesn't "while I'm in here" refactor adjacent code, doesn't update unrelated docs, doesn't bump dependencies.
+6. The fix's commit message identifies the root cause, not just the symptom.
+
+**Sort the table by:** `catch` (pass rate) descending, then by `p50` ascending, then by total cost ascending (bug patches should be cheap and fast).
+
+---
+
+**Common constraints (apply to all three tables):**
+- No touching `firebase/firestore.rules`, `Keys/`, `.env*`, `archive/`, or `firebase/functions/lib/`.
+- No new third-party deps outside `package.json` / `firebase/functions/package.json`.
+- Each row must show `model | catch | p50 | $/PR | result | cost-so-far`.
+- Each table must be preceded by a one-paragraph "why these 5 candidates" justification.
+- At the end, return a single "summary by use case" paragraph that names the best model for refactor, the best for algorithm/dashboard, and the best for bug-hunt, and whether any single model wins all three.
+
+**Start with Task C (bug finding and patching).** Show me that table first. Then I will decide whether to proceed to tasks A and B.

@@ -52,61 +52,52 @@ export const SUBSTACK_FEEDS: FeedSource[] = [
   { url: "https://www.theankler.com/feed", category: "Entertainment", publicationName: "The Ankler", qualityScore: 0.80 },
 ];
 
-// --- Scoring Formula Weights (High/Mid tranches — personalized) ---
-// All components normalized to [0,1] so these weights are honest percentages.
-// Diversity enforced by a hard per-publisher cap (5) during feed assembly,
-// not as a scoring component. Weights must sum to 1.0.
+
+// --- Scoring Formula Weights (single formula) ---
+// One formula is used for BOTH bucketing (tranche label) and ordering. There is
+// no separate tail formula. Weights must sum to 1.0.
 export const SCORE_WEIGHTS = {
-  personalization: 0.60, // P: how much you like this category × publisher
-  trending: 0.15,        // T: crowd engagement (normalized, decays over time)
-  recency: 0.10,         // R: how recently published (two-phase decay)
-  quality: 0.15,         // Q: crowd-sourced publisher quality
+  personalization: 0.60, // P: how well it matches this user (latent sigmoid)
+  trending: 0.15,        // T: crowd engagement (sigmoid S/(S+k))
+  recency: 0.10,         // R: freshness (single monotone curve)
+  quality: 0.15,         // Q: publisher quality (latent sigmoid)
 };
 
-// --- Scoring Formula Weights (Tail tranche — trending + recency only) ---
-// No personalization or quality. Sorted by trending + recency after the full
-// 4-component score places articles in the bottom tranche (fullScore ≤ 0.20).
-// Weights must sum to 1.0.
-export const SCORE_WEIGHTS_TAIL = {
-  trending: 0.43,
-  recency: 0.57,
-};
+// --- Sigmoid / latent parameters ---
+export const TRENDING_HALF_SAT = 25;          // T = S/(S+k): half-saturation — 1% of active users to trend
+export const RECENCY_DAYS_CONSTANT = 14;      // R = 1/(1 + daysOld/τ): single monotone curve
+export const LATENT_CLAMP = 20;               // write-time clamp for latent x/y (±20)
+export const LATENT_NIGHTLY_DECAY = 0.95;     // x *= λ toward 0 each full day
+export const LATENT_DRIFT_FLOOR = 0.5;        // magnitude floor — latents never decay below ±this (configurable driftFloor)
+export const DEFAULT_PUBLISHER_LATENT = 1.386; // σ(1.386)=0.8 optimistic publisher seed
 
-// --- Feedback Delta Multipliers ---
-// Controls how strongly each user action moves the personalization weights.
-// Higher values = faster personalization.
+// --- Feedback Delta Multipliers (latent steps δ) ---
+// Read-session deltas are scaled by the Engagement Index E; explicit tap-actions
+// (like/save/unlike/unsave/not-interested) ship unscaled at full strength.
+// quick_exit uses the asymmetric rejection: -2.5 × read_thorough.
 export const FEEDBACK_DELTAS: Record<string, number> = {
   save: 0.55,
   unsave: -0.55,
   like: 0.40,
   unlike: -0.40,
-  read_thorough: 0.30,
+  read_thorough: 0.275,
   read_skim: 0.10,
-  read_shallow: 0.00,
+  read_shallow: 0.10,
   swipe_next: 0.00,
-  quick_exit: 0,
-  swipe_not_interested: -0.40,
+  quick_exit: -0.6875,
+  swipe_not_interested: -0.6875,
 };
 
-// --- Learning Rate & Limits ---
-export const LEARNING_RATE = 0.08;
-export const MIN_CATEGORY_WEIGHT = 0.1;
-export const MAX_CATEGORY_WEIGHT = 5.0;
-export const DAILY_DECAY_RATE = 0.995; // User preference weights decay by 0.5% per day
-
 // --- Trending Score Decay ---
-// trendingScore decays daily at this rate: halves every 7 days.
-// 2^(-1/7) ≈ 0.9057
 export const TRENDING_DECAY_RATE = 0.9057;
-export const MAX_TRENDING_SCORE = 50.0; // Cap for T normalization
 
-export const DEFAULT_SELECTED_WEIGHT = 1.5;
-export const DEFAULT_NOT_INTERESTED_WEIGHT = 0.2;
-export const DEFAULT_NEUTRAL_WEIGHT = 1.0;
+// --- Latent UI thresholds ---
+export const DEFAULT_SELECTED_LATENT = 0.85;
+export const DEFAULT_NOT_INTERESTED_LATENT = -0.85;
+export const DEFAULT_NEUTRAL_LATENT = 0.0;
 
 // --- Feed Configuration ---
-export const MAX_FEED_ARTICLES = 30;
-export const CANDIDATE_POOL_SIZE = 200;
+export const MAX_FEED_ARTICLES = 30; // NOTE: client-side slice also uses 30 — see src/utils/constants.ts. Server feed size is `selection.feedSize`.
 
 // --- Paywall Keywords ---
 export const PAYWALL_KEYWORDS = [
@@ -137,7 +128,9 @@ export const PAYWALL_KEYWORDS = [
 ];
 
 // --- Sanitization Allowed Tags ---
-export const ALLOWED_HTML_TAGS = ['p', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'img', 'a', 'strong', 'em', 'blockquote', 'code', 'pre', 'br', 'hr'];
+// RETIRED: the server never sanitizes HTML (article bodies are fetched live by the
+// phone, which sanitizes with the `xss` package client-side). This list was never
+// imported. Removed — re-introduce server-side only if server sanitization returns.
 
 // --- WPM Calibration Guardrails (WPM Fix) ---
 // Only sessions inside the human-plausibility band may recalibrate a user's
@@ -148,6 +141,6 @@ export const MIN_PLAUSIBLE_WPM = 80;   // below: idle/paused screen, not reading
 export const MAX_PLAUSIBLE_WPM = 600;  // above: scrolling/skimming, not reading
 // Sessions consuming fewer words than this carry no reliable pace signal.
 export const MIN_WPM_CALIBRATION_WORDS = 150;
-// Fling threshold (Engagement-Credit Model): implied reading speed above this
-// is physically impossible to absorb, so the visit is algorithmically inert.
-export const FLING_WPM = 1750;
+// NOTE (retired FLING_WPM): the absolute 1750-WPM fling threshold was replaced by the
+// relative pace model — `engagement.flingRatio` (× the user's personal averageWpm) —
+// so absolute fling WPM is no longer read anywhere.

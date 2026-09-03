@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent Mockup — Ink Index</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&family=Noto+Serif+JP:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root { --sans: 'Cormorant Garamond', serif; --serif: 'Cormorant Garamond', serif; --mono: 'Noto Serif JP', serif; }
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Cormorant Garamond', serif;background:#888;color:#222;line-height:1.4}
+.page-header{padding:32px 40px 24px}
+.page-header h1{font-size:2rem;margin-bottom:6px}
+.page-header p{max-width:640px;opacity:.85}
+.nav-sticky{position:sticky;top:0;z-index:100;background:#333;color:#fff;padding:10px 40px;display:flex;flex-wrap:wrap;gap:8px;font-size:12px}
+.nav-sticky a{color:#fff;text-decoration:none;padding:4px 8px;border-radius:4px;background:#444}
+.nav-sticky a:hover{background:#555}
+.screen-block{padding:32px 40px;border-bottom:1px solid #ccc;background:#ddd}
+.screen-title{font-size:1.1rem;margin-bottom:16px;text-transform:uppercase;letter-spacing:.1em;color:#444}
+.pair{display:flex;flex-wrap:wrap;gap:24px;justify-content:center}
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.mode-tag{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.08em}
+.phone{width:280px;height:580px;border-radius:32px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.35);border:6px solid #1a1a1a;display:flex;flex-direction:column;position:relative}
+.status-bar{height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.screen-body{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0;font-size:11px;position:relative}
+.home-indicator{height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.home-indicator::after{content:'';width:100px;height:4px;background:currentColor;opacity:.25;border-radius:2px}
+.nav-header{display:flex;align-items:center;padding:10px 12px;gap:8px;font-weight:600;font-size:12px;border-bottom:1px solid var(--border)}
+.back{background:none;border:none;font-size:16px;cursor:pointer;color:inherit}
+.spacer{flex:1}
+.section-label{font-size:8px;letter-spacing:.12em;color:var(--muted);padding:10px 12px 4px}
+.card{background:var(--surface);border:1px solid var(--border);margin:0 12px 8px;border-radius:8px;overflow:hidden}
+.row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);font-size:11px}
+.row:last-child{border-bottom:none}
+.muted{color:var(--muted);font-size:10px}
+.split{display:flex;padding:0}
+.cell{flex:1;padding:12px;text-align:center;font-size:11px;border-right:1px solid var(--border)}
+.segment{display:flex;gap:2px;font-size:9px}
+.segment span{padding:3px 6px;border-radius:4px;background:var(--border)}
+.segment .on{background:var(--bg);font-weight:600}
+.toggle{width:36px;height:20px;border-radius:10px;background:var(--border);position:relative}
+.toggle.on{background:var(--accent)}
+.toggle.on::after{content:'';position:absolute;right:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#fff}
+.list-item{padding:10px 12px;border-bottom:1px solid var(--border)}
+.list-title{font-size:11px;font-weight:500}
+.list-meta{font-size:9px;color:var(--muted);margin-top:2px}
+.stat-chip{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:10px;background:var(--surface)}
+.stat-chip.on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.primary-btn{padding:12px;border-radius:8px;font-weight:600;font-size:12px;margin:12px}
+.modal-scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end}
+.modal{background:var(--surface);width:100%;padding:16px;border-radius:16px 16px 0 0}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 12px}
+.modal h3{font-size:14px;margin-bottom:10px}
+.modal textarea{width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:8px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--text);resize:none}
+.modal .primary-btn{width:calc(100% - 24px)}
+.danger-zone .danger{color:var(--accent)}
+.hud-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress{height:3px;background:var(--border);flex-shrink:0}
+.progress-fill{height:100%;background:var(--accent)}
+.reader-article{padding:12px}
+.reader-article .byline{font-size:10px;color:var(--muted);margin:4px 0 10px}
+.reader-article p{font-size:11px;margin-bottom:10px;line-height:1.5}
+@keyframes blink{50%{opacity:0}}
+.fit-section{padding:32px 40px;background:#eee}
+.fit-section h2{margin-bottom:12px}
+.fit-section ul{max-width:720px;padding-left:20px}
+.fit-section li{margin-bottom:8px}
+
+
+:root { --accent: #B91C1C; }
+.page-header { background: radial-gradient(ellipse at 20% 30%, #3D5A8044, transparent), #FAF6EF; }
+.ink-light { --bg:#FAF6EF; --surface:#FFF; --text:#2C2416; --muted:#7A6F5E; --border:#E5DDD0; --accent:#3D5A80; --seal:#B91C1C; background:var(--bg); color:var(--text); font-family:var(--sans); }
+.ink-dark { --bg:#1A1814; --surface:#252219; --text:#EDE6DA; --muted:#A89E8E; --border:#3D3830; --accent:#7BA3C9; --seal:#E05555; background:var(--bg); color:var(--text); font-family:var(--sans); }
+.brand { writing-mode:vertical-rl; font-size:10px; letter-spacing:.3em; color:var(--seal); position:absolute; left:6px; top:50px; }
+.ink-blob { position:absolute; width:80px; height:80px; border-radius:50%; background:radial-gradient(circle, var(--accent)22, transparent 70%); top:20%; right:-20px; filter:blur(2px); }
+.catalog-card { background:var(--surface); border:1px solid var(--border); padding:10px; margin-bottom:6px; box-shadow:2px 2px 0 var(--border); position:relative; }
+.catalog-card::before { content:''; position:absolute; left:0;top:0;bottom:0;width:3px;background:var(--seal); }
+.catalog-id { font-size:8px; font-family:var(--mono); color:var(--muted); }
+.chip { font-size:10px; border:1px dashed var(--border); padding:5px 8px; background:var(--surface); }
+.chip-sel { border-style:solid; border-color:var(--seal); background:var(--seal); color:#fff; }
+.spine-label { font-family:var(--mono); font-size:9px; color:var(--accent); }
+.stats-pill { border:1px dashed var(--border); padding:6px; font-size:10px; }
+.hud { background:var(--surface); border-bottom:2px solid var(--seal); padding:8px; font-size:10px; display:flex; gap:6px; align-items:center; }
+.reader-article h1 { font-size:17px; font-style:italic; }
+</style>
+</head>
+<body>
+<header class="page-header">
+  <h1>Mockup II — Ink Index</h1>
+  <p>Library card catalog — sumi ink washes, vertical spine labels, lunar rhythm</p>
+</header>
+<nav class="nav-sticky"><a href="#startup">Startup</a><a href="#onboarding">Onboarding</a><a href="#dashboard">Dashboard</a><a href="#reader">Reader</a><a href="#settings">Settings</a><a href="#account">Account</a><a href="#history">History</a><a href="#saved">Saved Reads</a><a href="#categories">Category Preferences</a><a href="#stats">Dashboard Stats</a><a href="#feedback">Feedback</a><a href="#feedrequest">Feed Request</a><a href="#developer">Developer Options</a></nav>
+
+<section class="screen-block" id="startup">
+  <h2 class="screen-title">Startup</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><div class="ink-blob"></div><div class="brand">TANGENT</div><div style="padding:30px 20px 20px 28px;height:100%;display:flex;flex-direction:column;justify-content:center"><div style="font-size:22px;font-style:italic;color:var(--seal)">sapere aude</div><div style="font-size:10px;color:var(--muted);margin-top:8px">dare to know</div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><div class="ink-blob"></div><div class="brand">TANGENT</div><div style="padding:30px 20px 20px 28px;height:100%;display:flex;flex-direction:column;justify-content:center"><div style="font-size:22px;font-style:italic;color:var(--seal)">sapere aude</div><div style="font-size:10px;color:var(--muted);margin-top:8px">dare to know</div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="onboarding">
+  <h2 class="screen-title">Onboarding</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:20px 14px 14px 24px"><h2 style="font-size:20px;margin-bottom:4px">Index your interests</h2><p style="font-size:10px;color:var(--muted);margin-bottom:12px">File cards into your reading catalog</p><div style="display:flex;flex-wrap:wrap;gap:5px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div><button class="primary-btn" style="margin-top:16px;width:100%;background:var(--seal);color:#fff;border:none">Begin Reading</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:20px 14px 14px 24px"><h2 style="font-size:20px;margin-bottom:4px">Index your interests</h2><p style="font-size:10px;color:var(--muted);margin-bottom:12px">File cards into your reading catalog</p><div style="display:flex;flex-wrap:wrap;gap:5px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div><button class="primary-btn" style="margin-top:16px;width:100%;background:var(--seal);color:#fff;border:none">Begin Reading</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="dashboard">
+  <h2 class="screen-title">Dashboard</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:12px 12px 12px 22px"><div style="display:flex;justify-content:flex-end;margin-bottom:8px"><span>⚙</span></div><div class="stats-pill"><span class="metric">📊 8</span><span class="metric-sep">·</span><span class="metric">🔥 12</span><span class="metric-sep">·</span><span class="metric">📈 Tech</span></div><div class="catalog-card" style="margin-top:10px;flex:1.3"><div class="catalog-id">CAT-BIZ · 001</div><div style="font-size:16px;margin:4px 0">Why Software Margins Are Collapsing</div><div class="spine-label">The Diff</div></div><div class="catalog-card"><div class="catalog-id">CAT-TEC · 002</div><div style="font-size:13px">The AI Integration Question</div></div><div class="catalog-card"><div class="catalog-id">CAT-SCI · 003</div><div style="font-size:13px">Book Review: The Scout Mindset</div></div><div style="display:flex;gap:6px;margin-top:8px"><div class="pill-btn" style="flex:1;border:1px dashed var(--border);padding:8px;text-align:center;font-size:10px">Discover</div><div class="pill-btn" style="flex:1;border:1px dashed var(--border);padding:8px;text-align:center;font-size:10px">Shuffle</div></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:12px 12px 12px 22px"><div style="display:flex;justify-content:flex-end;margin-bottom:8px"><span>⚙</span></div><div class="stats-pill"><span class="metric">📊 8</span><span class="metric-sep">·</span><span class="metric">🔥 12</span><span class="metric-sep">·</span><span class="metric">📈 Tech</span></div><div class="catalog-card" style="margin-top:10px;flex:1.3"><div class="catalog-id">CAT-BIZ · 001</div><div style="font-size:16px;margin:4px 0">Why Software Margins Are Collapsing</div><div class="spine-label">The Diff</div></div><div class="catalog-card"><div class="catalog-id">CAT-TEC · 002</div><div style="font-size:13px">The AI Integration Question</div></div><div class="catalog-card"><div class="catalog-id">CAT-SCI · 003</div><div style="font-size:13px">Book Review: The Scout Mindset</div></div><div style="display:flex;gap:6px;margin-top:8px"><div class="pill-btn" style="flex:1;border:1px dashed var(--border);padding:8px;text-align:center;font-size:10px">Discover</div><div class="pill-btn" style="flex:1;border:1px dashed var(--border);padding:8px;text-align:center;font-size:10px">Shuffle</div></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="reader">
+  <h2 class="screen-title">Reader</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar"></div><div class="screen-body"><div class="hud"><button class="hud-x">✕</button><span class="hud-title">Why Software Margins Are Collapsing</span><div class="hud-actions"><span class="heart">♥</span><span class="save">🔖</span></div></div><div class="progress"><div class="progress-fill" style="width:42%"></div></div><article class="reader-article"><h1>Why Software Margins Are Collapsing</h1><p class="byline">The Diff · Business</p><p>Platform economics and the new cost structure of AI-native products…</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p><p>Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p></article></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar"></div><div class="screen-body"><div class="hud"><button class="hud-x">✕</button><span class="hud-title">Why Software Margins Are Collapsing</span><div class="hud-actions"><span class="heart">♥</span><span class="save">🔖</span></div></div><div class="progress"><div class="progress-fill" style="width:42%"></div></div><article class="reader-article"><h1>Why Software Margins Are Collapsing</h1><p class="byline">The Diff · Business</p><p>Platform economics and the new cost structure of AI-native products…</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p><p>Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p></article></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="settings">
+  <h2 class="screen-title">Settings</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="account">
+  <h2 class="screen-title">Account</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Account</span><span class="spacer"></span></header>
+<div class="card">
+  <div class="row"><span>Status</span><span class="muted">Anonymous</span></div>
+  <div class="row"><span>Link Google Account</span><span>→</span></div>
+</div>
+<div class="card danger-zone">
+  <div class="row"><span>Sign Out</span></div>
+  <div class="row"><span>Reset Reading Data</span></div>
+  <div class="row danger"><span>Delete Account</span></div>
+</div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Account</span><span class="spacer"></span></header>
+<div class="card">
+  <div class="row"><span>Status</span><span class="muted">Anonymous</span></div>
+  <div class="row"><span>Link Google Account</span><span>→</span></div>
+</div>
+<div class="card danger-zone">
+  <div class="row"><span>Sign Out</span></div>
+  <div class="row"><span>Reset Reading Data</span></div>
+  <div class="row danger"><span>Delete Account</span></div>
+</div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="history">
+  <h2 class="screen-title">History</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>History</span><span class="spacer"></span></header><div class="catalog-card"><div class="catalog-id">READ · 2026-09-02</div><div>Why Software Margins Are Collapsing</div></div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>History</span><span class="spacer"></span></header><div class="catalog-card"><div class="catalog-id">READ · 2026-09-02</div><div>Why Software Margins Are Collapsing</div></div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="saved">
+  <h2 class="screen-title">Saved Reads</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Saved Reads</span><span class="spacer"></span></header><div style="font-size:10px;color:var(--muted);margin-bottom:8px">Offline copies available</div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Saved Reads</span><span class="spacer"></span></header><div style="font-size:10px;color:var(--muted);margin-bottom:8px">Offline copies available</div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="categories">
+  <h2 class="screen-title">Category Preferences</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Categories</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:5px;padding:8px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Categories</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:5px;padding:8px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="stats">
+  <h2 class="screen-title">Dashboard Stats</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Dashboard Stats</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px"><button class="stat-chip on">🔥 Streak Days</button><button class="stat-chip on">📊 Weekly Reads</button><button class="stat-chip ">⏳ Hours Read</button><button class="stat-chip on">⏱️ Avg WPM</button><button class="stat-chip ">📚 Finished</button><button class="stat-chip ">📈 Top Category</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Dashboard Stats</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px"><button class="stat-chip on">🔥 Streak Days</button><button class="stat-chip on">📊 Weekly Reads</button><button class="stat-chip ">⏳ Hours Read</button><button class="stat-chip on">⏱️ Avg WPM</button><button class="stat-chip ">📚 Finished</button><button class="stat-chip ">📈 Top Category</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="feedback">
+  <h2 class="screen-title">Feedback</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Send Feedback</h3><textarea placeholder="Your note to the librarians…"></textarea><button class="primary-btn">Send</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Send Feedback</h3><textarea placeholder="Your note to the librarians…"></textarea><button class="primary-btn">Send</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="feedrequest">
+  <h2 class="screen-title">Feed Request</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Request a Feed</h3><textarea placeholder="Paste RSS/Atom URL"></textarea><button class="primary-btn">Add to queue</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Request a Feed</h3><textarea placeholder="Paste RSS/Atom URL"></textarea><button class="primary-btn">Add to queue</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="developer">
+  <h2 class="screen-title">Developer Options</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone ink-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Developer Options</span><span class="spacer"></span></header><div class="card"><div class="row"><span>Sandbox Reader</span><span>→</span></div><div class="row danger"><span>Clear Local Data</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone ink-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Developer Options</span><span class="spacer"></span></header><div class="card"><div class="row"><span>Sandbox Reader</span><span>→</span></div><div class="row danger"><span>Clear Local Data</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+<section class="fit-section">
+  <h2>How this design fits Tangent's capabilities</h2>
+  <ul>
+<li><strong>Catalog cards with IDs</strong> — each article is a ranked object with category, publication, and server-assigned score; the card metaphor makes the feed feel browsable without changing swipe-to-read flow.</li>
+<li><strong>Vertical TANGENT spine</strong> — preserves the app's top-left brand anchor from StartupScreen and Dashboard.</li>
+<li><strong>Saved Reads "offline copies"</strong> — reflects getSavedArticleHtml local cache capability.</li>
+<li><strong>History timestamps</strong> — seen-article metadata stored in AsyncStorage for offline list rendering.</li>
+<li><strong>Modal bottom sheets</strong> — Feedback and Feed Request use vertical modal presentation per navigator config.</li>
+</ul>
+</section>
+</body>
+</html>

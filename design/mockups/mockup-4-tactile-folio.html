@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent — Folio Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=Outfit:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'Outfit', -apple-system, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* Day: Limestone, Deep Forest Pine & Ochre */
+  --bg-light: #F4EFEA;
+  --surface-light: #FAF7F2;
+  --surface-pure-light: #FFFFFF;
+  --text-main-light: #16241E;
+  --text-muted-light: #526359;
+  --border-light: #DCD4C7;
+  --hairline-light: #E7E0D3;
+  --accent-pine-light: #183B2E;
+  --accent-ochre-light: #D97E1E;
+
+  /* Night: Petroleum Night, Oatmeal & Jade */
+  --bg-dark: #0D1614;
+  --surface-dark: #15221F;
+  --surface-pure-dark: #1B2B26;
+  --text-main-dark: #EDE6DA;
+  --text-muted-dark: #8CA095;
+  --border-dark: #273933;
+  --hairline-dark: #1F2D28;
+  --accent-pine-dark: #2EC486;
+  --accent-ochre-dark: #F5B700;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #080D0C;
+  color: #DDD;
+  font-family: var(--font-sans);
+  padding: 40px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.device-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 56px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Hardware Phone Shell */
+.phone {
+  width: 384px;
+  height: 790px;
+  border-radius: 46px;
+  border: 12px solid #14221E;
+  box-shadow: 0 32px 85px rgba(0,0,0,0.85);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.theme-light {
+  --bg: var(--bg-light);
+  --surface: var(--surface-light);
+  --surface-pure: var(--surface-pure-light);
+  --text: var(--text-main-light);
+  --muted: var(--text-muted-light);
+  --border: var(--border-light);
+  --hairline: var(--hairline-light);
+  --accent-brand: var(--accent-pine-light);
+  --accent-alt: var(--accent-ochre-light);
+  background: var(--bg);
+  color: var(--text);
+}
+.theme-dark {
+  --bg: var(--bg-dark);
+  --surface: var(--surface-dark);
+  --surface-pure: var(--surface-pure-dark);
+  --text: var(--text-main-dark);
+  --muted: var(--text-muted-dark);
+  --border: var(--border-dark);
+  --hairline: var(--hairline-dark);
+  --accent-brand: var(--accent-pine-dark);
+  --accent-alt: var(--accent-ochre-dark);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.phone-status {
+  height: 38px;
+  padding: 12px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.app-screen-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen-pane {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+  display: none;
+  flex-direction: column;
+}
+.screen-pane.active {
+  display: flex;
+}
+.screen-pane::-webkit-scrollbar { width: 3px; }
+.screen-pane::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* Folio Brand Masthead */
+.folio-masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 6px;
+  margin-bottom: 18px;
+}
+.folio-brand-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.folio-counter {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+/* Tactile Folio Lead Sheet */
+.folio-sheet-lead {
+  background: var(--surface-pure);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px 18px 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+.folio-spine-tab {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  background: var(--accent-brand);
+  color: var(--bg);
+  padding: 3px 7px;
+  border-radius: 2px;
+  margin-bottom: 8px;
+}
+.folio-lead-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.22;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.folio-lead-deck {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.folio-lead-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  border-top: 1px solid var(--hairline);
+  padding-top: 8px;
+}
+
+/* Secondary Folio Sheets */
+.folio-sheet-sub {
+  background: var(--surface-pure);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.folio-sub-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  max-width: 240px;
+}
+.folio-sub-author {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+.folio-sub-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* Discovery Folio Sheet */
+.folio-sheet-discovery {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent-alt);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+.discovery-spine-label {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-alt);
+  letter-spacing: 0.8px;
+  margin-bottom: 4px;
+}
+.discovery-sheet-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 14.5px;
+  line-height: 1.3;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+/* Reader Folio Screen */
+.reader-folio-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+.reader-fold-btn {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.reader-fold-actions {
+  display: flex;
+  gap: 8px;
+}
+.folio-action-btn {
+  background: var(--surface-pure);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.folio-read-progress {
+  height: 2px;
+  background: var(--hairline);
+  margin-bottom: 16px;
+}
+.folio-read-fill {
+  height: 100%;
+  width: 55%;
+  background: var(--accent-brand);
+}
+.reader-sheet-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.22;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.reader-sheet-byline {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.reader-sheet-body p {
+  font-size: 13.5px;
+  line-height: 1.65;
+  margin-bottom: 14px;
+}
+
+/* Saved Folio Screen */
+.subscreen-title-folio {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+.saved-folio-entry {
+  background: var(--surface-pure);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.saved-folio-title {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.saved-folio-meta {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Stats Folio Screen */
+.cadence-token-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.cadence-token {
+  background: var(--surface-pure);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+}
+.token-huge {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent-brand);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.token-sub {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cadence-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* Settings Folio Screen */
+.settings-folio-card {
+  background: var(--surface-pure);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.settings-folio-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+/* Native In-App Bottom Navigation Bar */
+.phone-bottom-nav {
+  height: 52px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-shrink: 0;
+  z-index: 30;
+  padding: 0 8px;
+}
+.nav-tab-folio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: color 0.15s ease;
+}
+.nav-tab-folio.active {
+  color: var(--accent-brand);
+}
+.folio-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+</style>
+</head>
+<body>
+
+<main class="device-stage">
+
+  <!-- DAY EDITION (LIGHT) -->
+  <div class="phone theme-light" id="phone-light">
+    <div class="phone-status">
+      <span>09:41</span>
+      <span>TANGENT · FOLIO</span>
+    </div>
+
+    <div class="app-screen-container">
+      
+      <!-- SCREEN 1: FEED -->
+      <div class="screen-pane active" id="pane-light-feed">
+        <div class="folio-masthead">
+          <span class="folio-brand-name">Tangent.</span>
+          <span class="folio-counter">30 ARTICLES · TODAY</span>
+        </div>
+
+        <!-- Lead Folio Sheet -->
+        <div class="folio-sheet-lead" onclick="openReader('phone-light', 'How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz', '9 min read')">
+          <span class="folio-spine-tab">LEAD · ENGINEERING</span>
+          <h2 class="folio-lead-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+          <p class="folio-lead-deck">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized over pure architectural output.</p>
+          <div class="folio-lead-meta">
+            <span>The Pragmatic Engineer · Gergely Orosz</span>
+            <span>9 MIN READ</span>
+          </div>
+        </div>
+
+        <!-- Secondary Folio Sheets -->
+        <div class="folio-sheet-sub" onclick="openReader('phone-light', 'The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson', '7 min read')">
+          <div>
+            <h3 class="folio-sub-title">The Real Economics of the AI Platform Shift</h3>
+            <div class="folio-sub-author">Stratechery · Ben Thompson</div>
+          </div>
+          <span class="folio-sub-time">7M</span>
+        </div>
+
+        <div class="folio-sheet-sub" onclick="openReader('phone-light', 'The Frontier Models Open-Weights Dilemma', 'Platformer · Casey Newton', '6 min read')">
+          <div>
+            <h3 class="folio-sub-title">The Frontier Models Open-Weights Dilemma</h3>
+            <div class="folio-sub-author">Platformer · Casey Newton</div>
+          </div>
+          <span class="folio-sub-time">6M</span>
+        </div>
+
+        <!-- Discovery Folio Sheet -->
+        <div class="folio-sheet-discovery" onclick="openReader('phone-light', 'The Lost Construction Techniques of Gothic Vaults', 'Antiquities Quarterly', '14 min read')">
+          <div class="discovery-spine-label">✦ DISCOVERY</div>
+          <h3 class="discovery-sheet-title">The Lost Construction Techniques of Gothic Vaults in Northern France</h3>
+          <div class="folio-lead-meta" style="border: none; padding: 0;">
+            <span>Antiquities Quarterly</span>
+            <span style="color: var(--accent-alt); font-weight: 700;">14 MIN</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 2: READER -->
+      <div class="screen-pane" id="pane-light-reader">
+        <div class="reader-folio-bar">
+          <button class="reader-fold-btn" onclick="switchTab('phone-light', 'feed')">← FOLIO</button>
+          <div class="reader-fold-actions">
+            <button class="folio-action-btn" onclick="this.textContent = this.textContent === 'Like' ? 'Liked' : 'Like'">Like</button>
+            <button class="folio-action-btn" onclick="this.textContent = this.textContent === 'Save' ? 'Saved' : 'Save'">Save</button>
+          </div>
+        </div>
+        <div class="folio-read-progress"><div class="folio-read-fill"></div></div>
+        <article>
+          <h1 class="reader-sheet-title" id="light-reader-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h1>
+          <div class="reader-sheet-byline" id="light-reader-meta">The Pragmatic Engineer · Gergely Orosz · 9 min read</div>
+          <div class="reader-sheet-body">
+            <p>For more than a decade, senior engineering careers were framed around deep technical specialism: mastering distributed databases, microservice boundaries, or complex frontend lifecycles.</p>
+            <p>Today, executive calibration committees look for something fundamentally different: organizational leverage. As automated tooling reduces the friction of producing code, the primary bottleneck has shifted to system clarity and architectural verification.</p>
+            <p>In this analysis, we examine how top technology companies have restructured their principal and director-level evaluation rubric over the past eighteen months.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- SCREEN 3: SAVED -->
+      <div class="screen-pane" id="pane-light-saved">
+        <div class="subscreen-title-folio">SAVED ARTICLES</div>
+        <div class="saved-folio-entry" onclick="openReader('phone-light', 'The Economics of Machine Attention', 'Stratechery · Ben Thompson', '12 min read')">
+          <div class="saved-folio-title">The Economics of Machine Attention</div>
+          <div class="saved-folio-meta"><span>Stratechery</span><span>Saved yesterday · 12 min</span></div>
+        </div>
+        <div class="saved-folio-entry" onclick="openReader('phone-light', 'Reflections on Classical Architecture', 'The Honest Broker · Ted Gioia', '15 min read')">
+          <div class="saved-folio-title">Reflections on Classical Architecture</div>
+          <div class="saved-folio-meta"><span>The Honest Broker</span><span>Saved Aug 28 · 15 min</span></div>
+        </div>
+        <div class="saved-folio-entry" onclick="openReader('phone-light', 'Frontier Labs and the Compute Ceiling', 'The Diff · Byrne Hobart', '8 min read')">
+          <div class="saved-folio-title">Frontier Labs and the Compute Ceiling</div>
+          <div class="saved-folio-meta"><span>The Diff</span><span>Saved Aug 25 · 8 min</span></div>
+        </div>
+      </div>
+
+      <!-- SCREEN 4: STATS -->
+      <div class="screen-pane" id="pane-light-stats">
+        <div class="subscreen-title-folio">READING CADENCE</div>
+        <div class="cadence-token-grid">
+          <div class="cadence-token">
+            <div class="token-huge">14</div>
+            <div class="token-sub">Day Streak</div>
+          </div>
+          <div class="cadence-token">
+            <div class="token-huge">245</div>
+            <div class="token-sub">Avg WPM</div>
+          </div>
+        </div>
+        <div class="cadence-row"><span>Finished This Week</span><strong>18 Articles</strong></div>
+        <div class="cadence-row"><span>Time Invested</span><strong>14.2 Hours</strong></div>
+        <div class="cadence-row"><span>Primary Topic</span><strong>Technology (42%)</strong></div>
+        <div class="cadence-row"><span>Offline Cache</span><strong>30 Articles Ready</strong></div>
+      </div>
+
+      <!-- SCREEN 5: SETTINGS -->
+      <div class="screen-pane" id="pane-light-settings">
+        <div class="subscreen-title-folio">SETTINGS</div>
+        <div class="settings-folio-card" onclick="toggleSingleTheme('phone-light')">
+          <span>Theme Palette</span>
+          <span class="settings-folio-sub">Toggle Light/Dark</span>
+        </div>
+        <div class="settings-folio-card">
+          <span>Topic Preferences</span>
+          <span class="settings-folio-sub">5 Selected →</span>
+        </div>
+        <div class="settings-folio-card">
+          <span>Include Archived Articles</span>
+          <span class="settings-folio-sub">Enabled</span>
+        </div>
+        <div class="settings-folio-card">
+          <span>Google Account</span>
+          <span class="settings-folio-sub">Connected</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- IN-APP BOTTOM NAVIGATION BAR -->
+    <nav class="phone-bottom-nav">
+      <button class="nav-tab-folio active" onclick="switchTab('phone-light', 'feed', this)">
+        <span class="folio-dot"></span>
+        <span>Folio</span>
+      </button>
+      <button class="nav-tab-folio" onclick="switchTab('phone-light', 'saved', this)">
+        <span>Saved</span>
+      </button>
+      <button class="nav-tab-folio" onclick="switchTab('phone-light', 'stats', this)">
+        <span>Stats</span>
+      </button>
+      <button class="nav-tab-folio" onclick="switchTab('phone-light', 'settings', this)">
+        <span>Settings</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- NIGHT EDITION (DARK) -->
+  <div class="phone theme-dark" id="phone-dark">
+    <div class="phone-status">
+      <span>09:41</span>
+      <span>TANGENT · FOLIO</span>
+    </div>
+
+    <div class="app-screen-container">
+      
+      <!-- SCREEN 1: FEED (DARK) -->
+      <div class="screen-pane active" id="pane-dark-feed">
+        <div class="folio-masthead">
+          <span class="folio-brand-name">Tangent.</span>
+          <span class="folio-counter">30 ARTICLES · TODAY</span>
+        </div>
+
+        <div class="folio-sheet-lead" onclick="openReader('phone-dark', 'How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz', '9 min read')">
+          <span class="folio-spine-tab">LEAD · ENGINEERING</span>
+          <h2 class="folio-lead-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+          <p class="folio-lead-deck">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized over pure architectural output.</p>
+          <div class="folio-lead-meta">
+            <span>The Pragmatic Engineer · Gergely Orosz</span>
+            <span>9 MIN READ</span>
+          </div>
+        </div>
+
+        <div class="folio-sheet-sub" onclick="openReader('phone-dark', 'The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson', '7 min read')">
+          <div>
+            <h3 class="folio-sub-title">The Real Economics of the AI Platform Shift</h3>
+            <div class="folio-sub-author">Stratechery · Ben Thompson</div>
+          </div>
+          <span class="folio-sub-time">7M</span>
+        </div>
+
+        <div class="folio-sheet-sub" onclick="openReader('phone-dark', 'The Frontier Models Open-Weights Dilemma', 'Platformer · Casey Newton', '6 min read')">
+          <div>
+            <h3 class="folio-sub-title">The Frontier Models Open-Weights Dilemma</h3>
+            <div class="folio-sub-author">Platformer · Casey Newton</div>
+          </div>
+          <span class="folio-sub-time">6M</span>
+        </div>
+
+        <div class="folio-sheet-discovery" onclick="openReader('phone-dark', 'The Lost Construction Techniques of Gothic Vaults', 'Antiquities Quarterly', '14 min read')">
+          <div class="discovery-spine-label">✦ DISCOVERY</div>
+          <h3 class="discovery-sheet-title">The Lost Construction Techniques of Gothic Vaults in Northern France</h3>
+          <div class="folio-lead-meta" style="border: none; padding: 0;">
+            <span>Antiquities Quarterly</span>
+            <span style="color: var(--accent-alt); font-weight: 700;">14 MIN</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 2: READER (DARK) -->
+      <div class="screen-pane" id="pane-dark-reader">
+        <div class="reader-folio-bar">
+          <button class="reader-fold-btn" onclick="switchTab('phone-dark', 'feed')">← FOLIO</button>
+          <div class="reader-fold-actions">
+            <button class="folio-action-btn" onclick="this.textContent = this.textContent === 'Like' ? 'Liked' : 'Like'">Like</button>
+            <button class="folio-action-btn" onclick="this.textContent = this.textContent === 'Save' ? 'Saved' : 'Save'">Save</button>
+          </div>
+        </div>
+        <div class="folio-read-progress"><div class="folio-read-fill"></div></div>
+        <article>
+          <h1 class="reader-sheet-title" id="dark-reader-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h1>
+          <div class="reader-sheet-byline" id="dark-reader-meta">The Pragmatic Engineer · Gergely Orosz · 9 min read</div>
+          <div class="reader-sheet-body">
+            <p>For more than a decade, senior engineering careers were framed around deep technical specialism: mastering distributed databases, microservice boundaries, or complex frontend lifecycles.</p>
+            <p>Today, executive calibration committees look for something fundamentally different: organizational leverage. As automated tooling reduces the friction of producing code, the primary bottleneck has shifted to system clarity and architectural verification.</p>
+            <p>In this analysis, we examine how top technology companies have restructured their principal and director-level evaluation rubric over the past eighteen months.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- SCREEN 3: SAVED (DARK) -->
+      <div class="screen-pane" id="pane-dark-saved">
+        <div class="subscreen-title-folio">SAVED ARTICLES</div>
+        <div class="saved-folio-entry" onclick="openReader('phone-dark', 'The Economics of Machine Attention', 'Stratechery · Ben Thompson', '12 min read')">
+          <div class="saved-folio-title">The Economics of Machine Attention</div>
+          <div class="saved-folio-meta"><span>Stratechery</span><span>Saved yesterday · 12 min</span></div>
+        </div>
+        <div class="saved-folio-entry" onclick="openReader('phone-dark', 'Reflections on Classical Architecture', 'The Honest Broker · Ted Gioia', '15 min read')">
+          <div class="saved-folio-title">Reflections on Classical Architecture</div>
+          <div class="saved-folio-meta"><span>The Honest Broker</span><span>Saved Aug 28 · 15 min</span></div>
+        </div>
+        <div class="saved-folio-entry" onclick="openReader('phone-dark', 'Frontier Labs and the Compute Ceiling', 'The Diff · Byrne Hobart', '8 min read')">
+          <div class="saved-folio-title">Frontier Labs and the Compute Ceiling</div>
+          <div class="saved-folio-meta"><span>The Diff</span><span>Saved Aug 25 · 8 min</span></div>
+        </div>
+      </div>
+
+      <!-- SCREEN 4: STATS (DARK) -->
+      <div class="screen-pane" id="pane-dark-stats">
+        <div class="subscreen-title-folio">READING CADENCE</div>
+        <div class="cadence-token-grid">
+          <div class="cadence-token">
+            <div class="token-huge">14</div>
+            <div class="token-sub">Day Streak</div>
+          </div>
+          <div class="cadence-token">
+            <div class="token-huge">245</div>
+            <div class="token-sub">Avg WPM</div>
+          </div>
+        </div>
+        <div class="cadence-row"><span>Finished This Week</span><strong>18 Articles</strong></div>
+        <div class="cadence-row"><span>Time Invested</span><strong>14.2 Hours</strong></div>
+        <div class="cadence-row"><span>Primary Topic</span><strong>Technology (42%)</strong></div>
+        <div class="cadence-row"><span>Offline Cache</span><strong>30 Articles Ready</strong></div>
+      </div>
+
+      <!-- SCREEN 5: SETTINGS (DARK) -->
+      <div class="screen-pane" id="pane-dark-settings">
+        <div class="subscreen-title-folio">SETTINGS</div>
+        <div class="settings-folio-card" onclick="toggleSingleTheme('phone-dark')">
+          <span>Theme Palette</span>
+          <span class="settings-folio-sub">Toggle Light/Dark</span>
+        </div>
+        <div class="settings-folio-card">
+          <span>Topic Preferences</span>
+          <span class="settings-folio-sub">5 Selected →</span>
+        </div>
+        <div class="settings-folio-card">
+          <span>Include Archived Articles</span>
+          <span class="settings-folio-sub">Enabled</span>
+        </div>
+        <div class="settings-folio-card">
+          <span>Google Account</span>
+          <span class="settings-folio-sub">Connected</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- IN-APP BOTTOM NAVIGATION BAR -->
+    <nav class="phone-bottom-nav">
+      <button class="nav-tab-folio active" onclick="switchTab('phone-dark', 'feed', this)">
+        <span class="folio-dot"></span>
+        <span>Folio</span>
+      </button>
+      <button class="nav-tab-folio" onclick="switchTab('phone-dark', 'saved', this)">
+        <span>Saved</span>
+      </button>
+      <button class="nav-tab-folio" onclick="switchTab('phone-dark', 'stats', this)">
+        <span>Stats</span>
+      </button>
+      <button class="nav-tab-folio" onclick="switchTab('phone-dark', 'settings', this)">
+        <span>Settings</span>
+      </button>
+    </nav>
+  </div>
+
+</main>
+
+<script>
+function switchTab(phoneId, tabName, btnEl) {
+  const phone = document.getElementById(phoneId);
+  const isLight = phoneId === 'phone-light';
+  const prefix = isLight ? 'pane-light-' : 'pane-dark-';
+  
+  phone.querySelectorAll('.screen-pane').forEach(pane => pane.classList.remove('active'));
+  
+  const target = document.getElementById(prefix + tabName);
+  if (target) target.classList.add('active');
+  
+  if (btnEl) {
+    phone.querySelectorAll('.nav-tab-folio').forEach(btn => {
+      btn.classList.remove('active');
+      const dot = btn.querySelector('.folio-dot');
+      if (dot) dot.remove();
+    });
+    btnEl.classList.add('active');
+    const newDot = document.createElement('span');
+    newDot.className = 'folio-dot';
+    btnEl.prepend(newDot);
+  } else {
+    phone.querySelectorAll('.nav-tab-folio').forEach(btn => {
+      const label = btn.querySelector('span:last-child')?.textContent?.toLowerCase();
+      if (label === tabName || (tabName === 'feed' && label === 'folio')) {
+        btn.classList.add('active');
+        if (!btn.querySelector('.folio-dot')) {
+          const newDot = document.createElement('span');
+          newDot.className = 'folio-dot';
+          btn.prepend(newDot);
+        }
+      } else {
+        btn.classList.remove('active');
+        const dot = btn.querySelector('.folio-dot');
+        if (dot) dot.remove();
+      }
+    });
+  }
+}
+
+function openReader(phoneId, title, meta, readTime) {
+  const isLight = phoneId === 'phone-light';
+  const titleEl = document.getElementById(isLight ? 'light-reader-title' : 'dark-reader-title');
+  const metaEl = document.getElementById(isLight ? 'light-reader-meta' : 'dark-reader-meta');
+  
+  if (titleEl && title) titleEl.textContent = title;
+  if (metaEl && meta) metaEl.textContent = meta + (readTime ? ` · ${readTime}` : '');
+  
+  switchTab(phoneId, 'reader');
+}
+
+function toggleSingleTheme(phoneId) {
+  const phone = document.getElementById(phoneId);
+  if (phone.classList.contains('theme-light')) {
+    phone.classList.replace('theme-light', 'theme-dark');
+  } else {
+    phone.classList.replace('theme-dark', 'theme-light');
+  }
+}
+</script>
+</body>
+</html>

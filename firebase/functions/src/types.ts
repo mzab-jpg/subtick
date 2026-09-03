@@ -7,9 +7,9 @@ export interface UserProfile {
   isOnboarded: boolean;
   selectedCategoryIds: string[];
   notInterestedCategoryIds: string[];
-  categoryWeights: Record<string, number>;
-  categoryLengthWeights?: Record<string, number>;
-  publisherWeights?: Record<string, number>;
+  categoryWeights: Record<string, number>;      // latent x per category (0 = neutral)
+  lengthWeights?: Record<string, number>;       // global short/medium/long latent
+  publisherWeights?: Record<string, number>;    // latent x per publisher
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   totalArticlesRead: number;
@@ -22,8 +22,9 @@ export interface UserProfile {
   totalReadTimeMs?: number;
   weightUpdatedAt?: number; // Watermark: timestamp of the last event processed by updateWeights
   seenArticleIds?: string[]; // Audit fix: append-ordered list of shown article IDs; pruned by weightUpdater (trim at 5000, keep newest 4000)
-  weightsDecayedAt?: number; // Timestamp of the last time preference decay was applied
-  quickExitCategorySignals?: Record<string, Record<string, number>>; // category -> distinct article IDs -> quick-exit timestamps
+  weightsDecayedAt?: number; // Timestamp of the last time latent drift was applied
+  /** Threshold-based quick-exit rejection evidence, per preference axis, with a rolling window. Server-managed. */
+  rejectionEvidence?: Record<string, { count: number; windowStart: number }>;
   lastUpdated: number;
 }
 

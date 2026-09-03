@@ -13,18 +13,21 @@
 import { db } from './firebaseAdmin.js';
 import {
   SCORE_WEIGHTS,
-  SCORE_WEIGHTS_TAIL,
   FEEDBACK_DELTAS,
-  LEARNING_RATE,
-  MIN_CATEGORY_WEIGHT,
-  MAX_CATEGORY_WEIGHT,
-  DAILY_DECAY_RATE,
   TRENDING_DECAY_RATE,
-  MAX_TRENDING_SCORE,
-  DEFAULT_SELECTED_WEIGHT,
-  DEFAULT_NOT_INTERESTED_WEIGHT,
-  DEFAULT_NEUTRAL_WEIGHT,
-  FLING_WPM,
+  TRENDING_HALF_SAT,
+  RECENCY_DAYS_CONSTANT,
+  LATENT_CLAMP,
+  LATENT_NIGHTLY_DECAY,
+  LATENT_DRIFT_FLOOR,
+  DEFAULT_PUBLISHER_LATENT,
+  DEFAULT_SELECTED_LATENT,
+  DEFAULT_NOT_INTERESTED_LATENT,
+  DEFAULT_NEUTRAL_LATENT,
+  MIN_PLAUSIBLE_WPM,
+  MAX_PLAUSIBLE_WPM,
+  MIN_WPM_CALIBRATION_WORDS,
+  PAYWALL_KEYWORDS,
 } from './constants.js';
 
 // ------------------------------------------------------------------
@@ -40,31 +43,51 @@ export type ReadEventType =
 export interface ScoringConfig {
   schemaVersion: number;
   scoring: {
-    personalization: number; // SCORE_WEIGHTS.personalization (0.60)
-    trending: number;        // SCORE_WEIGHTS.trending (0.15)
-    recency: number;         // SCORE_WEIGHTS.recency (0.10)
-    quality: number;         // SCORE_WEIGHTS.quality (0.15)
-    tailTrending: number;    // SCORE_WEIGHTS_TAIL.trending (0.43)
-    tailRecency: number;     // SCORE_WEIGHTS_TAIL.recency (0.57)
-    maxTrendingScore: number;// MAX_TRENDING_SCORE (50)
-    // Used only until a user has any stored interaction with a publisher.
-    publisherColdStartCategoryWeight: number; // 0.90
-    publisherColdStartPublisherWeight: number; // 0.10
+    personalization: number;
+    trending: number;
+    recency: number;
+    quality: number;
+    trendingHalfSat: number;
+    recencyDaysConstant: number;
+    publisherColdStartCategoryWeight: number;
+    publisherColdStartPublisherWeight: number;
   };
-  feedback: Record<string, number>; // FEEDBACK_DELTAS (per action)
+  feedback: Record<string, number>;
+  engagement: {
+    fullRatio: number;
+    skimRatio: number;
+    flingRatio: number;
+    skimPenalty: number;
+    flingPenalty: number;
+  };
+  latent: {
+    clamp: number;
+    nightlyDecay: number;
+    driftFloor: number;
+    publisherSeed: number;
+    selectedLatent: number;
+    notInterestedLatent: number;
+    neutralLatent: number;
+  };
+  /** Shape of the preference-strength curve: σ(steepness · x). */
+  sigmoid: {
+    steepness: number;
+  };
+  /** How strongly user actions move each preference axis. */
   learning: {
-    baseRate: number;           // LEARNING_RATE (0.08)
-    categoryMultiplier: number; // 1.0
-    lengthMultiplier: number;   // 1.5
-    publisherMultiplier: number;// 2.0
-    minWeight: number;          // MIN_CATEGORY_WEIGHT (0.1)
-    maxWeight: number;          // MAX_CATEGORY_WEIGHT (5.0)
-    dailyDecayRate: number;     // DAILY_DECAY_RATE (0.995)
-    defaultSelectedWeight: number;      // DEFAULT_SELECTED_WEIGHT (1.5)
-    defaultNotInterestedWeight: number; // DEFAULT_NOT_INTERESTED_WEIGHT (0.2)
-    defaultNeutralWeight: number;       // DEFAULT_NEUTRAL_WEIGHT (1.0)
-    repeatedQuickExitThreshold: number; // 3 distinct articles in one category
-    repeatedQuickExitLookbackDays: number; // 14
+    categorySensitivity: number;
+    lengthSensitivity: number;
+    publisherSensitivity: number;
+    positiveSensitivity: number;
+    rejectionSensitivity: number;
+  };
+  /** Threshold-based quick-exit rejection (accidental taps no longer hit at full strength). */
+  rejection: {
+    categoryMinQuickExits: number;
+    lengthMinQuickExits: number;
+    publisherMinQuickExits: number;
+    windowMs: number;
+    maxCategoryPenalty: number;
   };
   trending: {
     decayRate: number; // TRENDING_DECAY_RATE (0.9057) — used by the decay cron
@@ -76,58 +99,105 @@ export interface ScoringConfig {
     read_thorough: number; read_skim: number;
     swipe_not_interested: number; quick_exit: number;
   };
-  tranche: {
-    highThreshold: number; // 0.40
-    midThreshold: number;  // 0.20
-    highSize: number;      // 12
-    midSize: number;       // 8
-    tailSize: number;      // 10
-    publisherCap: number;  // 5
-    newUserThreshold: number; // 30 (below this → tail randomised)
-    feedSize: number;      // 30 (RETURN_FEED_SIZE)
-    maxArticlesPerCategory: number; // 15, relaxed only when alternatives are exhausted
-    minDistinctCategories: number;  // 4, when eligible alternatives exist
+  selection: {
+    feedSize: number;
+    categoryPenaltyStep: number;
+    publisherPenaltyStep: number;
+    discoverySlotInterval: number;
+    jitterRange: number;
+    maxArticlesPerCategory: number;
+    minDistinctCategories: number;
   };
   classification: {
-    quickExitDepth: number;     // 0.2
-    quickExitTimeoutSec: number;// 15
-    thoroughDepth: number;      // 0.70
-    thoroughTimeFraction: number; // 0.60 (retired — kept for stored-config compat)
-    shallowDepth: number;       // 0.40
-    flingWpm: number;           // 1750 — implied speed above this = fling
+    quickExitDepth: number;
+    quickExitTimeoutSec: number;
+    thoroughDepth: number;
+    shallowDepth: number;
   };
+  /** Human reading-speed plausibility bands (WPM calibration + engagement fallback). */
+  wpm: {
+    minPlausible: number;
+    maxPlausible: number;
+    minCalibrationWords: number;
+  };
+  /** Candidate-pool construction knobs (cron + on-the-fly fallback). */
+  pool: {
+    boxQueryLimit: number;
+    fallbackFreshCutoffDays: number;
+    fallbackQueryCap: number;
+    minArticleWords: number;
+  };
+  /** RSS ingestion + event-sync throughput knobs. */
+  ingestion: {
+    feedChunkSize: number;
+    parseTimeoutSec: number;
+    ogTimeoutSec: number;
+    maxEventsPerSync: number;
+  };
+  /** Housekeeping: cleanup crons, pruning, batch sizes. */
+  maintenance: {
+    cleanupMinAgeDays: number;
+    cleanupSampleSize: number;
+    cleanupDeleteFraction: number;
+    stickerExpiryDays: number;
+    stickerFlipCap: number;
+    trendingDecayMinScore: number;
+    seenTrimOver: number;
+    seenTrimKeep: number;
+    deleteBatchSize: number;
+  };
+  /** Paywall detection phrases (matched case-insensitively against title/description/body). */
+  paywallKeywords: string[];
 }
 
 // ------------------------------------------------------------------
 // Defaults — EXACTLY the current hard-coded values. The safe fallback.
 // ------------------------------------------------------------------
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   scoring: {
     personalization: SCORE_WEIGHTS.personalization,
     trending: SCORE_WEIGHTS.trending,
     recency: SCORE_WEIGHTS.recency,
     quality: SCORE_WEIGHTS.quality,
-    tailTrending: SCORE_WEIGHTS_TAIL.trending,
-    tailRecency: SCORE_WEIGHTS_TAIL.recency,
-    maxTrendingScore: MAX_TRENDING_SCORE,
+    trendingHalfSat: TRENDING_HALF_SAT,
+    recencyDaysConstant: RECENCY_DAYS_CONSTANT,
     publisherColdStartCategoryWeight: 0.90,
     publisherColdStartPublisherWeight: 0.10,
   },
   feedback: { ...FEEDBACK_DELTAS },
+  engagement: {
+    fullRatio: 1.25,
+    skimRatio: 2.0,
+    flingRatio: 3.0,
+    skimPenalty: 0.50,
+    flingPenalty: 0.0,
+  },
+  latent: {
+    clamp: LATENT_CLAMP,
+    nightlyDecay: LATENT_NIGHTLY_DECAY,
+    driftFloor: LATENT_DRIFT_FLOOR,
+    publisherSeed: DEFAULT_PUBLISHER_LATENT,
+    selectedLatent: DEFAULT_SELECTED_LATENT,
+    notInterestedLatent: DEFAULT_NOT_INTERESTED_LATENT,
+    neutralLatent: DEFAULT_NEUTRAL_LATENT,
+  },
+  sigmoid: {
+    steepness: 1,
+  },
   learning: {
-    baseRate: LEARNING_RATE,
-    categoryMultiplier: 1.0,
-    lengthMultiplier: 1.5,
-    publisherMultiplier: 2.0,
-    minWeight: MIN_CATEGORY_WEIGHT,
-    maxWeight: MAX_CATEGORY_WEIGHT,
-    dailyDecayRate: DAILY_DECAY_RATE,
-    defaultSelectedWeight: DEFAULT_SELECTED_WEIGHT,
-    defaultNotInterestedWeight: DEFAULT_NOT_INTERESTED_WEIGHT,
-    defaultNeutralWeight: DEFAULT_NEUTRAL_WEIGHT,
-    repeatedQuickExitThreshold: 3,
-    repeatedQuickExitLookbackDays: 14,
+    categorySensitivity: 1,
+    lengthSensitivity: 1,
+    publisherSensitivity: 1,
+    positiveSensitivity: 1,
+    rejectionSensitivity: 1,
+  },
+  rejection: {
+    categoryMinQuickExits: 2,
+    lengthMinQuickExits: 2,
+    publisherMinQuickExits: 2,
+    windowMs: 24 * 60 * 60 * 1000, // 24h rolling window
+    maxCategoryPenalty: 0.6875,   // one real rejection's worth, capped
   },
   trending: {
     decayRate: TRENDING_DECAY_RATE,
@@ -137,17 +207,14 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
   quality: {
     save: 0.010, unsave: -0.010, like: 0.005, unlike: -0.005,
     read_thorough: 0.005, read_skim: 0.001,
-    swipe_not_interested: -0.010, quick_exit: -0.005,
+    swipe_not_interested: -0.010, quick_exit: -0.010,
   },
-  tranche: {
-    highThreshold: 0.40,
-    midThreshold: 0.20,
-    highSize: 12,
-    midSize: 8,
-    tailSize: 10,
-    publisherCap: 5,
-    newUserThreshold: 30,
+  selection: {
     feedSize: 30,
+    categoryPenaltyStep: 0.15,
+    publisherPenaltyStep: 0.25,
+    discoverySlotInterval: 5,
+    jitterRange: 0.03,
     maxArticlesPerCategory: 15,
     minDistinctCategories: 4,
   },
@@ -155,10 +222,37 @@ export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
     quickExitDepth: 0.2,
     quickExitTimeoutSec: 15,
     thoroughDepth: 0.70,
-    thoroughTimeFraction: 0.60, // retired — pace no longer influences labels
     shallowDepth: 0.40,
-    flingWpm: FLING_WPM,
   },
+  wpm: {
+    minPlausible: MIN_PLAUSIBLE_WPM,
+    maxPlausible: MAX_PLAUSIBLE_WPM,
+    minCalibrationWords: MIN_WPM_CALIBRATION_WORDS,
+  },
+  pool: {
+    boxQueryLimit: 500,
+    fallbackFreshCutoffDays: 28,
+    fallbackQueryCap: 2000,
+    minArticleWords: 150,
+  },
+  ingestion: {
+    feedChunkSize: 5,
+    parseTimeoutSec: 15,
+    ogTimeoutSec: 6,
+    maxEventsPerSync: 100,
+  },
+  maintenance: {
+    cleanupMinAgeDays: 90,
+    cleanupSampleSize: 500,
+    cleanupDeleteFraction: 0.03,
+    stickerExpiryDays: 28,
+    stickerFlipCap: 2000,
+    trendingDecayMinScore: 1.0,
+    seenTrimOver: 5000,
+    seenTrimKeep: 4000,
+    deleteBatchSize: 400,
+  },
+  paywallKeywords: [...PAYWALL_KEYWORDS],
 };
 
 // ------------------------------------------------------------------
@@ -178,28 +272,50 @@ export function deepMerge(base: any, overrides: any): any {
   return overrides !== undefined ? overrides : base;
 }
 
-// Safe range map (dotted path → [min, max]). Unknown numeric leaves are
-// sanity-clamped so a bad write can never poison the algorithm.
-const NUM_RANGES: Record<string, [number, number]> = {
-  'scoring.personalization': [0, 1.5], 'scoring.trending': [0, 1.5], 'scoring.recency': [0, 1.5], 'scoring.quality': [0, 1.5],
-  'scoring.tailTrending': [0, 1.5], 'scoring.tailRecency': [0, 1.5], 'scoring.maxTrendingScore': [1, 200],
-  'scoring.publisherColdStartCategoryWeight': [0, 1], 'scoring.publisherColdStartPublisherWeight': [0, 1],
-  'learning.baseRate': [0, 1], 'learning.categoryMultiplier': [0, 5], 'learning.lengthMultiplier': [0, 5], 'learning.publisherMultiplier': [0, 5],
-  'learning.minWeight': [0.01, 1], 'learning.maxWeight': [1, 10], 'learning.dailyDecayRate': [0.5, 1],
-  'learning.defaultSelectedWeight': [1, 5], 'learning.defaultNotInterestedWeight': [0.01, 1], 'learning.defaultNeutralWeight': [0.5, 2],
-  'learning.repeatedQuickExitThreshold': [1, 20], 'learning.repeatedQuickExitLookbackDays': [1, 90],
-  'trending.decayRate': [0.5, 1],
-  'tranche.highThreshold': [0, 1], 'tranche.midThreshold': [0, 1], 'tranche.highSize': [1, 50], 'tranche.midSize': [1, 50], 'tranche.tailSize': [1, 50],
-  'tranche.publisherCap': [1, 30], 'tranche.newUserThreshold': [0, 500], 'tranche.feedSize': [1, 100],
-  'tranche.maxArticlesPerCategory': [1, 100], 'tranche.minDistinctCategories': [1, 20],
-  'classification.quickExitDepth': [0, 1], 'classification.quickExitTimeoutSec': [1, 120],
-  'classification.thoroughDepth': [0, 1], 'classification.thoroughTimeFraction': [0.1, 2], 'classification.shallowDepth': [0, 1],
-  'classification.flingWpm': [600, 50000],
+// Safe range map (dotted path → [min, max, step]). Unknown numeric leaves are
+// sanity-clamped so a bad write can never poison the algorithm. The step is
+// ignored by clamping and used by the Control Dashboard dials.
+export const NUM_RANGES: Record<string, [number, number, number]> = {
+  'scoring.personalization': [0, 1.5, 0.01], 'scoring.trending': [0, 1.5, 0.01], 'scoring.recency': [0, 1.5, 0.01], 'scoring.quality': [0, 1.5, 0.01],
+  'scoring.trendingHalfSat': [1, 200, 1], 'scoring.recencyDaysConstant': [1, 90, 1],
+  'scoring.publisherColdStartCategoryWeight': [0, 1, 0.01], 'scoring.publisherColdStartPublisherWeight': [0, 1, 0.01],
+  'engagement.fullRatio': [0.5, 3, 0.05], 'engagement.skimRatio': [1, 5, 0.05], 'engagement.flingRatio': [1, 8, 0.05],
+  'engagement.skimPenalty': [0, 1, 0.01], 'engagement.flingPenalty': [0, 1, 0.01],
+  'latent.clamp': [5, 50, 1], 'latent.nightlyDecay': [0.5, 1, 0.001], 'latent.driftFloor': [0, 3, 0.01],
+  'latent.publisherSeed': [-3, 3, 0.01], 'latent.selectedLatent': [0, 3, 0.01], 'latent.notInterestedLatent': [-3, 0, 0.01],
+  'sigmoid.steepness': [0.25, 4, 0.05],
+  'learning.categorySensitivity': [0, 2, 0.05], 'learning.lengthSensitivity': [0, 2, 0.05],
+  'learning.publisherSensitivity': [0, 2, 0.05], 'learning.positiveSensitivity': [0, 2, 0.05],
+  'learning.rejectionSensitivity': [0, 2, 0.05],
+  'selection.feedSize': [1, 100, 1], 'selection.categoryPenaltyStep': [0, 0.5, 0.01], 'selection.publisherPenaltyStep': [0, 0.5, 0.01],
+  'selection.discoverySlotInterval': [1, 20, 1], 'selection.jitterRange': [0, 0.1, 0.005],
+  'selection.maxArticlesPerCategory': [1, 100, 1], 'selection.minDistinctCategories': [1, 20, 1],
+  'rejection.categoryMinQuickExits': [1, 20, 1], 'rejection.lengthMinQuickExits': [1, 20, 1],
+  'rejection.publisherMinQuickExits': [1, 20, 1], 'rejection.windowMs': [24 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000, 24 * 60 * 60 * 1000],
+  'rejection.maxCategoryPenalty': [0.1, 2, 0.01],
+  'classification.quickExitDepth': [0, 1, 0.01], 'classification.quickExitTimeoutSec': [1, 120, 1],
+  'classification.thoroughDepth': [0, 1, 0.01], 'classification.shallowDepth': [0, 1, 0.01],
+  'wpm.minPlausible': [20, 300, 5], 'wpm.maxPlausible': [200, 1500, 10], 'wpm.minCalibrationWords': [0, 1000, 10],
+  'pool.boxQueryLimit': [50, 1000, 50], 'pool.fallbackFreshCutoffDays': [7, 90, 1],
+  'pool.fallbackQueryCap': [100, 5000, 100], 'pool.minArticleWords': [0, 1000, 10],
+  'ingestion.feedChunkSize': [1, 20, 1], 'ingestion.parseTimeoutSec': [5, 60, 1],
+  'ingestion.ogTimeoutSec': [2, 30, 1], 'ingestion.maxEventsPerSync': [20, 500, 10],
+  'maintenance.cleanupMinAgeDays': [30, 365, 1], 'maintenance.cleanupSampleSize': [100, 2000, 50],
+  'maintenance.cleanupDeleteFraction': [0, 0.2, 0.005], 'maintenance.stickerExpiryDays': [7, 90, 1],
+  'maintenance.stickerFlipCap': [100, 10000, 100], 'maintenance.trendingDecayMinScore': [0, 10, 0.1],
+  'maintenance.seenTrimOver': [1000, 20000, 100], 'maintenance.seenTrimKeep': [500, 15000, 100],
+  'maintenance.deleteBatchSize': [100, 500, 10],
 };
 
-for (const key of Object.keys(FEEDBACK_DELTAS)) NUM_RANGES[`feedback.${key}`] = [-1, 1];
-for (const key of Object.keys(DEFAULT_SCORING_CONFIG.trending)) NUM_RANGES[`trending.${key}`] = [-10, 10];
-for (const key of Object.keys(DEFAULT_SCORING_CONFIG.quality)) NUM_RANGES[`quality.${key}`] = [-0.2, 0.2];
+for (const key of Object.keys(FEEDBACK_DELTAS)) NUM_RANGES[`feedback.${key}`] = [-1, 1, 0.05];
+for (const key of Object.keys(DEFAULT_SCORING_CONFIG.trending)) NUM_RANGES[`trending.${key}`] = [-10, 10, 0.1];
+NUM_RANGES['trending.decayRate'] = [0.5, 1, 0.001]; // finer step than the generic trending range
+for (const key of Object.keys(DEFAULT_SCORING_CONFIG.quality)) NUM_RANGES[`quality.${key}`] = [-0.2, 0.2, 0.005];
+NUM_RANGES['engagement.fullRatio'] = [0.5, 3, 0.05];
+NUM_RANGES['engagement.skimRatio'] = [1, 5, 0.05];
+NUM_RANGES['engagement.flingRatio'] = [1, 8, 0.05];
+NUM_RANGES['engagement.skimPenalty'] = [0, 1, 0.01];
+NUM_RANGES['engagement.flingPenalty'] = [0, 1, 0.01];
 
 const clampNum = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -229,6 +345,65 @@ export function clampConfig(cfg: any): any {
     coldStart.publisherColdStartPublisherWeight = 0.10;
   }
   return clamped;
+}
+
+// ------------------------------------------------------------------
+// Sigmoid + latent + engagement math (pure, unit-testable)
+// ------------------------------------------------------------------
+
+/** Logistic sigmoid: maps unbounded latent x → (0,1), σ(0) = 0.5.
+ *  steepness scales the input: higher = sharper dislike↔like transitions,
+ *  lower = softer, more gradual preference strength. Default 1 (classic curve). */
+export function sigmoid(x: number, steepness = 1): number {
+  const s = Math.max(0.05, steepness);
+  return 1 / (1 + Math.exp(-(s * x)));
+}
+
+/** Inverse sigmoid (log-odds). */
+export function logit(p: number): number {
+  const q = Math.max(1e-6, Math.min(1 - 1e-6, p));
+  return Math.log(q / (1 - q));
+}
+
+/** Clamp a latent score to the safe write-time band. */
+export function clampLatent(x: number, cfg?: Pick<ScoringConfig, 'latent'>): number {
+  const limit = cfg?.latent?.clamp ?? 20;
+  return Math.max(-limit, Math.min(limit, x));
+}
+
+/**
+ * Engagement Index (E) — continuous trust for a read session.
+ * pace penalty is derived from implied speed ÷ the user's own averageWpm,
+ * so a naturally-fast reader is not misclassified as a skimmer.
+ * E = scrollDepth × pacePenalty ∈ [0,1]; E scales learning deltas.
+ */
+export function computeEngagementIndex(
+  scrollDepth: number,
+  sessionDurationMs: number,
+  actualWordCount: number | undefined,
+  averageWpm: number | undefined,
+  cfg: ScoringConfig
+): number {
+  const depth = Math.min(1, Math.max(0, scrollDepth || 0));
+  if (!actualWordCount || actualWordCount <= 0 || sessionDurationMs <= 0) return depth;
+  const consumedWords = Math.round(actualWordCount * depth);
+  if (consumedWords < cfg.wpm.minCalibrationWords) return depth;
+  const sessionWpm = consumedWords / (sessionDurationMs / 60_000);
+  const baseline = averageWpm && averageWpm > 0 ? averageWpm : cfg.wpm.maxPlausible;
+  const ratio = sessionWpm / baseline;
+  const e = cfg.engagement;
+  let pacePenalty: number;
+  if (ratio <= e.fullRatio) pacePenalty = 1;
+  else if (ratio <= e.skimRatio) {
+    const t = (ratio - e.fullRatio) / Math.max(1e-6, e.skimRatio - e.fullRatio);
+    pacePenalty = 1 - t * (1 - e.skimPenalty);
+  } else if (ratio <= e.flingRatio) {
+    const t = (ratio - e.skimRatio) / Math.max(1e-6, e.flingRatio - e.skimRatio);
+    pacePenalty = e.skimPenalty - t * (e.skimPenalty - e.flingPenalty);
+  } else {
+    pacePenalty = e.flingPenalty;
+  }
+  return depth * pacePenalty;
 }
 
 // ------------------------------------------------------------------

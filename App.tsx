@@ -68,7 +68,7 @@ function AppContent() {
     // Firestore listeners attached to the correct UID.
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user && lastUserId && user.uid !== lastUserId) {
-        console.log('[SubTick] UID changed mid-session, remounting navigation');
+        if (__DEV__) console.log('[SubTick] UID changed mid-session, remounting navigation');
         navKey += 1;
         setNavigationKey(navKey);
         lastUserId = user.uid;
@@ -146,12 +146,12 @@ function AppContent() {
         await verifyProfile();
       }
 
-      console.log('[SubTick] Auth initialized, userId:', user.uid, 'initialRoute:', cachedRoute || initialRoute);
+      if (__DEV__) console.log('[SubTick] Auth initialized, userId:', user.uid, 'initialRoute:', cachedRoute || initialRoute);
 
       // If the UID changed mid-session (e.g. Google account recovery),
       // bump the navigation key to force a clean remount of all screens.
       if (lastUserId && lastUserId !== user.uid) {
-        console.log('[SubTick] UID changed, remounting navigation');
+        if (__DEV__) console.log('[SubTick] UID changed, remounting navigation');
         navKey += 1;
         setNavigationKey(navKey);
       }
@@ -160,13 +160,13 @@ function AppContent() {
       // Non-essential setup must not compete with first-route rendering.
       setTimeout(() => {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { GoogleSignin } = require('@react-native-google-signin/google-signin');
           GoogleSignin.configure({
             webClientId: GOOGLE_WEB_CLIENT_ID,
           });
         } catch {
-          console.log('[SubTick] Google Sign-In native module not available (Expo Go — use dev client to test Google Sign-In)');
+          if (__DEV__) console.log('[SubTick] Google Sign-In native module not available (Expo Go — use dev client to test Google Sign-In)');
         }
         startOfflineManager();
       }, 0);

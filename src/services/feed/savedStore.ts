@@ -89,7 +89,7 @@ export async function markArticleSaved(articleId: string, extractedHtml: string,
             // instead of failing silently (the local save is unaffected).
             try {
               const outRaw = await AsyncStorage.getItem(PENDING_SAVE_MIRRORS_KEY);
-              const outbox: Array<Record<string, unknown>> = outRaw ? JSON.parse(outRaw) : [];
+              const outbox: Record<string, unknown>[] = outRaw ? JSON.parse(outRaw) : [];
               const payload: Record<string, unknown> = {
                 id: articleId,
                 title: article.title,
@@ -132,13 +132,13 @@ export async function flushPendingSaveMirrors(): Promise<number> {
     if (!userId) return 0;
     const outRaw = await AsyncStorage.getItem(PENDING_SAVE_MIRRORS_KEY);
     if (!outRaw) return 0;
-    const outbox = JSON.parse(outRaw) as Array<Record<string, unknown>>;
+    const outbox = JSON.parse(outRaw) as Record<string, unknown>[];
     if (outbox.length === 0) return 0;
 
     const savedRaw = await AsyncStorage.getItem(SAVED_ARTICLES_KEY);
     const savedIds: string[] = savedRaw ? JSON.parse(savedRaw) : [];
 
-    const remaining: Array<Record<string, unknown>> = [];
+    const remaining: Record<string, unknown>[] = [];
     let synced = 0;
     for (const entry of outbox) {
       if (!savedIds.includes(String(entry.id))) continue; // un-saved since queueing
@@ -205,7 +205,7 @@ export async function unmarkArticleSaved(articleId: string): Promise<void> {
         try {
           const outRaw = await AsyncStorage.getItem(PENDING_SAVE_MIRRORS_KEY);
           if (outRaw) {
-            const outbox = JSON.parse(outRaw) as Array<Record<string, unknown>>;
+            const outbox = JSON.parse(outRaw) as Record<string, unknown>[];
             const filtered = outbox.filter((entry) => entry.id !== articleId);
             if (filtered.length !== outbox.length) {
               await AsyncStorage.setItem(PENDING_SAVE_MIRRORS_KEY, JSON.stringify(filtered));

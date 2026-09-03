@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubTick — Curve Playground (T / P / Q / Gravitational / Custom)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23121212'/><text y='0.72em' x='0.5em' font-size='58' text-anchor='middle' dominant-baseline='middle'>📈</text></svg>">
+<style>
+  :root {
+    --bg-dark: #121212; --card-bg: #1B1B1B; --card-border: #2A2A2A;
+    --accent-primary: #C94B4B; --accent-success: #6FCF97; --accent-warning: #E2B93B; --accent-danger: #FF6B6B;
+    --text-main: #F5F5F5; --text-muted: #777777; --text-dim: #B5B5B5; --input-bg: #1B1B1B;
+    --curve-T: #ff9e4e; --curve-P: #4e9eff; --curve-Q: #4ecca3; --curve-GRAV: #c084fc; --curve-EXP: #f472b6; --curve-CUST: #38bdf8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-dark);
+    background-image:
+      radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+      radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.10) 0px, transparent 50%);
+    color: var(--text-main); min-height: 100vh;
+  }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; background: var(--card-bg); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--card-border); gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-logo { font-size: 26px; }
+  .brand-title { font-size: 19px; font-weight: 800; letter-spacing: -0.4px; }
+  .brand-subtitle { font-size: 12px; color: var(--text-muted); }
+  .header-badge {
+    font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+    background: rgba(255, 158, 78, 0.15); color: #fdba74; border: 1px solid rgba(255, 158, 78, 0.35); white-space: nowrap;
+  }
+  .layout { display: grid; grid-template-columns: 420px 1fr; gap: 18px; padding: 18px 24px 30px; align-items: start; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card-bg); backdrop-filter: blur(16px); border: 1px solid var(--card-border);
+    border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-title .src { font-size: 10.5px; color: var(--text-dim); font-weight: 500; text-transform: none; letter-spacing: 0; }
+</style>
+<style>
+  .param-group { display: flex; flex-direction: column; gap: 10px; }
+  .param-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .param-row label { font-size: 13px; color: var(--text-main); font-weight: 500; flex: 1; }
+  .param-row .val { font-family: 'JetBrains Mono', monospace; color: var(--accent-primary); font-size: 13px; min-width: 56px; text-align: right; }
+  input[type="range"] { accent-color: var(--accent-primary); width: 170px; }
+  input[type="number"], input[type="text"] {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px;
+    color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 4px 6px;
+  }
+  input[type="number"] { width: 90px; text-align: right; }
+  input[type="text"] { width: 100%; padding: 6px 8px; }
+  select {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px;
+    color: var(--text-main); font-size: 12px; padding: 5px 6px; font-family: 'JetBrains Mono', monospace;
+  }
+  textarea {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px;
+    color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    padding: 8px; width: 100%; min-height: 64px; resize: vertical;
+  }
+  .hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    background: var(--input-bg); border: 1px solid var(--card-border); color: var(--text-main);
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s ease;
+  }
+  .chip:hover { background: rgba(255,255,255,0.1); }
+  .chip.active { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(201,75,75,0.35); }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn-mini {
+    font-size: 11px; padding: 4px 9px; border-radius: 6px; border: 1px solid var(--card-border);
+    background: var(--input-bg); color: var(--text-muted); cursor: pointer; font-weight: 600;
+  }
+  .btn-mini:hover { color: var(--text-main); border-color: var(--text-dim); }
+  .btn-mini.primary { color: var(--text-main); border-color: var(--accent-primary); }
+  .step-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .step-cell {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px; text-align: center;
+  }
+  .step-cell .lbl { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .step-cell .num { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .step-cell .sub { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .up { color: var(--accent-success); }
+  .down { color: var(--accent-danger); }
+  .neutral { color: var(--text-dim); }
+  .sym-row { display: grid; grid-template-columns: 64px 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .sym-row:last-child { border-bottom: none; }
+  .sym-row .x { font-family: 'JetBrains Mono', monospace; color: var(--text-muted); font-size: 12px; }
+  .sym-row .up, .sym-row .down { font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; }
+  .sym-header { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .bar-row { display: grid; grid-template-columns: 22px 1fr 90px; gap: 8px; align-items: center; padding: 5px 0; }
+  .bar-row .rank { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+  .bar-row .name { font-size: 12px; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .score { font-size: 11px; color: var(--text-main); font-family: 'JetBrains Mono', monospace; text-align: right; }
+  .bar-track { background: rgba(255,255,255,0.06); height: 8px; border-radius: 4px; overflow: hidden; display: flex; }
+  .bar-seg { height: 100%; }
+  .bar-P { background: var(--curve-P); }
+  .bar-T { background: var(--curve-T); }
+  .bar-R { background: #e94560; }
+  .bar-Q { background: var(--curve-Q); }
+  canvas { display: block; width: 100%; height: 320px; background: #0E1117; border-radius: 12px; border: 1px solid var(--card-border); }
+  .small-canvas { height: 180px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--text-dim); }
+  .legend .swatch { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+  .formula { background: #05070d; border: 1px solid var(--card-border); border-radius: 8px; padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e5e7eb; line-height: 1.5; }
+  .formula b { color: var(--accent-primary); }
+  .err { color: var(--accent-danger); font-size: 11px; }
+  .ok { color: var(--accent-success); font-size: 11px; }
+  .warn { color: var(--accent-warning); font-size: 11px; }
+  .sim-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+  .sim-table th { text-align: right; color: var(--text-muted); font-weight: 600; padding: 3px 6px; border-bottom: 1px solid rgba(255,255,255,0.08); text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.4px; }
+  .sim-table th:first-child, .sim-table td:first-child { text-align: left; }
+  .sim-table td { text-align: right; padding: 3px 6px; color: var(--text-dim); }
+  .sim-table tr.neg td { color: rgba(255,107,107,0.85); }
+  .sim-scroll { max-height: 240px; overflow-y: auto; }
+  .sim-summary { background: #05070d; border: 1px solid var(--card-border); border-radius: 8px; padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6; }
+  .sim-summary b { color: var(--accent-primary); }
+  /* Help system */
+  .help-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%; margin-left: 6px;
+    background: rgba(255,255,255,0.08); border: 1px solid var(--card-border);
+    color: var(--text-dim); font-size: 11px; font-weight: 700; cursor: pointer;
+    font-family: 'Inter', sans-serif; flex-shrink: 0;
+  }
+  .help-btn:hover { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); }
+  .label-link { cursor: pointer; }
+  .label-link:hover { color: var(--accent-primary); }
+  .help-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 1000;
+    display: none; align-items: flex-start; justify-content: center; padding: 40px 20px;
+    overflow-y: auto; backdrop-filter: blur(4px);
+  }
+  .help-overlay.open { display: flex; }
+  .help-modal {
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px;
+    max-width: 760px; width: 100%; padding: 24px 28px; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .help-modal h2 { font-size: 17px; font-weight: 800; letter-spacing: -0.2px; margin-bottom: 4px; padding-right: 36px; }
+  .help-modal .help-src { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-bottom: 14px; }
+  .help-modal .help-body { font-size: 13px; line-height: 1.65; color: var(--text-dim); }
+  .help-modal .help-body h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin: 16px 0 6px; }
+  .help-modal .help-body p { margin-bottom: 8px; }
+  .help-modal .help-body b, .help-modal .help-body strong { color: var(--text-main); }
+  .help-modal .help-body code { background: #05070d; border: 1px solid var(--card-border); border-radius: 4px; padding: 1px 5px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #e5e7eb; }
+  .help-modal .help-body .formula { margin: 8px 0; }
+  .help-modal .help-body table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+  .help-modal .help-body th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .help-modal .help-body td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+  .help-modal .help-close {
+    position: absolute; top: 14px; right: 14px; width: 28px; height: 28px;
+    border-radius: 8px; background: var(--input-bg); border: 1px solid var(--card-border);
+    color: var(--text-muted); font-size: 15px; cursor: pointer; line-height: 1;
+  }
+  .help-modal .help-close:hover { color: var(--text-main); border-color: var(--text-dim); }
+  .zoom-ctl { display: inline-flex; align-items: center; gap: 4px; }
+  .zoom-ctl button {
+    width: 22px; height: 22px; border-radius: 6px; background: var(--input-bg);
+    border: 1px solid var(--card-border); color: var(--text-muted); cursor: pointer;
+    font-size: 13px; line-height: 1; font-family: 'JetBrains Mono', monospace;
+  }
+  .zoom-ctl button:hover { color: var(--text-main); border-color: var(--text-dim); }
+  .zoom-ctl .zval { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); min-width: 34px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-logo">📈</div>
+    <div>
+      <div class="brand-title">Curve Playground</div>
+      <div class="brand-subtitle">Test k, saturation, deltas, and user-action sequences for every scoring curve</div>
+    </div>
+  </div>
+  <div class="header-badge">EXPERIMENTAL · NOT LIVE</div>
+  <div class="hint" style="max-width:280px;text-align:right">Click any <span class="help-btn" style="display:inline-flex;vertical-align:middle">?</span> or a control label for a full explanation.</div>
+</header>
+
+<div class="layout">
+  <div id="leftCol">
+    <div class="card">
+      <div class="card-title">1. Pick a curve <span class="src">Switch canvas + symmetry + simulator</span><span class="help-btn" data-help="curves">?</span></div>
+      <div class="chip-row" id="curveChips"></div>
+    </div>
+
+    <div class="card" id="calibrationCard">
+      <div class="card-title" id="calibrationTitle">2. Calibration<span class="help-btn" id="calibrationHelpBtn" data-help="curves">?</span></div>
+      <div id="calibrationBody" class="param-group"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3. Feed weights <span class="src">SCORE_WEIGHTS · constants.ts</span><span class="help-btn" data-help="weights">?</span></div>
+      <div class="param-group">
+        <div class="param-row"><label class="label-link" data-help="wP">w<sub>P</sub> · Personalization</label><span class="val mono" id="wPv">0.60</span><input type="range" id="wP" min="0" max="1" step="0.01" value="0.60"></div>
+        <div class="param-row"><label class="label-link" data-help="wT">w<sub>T</sub> · Trending</label><span class="val mono" id="wTv">0.15</span><input type="range" id="wT" min="0" max="1" step="0.01" value="0.15"></div>
+        <div class="param-row"><label class="label-link" data-help="wR">w<sub>R</sub> · Recency</label><span class="val mono" id="wRv">0.10</span><input type="range" id="wR" min="0" max="1" step="0.01" value="0.10"></div>
+        <div class="param-row"><label class="label-link" data-help="wQ">w<sub>Q</sub> · Quality</label><span class="val mono" id="wQv">0.15</span><input type="range" id="wQ" min="0" max="1" step="0.01" value="0.15"></div>
+      </div>
+      <div class="hint" id="weightNormalised"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">4. User-action simulator <span class="src">δ from constants.ts</span><span class="help-btn" data-help="simulator">?</span></div>
+      <div class="param-row"><label class="label-link" data-help="actions">Action</label><select id="simAction"></select></div>
+      <div class="param-row"><label class="label-link" data-help="simcount">Count</label><input type="number" id="simCount" value="1" min="1" max="1000"></div>
+      <div class="param-row"><label class="label-link" data-help="engagement">Engagement E (reads)</label><span class="val mono" id="simEv">1.00</span><input type="range" id="simE" min="0" max="1" step="0.05" value="1"></div>
+      <div class="param-row">
+        <label></label>
+        <div style="display:flex;gap:6px">
+          <button class="btn-mini primary" id="simApply">Apply</button>
+          <button class="btn-mini" id="simReset">Reset</button>
+        </div>
+      </div>
+      <div class="sim-summary" id="simSummary"></div>
+      <div class="sim-scroll">
+        <table class="sim-table" id="simTable">
+          <thead><tr><th>#</th><th>action</th><th>δ</th><th>x→</th><th>score→</th></tr></thead>
+          <tbody id="simBody"></tbody>
+        </table>
+      </div>
+      <div class="hint" id="simHint"></div>
+    </div>
+  </div>
+
+  <div id="rightCol">
+    <div class="card">
+      <div class="card-title">Curve shape <span class="src"><span id="currentCurveLabel"></span> · <span id="currentCurveFormula"></span></span></div>
+      <div class="param-row" style="gap:8px">
+        <span class="hint" style="flex:1">X-axis auto-fits to your trajectory. Zoom out to see more curve shape:</span>
+        <span class="zoom-ctl" data-help="axis" style="cursor:pointer">
+          <button id="zoomOut" title="Wider view">−</button>
+          <span class="zval" id="zoomVal">1.0×</span>
+          <button id="zoomIn" title="Narrower view">+</button>
+        </span>
+        <span class="help-btn" data-help="mainCanvas">?</span>
+      </div>
+      <canvas id="mainCanvas"></canvas>
+      <div class="legend" id="mainLegend"></div>
+      <div class="hint">Click the canvas to move the marker. Faded dashed curves = other functions for comparison.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Responsiveness profile <span class="src">|f′(x)| — where each step has the most power</span><span class="help-btn" data-help="responsiveness">?</span></div>
+      <canvas id="respCanvas" class="small-canvas"></canvas>
+      <div class="legend" id="respLegend"></div>
+      <div class="hint" id="respHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step symmetry at the marker <span class="src">adaptive ±h step</span><span class="help-btn" data-help="symmetry">?</span></div>
+      <div class="step-grid">
+        <div class="step-cell"><div class="lbl">Current x</div><div class="num mono" id="curX">0.0</div><div class="sub" id="curScore">→ 0.500</div></div>
+        <div class="step-cell"><div class="lbl">Step +h</div><div class="num mono up" id="stepUp">+0.025</div><div class="sub" id="stepUpTo">→ 0.525</div></div>
+        <div class="step-cell"><div class="lbl">Step −h</div><div class="num mono down" id="stepDown">−0.025</div><div class="sub" id="stepDownTo">→ 0.475</div></div>
+      </div>
+      <div class="hint" id="symHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Asymmetry sweep <span class="src">Equal ±h steps at five points</span><span class="help-btn" data-help="sweep">?</span></div>
+      <div class="sym-row sym-header"><div class="x">x</div><div style="text-align:right">score(x)</div><div style="text-align:right">Δ +h</div><div style="text-align:right">Δ −h</div></div>
+      <div id="sweepBody"></div>
+      <div class="hint" style="margin-top:8px" id="sweepHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Return-to-neutral decay <span class="src">x<sub>n+1</sub> = x<sub>n</sub> · λ per day</span><span class="help-btn" data-help="decay">?</span></div>
+      <canvas id="decayCanvas" class="small-canvas"></canvas>
+      <div class="param-row" style="margin-top:4px">
+        <label>Start value</label>
+        <span class="val mono" id="startXv">1.5</span>
+        <input type="number" id="startX" value="1.5" step="0.1">
+      </div>
+      <div class="param-row">
+        <label>Days to simulate</label>
+        <span class="val mono" id="daysV">60</span>
+        <input type="range" id="days" min="7" max="365" step="1" value="60">
+      </div>
+      <div class="hint" id="decayHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Mini feed simulation <span class="src">12 fake articles, ranked with current weights</span><span class="help-btn" data-help="feed">?</span></div>
+      <div id="feedBody"></div>
+      <div class="hint">Stacked bars show the P/T/R/Q contribution to each article's final score.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Production constants — keep in sync with constants.ts + scoringConfig.ts */
+const PROD = {
+  TRENDING_HALF_SAT: 25,
+  TRENDING_DECAY_RATE: 0.9057,
+  RECENCY_DAYS_CONSTANT: 14,
+  LATENT_CLAMP: 20,
+  LATENT_NIGHTLY_DECAY: 0.95,
+  DEFAULT_PUBLISHER_LATENT: 1.386,
+  LATENT_DELTAS: {
+    save: 0.55, unsave: -0.55, like: 0.40, unlike: -0.40,
+    read_thorough: 0.275, read_skim: 0.10, read_shallow: 0.10,
+    swipe_next: 0.00, quick_exit: -0.6875, swipe_not_interested: -0.6875,
+  },
+  TRENDING_DELTAS: {
+    save: 3.0, unsave: -3.0, like: 2.0, unlike: -2.0,
+    read_thorough: 1.5, read_skim: 0.5, read_shallow: 0.2,
+    swipe_next: 0.0, quick_exit: 0.0, swipe_not_interested: 0.0,
+  },
+  QUALITY_DELTAS: {
+    save: 0.010, unsave: -0.010, like: 0.005, unlike: -0.005,
+    read_thorough: 0.005, read_skim: 0.001, read_shallow: 0.0,
+    swipe_next: 0.0, quick_exit: -0.010, swipe_not_interested: -0.010,
+  },
+  SCORE_WEIGHTS: { P: 0.60, T: 0.15, R: 0.10, Q: 0.15 },
+  ENGAGEMENT: { fullRatio: 1.25, skimRatio: 2.0, flingRatio: 3.0, skimPenalty: 0.50, flingPenalty: 0.0 },
+};
+const ACTION_LABELS = {
+  save: 'save', unsave: 'unsave', like: 'like', unlike: 'unlike',
+  read_thorough: 'read_thorough', read_skim: 'read_skim', read_shallow: 'read_shallow',
+  swipe_next: 'swipe_next', quick_exit: 'quick_exit', swipe_not_interested: 'not_interested',
+};
+</script>
+
+<script>
+/* Curve catalogue + live state */
+const CURVES = {
+  T:    { label:'T · Trending',            color:'#ff9e4e', domain:[-1, 60], neutral:0, kind:'trending' },
+  P:    { label:'P · Personalization',     color:'#4e9eff', domain:[-5, 5],  neutral:0, kind:'latent' },
+  Q:    { label:'Q · Publisher Quality',   color:'#4ecca3', domain:[-5, 5],  neutral:0, kind:'latent' },
+  GRAV: { label:'GRAV · Gravitational',    color:'#c084fc', domain:[-5, 5],  neutral:0, kind:'latent' },
+  EXP:  { label:'EXP · Exponential',       color:'#f472b6', domain:[-5, 5],  neutral:0, kind:'latent' },
+  CUST: { label:'CUST · Custom JS',        color:'#38bdf8', domain:[-1, 60], neutral:0, kind:'latent' },
+};
+
+const state = {
+  curve: 'T',
+  markerX: 10,
+  k: PROD.TRENDING_HALF_SAT,
+  clamp: PROD.LATENT_CLAMP,
+  scaleP: 1.0,
+  scaleQ: 1.0,
+  gravA: 0.05,
+  expS: 1.5,
+  decay: PROD.LATENT_NIGHTLY_DECAY,
+  customExpr: '0.5 + 0.5 * Math.tanh(0.05 * x * x * x)',
+  weights: { ...PROD.SCORE_WEIGHTS },
+  startX: 1.5,
+  days: 60,
+  simSteps: [],
+  simE: 1.0,
+  zoom: 1.0,
+};
+
+function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+function sigmoidScaled(x, s) { return 1 / (1 + Math.exp(-x / Math.max(0.01, s))); }
+function clampX(x, c) { return Math.max(-c, Math.min(c, x)); }
+function curveT(S, k) { const s = Math.max(0, S); return s / (s + k); }
+function curveR(daysOld, tau) { return 1 / (1 + daysOld / tau); }
+function curveGrav(x, a) { return 0.5 + 0.5 * Math.tanh(a * x * x * x); }
+function curveExp(x, s) {
+  const sx = Math.sign(x);
+  return 0.5 + 0.5 * sx * (1 - Math.exp(-Math.abs(x) / Math.max(0.01, s)));
+}
+
+function activeFn() {
+  const c = state.curve;
+  if (c === 'T') return S => curveT(S, state.k);
+  if (c === 'P') return x => sigmoidScaled(clampX(x, state.clamp), state.scaleP);
+  if (c === 'Q') return y => sigmoidScaled(clampX(y, state.clamp), state.scaleQ);
+  if (c === 'GRAV') return x => curveGrav(clampX(x, state.clamp), state.gravA);
+  if (c === 'EXP') return x => curveExp(clampX(x, state.clamp), state.expS);
+  if (c === 'CUST') {
+    try {
+      const fn = new Function('S', 'x', 'k', 'lambda', 'return (' + state.customExpr + ');');
+      return x => { const v = fn(x, x, state.k, state.decay); return Number.isFinite(v) ? v : NaN; };
+    } catch (e) { return () => NaN; }
+  }
+  return () => NaN;
+}
+function curveRange(c) { return CURVES[c].domain; }
+function curveColor(c) { return CURVES[c].color; }
+function curveKind() { return CURVES[state.curve].kind; }
+
+/* Auto-fitting x-domain: base domain ∪ marker ∪ trajectory, padded, snapped */
+function visibleDomain(c) {
+  const base = CURVES[c].domain;
+  let lo = base[0], hi = base[1];
+  const include = v => { if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } };
+  include(state.markerX);
+  for (const s of state.simSteps) include(s.x);
+  const span = Math.max(1e-6, hi - lo);
+  const pad = span * 0.12 * (state.zoom || 1);
+  lo -= pad; hi += pad;
+  return [lo, hi];
+}
+
+/* Nice tick step via 1-2-5 progression */
+function niceStep(span, target) {
+  const raw = span / Math.max(2, target);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  return (norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10) * mag;
+}
+function tickDecimals(step) { return Math.max(0, -Math.floor(Math.log10(step) + 1e-9)); }
+
+function stepSize(c) {
+  const [a, b] = visibleDomain(c);
+  const raw = (b - a) / 30;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const snap = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
+  return snap * mag;
+}
+
+function deriv(fn, x, h) {
+  const hh = Math.max(1e-6, Math.abs(h) || 1e-3);
+  const y1 = fn(x - hh), y2 = fn(x + hh);
+  if (!Number.isFinite(y1) || !Number.isFinite(y2)) return NaN;
+  return (y2 - y1) / (2 * hh);
+}
+function fmt(v, dp) { if (!Number.isFinite(v)) return '—'; return v.toFixed(dp); }
+</script>
+
+<script>
+/* Canvas helpers */
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+function drawAxes(ctx, w, h, xMin, xMax, yMin, yMax, padL, padR, padT, padB) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.fillStyle = 'rgba(180,180,180,0.55)';
+  for (let i = 0; i <= 4; i++) {
+    const yv = yMin + (yMax - yMin) * (i / 4);
+    const py = padT + (h - padT - padB) * (1 - (yv - yMin) / (yMax - yMin));
+    ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(w - padR, py); ctx.stroke();
+    ctx.fillText(yv.toFixed(2), 4, py + 3);
+  }
+  // Nice x ticks (1-2-5 progression) so extended domains stay readable
+  const step = niceStep(xMax - xMin, 7);
+  const dp = tickDecimals(step);
+  const first = Math.ceil(xMin / step) * step;
+  for (let xv = first; xv <= xMax + step * 0.001; xv += step) {
+    const px = padL + (w - padL - padR) * ((xv - xMin) / (xMax - xMin));
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, h - padB); ctx.stroke();
+    const label = Math.abs(xv) < step * 0.001 ? '0' : xv.toFixed(dp);
+    ctx.fillText(label, px - ctx.measureText(label).width / 2, h - padB + 14);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.moveTo(padL, padT); ctx.lineTo(padL, h - padB); ctx.lineTo(w - padR, h - padB);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function plotCurve(ctx, fn, color, w, h, xMin, xMax, yMin, yMax, padL, padR, padT, padB, dashed, lw) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw || 2.5;
+  if (dashed) ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  const N = 240;
+  let started = false;
+  for (let i = 0; i <= N; i++) {
+    const xv = xMin + (xMax - xMin) * (i / N);
+    const yv = fn(xv);
+    if (!Number.isFinite(yv)) { started = false; continue; }
+    const yClamped = Math.max(yMin, Math.min(yMax, yv));
+    const px = padL + (w - padL - padR) * ((xv - xMin) / (xMax - xMin));
+    const py = padT + (h - padT - padB) * (1 - (yClamped - yMin) / (yMax - yMin));
+    if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMarker(ctx, x, fn, color, w, h, xMin, xMax, yMin, yMax, padL, padR, padT, padB) {
+  const y = fn(x);
+  if (!Number.isFinite(y)) return null;
+  const px = padL + (w - padL - padR) * ((x - xMin) / (xMax - xMin));
+  const py = padT + (h - padT - padB) * (1 - (Math.max(yMin, Math.min(yMax, y)) - yMin) / (yMax - yMin));
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, h - padB); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(w - padR, py); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  return { px, py, x, y };
+}
+
+function buildLegend(el, items) {
+  el.innerHTML = items.map(i =>
+    '<span><span class="swatch" style="background:' + i.color + '"></span>' + i.text + '</span>'
+  ).join('');
+}
+</script>
+
+<script>
+/* Main canvas render + responsiveness profile */
+function renderMain() {
+  const canvas = document.getElementById('mainCanvas');
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 36, padR = 12, padT = 12, padB = 26;
+  const [xMin, xMax] = visibleDomain(state.curve);
+  drawAxes(ctx, w, h, xMin, xMax, 0, 1, padL, padR, padT, padB);
+
+  for (const key of Object.keys(CURVES)) {
+    if (key === state.curve) continue;
+    const fn = makeFnFor(key);
+    plotCurve(ctx, fn, CURVES[key].color + '55', w, h, xMin, xMax, 0, 1, padL, padR, padT, padB, true, 1.5);
+  }
+
+  const fn = activeFn();
+  plotCurve(ctx, fn, curveColor(state.curve), w, h, xMin, xMax, 0, 1, padL, padR, padT, padB, false, 2.5);
+
+  if (state.simSteps.length > 0) {
+    ctx.save();
+    for (let i = 0; i < state.simSteps.length; i++) {
+      const s = state.simSteps[i];
+      const px = padL + (w - padL - padR) * ((s.x - xMin) / (xMax - xMin));
+      const py = padT + (h - padT - padB) * (1 - Math.max(0, Math.min(1, s.score)));
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(px, py, i === state.simSteps.length - 1 ? 4.5 : 2.5, 0, Math.PI * 2); ctx.fill();
+      if (i > 0) {
+        const p = state.simSteps[i - 1];
+        const px0 = padL + (w - padL - padR) * ((p.x - xMin) / (xMax - xMin));
+        const py0 = padT + (h - padT - padB) * (1 - Math.max(0, Math.min(1, p.score)));
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+        ctx.beginPath(); ctx.moveTo(px0, py0); ctx.lineTo(px, py); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  drawMarker(ctx, state.markerX, fn, curveColor(state.curve), w, h, xMin, xMax, 0, 1, padL, padR, padT, padB);
+
+  const meta = CURVES[state.curve];
+  document.getElementById('currentCurveLabel').textContent = meta.label;
+  document.getElementById('currentCurveFormula').textContent = formulaFor(state.curve);
+  buildLegend(document.getElementById('mainLegend'), Object.keys(CURVES).map(key => ({
+    color: CURVES[key].color, text: CURVES[key].label + (key === state.curve ? ' (active)' : ''),
+  })));
+}
+
+function makeFnFor(key) {
+  if (key === 'T') return S => curveT(S, state.k);
+  if (key === 'P') return x => sigmoidScaled(clampX(x, state.clamp), state.scaleP);
+  if (key === 'Q') return y => sigmoidScaled(clampX(y, state.clamp), state.scaleQ);
+  if (key === 'GRAV') return x => curveGrav(clampX(x, state.clamp), state.gravA);
+  if (key === 'EXP') return x => curveExp(clampX(x, state.clamp), state.expS);
+  if (key === 'CUST') {
+    try {
+      const fn = new Function('S', 'x', 'k', 'lambda', 'return (' + state.customExpr + ');');
+      return x => { const v = fn(x, x, state.k, state.decay); return Number.isFinite(v) ? v : NaN; };
+    } catch (e) { return () => NaN; }
+  }
+}
+
+function formulaFor(c) {
+  if (c === 'T') return 'S / (S + ' + state.k + ')';
+  if (c === 'P') return 'σ(x / ' + state.scaleP.toFixed(1) + ')';
+  if (c === 'Q') return 'σ(y / ' + state.scaleQ.toFixed(1) + ')';
+  if (c === 'GRAV') return '0.5 + 0.5·tanh(' + state.gravA + '·x³)';
+  if (c === 'EXP') return '0.5 + 0.5·sign(x)·(1−e^(−|x|/' + state.expS.toFixed(1) + '))';
+  if (c === 'CUST') return state.customExpr;
+}
+</script>
+
+<script>
+/* Responsiveness: |f'(x)| for active curve vs production sigmoid */
+function renderResponsiveness() {
+  const canvas = document.getElementById('respCanvas');
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 36, padR = 12, padT = 12, padB = 26;
+  const [xMin, xMax] = visibleDomain(state.curve);
+  const fn = activeFn();
+  const refFn = x => sigmoidScaled(clampX(x, state.clamp), 1.0);
+  const hh = (xMax - xMin) / 400;
+  let yMax = 0;
+  for (let i = 0; i <= 120; i++) {
+    const xv = xMin + (xMax - xMin) * (i / 120);
+    const d1 = Math.abs(deriv(fn, xv, hh));
+    const d2 = Math.abs(deriv(refFn, xv, hh));
+    if (Number.isFinite(d1)) yMax = Math.max(yMax, d1);
+    if (Number.isFinite(d2)) yMax = Math.max(yMax, d2);
+  }
+  yMax = Math.max(0.02, yMax * 1.15);
+  drawAxes(ctx, w, h, xMin, xMax, 0, yMax, padL, padR, padT, padB);
+
+  plotCurve(ctx, x => Math.abs(deriv(refFn, x, hh)), '#ffffff66', w, h, xMin, xMax, 0, yMax, padL, padR, padT, padB, true, 1.5);
+  plotCurve(ctx, x => Math.abs(deriv(fn, x, hh)), curveColor(state.curve), w, h, xMin, xMax, 0, yMax, padL, padR, padT, padB, false, 2.5);
+
+  buildLegend(document.getElementById('respLegend'), [
+    { color: curveColor(state.curve), text: '|f′(x)| · ' + CURVES[state.curve].label },
+    { color: '#ffffff', text: '|σ′(x)| · production sigmoid' },
+  ]);
+
+  const hint = document.getElementById('respHint');
+  if (state.curve === 'P' || state.curve === 'Q') {
+    hint.innerHTML = '<span class="warn">Production sigmoid:</span> responsiveness peaks at <b>neutral</b> and shrinks as |x| grows — strong preferences become <b>hard</b> to change.';
+  } else if (state.curve === 'GRAV') {
+    hint.innerHTML = '<span class="ok">Gravitational tanh(a·x³):</span> responsiveness is <b>~0 at neutral</b> and <b>peaks away from neutral</b>. This is the property you asked about — an equal-size step has <b>more</b> power the further from neutral you are, until it saturates at the extremes.';
+  } else if (state.curve === 'EXP') {
+    hint.innerHTML = '<span class="warn">Exponential:</span> steepest at neutral (like sigmoid) but with <b>fatter shoulders</b>.';
+  } else if (state.curve === 'T') {
+    hint.innerHTML = '<span class="warn">Michaelis-Menten T:</span> most responsive at S=0, declines monotonically. k only stretches the x-axis, never changes the shape.';
+  } else {
+    hint.innerHTML = 'Compare the active |f′(x)| (colored) against the production sigmoid (white dashed). Higher = each unit of x moves the score more.';
+  }
+}
+</script>
+
+<script>
+/* Step symmetry + asymmetry sweep */
+function renderStepSymmetry() {
+  const fn = activeFn();
+  const x = state.markerX;
+  const h = stepSize(state.curve);
+  const y0 = fn(x), yUp = fn(x + h), yDn = fn(x - h);
+  const dUp = (Number.isFinite(y0) && Number.isFinite(yUp)) ? yUp - y0 : NaN;
+  const dDn = (Number.isFinite(y0) && Number.isFinite(yDn)) ? yDn - y0 : NaN;
+
+  document.getElementById('curX').textContent = fmt(x, 2);
+  document.getElementById('curScore').textContent = '→ ' + fmt(y0, 3);
+  const upEl = document.getElementById('stepUp');
+  upEl.textContent = (dUp >= 0 ? '+' : '') + fmt(dUp, 4);
+  upEl.className = 'num mono ' + (dUp >= 0 ? 'up' : 'down');
+  document.getElementById('stepUpTo').textContent = '→ ' + fmt(yUp, 3) + ' (h=' + fmt(h, 2) + ')';
+  const dnEl = document.getElementById('stepDown');
+  dnEl.textContent = (dDn >= 0 ? '+' : '') + fmt(dDn, 4);
+  dnEl.className = 'num mono ' + (dDn >= 0 ? 'up' : 'down');
+  document.getElementById('stepDownTo').textContent = '→ ' + fmt(yDn, 3) + ' (h=' + fmt(h, 2) + ')';
+
+  const hint = document.getElementById('symHint');
+  if (!Number.isFinite(dUp) || !Number.isFinite(dDn)) {
+    hint.innerHTML = '<span class="err">Invalid expression or out-of-range x.</span>';
+    return;
+  }
+  const towardNeutral = x > 0 ? dDn : dUp;
+  const awayNeutral = x > 0 ? dUp : dDn;
+  const ratio = Math.abs(towardNeutral / Math.max(1e-9, awayNeutral));
+  if (Math.abs(x) < 1e-6) {
+    hint.innerHTML = '<span class="ok">At neutral.</span> Up/down steps differ by ' + fmt(Math.abs(dUp / Math.max(1e-9, dDn)), 3) + '× (≈1 = symmetric).';
+  } else if (ratio > 1.02) {
+    hint.innerHTML = '<span class="ok">Return-to-neutral is stronger</span>: moving back toward 0 moves the score ' + fmt(ratio, 2) + '× as much as an equal step further away.';
+  } else if (ratio < 0.98) {
+    hint.innerHTML = '<span class="warn">Push-away is stronger</span>: moving further from neutral moves the score ' + fmt(1 / Math.max(1e-9, ratio), 2) + '× as much as a return step.';
+  } else {
+    hint.innerHTML = '<span class="neutral">Locally symmetric</span>: an equal ±h step moves the score equally both ways.';
+  }
+}
+
+function renderSweep() {
+  const fn = activeFn();
+  const [xMin, xMax] = visibleDomain(state.curve);
+  const h = stepSize(state.curve);
+  const points = [xMin, xMin + (xMax - xMin) * 0.25, xMin + (xMax - xMin) * 0.5, xMin + (xMax - xMin) * 0.75, xMax];
+  const body = document.getElementById('sweepBody');
+  body.innerHTML = '';
+  for (const x of points) {
+    const y0 = fn(x), yUp = fn(x + h), yDn = fn(x - h);
+    const dUp = (Number.isFinite(y0) && Number.isFinite(yUp)) ? yUp - y0 : NaN;
+    const dDn = (Number.isFinite(y0) && Number.isFinite(yDn)) ? yDn - y0 : NaN;
+    const row = document.createElement('div');
+    row.className = 'sym-row';
+    row.innerHTML =
+      '<div class="x">' + fmt(x, 2) + '</div>' +
+      '<div class="mono" style="text-align:right">' + fmt(y0, 3) + '</div>' +
+      '<div class="up">' + (Number.isFinite(dUp) ? (dUp >= 0 ? '+' : '') + fmt(dUp, 4) : '—') + '</div>' +
+      '<div class="down">' + (Number.isFinite(dDn) ? (dDn >= 0 ? '+' : '') + fmt(dDn, 4) : '—') + '</div>';
+    body.appendChild(row);
+  }
+  document.getElementById('sweepHint').innerHTML =
+    'Step h = <b>' + fmt(h, 2) + '</b>. A symmetric curve shows mirrored <span class="up">+h</span> / <span class="down">−h</span> columns. The production σ is symmetric — its real asymmetry comes from <b>δ<sub>neg</sub> = −2.5×δ<sub>pos</sub></b>, not the curve shape.';
+}
+</script>
+
+<script>
+/* Calibration panel — per-curve controls */
+function renderCalibration() {
+  const body = document.getElementById('calibrationBody');
+  const title = document.getElementById('calibrationTitle');
+  const c = state.curve;
+  const helpMap = { T: 'calT', P: 'calPQ', Q: 'calPQ', GRAV: 'calGrav', EXP: 'calExp', CUST: 'calCust' };
+  const hb = document.getElementById('calibrationHelpBtn');
+  if (hb) hb.setAttribute('data-help', helpMap[c] || 'curves');
+
+  if (c === 'T') {
+    title.innerHTML = '2. Calibration · T <span class="src">TRENDING_HALF_SAT · constants.ts</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>k · half-saturation</label><span class="val mono" id="kV">' + state.k + '</span><input type="range" id="k" min="1" max="200" step="1" value="' + state.k + '"></div>' +
+      '<div class="param-row"><label>Reset to prod</label><button class="btn-mini" id="kReset">k = 25</button></div>' +
+      '<div class="formula">T = S / (S + k) → half-saturation at <b>S = k</b><br>k=25 ⇒ T(25)=0.500 · T(50)=0.667 · T(100)=0.800</div>' +
+      '<div class="hint">Smaller k = trending more sensitive. Bigger k = harder to reach the top.</div>';
+    document.getElementById('k').addEventListener('input', e => { state.k = +e.target.value; document.getElementById('kV').textContent = state.k; updateAll(); });
+    document.getElementById('kReset').addEventListener('click', () => { state.k = PROD.TRENDING_HALF_SAT; updateAll(); });
+  }
+  else if (c === 'P' || c === 'Q') {
+    const isP = c === 'P';
+    const sVal = isP ? state.scaleP : state.scaleQ;
+    const id = isP ? 'scaleP' : 'scaleQ';
+    title.innerHTML = '2. Calibration · ' + (isP ? 'P' : 'Q') + ' <span class="src">σ(x/s) · steepness</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>Steepness s (scale)</label><span class="val mono" id="sV">' + sVal.toFixed(2) + '</span><input type="range" id="' + id + '" min="0.2" max="4" step="0.1" value="' + sVal + '"></div>' +
+      '<div class="param-row"><label>Reset to prod</label><button class="btn-mini" id="sReset">s=1.0</button></div>' +
+      '<div class="formula">' + (isP ? 'P' : 'Q') + ' = σ(x / s)<br>s=' + sVal.toFixed(1) + ' → score at ' + (isP ? 'x=2.20: ' : 'y=1.386: ') + sigmoidScaled(isP ? 2.20 : 1.386, sVal).toFixed(2) + '</div>' +
+      '<div class="hint">Bigger s = shallower. Smaller s = steeper. Changes <b>steepness</b> only, never symmetry.</div>';
+    document.getElementById(id).addEventListener('input', e => {
+      const v = +e.target.value; if (isP) state.scaleP = v; else state.scaleQ = v;
+      document.getElementById('sV').textContent = v.toFixed(2); updateAll();
+    });
+    document.getElementById('sReset').addEventListener('click', () => { if (isP) state.scaleP = 1.0; else state.scaleQ = 1.0; updateAll(); });
+  }
+  else if (c === 'GRAV') {
+    title.innerHTML = '2. Calibration · GRAV <span class="src">tanh(a·x³) — far-from-neutral power</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>a · curvature</label><span class="val mono" id="gV">' + state.gravA.toFixed(3) + '</span><input type="range" id="gravA" min="0.005" max="0.4" step="0.005" value="' + state.gravA + '"></div>' +
+      '<div class="param-row"><label>Reset</label><button class="btn-mini" id="gReset">a=0.05</button></div>' +
+      '<div class="formula">GRAV = 0.5 + 0.5·tanh(a·x³)<br>inflection at x ≈ (1/a)^(1/3) = ' + Math.cbrt(1 / state.gravA).toFixed(1) + '</div>' +
+      '<div class="hint">Flat near neutral, <b>accelerating</b> mid-range, then saturating. Larger a pulls the inflection toward 0.</div>';
+    document.getElementById('gravA').addEventListener('input', e => { state.gravA = +e.target.value; document.getElementById('gV').textContent = state.gravA.toFixed(3); updateAll(); });
+    document.getElementById('gReset').addEventListener('click', () => { state.gravA = 0.05; updateAll(); });
+  }
+  else if (c === 'EXP') {
+    title.innerHTML = '2. Calibration · EXP <span class="src">symmetric exponential saturation</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>s · length scale</label><span class="val mono" id="eV">' + state.expS.toFixed(2) + '</span><input type="range" id="expS" min="0.2" max="6" step="0.1" value="' + state.expS + '"></div>' +
+      '<div class="param-row"><label>Reset</label><button class="btn-mini" id="eReset">s=1.5</button></div>' +
+      '<div class="formula">EXP = 0.5 + 0.5·sign(x)·(1 − e^(−|x|/s))<br>half-height at |x| = s·ln(2) = ' + (state.expS * Math.LN2).toFixed(1) + '</div>' +
+      '<div class="hint">Like sigmoid, steepest at neutral but with <b>fatter shoulders</b>.</div>';
+    document.getElementById('expS').addEventListener('input', e => { state.expS = +e.target.value; document.getElementById('eV').textContent = state.expS.toFixed(2); updateAll(); });
+    document.getElementById('eReset').addEventListener('click', () => { state.expS = 1.5; updateAll(); });
+  }
+  else if (c === 'CUST') {
+    title.innerHTML = '2. Calibration · Custom <span class="src">free-form JS</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>JS expression (x is the input)</label></div>' +
+      '<textarea id="customExpr" rows="2">' + state.customExpr + '</textarea>' +
+      '<div class="param-row" style="margin-top:6px"><label>Presets</label><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="btn-mini" data-preset="S / (S + 25)">prod T</button>' +
+        '<button class="btn-mini" data-preset="1 / (1 + Math.exp(-x))">σ(x)</button>' +
+        '<button class="btn-mini" data-preset="0.5 + 0.5 * Math.tanh(0.05 * x * x * x)">grav</button>' +
+        '<button class="btn-mini" data-preset="0.5 + 0.5 * Math.sign(x) * (1 - Math.exp(-Math.abs(x) / 1.5))">exp</button>' +
+      '</div></div>' +
+      '<div class="formula">You can reference <b>x</b>, <b>S</b> (= x), <b>k</b>, <b>lambda</b>.</div>';
+    const ta = document.getElementById('customExpr');
+    ta.addEventListener('input', e => { state.customExpr = e.target.value; updateAll(); });
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => { state.customExpr = btn.getAttribute('data-preset'); ta.value = state.customExpr; updateAll(); });
+    });
+  }
+}
+</script>
+
+<script>
+/* Action simulator — apply real δ from constants.ts */
+const READ_VISITS = new Set(['read_thorough', 'read_skim', 'read_shallow', 'swipe_next']);
+
+function simDeltaTable() {
+  if (state.curve === 'T') return 'trending';
+  if (state.curve === 'Q') return 'quality';
+  return 'latent';
+}
+function simDeltaFor(action) {
+  const t = simDeltaTable();
+  if (t === 'trending') return PROD.TRENDING_DELTAS[action];
+  if (t === 'quality') return PROD.QUALITY_DELTAS[action];
+  return PROD.LATENT_DELTAS[action];
+}
+function simScaledDelta(action) {
+  const d = simDeltaFor(action);
+  const scale = (simDeltaTable() === 'latent' && READ_VISITS.has(action)) ? state.simE : 1;
+  return d * scale;
+}
+
+function buildActionSelect() {
+  const sel = document.getElementById('simAction');
+  const order = ['read_thorough', 'read_shallow', 'read_skim', 'save', 'like', 'swipe_next', 'quick_exit', 'swipe_not_interested', 'unlike', 'unsave'];
+  sel.innerHTML = '';
+  for (const a of order) {
+    const opt = document.createElement('option');
+    opt.value = a;
+    opt.textContent = ACTION_LABELS[a] + '  (δ=' + (simDeltaFor(a) >= 0 ? '+' : '') + simDeltaFor(a) + ')';
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', updateSimHint);
+}
+
+function applySimAction() {
+  const action = document.getElementById('simAction').value;
+  const count = Math.max(1, Math.min(1000, parseInt(document.getElementById('simCount').value, 10) || 1));
+  const fn = activeFn();
+  const d = simScaledDelta(action);
+  let x = state.simSteps.length ? state.simSteps[state.simSteps.length - 1].x : 0;
+  const startIdx = state.simSteps.length;
+  for (let i = 0; i < count; i++) {
+    const before = x;
+    const scoreBefore = fn(before);
+    x = before + d;
+    // Production parity: weightUpdater.ts clamps latents to ±LATENT_CLAMP at
+    // write time. Trending score S has no clamp (crowd heat is unbounded).
+    if (curveKind() !== 'trending') x = clampX(x, state.clamp);
+    state.simSteps.push({ idx: startIdx + i + 1, action, delta: d, x, score: fn(x), before, scoreBefore });
+  }
+  updateAll();
+}
+function resetSim() { state.simSteps = []; updateAll(); }
+
+function renderActionSimulator() {
+  const fn = activeFn();
+  const x = state.simSteps.length ? state.simSteps[state.simSteps.length - 1].x : 0;
+  const score = Number.isFinite(fn(x)) ? fn(x) : NaN;
+  const tableName = { latent: 'LATENT_DELTAS (personal weights, E-scaled reads)', trending: 'TRENDING_DELTAS (crowd heat S)', quality: 'QUALITY_DELTAS (collective reputation y)' }[simDeltaTable()];
+  document.getElementById('simSummary').innerHTML =
+    'Curve <b>' + CURVES[state.curve].label + '</b> · <b>' + tableName + '</b><br>' +
+    'x = <b>' + fmt(x, 3) + '</b> → score = <b>' + fmt(score, 3) + '</b>' +
+    (state.simSteps.length ? ' · ' + state.simSteps.length + ' step(s)' : '');
+
+  const body = document.getElementById('simBody');
+  body.innerHTML = '';
+  for (const s of state.simSteps) {
+    const tr = document.createElement('tr');
+    if (s.delta < 0) tr.className = 'neg';
+    tr.innerHTML =
+      '<td>' + s.idx + '</td>' +
+      '<td>' + ACTION_LABELS[s.action] + '</td>' +
+      '<td>' + (s.delta >= 0 ? '+' : '') + fmt(s.delta, 4) + '</td>' +
+      '<td>' + fmt(s.before, 2) + ' → ' + fmt(s.x, 2) + '</td>' +
+      '<td>' + fmt(s.scoreBefore, 3) + ' → ' + fmt(s.score, 3) + '</td>';
+    body.appendChild(tr);
+  }
+}
+
+function updateSimHint() {
+  const action = document.getElementById('simAction').value;
+  const d = simDeltaFor(action);
+  const scaled = simScaledDelta(action);
+  const el = document.getElementById('simHint');
+  let note = '';
+  if (simDeltaTable() === 'latent' && READ_VISITS.has(action)) {
+    note = ' · read-visit scaled × E (' + state.simE.toFixed(2) + ') = ' + (scaled >= 0 ? '+' : '') + scaled.toFixed(4);
+  }
+  el.innerHTML = 'Base δ for <b>' + ACTION_LABELS[action] + '</b> = ' + (d >= 0 ? '+' : '') + d + note + '.';
+}
+</script>
+
+<script>
+/* Decay canvas — nightly return-to-neutral */
+function renderDecay() {
+  const canvas = document.getElementById('decayCanvas');
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 36, padR = 34, padT = 12, padB = 26;
+  const days = state.days;
+  const rate = (curveKind() === 'trending') ? PROD.TRENDING_DECAY_RATE : state.decay;
+  const yMax = Math.max(2, state.startX * 1.2);
+  drawAxes(ctx, w, h, 0, days, 0, yMax, padL, padR, padT, padB);
+
+  const fn = activeFn();
+  const xSeries = [];
+  let xv = state.startX;
+  for (let d = 0; d <= days; d++) { xSeries.push(xv); xv = xv * rate; }
+  const scoreSeries = xSeries.map(x => fn(x));
+
+  // Neutral reference: score 0.5 on the right-hand score scale
+  const neutralPy = padT + (h - padT - padB) * (1 - 0.5);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+  ctx.beginPath(); ctx.moveTo(padL, neutralPy); ctx.lineTo(w - padR, neutralPy); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('neutral', w - padR - 4, neutralPy - 3);
+  ctx.restore();
+
+  // Raw-value trace — reads on the LEFT axis (0 .. yMax)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  for (let d = 0; d <= days; d++) {
+    const px = padL + (w - padL - padR) * (d / days);
+    const py = padT + (h - padT - padB) * (1 - Math.max(0, Math.min(1, xSeries[d] / yMax)));
+    if (d === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke(); ctx.restore();
+
+  // Score trace — reads on the RIGHT axis (0 .. 1), drawn at the same heights
+  ctx.save();
+  ctx.strokeStyle = curveColor(state.curve); ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let d = 0; d <= days; d++) {
+    const px = padL + (w - padL - padR) * (d / days);
+    const py = padT + (h - padT - padB) * (1 - Math.max(0, Math.min(1, scoreSeries[d])));
+    if (d === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke(); ctx.restore();
+
+  // Right-hand score axis labels (0–1) in the curve's color
+  ctx.save();
+  ctx.fillStyle = curveColor(state.curve);
+  ctx.globalAlpha = 0.75;
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'left';
+  for (let i = 0; i <= 4; i++) {
+    const sv = i / 4;
+    const py = padT + (h - padT - padB) * (1 - sv);
+    ctx.fillText(sv.toFixed(2), w - padR + 5, py + 3);
+  }
+  ctx.fillStyle = 'rgba(180,180,180,0.8)';
+  ctx.fillText('score', w - padR + 5, padT - 2);
+  ctx.restore();
+
+  const halfLife = Math.log(0.5) / Math.log(rate);
+  if (halfLife > 0 && halfLife < days) {
+    const px = padL + (w - padL - padR) * (halfLife / days);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, h - padB); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(220,220,220,0.9)'; ctx.font = '10px JetBrains Mono, monospace';
+    ctx.fillText('½ in ' + halfLife.toFixed(1) + 'd', px + 4, padT + 12);
+    ctx.restore();
+  }
+
+  const rawName = (curveKind() === 'trending') ? 'S' : 'x';
+  document.getElementById('decayHint').innerHTML =
+    '<b>Two y-scales:</b> grey dashed = raw value (' + rawName + ', left axis) · colored = <b>score</b> (right axis, 0–1) · faint line = neutral score 0.5. The score can never exceed 1 — it always reads on the right.<br>' +
+    'Start ' + rawName + ' = <b>' + state.startX.toFixed(2) + '</b> · λ = <b>' + rate.toFixed(4) + '</b>/day · after <b>' + days + '</b>d: ' + rawName + ' = <b>' + xSeries[days].toFixed(3) + '</b> · score = <b>' + fmt(scoreSeries[days], 3) + '</b> · half-life ≈ ' + halfLife.toFixed(1) + 'd';
+}
+</script>
+
+<script>
+/* Mini feed simulation — 12 fake articles */
+const FAKE_ARTICLES = [
+  { name: 'The AI Race Is Already Over',          cat: 'Tech',      P_x:  2.1, T_S: 38, daysOld: 0,  Q_y:  1.4 },
+  { name: "Why Inflation Won't Quit",             cat: 'Finance',   P_x: -0.6, T_S: 12, daysOld: 4,  Q_y:  1.0 },
+  { name: 'The Last Honest Newspaper',           cat: 'Politics',  P_x:  1.2, T_S:  6, daysOld: 1,  Q_y:  0.8 },
+  { name: 'GPT-6 and the End of Coding',         cat: 'Tech',      P_x:  1.8, T_S: 22, daysOld: 1,  Q_y:  1.2 },
+  { name: 'A Quiet Revolution in Energy',        cat: 'Business',  P_x:  0.3, T_S:  3, daysOld: 9,  Q_y:  1.0 },
+  { name: 'The Housing Trap',                    cat: 'Finance',   P_x:  0.0, T_S:  9, daysOld: 3,  Q_y:  0.9 },
+  { name: 'What 2026 Will Really Look Like',     cat: 'Politics',  P_x: -1.0, T_S: 45, daysOld: 0,  Q_y:  0.2 },
+  { name: 'Why I Quit Twitter (Again)',          cat: 'Tech',      P_x:  0.7, T_S:  1, daysOld: 12, Q_y:  0.6 },
+  { name: 'The Boring Case for Bonds',           cat: 'Finance',   P_x:  1.0, T_S:  4, daysOld: 6,  Q_y:  1.3 },
+  { name: 'Notes from a Quiet Year',             cat: 'Culture',   P_x:  0.2, T_S:  2, daysOld: 21, Q_y:  1.1 },
+  { name: 'The Subsidy Economy',                 cat: 'Business',  P_x:  0.5, T_S:  7, daysOld: 2,  Q_y:  0.7 },
+  { name: 'The Memo That Changed Everything',    cat: 'Politics',  P_x:  0.4, T_S: 15, daysOld: 1,  Q_y:  0.5 },
+];
+
+function renderFeed() {
+  const w = state.weights;
+  const total = w.P + w.T + w.R + w.Q;
+  document.getElementById('weightNormalised').textContent =
+    'Auto-normalised so they sum to 1.0 (currently ' + total.toFixed(2) + ').';
+
+  const items = FAKE_ARTICLES.map(a => {
+    const P = sigmoidScaled(clampX(a.P_x, state.clamp), state.scaleP);
+    const T = curveT(a.T_S, state.k);
+    const R = curveR(a.daysOld, PROD.RECENCY_DAYS_CONSTANT);
+    const Q = sigmoidScaled(clampX(a.Q_y, state.clamp), state.scaleQ);
+    const score = (w.P * P + w.T * T + w.R * R + w.Q * Q) / Math.max(0.0001, total);
+    return { ...a, P, T, R, Q, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const body = document.getElementById('feedBody');
+  body.innerHTML = '';
+  items.forEach((a, i) => {
+    const segP = (w.P * a.P) / total;
+    const segT = (w.T * a.T) / total;
+    const segR = (w.R * a.R) / total;
+    const segQ = (w.Q * a.Q) / total;
+    const totalSeg = segP + segT + segR + segQ;
+    const widths = totalSeg > 0 ? [segP / totalSeg, segT / totalSeg, segR / totalSeg, segQ / totalSeg] : [0, 0, 0, 0];
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML =
+      '<div class="rank">' + (i + 1) + '.</div>' +
+      '<div class="name">' + a.name + ' <span class="mono" style="color:var(--text-muted);font-size:10.5px">· ' + a.cat + '</span></div>' +
+      '<div class="score">' + a.score.toFixed(3) + '</div>' +
+      '<div class="bar-track" style="grid-column: 1 / span 3; margin-top:2px">' +
+        '<div class="bar-seg bar-P" style="width:' + (widths[0] * 100).toFixed(1) + '%"></div>' +
+        '<div class="bar-seg bar-T" style="width:' + (widths[1] * 100).toFixed(1) + '%"></div>' +
+        '<div class="bar-seg bar-R" style="width:' + (widths[2] * 100).toFixed(1) + '%"></div>' +
+        '<div class="bar-seg bar-Q" style="width:' + (widths[3] * 100).toFixed(1) + '%"></div>' +
+      '</div>';
+    body.appendChild(row);
+  });
+}
+</script>
+
+<script>
+/* Wire-up + main update loop */
+function updateAll() {
+  renderMain();
+  renderResponsiveness();
+  renderStepSymmetry();
+  renderSweep();
+  renderDecay();
+  renderFeed();
+  renderActionSimulator();
+  updateSimHint();
+}
+
+function setActiveCurve(c) {
+  state.curve = c;
+  const [xMin, xMax] = curveRange(c);
+  state.markerX = (xMin + xMax) / 2;
+  state.simSteps = [];
+  state.zoom = 1.0;
+  const zv = document.getElementById('zoomVal');
+  if (zv) zv.textContent = '1.0×';
+  document.querySelectorAll('#curveChips .chip').forEach(chip => {
+    chip.classList.toggle('active', chip.getAttribute('data-curve') === c);
+  });
+  renderCalibration();
+  buildActionSelect();
+  updateAll();
+}
+
+function buildCurveChips() {
+  const row = document.getElementById('curveChips');
+  row.innerHTML = '';
+  for (const key of Object.keys(CURVES)) {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.setAttribute('data-curve', key);
+    chip.innerHTML = '<span class="dot" style="background:' + CURVES[key].color + '"></span>' + CURVES[key].label;
+    chip.addEventListener('click', () => setActiveCurve(key));
+    row.appendChild(chip);
+  }
+}
+
+function attachCanvasClick() {
+  const canvas = document.getElementById('mainCanvas');
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const padL = 36, padR = 12;
+    const [xMin, xMax] = visibleDomain(state.curve);
+    const xFrac = Math.max(0, Math.min(1, (px - padL) / (rect.width - padL - padR)));
+    state.markerX = xMin + xFrac * (xMax - xMin);
+    updateAll();
+  });
+}
+
+function attachWeightSliders() {
+  ['wP', 'wT', 'wR', 'wQ'].forEach(id => {
+    const el = document.getElementById(id);
+    const out = document.getElementById(id + 'v');
+    el.addEventListener('input', e => {
+      state.weights[id.slice(1)] = +e.target.value;
+      out.textContent = state.weights[id.slice(1)].toFixed(2);
+      renderFeed();
+    });
+  });
+}
+
+function attachDecayControls() {
+  const startX = document.getElementById('startX');
+  const days = document.getElementById('days');
+  startX.addEventListener('input', e => { state.startX = +e.target.value || 0; document.getElementById('startXv').textContent = state.startX.toFixed(2); renderDecay(); });
+  days.addEventListener('input', e => { state.days = +e.target.value; document.getElementById('daysV').textContent = state.days; renderDecay(); });
+}
+
+function attachSimControls() {
+  document.getElementById('simApply').addEventListener('click', applySimAction);
+  document.getElementById('simReset').addEventListener('click', resetSim);
+  document.getElementById('simE').addEventListener('input', e => {
+    state.simE = +e.target.value;
+    document.getElementById('simEv').textContent = state.simE.toFixed(2);
+    updateSimHint();
+  });
+}
+
+window.addEventListener('load', () => {
+  buildCurveChips();
+  attachCanvasClick();
+  attachWeightSliders();
+  attachDecayControls();
+  attachSimControls();
+  setActiveCurve('T');
+});
+window.addEventListener('resize', () => { renderMain(); renderResponsiveness(); renderDecay(); });
+</script>
+
+<script>
+/* Help system — click any ? or label for a full explanation */
+const HELP = {
+  curves: {
+    title: 'The six curves — what is being mapped',
+    src: 'firebase/functions/src/getRankedFeed.ts · normalizeT / normalizeP / normalizeQ',
+    body: '<p>Every score the app shows is a number between <b>0 and 1</b> built from curves like these. Each curve takes a <b>raw input</b> (which can be any size) and squashes it into 0–1.</p>'
+    + '<h3>T · Trending — <code>S / (S + k)</code></h3>'
+    + '<p>Input is the article\'s raw <b>trending score S</b> — crowd heat accumulated from saves, likes and reads across <i>all</i> users. Stored on the article in Firestore as <code>trendingScore</code>. Unbounded: every save adds ~3.0, every thorough read ~1.5, and it decays ~9.4% per day.</p>'
+    + '<h3>P · Personalization — <code>&sigma;(x/s)</code></h3>'
+    + '<p>Input is <b>your latent x</b> for that category (and separately for the publisher). A latent starts at 0 = neutral, goes positive when you engage, negative when you reject. Stored in your profile as <code>categoryWeights</code> / <code>publisherWeights</code>.</p>'
+    + '<h3>Q · Publisher Quality — <code>&sigma;(y/s)</code></h3>'
+    + '<p>Input is the <b>publisher\'s collective latent y</b> — one shared number per publication, moved a tiny amount by every user\'s actions. Stored in the <code>publishers</code> collection. New publishers seed at y = 1.386 &rarr; score 0.80.</p>'
+    + '<h3>GRAV · Gravitational — <code>0.5 + 0.5&middot;tanh(a&middot;x&sup3;)</code> (experimental)</h3>'
+    + '<p>A candidate replacement for &sigma;. Flat at neutral, <b>accelerates</b> as you move away, then saturates. See the responsiveness panel — this is the shape where "the further from neutral, the more powerful an equal step".</p>'
+    + '<h3>EXP · Exponential (experimental)</h3>'
+    + '<p>Another &sigma; alternative: steepest at neutral like &sigma;, but with fatter shoulders, so mid-range latents keep responding longer.</p>'
+    + '<h3>CUST · Custom JS</h3>'
+    + '<p>Free-form expression for testing anything. Variables: <code>x</code> (the input), <code>S</code> (same as x), <code>k</code>, <code>lambda</code> (decay rate).</p>'
+    + '<h3>Key vocabulary</h3>'
+    + '<p><b>Neutral</b> = input 0 &rarr; every curve outputs exactly 0.5 (no opinion). <b>Latent</b> = the stored number that actions push around. <b>Score</b> = what the curve turns the latent into for ranking.</p>',
+  },
+  calT: {
+    title: 'k · trending half-saturation',
+    src: 'firebase/functions/src/constants.ts · TRENDING_HALF_SAT = 25',
+    body: '<p><code>k</code> is the raw trending score at which T hits exactly <b>0.5</b>. Production value: <b>25</b> — chosen so roughly 1% of the active user base engaging with an article gets it to half-strength.</p>'
+    + '<div class="formula">T = S / (S + k)<br>k=25 &rArr; T(25)=0.500 &middot; T(50)=0.667 &middot; T(100)=0.800 &middot; T(250)=0.909</div>'
+    + '<h3>What changing k does</h3>'
+    + '<p><b>Smaller k</b> (e.g. 10) &rarr; saturates early. A handful of saves pushes an article near 1.0 and extra engagement barely matters. Trending is easy to "win".</p>'
+    + '<p><b>Bigger k</b> (e.g. 100) &rarr; only genuinely viral articles (S in the hundreds) reach high T. Trending barely differentiates, so the feed leans more on P, R and Q.</p>'
+    + '<p><b>k only stretches the x-axis</b> — the shape (steepest at S=0, always flattening) never changes. That is why the responsiveness profile looks identical for every k.</p>',
+  },
+  calPQ: {
+    title: 'Steepness s · how fast &sigma; saturates',
+    src: 'sigmoidScaled(x, s) — production uses s = 1',
+    body: '<p><code>s</code> divides the latent before the sigmoid, controlling <b>how much evidence it takes to move the score</b>. Production uses s = 1.</p>'
+    + '<div class="formula">score = &sigma;(x / s) = 1 / (1 + e^(&minus;x/s))<br>s=1: x=2.20 &rarr; 0.90 &middot; x=0.85 &rarr; 0.70 &middot; x=&minus;0.85 &rarr; 0.30<br>s=2: x=2.20 &rarr; 0.75 &middot; x=0.85 &rarr; 0.60</div>'
+    + '<h3>What changing s does</h3>'
+    + '<p><b>Smaller s</b> &rarr; steeper. Your first few reads almost fully decide the score; later evidence barely matters (echo-chamber behaviour).</p>'
+    + '<p><b>Bigger s</b> &rarr; shallower. Even x = &plusmn;3 leaves the score near 0.65 — preferences stay soft and reversible.</p>'
+    + '<p><b>s never breaks symmetry</b>: an equal step up or down from any x moves the score by mirrored amounts. The app\'s real asymmetry comes from the deltas (quick_exit = &minus;2.5&times; read_thorough), not the curve.</p>',
+  },
+  calGrav: {
+    title: 'a · gravitational curvature',
+    src: 'curveGrav(x, a) = 0.5 + 0.5·tanh(a·x³) — experimental',
+    body: '<p><code>a</code> controls where the cubic inside tanh "wakes up". The inflection — where the curve is steepest — sits at <b>x &asymp; (1/a)^(1/3)</b>.</p>'
+    + '<div class="formula">a=0.05 &rarr; steepest at x &asymp; 2.7<br>a=0.10 &rarr; steepest at x &asymp; 2.2<br>a=0.20 &rarr; steepest at x &asymp; 1.7</div>'
+    + '<h3>Why this shape exists</h3>'
+    + '<p>This is the function family that answers "can an equal step be <b>more</b> powerful the further from neutral you are?".</p>'
+    + '<ul><li><b>Near neutral:</b> x&sup3; is tiny &rarr; almost flat. Early signals barely move your score — trust must accumulate.</li>'
+    + '<li><b>Mid-range:</b> slope grows with x&sup2; — each additional action moves the score <i>more</i> than the last. Preferences compound once established.</li>'
+    + '<li><b>Extremes:</b> tanh saturates &rarr; the score clamps smoothly toward 0/1 and responsiveness dies off again.</li></ul>'
+    + '<h3>Behavioural consequence</h3>'
+    + '<p>Compared to &sigma;, a well-established preference is <b>both easier to reinforce and easier to undo</b> — a few contradictory actions in the mid-range pull hard, while the extremes are stable. &sigma; does the opposite: it makes strong preferences rigid.</p>'
+    + '<p>Watch the <b>Responsiveness |f&prime;(x)|</b> panel while dragging <code>a</code> — the hump slides toward or away from neutral.</p>',
+  },
+  calExp: {
+    title: 's · exponential length scale',
+    src: 'curveExp(x, s) — experimental',
+    body: '<p><code>s</code> is the distance over which the exponential decays. Half of the remaining distance to the rail is covered every <b>s&middot;ln(2)</b> units of x.</p>'
+    + '<div class="formula">EXP = 0.5 + 0.5&middot;sign(x)&middot;(1 &minus; e^(&minus;|x|/s))<br>s=1.5 &rarr; half-height at |x| &asymp; 1.04 &middot; 90% at |x| &asymp; 3.45</div>'
+    + '<h3>EXP vs &sigma;</h3>'
+    + '<p>Both are steepest at neutral, but &sigma;\s slope collapses quadratically while the exponential\'s decays geometrically — leaving <b>fatter shoulders</b>: at |x| = 3, &sigma; is ~95% saturated while EXP still responds visibly.</p>'
+    + '<p>Use it when you want saturation <i>less</i> aggressive than &sigma; in the mid-range but still monotonic and symmetric — a middle ground between &sigma; and GRAV.</p>',
+  },
+  calCust: {
+    title: 'Custom JS expression',
+    src: 'evaluated as new Function("S","x","k","lambda", ...)',
+    body: '<p>Type any JavaScript expression returning a number (ideally 0–1; values outside are clipped to the plot). Available variables:</p>'
+    + '<div class="formula">x — the raw input (same value as S)<br>S — alias of x (trending naming)<br>k — current trending half-saturation (25)<br>lambda — decay rate shown in the decay panel</div>'
+    + '<h3>Presets</h3>'
+    + '<p><code>prod T</code> &rarr; S/(S+25) &middot; <code>&sigma;(x)</code> &rarr; 1/(1+e^(&minus;x)) &middot; <code>grav</code> &rarr; tanh(0.05&middot;x&sup3;) &middot; <code>exp</code> &rarr; 1&minus;e^(&minus;|x|/1.5).</p>'
+    + '<h3>Try these</h3>'
+    + '<ul><li><code>0.5 + x / (2 * (1 + Math.abs(x)))</code> — a "soft clamp": near-linear slope that fades smoothly.</li>'
+    + '<li><code>0.5 + 0.5 * Math.tanh(0.5 * x)</code> — &sigma; at double steepness; compare against the white &sigma; reference in the responsiveness panel.</li>'
+    + '<li><code>x &lt;= 0 ? 0.5 + 0.4 * x / 3 : 0.5 + 0.4 * x / 10</code> — deliberately <b>asymmetric</b>: negative latents move the score 3.3&times; faster than positive ones (cheap to lose trust, expensive to build it).</li></ul>'
+    + '<p>If the expression has a syntax error the curve disappears and the symmetry panel shows an error — fix it or re-pick a preset.</p>',
+  },
+  weights: {
+    title: 'Feed weights — how the final score is assembled',
+    src: 'firebase/functions/src/constants.ts · SCORE_WEIGHTS',
+    body: '<p>The feed ranks every candidate article with one number:</p>'
+    + '<div class="formula">Base = w<sub>P</sub>&middot;P + w<sub>T</sub>&middot;T + w<sub>R</sub>&middot;R + w<sub>Q</sub>&middot;Q<br>production: 0.60 / 0.15 / 0.10 / 0.15</div>'
+    + '<p>Each component is already normalised to 0–1, so the weights say exactly what fraction of the score each factor can contribute. The sliders here auto-normalise to keep the sum at 1.0, exactly like the backend\'s <code>system/scoringConfig</code> does.</p>'
+    + '<h3>Reading the mini feed</h3>'
+    + '<p>Drop w<sub>P</sub> to 0 and watch the ranking reorder by pure crowd heat + freshness. Raise w<sub>T</sub> and viral-but-unread articles (like "What 2026 Will Really Look Like", S=45) climb. This is the cheapest way to feel what each weight does.</p>'
+    + '<h3>Beyond the base score</h3>'
+    + '<p>Production then applies variety on top: cumulative penalties (&minus;0.15 per same-category card, &minus;0.25 per same-publisher card), discovery slots every 5th card that drop personalisation entirely, and publisher spacing. Those are not modelled here — this playground is only the scoring layer.</p>',
+  },
+  wP: {
+    title: 'w_P · personalization weight (0.60)',
+    src: 'SCORE_WEIGHTS.personalization = 0.60',
+    body: '<p>Personalisation is <b>60%</b> of the base score — by far the dominant factor. P blends two sigmoids: your category affinity (60% share) and your publisher affinity (40% share); for a publisher you have never read, it blends 90% category / 10% publisher instead (cold-start).</p>'
+    + '<div class="formula">P = 0.6&middot;&sigma;(x_cat) + 0.4&middot;&sigma;(x_pub) &nbsp;(known publisher)<br>P = 0.9&middot;&sigma;(x_cat) + 0.1&middot;&sigma;(x_pub) &nbsp;(cold start)</div>'
+    + '<p>Lowering w<sub>P</sub> makes the feed more "public" — same ranking for everyone. Raising it towards 1 makes the feed almost purely a mirror of your own history.</p>',
+  },
+  wT: {
+    title: 'w_T · trending weight (0.15)',
+    src: 'SCORE_WEIGHTS.trending = 0.15',
+    body: '<p>Trending contributes at most <b>15%</b> of the base score. T comes from the article\'s raw crowd score S: saves +3.0, likes +2.0, thorough reads +1.5, shallow +0.2 — decayed &times;0.9057 daily so old heat fades in about a week (half-life &asymp; 7 days).</p>'
+    + '<p>Trending is the discovery engine: a brand-new article from an unknown publisher has P &asymp; 0.5 and Q &asymp; 0.8 fixed, so its only lever to reach the top of the feed is crowd heat. Discovery slots (every 5th card) even drop P entirely and rank on T + R + Q alone.</p>',
+  },
+  wR: {
+    title: 'w_R · recency weight (0.10)',
+    src: 'SCORE_WEIGHTS.recency = 0.10 · RECENCY_DAYS_CONSTANT = 14',
+    body: '<p>Recency contributes at most <b>10%</b>. Its curve is <code>R = 1 / (1 + daysOld/14)</code> — hyperbolic decay with a 14-day half-life:</p>'
+    + '<div class="formula">R(0)=1.00 &middot; R(1)=0.93 &middot; R(7)=0.67 &middot; R(14)=0.50 &middot; R(30)=0.32 &middot; R(90)=0.14</div>'
+    + '<p>Note R is computed from age directly — there is no latent and no learning; it is pure clock time. Candidate pools are split into "fresh" (&le;28 days) and "old" slabs so old articles can still surface, but always with a recency handicap.</p>',
+  },
+  wQ: {
+    title: 'w_Q · publisher quality weight (0.15)',
+    src: 'SCORE_WEIGHTS.quality = 0.15 · publishers collection',
+    body: '<p>Quality contributes at most <b>15%</b>. Q is the sigmoid of the publisher\'s <b>collective</b> latent y — one number shared by all users, nudged by everyone\'s behaviour: saves +0.010, likes +0.005, thorough reads +0.005, not-interested &minus;0.010, quick exits &minus;0.010.</p>'
+    + '<p>Because the increments are tiny, Q moves slowly — it is crowd-sourced reputation, not personal taste. All 42 seeded feeds start at y = 1.386 (score 0.80) and diverge only as users react to them. Switch the curve to <b>Q</b> and apply a few dozen actions in the simulator to feel how much collective evidence a real shift would take.</p>',
+  },
+  simulator: {
+    title: 'User-action simulator — what a "step" is',
+    src: 'delta tables mirror firebase/functions/src/constants.ts + scoringConfig.ts',
+    body: '<p>This panel replays the learning loop one action at a time. Each <b>Apply</b> appends N copies of the selected action to a sequence:</p>'
+    + '<ol><li>Look up the action\'s raw &delta; in the table that matches the current curve (see the <b>Action</b> help for the three tables).</li>'
+    + '<li>If it is a read visit on a personal-latent curve, scale &delta; by your Engagement E slider.</li>'
+    + '<li>Add it to the running raw value (x, or S for the T curve) — clamped to &plusmn;20 for latents, exactly as <code>weightUpdater.ts</code> does at write time.</li>'
+    + '<li>Push the new value through the active curve and record the score.</li></ol>'
+    + '<p>The table shows each step; the white dots on the main canvas plot the same trajectory through the curve; Reset clears it.</p>'
+    + '<h3>Experiments worth running</h3>'
+    + '<ul><li><b>P curve, 8&times; read_thorough</b> from neutral: x=+2.2, score &asymp; 0.90. Then 2&times; quick_exit: x=+0.83, score &asymp; 0.70 — two bad sessions undo eight good ones.</li>'
+    + '<li><b>Same on GRAV</b>: the first few reads barely move (flat at neutral), then it accelerates.</li>'
+    + '<li><b>T curve, 5&times; save</b>: S=15, T=0.38. Heat is cheap to gain per user but shared across everyone.</li>'
+    + '<li><b>Q curve, 30&times; like</b>: y moves only +0.15 — collective reputation is deliberately slow.</li></ul>',
+  },
+  actions: {
+    title: 'The three delta tables — which one applies?',
+    src: 'LATENT_DELTAS / TRENDING_DELTAS / QUALITY_DELTAS',
+    body: '<p>One user action updates <b>three separate memories</b>, each with its own delta sizes. The simulator uses the table matching the current curve so you can study each memory in isolation.</p>'
+    + '<h3>1 · LATENT_DELTAS — personal taste (P curve, GRAV, EXP, CUST)</h3>'
+    + '<table><tr><th>action</th><th>&delta;</th><th>E-scaled?</th></tr>'
+    + '<tr><td>save</td><td>+0.55</td><td>no</td></tr><tr><td>unsave</td><td>&minus;0.55</td><td>no</td></tr>'
+    + '<tr><td>like</td><td>+0.40</td><td>no</td></tr><tr><td>unlike</td><td>&minus;0.40</td><td>no</td></tr>'
+    + '<tr><td>read_thorough</td><td>+0.275</td><td><b>yes &times;E</b></td></tr>'
+    + '<tr><td>read_shallow</td><td>+0.10</td><td><b>yes &times;E</b></td></tr>'
+    + '<tr><td>read_skim</td><td>+0.10</td><td><b>yes &times;E</b> (legacy label)</td></tr>'
+    + '<tr><td>swipe_next</td><td>0.00</td><td>—</td></tr>'
+    + '<tr><td>quick_exit</td><td>&minus;0.6875</td><td>no</td></tr>'
+    + '<tr><td>not_interested</td><td>&minus;0.6875</td><td>no</td></tr></table>'
+    + '<p>Rejections are exactly <b>2.5&times; stronger</b> than thorough reads — the asymmetry that makes preferences quick to lose and slow to build.</p>'
+    + '<h3>2 · TRENDING_DELTAS — crowd heat on S (T curve, never E-scaled)</h3>'
+    + '<table><tr><th>action</th><th>&delta;S</th></tr>'
+    + '<tr><td>save</td><td>+3.0</td></tr><tr><td>unsave</td><td>&minus;3.0</td></tr>'
+    + '<tr><td>like</td><td>+2.0</td></tr><tr><td>unlike</td><td>&minus;2.0</td></tr>'
+    + '<tr><td>read_thorough</td><td>+1.5</td></tr><tr><td>read_skim</td><td>+0.5</td></tr>'
+    + '<tr><td>read_shallow</td><td>+0.2</td></tr>'
+    + '<tr><td>quick_exit / not_interested</td><td>0</td></tr></table>'
+    + '<h3>3 · QUALITY_DELTAS — collective reputation on y (Q curve, never E-scaled)</h3>'
+    + '<table><tr><th>action</th><th>&delta;y</th></tr>'
+    + '<tr><td>save</td><td>+0.010</td></tr><tr><td>unsave</td><td>&minus;0.010</td></tr>'
+    + '<tr><td>like</td><td>+0.005</td></tr><tr><td>unlike</td><td>&minus;0.005</td></tr>'
+    + '<tr><td>read_thorough</td><td>+0.005</td></tr><tr><td>read_skim</td><td>+0.001</td></tr>'
+    + '<tr><td>quick_exit / not_interested</td><td>&minus;0.010</td></tr></table>',
+  },
+  simcount: {
+    title: 'Count — how many actions per Apply',
+    src: 'applied in one batch, like a synced event batch',
+    body: '<p>Each Apply appends this many copies of the selected action, one row each. The backend processes behaviour in batches of up to 20 events per sync, so a count like 8–20 mirrors a realistic reading session.</p>'
+    + '<p>Use large counts (30–100) on the Q curve to see collective reputation move, and small counts (1–5) on P/GRAV to study single-action sensitivity at different points: apply 1, drag the canvas marker, apply another, and watch the score jumps shrink (σ) or grow (GRAV).</p>',
+  },
+  engagement: {
+    title: 'Engagement E — trust multiplier for read visits',
+    src: 'computeEngagementIndex() · scoringConfig.ts',
+    body: '<p>The backend never takes a read at face value. From the session\'s scroll depth and pace it computes a trust factor <b>E &isin; [0,1]</b>, and read-visit deltas are scaled by it:</p>'
+    + '<div class="formula">E = scrollDepth &times; pacePenalty<br>read_thorough contribution = 0.275 &times; E</div>'
+    + '<h3>How production computes pacePenalty</h3>'
+    + '<p>Implied reading speed = words actually consumed &divide; active minutes, compared against <b>your own average WPM</b> (ratio-based, not absolute):</p>'
+    + '<table><tr><th>speed ratio</th><th>pacePenalty</th></tr>'
+    + '<tr><td>&le; 1.25&times; personal WPM</td><td>1.0 — genuine reading</td></tr>'
+    + '<tr><td>1.25–2.0&times;</td><td>1.0 &rarr; 0.50 linear — skimming</td></tr>'
+    + '<tr><td>2.0–3.0&times;</td><td>0.50 &rarr; 0.0 — flinging</td></tr>'
+    + '<tr><td>&gt; 3.0&times;</td><td>0.0 — algorithmically inert</td></tr></table>'
+    + '<p>Tap actions (save, like, not-interested, quick_exit) are never E-scaled — a deliberate tap is deliberate at any speed. Only read visits carry pace risk.</p>'
+    + '<p>Here the slider sets E directly so you can ask "what if this read was only 40% trustworthy?": E=0.4 turns a thorough read into +0.11 of latent.</p>',
+  },
+  mainCanvas: {
+    title: 'Curve shape — reading the main canvas',
+    src: 'the active curve f(input) with score on the y-axis',
+    body: '<p><b>Solid colored line</b> — the currently selected curve: raw input on x, resulting 0–1 score on y.</p>'
+    + '<p><b>Faded dashed lines</b> — all the other curves, drawn on the same window for shape comparison.</p>'
+    + '<p><b>White crosshair + dot</b> — the marker. Click anywhere on the canvas to move it; every panel (step symmetry, sweep) reads the same x.</p>'
+    + '<p><b>White dots + dotted path</b> — your simulator trajectory: each Apply lands a dot at its resulting (x, score). This is the clearest way to see saturation: on &sigma; the dots bunch up as x grows; on GRAV they spread out before bunching at the rails.</p>'
+    + '<p>Reference: a score of 0.5 is always the horizontal centre line — everything above boosts ranking, below suppresses.</p>',
+  },
+  axis: {
+    title: 'X-axis — auto-fit and zoom',
+    src: 'visibleDomain() in this playground',
+    body: '<p>The raw inputs are unbounded — trending score S grows without limit, and latents clamp at &plusmn;20 (<code>LATENT_CLAMP</code>). Fixed axes would hide your trajectory, so the x-axis <b>auto-fits</b>: it always spans at least the curve\'s base domain, and stretches to include the marker and every simulator step, with 12% padding.</p>'
+    + '<h3>Zoom buttons</h3>'
+    + '<p><b>&minus;</b> widens the view (extra padding, up to 6&times;) to inspect curve shape in the far field; <b>+</b> narrows it (down to 0.4&times;) for a close-up. Auto-fit always re-expands if data would leave the frame, so you can never lose the trajectory. Zoom resets when you switch curves.</p>'
+    + '<h3>Tick marks</h3>'
+    + '<p>Ticks use a 1-2-5 progression (&hellip;0.5, 1, 2, 5, 10&hellip;) chosen from the visible span, so labels stay round at any width: [-5, 23] gives ticks every 5; [-1, 78] gives ticks every 10.</p>'
+    + '<h3>Clamp behaviour</h3>'
+    + '<p>Latent curves stop at exactly &plusmn;20 — beyond that, extra actions change nothing (production clamps at write time). The T curve\'s S never clamps; heat accumulates until the daily &times;0.9057 decay catches up.</p>',
+  },
+  responsiveness: {
+    title: 'Responsiveness |f′(x)| — where a step has the most power',
+    src: 'numerical derivative of the active curve vs σ',
+    body: '<p>This plots the <b>absolute slope</b> of the active curve at every x. It answers one question: <i>if I take a small step here, how much does the score move?</i></p>'
+    + '<h3>How to read it</h3>'
+    + '<ul><li><b>White dashed line</b> — the production sigmoid &sigma;(x), fixed reference (peak 0.25 at x=0).</li>'
+    + '<li><b>Colored line above the reference</b> — that region is more responsive than production: equal evidence moves the score more.</li>'
+    + '<li><b>Colored line below</b> — more rigid: it takes more evidence to move the score there.</li></ul>'
+    + '<h3>Why it matters</h3>'
+    + '<p>&sigma; is most responsive at neutral and rigid at the extremes — early opinions form easily, then cement. GRAV inverts that: nearly inert at neutral, most responsive mid-range. Neither is "correct"; they encode different philosophies about how fast a user profile should crystallise.</p>'
+    + '<h3>Connection to the app</h3>'
+    + '<p>Wherever |f&prime;| is high, the &plusmn;0.6875 rejection deltas bite hardest too. A curve with a mid-range hump means rejection windows are widest exactly where preferences are actively forming.</p>',
+  },
+  symmetry: {
+    title: 'Step symmetry — the ±h test at the marker',
+    src: 'uses the adaptive step h shown under each value',
+    body: '<p>At the marker x, this applies one equal step each way — <b>+h</b> (further from zero when x&gt;0) and <b>&minus;h</b> (back toward zero) — and reports the score change each produces.</p>'
+    + '<h3>The ratio verdict</h3>'
+    + '<ul><li><b>Return-to-neutral is stronger</b> (ratio &gt; 1.02) — moving back toward 0 moves the score more than straying further. The curve "forgives" extremes.</li>'
+    + '<li><b>Push-away is stronger</b> (ratio &lt; 0.98) — straying further moves the score more than returning. The curve rewards commitment.</li>'
+    + '<li><b>Locally symmetric</b> (&asymp; 1.0) — the shape is neutral here; &sigma; is symmetric everywhere.</li></ul>'
+    + '<h3>Interpreting &sigma; vs GRAV</h3>'
+    + '<p>&sigma; always reads &asymp;1.0 — perfectly symmetric shape. GRAV reads <b>push-away stronger</b> on the rising flank (before its inflection) and return-stronger near the rails. This asymmetry is pure curve geometry — independent of the deltas.</p>'
+    + '<p>Move the marker (click the canvas) to watch the verdict flip as you cross the inflection.</p>',
+  },
+  sweep: {
+    title: 'Asymmetry sweep — the ±h test at five points',
+    src: 'same step h, sampled across the visible domain',
+    body: '<p>The same ±h experiment, run at five positions across the visible x-range, so you can see how local behaviour changes with distance from neutral.</p>'
+    + '<h3>What to look for</h3>'
+    + '<ul><li><b>Mirrored columns</b> (+h equals &minus;h at every row) &rArr; a symmetric curve. &sigma; and EXP always qualify.</li>'
+    + '<li><b>Shrinking +h with growing x</b> (&sigma;) &rArr; diminishing returns: each unit of latent matters less as you saturate.</li>'
+    + '<li><b>Growing then collapsing &Delta;</b> (GRAV) &rArr; the acceleration zone, then the rails.</li></ul>'
+    + '<h3>Where real asymmetry comes from</h3>'
+    + '<p>The production curve is symmetric; the app behaves asymmetrically because of the <b>deltas</b>: rejections are &minus;2.5&times; a thorough read, and trending heat is added by all users while personalisation is per-user. Curve shape and delta size are independent levers — this panel isolates the shape half.</p>',
+  },
+  decay: {
+    title: 'Return-to-neutral decay — the nightly λ',
+    src: 'TRENDING_DECAY_RATE = 0.9057 · LATENT_NIGHTLY_DECAY = 0.95',
+    body: '<p>Every day, stored values drift back toward neutral by multiplication:</p>'
+    + '<div class="formula">value &larr; value &times; &lambda; per day<br>trending score S: &lambda; = 0.9057 (crowd heat decays ~9.4%/day)<br>latent x / y: &lambda; = 0.95 (personal taste fades ~5%/day)</div>'
+    + '<p>The grey dashed trace is the raw value; the colored trace is that value pushed through the active curve — so you can watch the <i>score</i> relax toward 0.5 even while the raw value is still far from 0.</p>'
+    + '<h3>Half-life</h3>'
+    + '<p>Marked on the chart: ln(0.5)/ln(&lambda;) days. S halves in ~7.0 days; a latent halves in ~13.5 days. After 30 days a latent retains 0.95<sup>30</sup> &asymp; 21% of its size.</p>'
+    + '<h3>Why it exists</h3>'
+    + '<p>Without decay, a month of heavy Politics reading would lock the profile forever. Decay makes the profile a <b>running average of recent behaviour</b> — stop reading Politics and the weight quietly dissolves. It also bounds the system: decay + clamp keeps latents in a fixed band no matter how much evidence accumulates.</p>',
+  },
+  feed: {
+    title: 'Mini feed simulation — weights in action',
+    src: 'score = (w_P·P + w_T·T + w_R·R + w_Q·Q) / Σw',
+    body: '<p>Twelve fake articles, each with fixed raw ingredients (category affinity, trending score, age, publisher quality), scored with your <b>live</b> calibrations and weights, then ranked.</p>'
+    + '<p>The stacked bar under each title shows which fraction of its final score came from P (blue), T (orange), R (red) and Q (green).</p>'
+    + '<h3>Experiments</h3>'
+    + '<ul><li>Set k=5 in the T calibration: every orange segment explodes and the ranking reshuffles toward whatever has any heat at all.</li>'
+    + '<li>Set s=3 in P: personalisation flattens toward 0.5 for everyone and the feed converges to a "crowd" ranking.</li>'
+    + '<li>Drop w<sub>Q</sub> to 0 to see how much the publisher-quality layer was contributing.</li></ul>'
+    + '<p>This is only the scoring layer: production then applies variety guards (category caps, publisher penalties, discovery slots, spacing) before anything reaches the screen.</p>',
+  },
+};
+</script>
+
+<div class="help-overlay" id="helpOverlay">
+  <div class="help-modal" id="helpModal">
+    <button class="help-close" id="helpClose" title="Close (Esc)">✕</button>
+    <h2 id="helpTitle"></h2>
+    <div class="help-src" id="helpSrc"></div>
+    <div class="help-body" id="helpBody"></div>
+  </div>
+</div>
+
+<script>
+/* Help modal + zoom wiring (after modal markup so elements exist) */
+function openHelp(key) {
+  const t = HELP[key];
+  if (!t) return;
+  document.getElementById('helpTitle').innerHTML = t.title;
+  document.getElementById('helpSrc').innerHTML = t.src || '';
+  document.getElementById('helpBody').innerHTML = t.body || '';
+  document.getElementById('helpOverlay').classList.add('open');
+}
+function closeHelp() { document.getElementById('helpOverlay').classList.remove('open'); }
+
+document.addEventListener('click', e => {
+  if (e.target.closest('button')) return;              // buttons handle themselves
+  const el = e.target.closest('[data-help]');
+  if (el) { openHelp(el.getAttribute('data-help')); return; }
+  if (e.target.id === 'helpOverlay') closeHelp();      // backdrop click
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+document.getElementById('helpClose').addEventListener('click', closeHelp);
+
+function updateZoomVal() {
+  const el = document.getElementById('zoomVal');
+  if (el) el.textContent = state.zoom.toFixed(1) + '\u00d7';
+}
+document.getElementById('zoomOut').addEventListener('click', () => {
+  state.zoom = Math.min(6, state.zoom * 1.5);
+  updateZoomVal(); updateAll();
+});
+document.getElementById('zoomIn').addEventListener('click', () => {
+  state.zoom = Math.max(0.4, state.zoom / 1.5);
+  updateZoomVal(); updateAll();
+});
+</script>
+</body>
+</html>
+
+
+

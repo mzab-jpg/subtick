@@ -90,9 +90,10 @@ check('WPM Fix: speed calibration is gated to genuine reads, consumed words, and
     && userContextSource.includes('MAX_PLAUSIBLE_WPM')
     && userContextSource.includes('MIN_WPM_CALIBRATION_WORDS')
     && userContextSource.includes('consumedWords')
-    && weightUpdaterSource.includes('MIN_PLAUSIBLE_WPM')
-    && weightUpdaterSource.includes('MAX_PLAUSIBLE_WPM')
-    && weightUpdaterSource.includes('MIN_WPM_CALIBRATION_WORDS')
+    && weightUpdaterSource.includes('cfg.wpm.minPlausible')
+    && weightUpdaterSource.includes('cfg.wpm.maxPlausible')
+    && weightUpdaterSource.includes('cfg.wpm.minCalibrationWords')
+    && userContextSource.includes('consumedWords')
     && weightUpdaterSource.includes('consumedWords')
     && !weightUpdaterSource.includes('const sessionWpm = wordCount / (event.sessionDuration / 60_000)'),
   true);
@@ -100,7 +101,7 @@ check('Engagement-Credit Model: attention factor scales read visits on both upda
   weightUpdaterSource.includes('computeAttentionFactor')
     && weightUpdaterSource.includes('READ_VISIT_TYPES.has(event.eventType)')
     && fs.readFileSync(path.join(__dirname, '..', 'firebase', 'functions', 'src', 'syncBehaviorEvents.ts'), 'utf8').includes('computeAttentionFactor')
-    && fs.readFileSync(path.join(__dirname, '..', 'firebase', 'functions', 'src', 'scoringConfig.ts'), 'utf8').includes('flingWpm: FLING_WPM'),
+    && fs.readFileSync(path.join(__dirname, '..', 'firebase', 'functions', 'src', 'scoringConfig.ts'), 'utf8').includes('minPlausible: MIN_PLAUSIBLE_WPM'),
   true);
 check('Shuffle replenishment appends instead of replacing remaining cards',
   dashboardSource.includes('appendFeedArticles') && dashboardSource.includes('const merged = [...previous, ...additions') && !dashboardSource.includes('loadFeedArticles(effectiveProfile).catch(() => {})'),

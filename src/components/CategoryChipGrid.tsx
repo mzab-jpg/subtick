@@ -19,8 +19,8 @@ import {
   Palette,           // Culture
   Leaf,              // Lifestyle
   Clapperboard,      // Entertainment
+  LucideIcon,
 } from 'lucide-react-native';
-import { LucideIcon } from 'lucide-react-native';
 
 export type ChipState = 'selected' | 'not_interested' | 'neutral';
 

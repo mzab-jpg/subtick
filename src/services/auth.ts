@@ -11,7 +11,6 @@ import {
   linkWithCredential,
   GoogleAuthProvider,
   unlink,
-  deleteUser,
   User,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -325,7 +324,7 @@ export async function clearAllLocalData(): Promise<void> {
     if (keysToRemove.length > 0) {
       await AsyncStorage.multiRemove(keysToRemove);
     }
-    console.log('[Auth] Cleared all local AsyncStorage data.');
+    if (__DEV__) console.log('[Auth] Cleared all local AsyncStorage data.');
   } catch (error) {
     console.error('[Auth] clearAllLocalData error:', error);
     throw error;

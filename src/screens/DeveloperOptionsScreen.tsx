@@ -11,13 +11,11 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  ActivityIndicator,
   Alert,
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { Article, RootStackParamList } from '../types';
@@ -25,7 +23,6 @@ import {
   TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
-  TEXT_LG,
 } from '../utils/constants';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenEntrance } from '../components/ScreenEntrance';
@@ -36,7 +33,6 @@ export default function DeveloperOptionsScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   const [devSandboxUrl, setDevSandboxUrl] = useState('');
-  const [testingDevSandbox, setTestingDevSandbox] = useState(false);
 
   const handleDevSandboxTest = () => {
     const url = devSandboxUrl.trim();
@@ -80,10 +76,11 @@ export default function DeveloperOptionsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports -- deliberate lazy require
               const AsyncStorage = require('@react-native-async-storage/async-storage').default;
               await AsyncStorage.clear();
               Alert.alert('Cleared', 'Local storage has been completely wiped.');
-            } catch (e) {
+            } catch {
               Alert.alert('Error', 'Failed to clear local storage.');
             }
           },
@@ -137,14 +134,9 @@ export default function DeveloperOptionsScreen() {
                 { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, borderWidth: 1 },
               ]}
               onPress={handleDevSandboxTest}
-              disabled={testingDevSandbox}
               activeOpacity={0.7}
             >
-              {testingDevSandbox ? (
-                <ActivityIndicator color={colors.text} style={{ marginRight: 8 }} />
-              ) : (
-                <TerminalSquare size={18} color={colors.text} style={{ marginRight: 8 }} />
-              )}
+              <TerminalSquare size={18} color={colors.text} style={{ marginRight: 8 }} />
               <Text style={[styles.actionButtonText, { color: colors.text }]}>Test URL in Reader</Text>
             </TouchableOpacity>
           </View>

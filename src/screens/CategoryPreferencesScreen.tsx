@@ -29,8 +29,6 @@ import {
   DEFAULT_SELECTED_WEIGHT,
   DEFAULT_NOT_INTERESTED_WEIGHT,
   DEFAULT_NEUTRAL_WEIGHT,
-  TEXT_SM,
-  TEXT_BASE,
   TEXT_LG,
 } from '../utils/constants';
 import { ChevronLeft } from 'lucide-react-native';

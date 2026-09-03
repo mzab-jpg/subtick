@@ -3,7 +3,7 @@
 > **Status:** The BigQuery view `v_personalization_health` is **created and live** at `subtick-bbd55.analytics_545741262` (26 August 2026). If it ever needs re-creating, run `firebase/analytics/create_personalization_health_view.sql` in BigQuery Console — the MCP service account is read-only and cannot create the view.
 > **Purpose:** Measure whether recommendations improve as Tangent learns about a user.
 
-> **Reading-behavior note (26 Aug):** Since the geometry-only classification change, `read_skim` is no longer emitted; reads are labelled `quick_exit` / `thorough` (≥70%) / `shallow` (≥40%) / else swipe-past, and pace is reflected by the attention factor at weight/trending time. Historical `read_skim` rows remain in the data. Treat `is_read_thorough` consistently across the change boundary; do not use the disappearance of `read_skim` as a volume drop.
+> **Scoring-model note (27 Aug):** Tangent v2 uses a single sigmoid/latent scoring model with single-pass greedy selection. Historical tranche labels (high/mid/tail) are retained in analytics for continuity. The `read_skim` event is no longer emitted by the geometry-only classifier; historical rows remain. `position` is the original server-returned ranking; position 0 is the hero anchor.
 
 ## Use this view, not raw GA4 events
 

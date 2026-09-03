@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent — Mockup I: Shortwave</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Archivo+Black&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a1410;color:#e8dcc8;font-family:'Share Tech Mono',monospace}
+.intro{padding:40px;background:linear-gradient(180deg,#2a1f18,#1a1410);border-bottom:4px solid #c45a2a}
+.intro h1{font-family:'Archivo Black',sans-serif;font-size:2.4rem;color:#f0a050;letter-spacing:.05em}
+.intro p{max-width:680px;margin-top:12px;line-height:1.7;color:#b8a090}
+.intro .core{margin-top:20px;padding:16px;border:1px dashed #c45a2a55;font-size:12px;color:#d4b896}
+nav{position:sticky;top:0;z-index:99;background:#0d0a08;padding:12px 24px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:2px solid #c45a2a}
+nav a{color:#f0a050;text-decoration:none;font-size:11px;padding:6px 10px;border:1px solid #c45a2a66}
+nav a:hover{background:#c45a2a33}
+.section{padding:40px 24px;border-bottom:1px solid #3a2a20}
+.section h2{font-family:'Archivo Black',sans-serif;color:#c45a2a;font-size:14px;letter-spacing:.2em;margin-bottom:20px}
+.pair{display:flex;flex-wrap:wrap;gap:32px;justify-content:center}
+.frame-label{font-size:10px;color:#887060;text-align:center;margin-bottom:8px;letter-spacing:.15em}
+.device{width:300px;height:620px;border-radius:24px;padding:14px;position:relative}
+.device.light{background:linear-gradient(145deg,#d4c4a8,#a89070);box-shadow:inset 0 2px 0 #fff5,inset 0 -4px 8px #0003,0 20px 50px #0008}
+.device.dark{background:linear-gradient(145deg,#3a3028,#1a1410);box-shadow:inset 0 2px 0 #ffffff15,inset 0 -4px 8px #0008,0 20px 50px #000c}
+.screen{width:100%;height:100%;border-radius:12px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.light .screen{background:#f5ead8;color:#2a1810}
+.dark .screen{background:#0a0806;color:#f0d8a0}
+/* Radio chrome */
+.radio-face{flex:1;padding:12px;display:flex;flex-direction:column;gap:8px}
+.brand-plate{font-family:'Archivo Black',sans-serif;font-size:13px;letter-spacing:.35em;color:#c45a2a;text-align:center}
+.lcd{background:#1a2818;border:3px inset #000;border-radius:4px;padding:10px;font-size:10px;line-height:1.5;min-height:72px;box-shadow:inset 0 0 20px #0008}
+.light .lcd{background:#c8d8c0;color:#1a2818}
+.lcd .freq{color:#39ff14;font-size:16px;font-family:'Share Tech Mono',monospace}
+.dark .lcd .freq{color:#7fff7f}
+.lcd .motto{color:#c45a2a;font-style:italic}
+.vu-row{display:flex;gap:6px;align-items:flex-end;height:40px}
+.vu-bar{flex:1;background:#2a1810;border-radius:2px 2px 0 0;min-height:4px}
+.light .vu-bar{background:#8a7060}
+.vu-bar.on{background:linear-gradient(180deg,#f0a050,#c45a2a)!important}
+.dial-wrap{position:relative;height:100px;display:flex;align-items:center;justify-content:center}
+.dial{width:90px;height:90px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#f0a050,#8a4020);border:4px solid #2a1810;box-shadow:0 4px 12px #0006,inset 0 -4px 8px #0004;position:relative}
+.dial::after{content:'';position:absolute;top:50%;left:50%;width:4px;height:35px;background:#2a1810;transform-origin:bottom center;transform:translate(-50%,-100%) rotate(35deg);border-radius:2px}
+.preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.preset{font-size:7px;padding:6px 2px;text-align:center;border:2px solid #2a1810;border-radius:4px;cursor:default;line-height:1.2}
+.light .preset{background:#e8dcc8}
+.dark .preset{background:#2a2018;border-color:#c45a2a55}
+.preset.on{background:#c45a2a!important;color:#fff;border-color:#8a3010}
+.preset.off{opacity:.35;text-decoration:line-through}
+.btn-row{display:flex;gap:6px;margin-top:auto}
+.btn{flex:1;padding:10px 4px;text-align:center;font-size:9px;font-weight:bold;border:3px solid #2a1810;border-radius:6px;background:linear-gradient(180deg,#f0a050,#c45a2a);color:#2a1810;letter-spacing:.05em}
+.light .btn{border-color:#5a4030}
+/* Reader as signal lock */
+.scope{height:48px;background:#0a1008;border:2px inset #000;margin-bottom:8px;position:relative;overflow:hidden}
+.scope svg{width:100%;height:100%}
+.article-scroll{flex:1;overflow:hidden;font-size:10px;line-height:1.6;padding:4px}
+.article-scroll h3{font-size:12px;margin-bottom:6px;color:#c45a2a}
+.hud-strip{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#c45a2a22;border-top:2px solid #c45a2a;font-size:9px}
+.progress-led{height:4px;background:#2a181033;margin-top:4px}
+.progress-led i{display:block;height:100%;width:42%;background:#c45a2a}
+/* Back panel settings */
+.back-panel{flex:1;padding:10px;background:repeating-linear-gradient(0deg,transparent,transparent 8px,#00000008 8px,#00000008 9px)}
+.screw{width:8px;height:8px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#888,#333);position:absolute}
+.screw.tl{top:8px;left:8px}.screw.tr{top:8px;right:8px}.screw.bl{bottom:8px;left:8px}.screw.br{bottom:8px;right:8px}
+.switch-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #0002;font-size:10px}
+.toggle-sw{width:32px;height:16px;background:#2a1810;border-radius:2px;position:relative}
+.toggle-sw.on{background:#c45a2a}
+.toggle-sw::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:#f0d8a0}
+.toggle-sw.on::after{left:18px}
+.tape-log{font-size:9px;padding:6px;border:1px dashed #c45a2a55;margin-bottom:4px}
+.modal-morse{position:absolute;inset:0;background:#000c;display:flex;align-items:flex-end;padding:12px}
+.modal-morse .sheet{width:100%;background:var(--sheet);padding:16px;border-radius:12px 12px 0 0;border:2px solid #c45a2a}
+.light .modal-morse .sheet{--sheet:#f5ead8}
+.dark .modal-morse .sheet{--sheet:#1a1410}
+textarea{width:100%;height:60px;background:#0002;border:1px solid #c45a2a;padding:8px;font-family:inherit;font-size:10px;margin:8px 0;color:inherit}
+.fit{padding:40px 24px;background:#2a1f18;line-height:1.8;font-size:13px}
+.fit h2{color:#f0a050;font-family:'Archivo Black',sans-serif;margin-bottom:16px}
+.fit li{margin-bottom:10px}
+</style>
+</head>
+<body>
+<header class="intro">
+  <h1>MOCKUP I — SHORTWAVE</h1>
+  <p>The app is a radio. Ranked articles are transmissions on the band. You tune in, lock signal, read. Behavior learning is signal strength calibration.</p>
+  <div class="core">CORE REDUCED: (1) queue of ranked transmissions (2) read one at full focus (3) swipe = change frequency (4) prefs = preset filters (5) library = tape log</div>
+</header>
+<nav>
+  <a href="#boot">Boot</a><a href="#calibrate">Calibrate</a><a href="#tune">Tune In</a><a href="#lock">Signal Lock</a>
+  <a href="#panel">Back Panel</a><a href="#id">ID Plate</a><a href="#tape">Tape Log</a><a href="#vault">Vault</a>
+  <a href="#presets">Presets</a><a href="#meters">Meters</a><a href="#telegraph">Telegraph</a><a href="#service">Service</a>
+</nav>
+
+<section class="section" id="boot"><h2>01 · VACUUM TUBE WARMUP (Startup)</h2>
+<div class="pair">
+<div><div class="frame-label">DAYLIGHT CABINET</div><div class="device light"><div class="screen"><div class="radio-face"><div class="brand-plate">TANGENT</div><div class="dial-wrap"><div class="dial"></div></div><div class="lcd"><div class="freq">─── MHz</div><div class="motto">sapere aude<span style="animation:blink 1s step-end infinite">▮</span></div></div><div class="vu-row"><div class="vu-bar on" style="height:20%"></div><div class="vu-bar on" style="height:35%"></div><div class="vu-bar on" style="height:15%"></div><div class="vu-bar" style="height:8%"></div><div class="vu-bar" style="height:5%"></div></div></div></div></div></div>
+<div><div class="frame-label">NIGHT RECEIVE</div><div class="device dark"><div class="screen"><div class="radio-face"><div class="brand-plate">TANGENT</div><div class="dial-wrap"><div class="dial"></div></div><div class="lcd"><div class="freq">─── MHz</div><div class="motto">sapere aude▮</div></div><div class="vu-row"><div class="vu-bar on" style="height:30%;box-shadow:0 0 8px #7fff7f"></div><div class="vu-bar on" style="height:55%"></div><div class="vu-bar on" style="height:40%"></div><div class="vu-bar on" style="height:25%"></div><div class="vu-bar" style="height:10%"></div></div></div></div></div></div>
+</div></section>
+
+<section class="section" id="calibrate"><h2>02 · PRESET CALIBRATION (Onboarding)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="radio-face"><div class="brand-plate">CALIBRATE</div><p style="font-size:9px;text-align:center;margin:4px 0">Tap preset: BOOST · NEUTRAL · CUT</p><div class="preset-grid"><div class="preset on">🏛️ POL</div><div class="preset on">💼 BIZ</div><div class="preset">📈 FIN</div><div class="preset on">💻 TEC</div><div class="preset">🔬 SCI</div><div class="preset off">📜 HIS</div><div class="preset">🎨 CUL</div><div class="preset">🌿 LIF</div><div class="preset off">🎬 ENT</div></div><div class="btn-row"><div class="btn">▶ TRANSMIT</div></div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="radio-face"><div class="brand-plate">CALIBRATE</div><p style="font-size:9px;text-align:center;margin:4px 0">Tap preset: BOOST · NEUTRAL · CUT</p><div class="preset-grid"><div class="preset on">🏛️ POL</div><div class="preset on">💼 BIZ</div><div class="preset">📈 FIN</div><div class="preset on">💻 TEC</div><div class="preset">🔬 SCI</div><div class="preset off">📜 HIS</div><div class="preset">🎨 CUL</div><div class="preset">🌿 LIF</div><div class="preset off">🎬 ENT</div></div><div class="btn-row"><div class="btn">▶ TRANSMIT</div></div></div></div></div></div>
+</div></section>
+
+<section class="section" id="tune"><h2>03 · MAIN RECEIVER (Dashboard)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="radio-face"><div style="display:flex;justify-content:space-between;font-size:9px"><span>TANGENT RX-1</span><span>⚙</span></div><div class="lcd"><div class="freq">142.580 MHz · STRONG</div><div style="margin-top:4px;font-weight:bold">Why Software Margins Are Collapsing</div><div style="opacity:.7">The Diff · Business</div></div><div class="dial-wrap" style="height:70px"><div class="dial"></div></div><div style="font-size:8px;display:flex;justify-content:space-between"><span>◀ 142.440 Stratechery</span><span>142.720 ACX ▶</span></div><div style="font-size:8px;text-align:center;padding:4px;border:1px solid #c45a2a55">🔥12 · ⏳4.2h · ⏱245</div><div class="btn-row"><div class="btn">SCAN</div><div class="btn">RANDOM</div></div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="radio-face"><div style="display:flex;justify-content:space-between;font-size:9px"><span>TANGENT RX-1</span><span>⚙</span></div><div class="lcd"><div class="freq">142.580 MHz · STRONG</div><div style="margin-top:4px;font-weight:bold">Why Software Margins Are Collapsing</div><div style="opacity:.7">The Diff · Business</div></div><div class="dial-wrap" style="height:70px"><div class="dial"></div></div><div style="font-size:8px;display:flex;justify-content:space-between"><span>◀ 142.440 Stratechery</span><span>142.720 ACX ▶</span></div><div style="font-size:8px;text-align:center;padding:4px;border:1px solid #c45a2a55">🔥12 · ⏳4.2h · ⏱245</div><div class="btn-row"><div class="btn">SCAN</div><div class="btn">RANDOM</div></div></div></div></div></div>
+</div></section>
+
+<section class="section" id="lock"><h2>04 · SIGNAL LOCK (Reader)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="hud-strip"><span>✕</span><span style="flex:1;overflow:hidden;white-space:nowrap">Why Software Margins…</span><span>♥</span><span>📼</span></div><div class="scope"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><polyline fill="none" stroke="#c45a2a" stroke-width="1.5" points="0,20 10,18 20,25 30,12 40,22 50,15 60,28 70,10 80,20 90,16 100,24 110,14 120,20 130,18 140,26 150,12 160,22 170,16 180,24 190,18 200,20"/></svg></div><div class="article-scroll"><h3>Why Software Margins Are Collapsing</h3><p>Platform economics and the new cost structure of AI-native products are reshaping what "software company" means…</p><p>When marginal cost approaches zero but competition is infinite, margins compress toward commodity levels unless…</p></div><div class="progress-led"><i></i></div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="hud-strip"><span>✕</span><span style="flex:1">Why Software Margins…</span><span>♥</span><span>📼</span></div><div class="scope"><svg viewBox="0 0 200 40"><polyline fill="none" stroke="#7fff7f" stroke-width="1.5" points="0,20 10,18 20,25 30,12 40,22 50,15 60,28 70,10 80,20 90,16 100,24 110,14 120,20 130,18 140,26 150,12 160,22 170,16 180,24 190,18 200,20"/></svg></div><div class="article-scroll"><h3>Why Software Margins Are Collapsing</h3><p>Platform economics and the new cost structure of AI-native products…</p><p>When marginal cost approaches zero but competition is infinite…</p></div><div class="progress-led"><i style="background:#7fff7f"></i></div></div></div></div></div>
+</div></section>
+
+<section class="section" id="panel"><h2>05 · BACK PANEL (Settings)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen" style="position:relative"><div class="screw tl"></div><div class="screw tr"></div><div class="screw bl"></div><div class="screw br"></div><div class="back-panel"><div style="font-size:11px;font-weight:bold;margin-bottom:12px">SERVICE PANEL</div><div class="switch-row"><span>ID PLATE →</span><span>ANON</span></div><div class="switch-row"><span>TAPE LOG / VAULT</span><span>→</span></div><div class="switch-row"><span>DISPLAY: AUTO / DAY / NIGHT</span><div style="display:flex;gap:2px;font-size:8px"><span style="padding:2px 4px;border:1px solid">A</span><span style="padding:2px 4px;background:#c45a2a;color:#fff">D</span><span style="padding:2px 4px;border:1px solid">N</span></div></div><div class="switch-row"><span>PRESET MATRIX →</span><span>4 boost</span></div><div class="switch-row"><span>METER CONFIG →</span><span>3 active</span></div><div class="switch-row"><span>ARCHIVE RX</span><div class="toggle-sw on"></div></div><div class="switch-row"><span>TELEGRAPH / REQUEST</span><span>→</span></div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen" style="position:relative"><div class="screw tl"></div><div class="screw tr"></div><div class="screw bl"></div><div class="screw br"></div><div class="back-panel"><div style="font-size:11px;font-weight:bold;margin-bottom:12px">SERVICE PANEL</div><div class="switch-row"><span>ID PLATE →</span><span>ANON</span></div><div class="switch-row"><span>TAPE LOG / VAULT</span><span>→</span></div><div class="switch-row"><span>DISPLAY: AUTO / DAY / NIGHT</span><div style="display:flex;gap:2px;font-size:8px"><span style="padding:2px 4px;border:1px solid #c45a2a55">A</span><span style="padding:2px 4px;border:1px solid #c45a2a55">D</span><span style="padding:2px 4px;background:#c45a2a;color:#fff">N</span></div></div><div class="switch-row"><span>PRESET MATRIX →</span><span>4 boost</span></div><div class="switch-row"><span>METER CONFIG →</span><span>3 active</span></div><div class="switch-row"><span>ARCHIVE RX</span><div class="toggle-sw on"></div></div><div class="switch-row"><span>TELEGRAPH / REQUEST</span><span>→</span></div></div></div></div></div>
+</div></section>
+
+<section class="section" id="id"><h2>06 · ID PLATE (Account)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="back-panel"><div style="border:2px solid #c45a2a;padding:12px;margin:20px 0"><div style="font-size:8px;letter-spacing:.2em">OPERATOR ID</div><div style="font-size:14px;margin:8px 0">ANONYMOUS</div><div style="font-size:9px">LINK GOOGLE CALLSIGN →</div></div><div class="switch-row" style="color:#8a3010">SIGN OFF</div><div class="switch-row">WIPE TAPE LOG</div><div class="switch-row" style="color:#c0392b">DESTROY LICENSE</div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="back-panel"><div style="border:2px solid #c45a2a;padding:12px;margin:20px 0"><div style="font-size:8px;letter-spacing:.2em">OPERATOR ID</div><div style="font-size:14px;margin:8px 0">ANONYMOUS</div><div style="font-size:9px">LINK GOOGLE CALLSIGN →</div></div><div class="switch-row" style="color:#f0a050">SIGN OFF</div><div class="switch-row">WIPE TAPE LOG</div><div class="switch-row" style="color:#ff6b6b">DESTROY LICENSE</div></div></div></div></div>
+</div></section>
+
+<section class="section" id="tape"><h2>07 · TAPE LOG (History)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="back-panel"><div style="font-size:10px;margin-bottom:8px">← TAPE LOG</div><div class="tape-log"><strong>09/02 · 142.580</strong><br>Why Software Margins Are Collapsing</div><div class="tape-log"><strong>09/01 · 141.220</strong><br>The AI Integration Question</div><div class="tape-log"><strong>08/31 · 139.880</strong><br>Book Review: The Scout Mindset</div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="back-panel"><div style="font-size:10px;margin-bottom:8px">← TAPE LOG</div><div class="tape-log"><strong>09/02 · 142.580</strong><br>Why Software Margins Are Collapsing</div><div class="tape-log"><strong>09/01 · 141.220</strong><br>The AI Integration Question</div><div class="tape-log"><strong>08/31 · 139.880</strong><br>Book Review: The Scout Mindset</div></div></div></div></div>
+</div></section>
+
+<section class="section" id="vault"><h2>08 · VAULT (Saved Reads)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="back-panel"><div style="font-size:10px;margin-bottom:8px">← VAULT · offline HTML</div><div class="tape-log">📼 Why Software Margins… <span style="float:right">OFFLINE</span></div><div class="tape-log">📼 The Scout Mindset Review</div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="back-panel"><div style="font-size:10px;margin-bottom:8px">← VAULT · offline HTML</div><div class="tape-log">📼 Why Software Margins… <span style="float:right">OFFLINE</span></div><div class="tape-log">📼 The Scout Mindset Review</div></div></div></div></div>
+</div></section>
+
+<section class="section" id="presets"><h2>09 · PRESET MATRIX (Category Prefs)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="radio-face"><div class="brand-plate" style="font-size:10px">PRESET MATRIX</div><div class="preset-grid" style="margin-top:12px"><div class="preset on">🏛️</div><div class="preset on">💼</div><div class="preset">📈</div><div class="preset on">💻</div><div class="preset">🔬</div><div class="preset off">📜</div><div class="preset">🎨</div><div class="preset">🌿</div><div class="preset off">🎬</div></div><p style="font-size:8px;text-align:center;margin-top:8px">Auto-saves on tap</p></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="radio-face"><div class="brand-plate" style="font-size:10px">PRESET MATRIX</div><div class="preset-grid" style="margin-top:12px"><div class="preset on">🏛️</div><div class="preset on">💼</div><div class="preset">📈</div><div class="preset on">💻</div><div class="preset">🔬</div><div class="preset off">📜</div><div class="preset">🎨</div><div class="preset">🌿</div><div class="preset off">🎬</div></div><p style="font-size:8px;text-align:center;margin-top:8px">Auto-saves on tap</p></div></div></div></div>
+</div></section>
+
+<section class="section" id="meters"><h2>10 · METER CONFIG (Dashboard Stats)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="radio-face"><div class="brand-plate" style="font-size:10px">METERS · max 3</div><div class="preset-grid" style="margin-top:12px"><div class="preset on">🔥 Streak</div><div class="preset on">📊 Weekly</div><div class="preset">⏳ Hours</div><div class="preset on">⏱ WPM</div><div class="preset">📚 Finished</div><div class="preset">📈 Top Cat</div></div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="radio-face"><div class="brand-plate" style="font-size:10px">METERS · max 3</div><div class="preset-grid" style="margin-top:12px"><div class="preset on">🔥 Streak</div><div class="preset on">📊 Weekly</div><div class="preset">⏳ Hours</div><div class="preset on">⏱ WPM</div><div class="preset">📚 Finished</div><div class="preset">📈 Top Cat</div></div></div></div></div></div>
+</div></section>
+
+<section class="section" id="telegraph"><h2>11 · TELEGRAPH (Feedback / Feed Request)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen" style="position:relative"><div class="back-panel" style="opacity:.3;height:100%"></div><div class="modal-morse"><div class="sheet"><div style="font-size:11px;font-weight:bold">TELEGRAPH OUT</div><textarea placeholder="Signal to HQ…"></textarea><div class="btn">SEND · · — · ·</div></div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen" style="position:relative"><div class="modal-morse"><div class="sheet"><div style="font-size:11px;font-weight:bold">REQUEST FREQUENCY</div><textarea placeholder="https://newsletter.example.com/feed"></textarea><div class="btn">REGISTER BAND</div></div></div></div></div></div>
+</div></section>
+
+<section class="section" id="service"><h2>12 · SERVICE MODE (Developer)</h2>
+<div class="pair">
+<div><div class="frame-label">LIGHT</div><div class="device light"><div class="screen"><div class="back-panel"><div style="font-size:10px;color:#c45a2a;margin-bottom:12px">⚠ SERVICE MODE</div><div class="switch-row">SANDBOX RECEIVER →</div><div class="switch-row" style="color:#c0392b">PURGE LOCAL CACHE</div></div></div></div></div>
+<div><div class="frame-label">DARK</div><div class="device dark"><div class="screen"><div class="back-panel"><div style="font-size:10px;color:#f0a050;margin-bottom:12px">⚠ SERVICE MODE</div><div class="switch-row">SANDBOX RECEIVER →</div><div class="switch-row" style="color:#ff6b6b">PURGE LOCAL CACHE</div></div></div></div></div>
+</div></section>
+
+<section class="fit"><h2>How Shortwave maps to Tangent</h2>
+<ul>
+<li><strong>LCD hero = position-0 ranked article.</strong> Side frequencies = queue positions 1–2. SCAN/RANDOM = Discover/Shuffle callables.</li>
+<li><strong>VU meters = stats pill</strong> (≤3 metrics, placeholder until verified).</li>
+<li><strong>Signal lock reader</strong> = WebView + oscilloscope-as-progress-bar (scroll depth) + HUD strip (close/like/save).</li>
+<li><strong>Preset BOOST/NEUTRAL/CUT</strong> = 3-state category chips updating catLatent weights.</li>
+<li><strong>Tape log / Vault</strong> = History (seen metadata) / Saved Reads (offline HTML).</li>
+<li><strong>Back panel screws</strong> = Settings card groups; no new capabilities invented.</li>
+</ul></section>
+<style>@keyframes blink{50%{opacity:0}}</style>
+</body>
+</html>

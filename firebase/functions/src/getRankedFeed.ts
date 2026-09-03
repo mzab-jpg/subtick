@@ -11,15 +11,17 @@ import { randomUUID } from 'crypto';
 import { Article, ArticleScoreDetail, RankedFeedResult, UserProfile } from './types.js';
 import {
   SCORE_WEIGHTS,
-  SCORE_WEIGHTS_TAIL,
-  MAX_TRENDING_SCORE,
 } from './constants.js';
 import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
 import { isControlDashboardAdmin } from './dashboardAuth.js';
-import { loadScoringConfig, prepareConfig, ScoringConfig } from './scoringConfig.js';
+import { loadScoringConfig, prepareConfig, ScoringConfig, sigmoid } from './scoringConfig.js';
 
 // --- Configuration ---
 const CACHE_LIFETIME_MS = 10 * 60 * 1000; // 10 minutes memory cache
+
+// Publisher seed latent — configurable via `latent.publisherSeed` in the
+// scoring config; DEFAULT_PUBLISHER_LATENT remains the compiled fallback.
+const PUBLISHER_SEED_FALLBACK = 1.386;
 
 // Global Cache Variables (persistent across function container instances)
 let candidateCacheCurrent: Article[] = [];
@@ -46,27 +48,23 @@ let publisherCacheTimestamp = 0;
 
 /**
  * P — Personalization [0, 1]
- * Converts raw category and publisher weights (range [0.1, 5.0])
- * into a 0-to-1 fraction of maximum possible interest.
+ * Sigmoid-blend of unbounded category and publisher latent scores x.
+ * Neutral x = 0.0 → sigmoid(0) = 0.50 (true neutral).
+ * Strong enthusiast  x = 2.20 → sigmoid(2.20) ≈ 0.90.
+ * Strong rejection   x = -2.20 → sigmoid(-2.20) ≈ 0.10.
  *
- * Known publishers use 60% category and 40% publisher. A publisher with no
- * stored interaction history uses the configurable cold-start blend instead.
- *
- * A neutral user (all weights = 1.0) gets P ≈ 0.18.
- * Max possible (both weights = 5.0) gets P = 1.0.
+ * Known publishers use 60% category and 40% publisher. A publisher
+ * with no stored interaction history uses the configurable cold‑start
+ * blend instead.
  */
 function normalizeP(
-  categoryWeight: number,
-  publisherWeight: number,
+  categoryLatent: number,
+  publisherLatent: number,
   categoryShare: number = 0.6,
-  publisherShare: number = 0.4
+  publisherShare: number = 0.4,
+  steepness: number = 1
 ): number {
-  const MIN_W = 0.1;
-  const MAX_W = 5.0;
-  const RANGE = MAX_W - MIN_W; // 4.9
-  const catFraction = Math.max(0, Math.min(1, (categoryWeight - MIN_W) / RANGE));
-  const pubFraction = Math.max(0, Math.min(1, (publisherWeight - MIN_W) / RANGE));
-  return catFraction * categoryShare + pubFraction * publisherShare;
+  return categoryShare * sigmoid(categoryLatent, steepness) + publisherShare * sigmoid(publisherLatent, steepness);
 }
 
 function getUserStage(totalArticlesRead: number, lastReadDate: number, now: number): 'new' | 'learning' | 'established' | 'inactive_returning' {
@@ -78,9 +76,13 @@ function getUserStage(totalArticlesRead: number, lastReadDate: number, now: numb
 }
 
 function getProfileConcentration(categoryWeights: Record<string, number>): number {
-  const weights = Object.values(categoryWeights).filter((weight) => Number.isFinite(weight) && weight > 0);
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  return total > 0 ? weights.reduce((sum, weight) => sum + Math.pow(weight / total, 2), 0) : 0;
+  // Compute Herfindahl on sigmoid-mapped probabilities (not raw latents) so
+  // negative latents contribute meaningfully and the metric stays in [0,1].
+  const probs = Object.values(categoryWeights)
+    .filter((x) => Number.isFinite(x))
+    .map((x) => sigmoid(x));
+  const total = probs.reduce((sum, p) => sum + p, 0);
+  return total > 0 ? probs.reduce((sum, p) => sum + (p / total) ** 2, 0) : 0;
 }
 
 function getPersonalizationScore(
@@ -90,58 +92,41 @@ function getPersonalizationScore(
   cfg: ScoringConfig
 ): number {
   const hasPublisherHistory = Object.prototype.hasOwnProperty.call(publisherWeights, publisherName);
-  const publisherWeight = publisherWeights[publisherName] ?? 1.0;
+  const publisherWeight = publisherWeights[publisherName] ?? 0.0;
   return normalizeP(
     categoryWeight,
     publisherWeight,
     hasPublisherHistory ? 0.6 : cfg.scoring.publisherColdStartCategoryWeight,
-    hasPublisherHistory ? 0.4 : cfg.scoring.publisherColdStartPublisherWeight
+    hasPublisherHistory ? 0.4 : cfg.scoring.publisherColdStartPublisherWeight,
+    cfg.sigmoid.steepness
   );
 }
 
 /**
- * T — Trending [0, 1]
- * Normalized trendingScore capped at MAX_TRENDING_SCORE (50).
- * Score of 0 → T = 0.0 (new article).
- * Score of 50+ → T = 1.0 (very viral).
+ * T — Trending [0, 1] via saturation sigmoid.
+ * T = S / (S + k), where k = trendingHalfSat (default 25).
+ * Score of 0 → T = 0.0, score of 25 → T = 0.5, no cap needed.
  */
-function normalizeT(trendingScore: number, maxScale: number = MAX_TRENDING_SCORE): number {
-  return Math.min(trendingScore, maxScale) / maxScale;
+function normalizeT(trendingScore: number, halfSat: number): number {
+  const s = Math.max(0, trendingScore || 0);
+  return s / (s + halfSat);
 }
 
 /**
- * R — Recency [0, 1]
- * Two-phase decay:
- * - Days 0–7: slow linear drop from 1.0 to 0.8 (article stays "fresh" for a week)
- * - After day 7: steeper power-law decay (0.8 × (7/daysOld)^1.5)
- *
- * Values at key ages:
- *   0 days  → 1.00
- *   3 days  → 0.91
- *   7 days  → 0.80
- *  14 days  → 0.43
- *  28 days  → 0.15
- *  60 days  → 0.04
+ * R — Recency [0, 1] via single monotone decay.
+ * R = 1 / (1 + daysOld / τ), where τ = recencyDaysConstant (default 14).
  */
-function normalizeR(daysOld: number): number {
+function normalizeR(daysOld: number, daysConstant: number): number {
   if (daysOld <= 0) return 1.0;
-  if (daysOld <= 7) {
-    return 1.0 - (daysOld / 7) * 0.2;
-  }
-  return 0.8 * Math.pow(7 / daysOld, 1.5);
+  return 1 / (1 + daysOld / daysConstant);
 }
 
 /**
- * Q — Publisher Quality [0, 1]
- * Rescales the crowd-sourced quality score from [0.2, 1.0] to [0, 1].
- * Default new publisher (0.8) → Q = 0.75
- * Best publisher (1.0) → Q = 1.0
- * Worst publisher (0.2) → Q = 0.0
+ * Q — Publisher Quality [0, 1] via sigmoid of latent y.
+ * Publishers collection stores unbounded latent y (seed 1.386 → σ=0.8).
  */
-function normalizeQ(qualityScore: number): number {
-  const MIN_Q = 0.2;
-  const MAX_Q = 1.0;
-  return Math.max(0, Math.min(1, (qualityScore - MIN_Q) / (MAX_Q - MIN_Q)));
+function normalizeQ(publisherQualityScore: number, steepness: number = 1): number {
+  return sigmoid(publisherQualityScore, steepness);
 }
 
 /**
@@ -158,19 +143,6 @@ function scorePersonalized(
   w: { personalization: number; trending: number; recency: number; quality: number } = SCORE_WEIGHTS
 ): number {
   return w.personalization * P + w.trending * T + w.recency * R + w.quality * Q;
-}
-
-/**
- * Tail score for the Tail tranche (trending + recency only).
- * No personalization or quality.
- * Score = 0.43T + 0.57R. Output is [0, 1].
- */
-function scoreTail(
-  T: number,
-  R: number,
-  w: { trending: number; recency: number } = SCORE_WEIGHTS_TAIL
-): number {
-  return w.trending * T + w.recency * R;
 }
 
 /**
@@ -302,6 +274,7 @@ async function queryRandomSample(
 export const cronUpdateCandidatePool = onSchedule('every 6 hours', async () => {
   console.log('[Cron] Starting dual candidate pool generation (Current vs Mixed)...');
   try {
+    const cfgPool = (await loadScoringConfig()).pool;
     const now = Date.now();
     // Single random threshold shared across all 4 queries this run.
     // Changes on every invocation so the pool content is always different.
@@ -310,10 +283,10 @@ export const cronUpdateCandidatePool = onSchedule('every 6 hours', async () => {
 
     // Run all 4 queries in parallel for speed
     const [freshCurrent, oldCurrent, freshMixed, oldMixed] = await Promise.all([
-      queryRandomSample(true,  true,  threshold, 500),  // Fresh active  (Box 1)
-      queryRandomSample(false, true,  threshold, 500),  // Old active    (Box 1)
-      queryRandomSample(true,  false, threshold, 500),  // Fresh any     (Box 2)
-      queryRandomSample(false, false, threshold, 500),  // Old any       (Box 2)
+      queryRandomSample(true,  true,  threshold, cfgPool.boxQueryLimit),  // Fresh active  (Box 1)
+      queryRandomSample(false, true,  threshold, cfgPool.boxQueryLimit),  // Old active    (Box 1)
+      queryRandomSample(true,  false, threshold, cfgPool.boxQueryLimit),  // Fresh any     (Box 2)
+      queryRandomSample(false, false, threshold, cfgPool.boxQueryLimit),  // Old any       (Box 2)
     ]);
 
     // Box 1: strictly active articles only, 50/50 fresh/old split
@@ -356,15 +329,15 @@ export const cronUpdateCandidatePool = onSchedule('every 6 hours', async () => {
  * handful of newly-crossed articles. Requires composite index
  * (isFresh ASC, publishDate ASC) - see firestore.indexes.json.
  */
-async function expireStaleStickers(): Promise<number> {
-  const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
+async function expireStaleStickers(expiryDays: number, flipCap: number, batchSize: number): Promise<number> {
+  const cutoff = Date.now() - expiryDays * 24 * 60 * 60 * 1000;
   let flipped = 0;
-  while (flipped < 2000) {
+  while (flipped < flipCap) {
     const snap = await db.collection('articles')
       .where('isFresh', '==', true)
       .where('publishDate', '<', cutoff)
       .orderBy('publishDate', 'asc')
-      .limit(500)
+      .limit(batchSize)
       .get();
     if (snap.empty) break;
     const batch = db.batch();
@@ -377,12 +350,14 @@ async function expireStaleStickers(): Promise<number> {
 
 export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => {
   console.log('[Cron] Starting daily trendingScore decay...');
+  const cfgDecay = await loadScoringConfig();
+  const m = cfgDecay.maintenance;
 
   // Audit fix (isFresh): expire aged-out stickers FIRST so quiet articles are
   // maintained even though the early-return below skips the decay batch when
   // there are no hot articles.
   try {
-    const expired = await expireStaleStickers();
+    const expired = await expireStaleStickers(m.stickerExpiryDays, m.stickerFlipCap, m.deleteBatchSize);
     if (expired > 0) {
       console.log(`[Cron] Expired isFresh sticker on ${expired} aged-out article(s).`);
     }
@@ -390,22 +365,22 @@ export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => 
     console.error('[Cron] Error expiring stale isFresh stickers:', err);
   }
 
-  const cfgDecay = await loadScoringConfig();
   const decayRate = cfgDecay.trending.decayRate;
   try {
     // C1 Fix: Raised threshold from 0.1 to 1.0.
-    // Articles with trendingScore < 1.0 are effectively zero-signal — decaying them
-    // does not meaningfully change rankings but wastes ~70% of the daily write budget.
+    // Articles with trendingScore < the configured minimum are effectively
+    // zero-signal — decaying them does not meaningfully change rankings but
+    // wastes most of the daily write budget.
     const snapshot = await db.collection('articles')
-      .where('trendingScore', '>', 1.0)
+      .where('trendingScore', '>', m.trendingDecayMinScore)
       .get();
 
     if (snapshot.empty) {
-      console.log('[Cron] No articles with trendingScore > 1.0, nothing to decay.');
+      console.log(`[Cron] No articles with trendingScore > ${m.trendingDecayMinScore}, nothing to decay.`);
       return;
     }
 
-    const batchSize = 500;
+    const batchSize = m.deleteBatchSize;
     const docs = snapshot.docs;
     let decayed = 0;
 
@@ -436,6 +411,7 @@ export const cronDecayTrendingScores = onSchedule('every 24 hours', async () => 
 
 async function getOrUpdateCandidatePool(includeArchived: boolean): Promise<Article[]> {
   const now = Date.now();
+  const cfgPool = (await loadScoringConfig()).pool;
   const memoryCache = includeArchived ? candidateCacheMixed : candidateCacheCurrent;
   const memCacheTimestamp = includeArchived ? cacheTimestampMixed : cacheTimestampCurrent;
 
@@ -470,20 +446,20 @@ async function getOrUpdateCandidatePool(includeArchived: boolean): Promise<Artic
 
   console.log('[Cache] Fallback triggered. Querying stratified buckets on-the-fly...');
   try {
-    const fourWeeksAgo = Date.now() - (4 * 7 * 24 * 60 * 60 * 1000);
+        const freshCutoff = Date.now() - (cfgPool.fallbackFreshCutoffDays * 24 * 60 * 60 * 1000);
 
     const freshSnapshot = await db
       .collection('articles')
-      .where('publishDate', '>=', fourWeeksAgo)
+      .where('publishDate', '>=', freshCutoff)
       .orderBy('publishDate', 'desc')
-      .limit(2000)
+      .limit(cfgPool.fallbackQueryCap)
       .get();
 
     const qualitySnapshot = await db
       .collection('articles')
-      .where('publishDate', '<', fourWeeksAgo)
+      .where('publishDate', '<', freshCutoff)
       .orderBy('publishDate', 'desc')
-      .limit(2000)
+      .limit(cfgPool.fallbackQueryCap)
       .get();
 
     const freshArticles: Article[] = [];
@@ -492,7 +468,7 @@ async function getOrUpdateCandidatePool(includeArchived: boolean): Promise<Artic
       if (
         !data.isPaywalled &&
         (includeArchived || data.rssStatus === 'current') &&
-        (data.wordCount === undefined || data.wordCount >= 150)
+        (data.wordCount === undefined || data.wordCount >= cfgPool.minArticleWords)
       ) {
         freshArticles.push({ ...data, id: doc.id });
       }
@@ -504,7 +480,7 @@ async function getOrUpdateCandidatePool(includeArchived: boolean): Promise<Artic
       if (
         !data.isPaywalled &&
         (includeArchived || data.rssStatus === 'current') &&
-        (data.wordCount === undefined || data.wordCount >= 150)
+        (data.wordCount === undefined || data.wordCount >= cfgPool.minArticleWords)
       ) {
         archiveArticles.push({ ...data, id: doc.id });
       }
@@ -513,8 +489,8 @@ async function getOrUpdateCandidatePool(includeArchived: boolean): Promise<Artic
     shuffleArray(freshArticles);
     shuffleArray(archiveArticles);
 
-    const articlesMap = new Map<string, Article>();
-    [...freshArticles.slice(0, 500), ...archiveArticles.slice(0, 500)].forEach(a => {
+        const articlesMap = new Map<string, Article>();
+    [...freshArticles.slice(0, cfgPool.boxQueryLimit), ...archiveArticles.slice(0, cfgPool.boxQueryLimit)].forEach(a => {
       articlesMap.set(a.id, a);
     });
 
@@ -551,14 +527,16 @@ async function getOrUpdatePublisherQualities(): Promise<Record<string, number>> 
     const tempQualities: Record<string, number> = {};
     snapshot.forEach(doc => {
       const data = doc.data();
+      // Stored quality values are unbounded latent y — feed them directly
+      // through sigmoid() at scoring time. No clamp.
       if (data && typeof data.qualityScore === 'number') {
         const pubKey = (data.name && typeof data.name === 'string') ? data.name : doc.id;
-        tempQualities[pubKey] = Math.max(0.2, Math.min(1.0, data.qualityScore));
+        tempQualities[pubKey] = data.qualityScore;
       }
     });
     publisherQualityCache = tempQualities;
     publisherCacheTimestamp = now;
-    console.log(`[Cache] Loaded live dynamic quality scores for ${Object.keys(publisherQualityCache).length} publishers`);
+    console.log(`[Cache] Loaded live latent quality scores for ${Object.keys(publisherQualityCache).length} publishers`);
     return publisherQualityCache;
   } catch (err: any) {
     console.error('[Cache] Failed to load publisher quality scores, falling back to old cache:', err.message);
@@ -651,223 +629,170 @@ export function spaceArticlesByPublisher<T extends { id: string; publicationName
   return result;
 }
 
-export function assembleFeedWithTranches(
-  scoredList: { article: Article; fullScore: number; tailScore: number }[],
+
+/**
+ * Single-pass greedy feed selection with subtractive penalty steps.
+ *
+ * Every candidate is re-scored at each pick:
+ *   Adjusted = BaseScore − (P_cat × N_cat) − (P_pub × N_pub) + jitter
+ * Discovery slots (every 5th card, starting at position 4) zero out
+ * personalization and pick purely on trending, recency, and quality.
+ */
+export function selectFeed(
+  scoredList: { article: Article; fullScore: number; P?: number; T?: number; R?: number; Q?: number }[],
   totalSize = 30,
-  totalArticlesRead = 0,
+  _totalArticlesRead = 0,
   opts: {
-    highThreshold?: number;
-    midThreshold?: number;
-    highSize?: number;
-    midSize?: number;
-    tailSize?: number;
-    publisherCap?: number;
-    newUserThreshold?: number;
+    categoryPenaltyStep?: number;
+    publisherPenaltyStep?: number;
+    discoverySlotInterval?: number;
+    jitterRange?: number;
     maxArticlesPerCategory?: number;
     minDistinctCategories?: number;
   } = {}
 ): Article[] {
   const {
-    highThreshold = 0.40,
-    midThreshold = 0.20,
-    highSize = 12,
-    midSize = 8,
-    tailSize = 10,
-    publisherCap = 5,
-    newUserThreshold = 30,
+    categoryPenaltyStep = 0.15,
+    publisherPenaltyStep = 0.25,
+    discoverySlotInterval = 5,
+    jitterRange = 0.03,
     maxArticlesPerCategory = 15,
     minDistinctCategories = 4,
   } = opts;
   if (scoredList.length === 0) return [];
 
-  const highBucket: typeof scoredList = [];
-  const midBucket: typeof scoredList = [];
-  const tailBucket: typeof scoredList = [];
+  const w = SCORE_WEIGHTS;
+  const candidates = [...scoredList].sort((a, b) => b.fullScore - a.fullScore);
 
-  for (const item of scoredList) {
-    if (item.fullScore > highThreshold) {
-      highBucket.push(item);
-    } else if (item.fullScore > midThreshold) {
-      midBucket.push(item);
-    } else {
-      tailBucket.push(item);
-    }
-  }
+  // Startup anchor: highest-scoring article at position 0
+  const anchor = candidates[0];
+  const startupAnchorId = anchor.article.id;
+  const selected: Article[] = [];
+  const usedIds = new Set<string>();
+  const catCounts = new Map<string, number>();
+  const pubCounts = new Map<string, number>();
 
-  const PUB_CAP = publisherCap;
-  const pubCountsInFeed = new Map<string, number>();
-  const categoryCountsInFeed = new Map<string, number>();
-  const finalFeed: Article[] = [];
-  let remainingCount = totalSize;
+  selected.push(anchor.article);
+  usedIds.add(anchor.article.id);
+  catCounts.set(anchor.article.category || 'Uncategorized', 1);
+  pubCounts.set(anchor.article.publicationName, 1);
 
-  // Helper: iterate a shuffled (or sorted) bucket, pick articles respecting the
-  // per-publisher cap, and return how many were picked.
-  function pickFromBucket(
-    bucket: typeof scoredList,
-    target: number,
-    enforceCategoryCap = true
-  ): Article[] {
-    const picked: Article[] = [];
-    for (const item of bucket) {
-      if (picked.length >= target) break;
-      const pub = item.article.publicationName;
-      const current = pubCountsInFeed.get(pub) || 0;
-      const category = item.article.category || 'Uncategorized';
-      const categoryCount = categoryCountsInFeed.get(category) || 0;
-      if (current >= PUB_CAP) continue;
-      if (enforceCategoryCap && categoryCount >= maxArticlesPerCategory) continue;
-      pubCountsInFeed.set(pub, current + 1);
-      categoryCountsInFeed.set(category, categoryCount + 1);
-      picked.push(item.article);
-    }
-    return picked;
-  }
+  // Remaining candidates (excluding anchor)
+  const pool = candidates.slice(1);
 
-  let targetHigh = highSize;
-  let targetMid = midSize;
-  let targetTail = tailSize;
+  // Randomize which position within each block of `discoverySlotInterval` cards
+  // is the discovery slot. A fixed "every 5th card" cadence lets users learn to
+  // skip those cards on autopilot, defeating discovery's purpose.
+  const discoveryPhase = Math.floor(Math.random() * discoverySlotInterval);
 
-  // Reserve the opening card for the strongest eligible article, regardless of
-  // tranche. Every other slot remains randomized/category-varied, so this keeps
-  // the intended discovery mix rather than making the feed deterministic.
-  let startupAnchorId: string | undefined;
-  const startupAnchor = [...scoredList].sort((a, b) => b.fullScore - a.fullScore)[0];
-  const pickedHigh: Article[] = [];
-  const pickedMid: Article[] = [];
-  const pickedTail: Article[] = [];
-  if (startupAnchor) {
-    const anchorArticle = startupAnchor.article;
-    const anchorCategory = anchorArticle.category || 'Uncategorized';
-    pubCountsInFeed.set(anchorArticle.publicationName, 1);
-    categoryCountsInFeed.set(anchorCategory, 1);
-    startupAnchorId = anchorArticle.id;
+  for (let pos = 1; pos < totalSize && pool.length > 0; pos++) {
+    // Discovery slot: one randomized position per block, zero out personalization
+    const isDiscoverySlot = pos % discoverySlotInterval === discoveryPhase;
 
-    if (startupAnchor.fullScore > highThreshold && targetHigh > 0) {
-      pickedHigh.push(anchorArticle);
-      highBucket.splice(highBucket.indexOf(startupAnchor), 1);
-    } else if (startupAnchor.fullScore > midThreshold && targetMid > 0) {
-      pickedMid.push(anchorArticle);
-      midBucket.splice(midBucket.indexOf(startupAnchor), 1);
-    } else if (targetTail > 0) {
-      pickedTail.push(anchorArticle);
-      tailBucket.splice(tailBucket.indexOf(startupAnchor), 1);
-    }
-  }
+    let bestIdx = -1;
+    let bestScore = -Infinity;
 
-  // High Tranche — random selection for every remaining slot, respecting caps.
-  shuffleArray(highBucket);
-  pickedHigh.push(...pickFromBucket(highBucket, Math.max(0, targetHigh - pickedHigh.length)));
-  finalFeed.push(...pickedHigh);
-  remainingCount -= pickedHigh.length;
-  if (pickedHigh.length < targetHigh) targetMid += (targetHigh - pickedHigh.length);
+    for (let i = 0; i < pool.length; i++) {
+      const s = pool[i];
+      const cat = s.article.category || 'Uncategorized';
+      const pub = s.article.publicationName;
+      const catN = catCounts.get(cat) || 0;
+      const pubN = pubCounts.get(pub) || 0;
 
-  // Mid Tranche — random selection for every remaining slot, respecting caps.
-  shuffleArray(midBucket);
-  pickedMid.push(...pickFromBucket(midBucket, Math.max(0, targetMid - pickedMid.length)));
-  finalFeed.push(...pickedMid);
-  remainingCount -= pickedMid.length;
-  if (pickedMid.length < targetMid) targetTail += (targetMid - pickedMid.length);
+      // Hard safety net: do not exceed per-category cap
+      if (catN >= maxArticlesPerCategory) continue;
 
-  // Tail — sorted by tailScore (T+R), or randomized for new users
-  if (totalArticlesRead < newUserThreshold) {
-    shuffleArray(tailBucket);
-  } else {
-    tailBucket.sort((a, b) => b.tailScore - a.tailScore);
-  }
-  pickedTail.push(...pickFromBucket(tailBucket, Math.max(0, targetTail - pickedTail.length)));
-  finalFeed.push(...pickedTail);
-  remainingCount -= pickedTail.length;
+      // Base score
+      const baseScore = isDiscoverySlot
+        ? w.trending * (s.T ?? 0) + w.recency * (s.R ?? 0) + w.quality * (s.Q ?? 0)
+        : s.fullScore;
 
-  // Final fallback if pool was very small
-  if (remainingCount > 0) {
-    const usedIds = new Set(finalFeed.map(a => a.id));
-    const leftovers = scoredList.filter(s => !usedIds.has(s.article.id));
-    leftovers.sort((a, b) => b.tailScore - a.tailScore);
-    const pickedLeftovers = pickFromBucket(leftovers, remainingCount);
-    finalFeed.push(...pickedLeftovers);
-    // If every eligible remaining article is already at the category cap, relax
-    // only that cap so a small/skewed pool still returns a full feed.
-    if (pickedLeftovers.length < remainingCount) {
-      const usedIdsAfterCap = new Set(finalFeed.map(a => a.id));
-      const relaxedLeftovers = scoredList
-        .filter(s => !usedIdsAfterCap.has(s.article.id))
-        .sort((a, b) => b.tailScore - a.tailScore);
-      finalFeed.push(...pickFromBucket(relaxedLeftovers, remainingCount - pickedLeftovers.length, false));
-    }
-  }
+      // Cumulative linear penalty (subtractive, so elite articles survive longer)
+      const penalty = categoryPenaltyStep * catN + publisherPenaltyStep * pubN;
+      const adjusted = baseScore - penalty;
 
-  // When eligible alternatives exist, replace an overrepresented category item
-  // with the strongest missing category candidate. This preserves feed size,
-  // uniqueness, and publisher caps while meeting the minimum-category goal.
-  const usedIds = new Set(finalFeed.map(article => article.id));
-  const distinctCategories = new Set(finalFeed.map(article => article.category || 'Uncategorized'));
-  const categoryCounts = new Map<string, number>();
-  for (const article of finalFeed) {
-    const category = article.category || 'Uncategorized';
-    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
-  }
-  const publisherCounts = new Map<string, number>();
-  for (const article of finalFeed) {
-    publisherCounts.set(article.publicationName, (publisherCounts.get(article.publicationName) || 0) + 1);
-  }
-  const replacementCandidates = [...scoredList].sort((a, b) => b.fullScore - a.fullScore);
-  while (distinctCategories.size < minDistinctCategories) {
-    const candidate = replacementCandidates.find(({ article }) =>
-      !usedIds.has(article.id) &&
-      !distinctCategories.has(article.category || 'Uncategorized') &&
-      (publisherCounts.get(article.publicationName) || 0) < PUB_CAP
-    );
-    if (!candidate) break;
+      // Jitter: uniform random in [-jitterRange, +jitterRange]
+      const jitter = (Math.random() * 2 - 1) * jitterRange;
+      const final = adjusted + jitter;
 
-    let replaceIndex = -1;
-    let replaceScore = Number.POSITIVE_INFINITY;
-    for (let index = 0; index < finalFeed.length; index += 1) {
-      const article = finalFeed[index];
-      const category = article.category || 'Uncategorized';
-      if (article.id === startupAnchorId || (categoryCounts.get(category) || 0) <= 1) continue;
-      const score = scoredList.find(s => s.article.id === article.id)?.fullScore ?? 0;
-      if (score < replaceScore) {
-        replaceScore = score;
-        replaceIndex = index;
+      if (final > bestScore) {
+        bestScore = final;
+        bestIdx = i;
       }
     }
-    if (replaceIndex < 0) break;
 
-    const removed = finalFeed[replaceIndex];
-    const removedCategory = removed.category || 'Uncategorized';
-    categoryCounts.set(removedCategory, (categoryCounts.get(removedCategory) || 1) - 1);
-    publisherCounts.set(removed.publicationName, (publisherCounts.get(removed.publicationName) || 1) - 1);
-    usedIds.delete(removed.id);
+    if (bestIdx < 0) break;  // no eligible remaining candidates
 
-    finalFeed[replaceIndex] = candidate.article;
-    const candidateCategory = candidate.article.category || 'Uncategorized';
-    categoryCounts.set(candidateCategory, (categoryCounts.get(candidateCategory) || 0) + 1);
-    publisherCounts.set(candidate.article.publicationName, (publisherCounts.get(candidate.article.publicationName) || 0) + 1);
-    usedIds.add(candidate.article.id);
-    distinctCategories.add(candidateCategory);
-    if ((categoryCounts.get(removedCategory) || 0) === 0) distinctCategories.delete(removedCategory);
+    const picked = pool.splice(bestIdx, 1)[0];
+    const category = picked.article.category || 'Uncategorized';
+    selected.push(picked.article);
+    usedIds.add(picked.article.id);
+    catCounts.set(category, (catCounts.get(category) || 0) + 1);
+    pubCounts.set(picked.article.publicationName, (pubCounts.get(picked.article.publicationName) || 0) + 1);
+  }
+// Fill any remaining slots if pool still has candidates
+  for (const s of pool) {
+    if (selected.length >= totalSize) break;
+    selected.push(s.article);
   }
 
-  // Preserve variety without letting the final random order create topic fatigue.
-  // This only changes display order; selection, scores, and publisher caps are final.
-  const categoryInterleavedFeed = interleaveArticlesByCategory(finalFeed);
+  // minDistinctCategories fixup: replace weakest overrepresented-category
+  // article with best missing-category candidate
+  const distinct = new Set(selected.map(a => a.category || 'Uncategorized'));
+  if (distinct.size < minDistinctCategories) {
+    const publisherCounts = new Map<string, number>();
+    const categoryCounts = new Map<string, number>();
+    for (const a of selected) {
+      publisherCounts.set(a.publicationName, (publisherCounts.get(a.publicationName) || 0) + 1);
+      const cat = a.category || 'Uncategorized';
+      categoryCounts.set(cat, (categoryCounts.get(cat) || 0) + 1);
+    }
+    const replacements = [...scoredList].sort((a, b) => b.fullScore - a.fullScore);
+    while (distinct.size < minDistinctCategories) {
+      const cand = replacements.find(({ article }) =>
+        !usedIds.has(article.id) &&
+        !distinct.has(article.category || 'Uncategorized')
+      );
+      if (!cand) break;
+      let replaceIdx = -1;
+      let weakestScore = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < selected.length; i++) {
+        const a = selected[i];
+        if (a.id === startupAnchorId) continue;
+        const cnt = categoryCounts.get(a.category || 'Uncategorized') || 0;
+        if (cnt <= 1) continue;
+        const fs = scoredList.find(s => s.article.id === a.id)?.fullScore ?? 0;
+        if (fs < weakestScore) { weakestScore = fs; replaceIdx = i; }
+      }
+      if (replaceIdx < 0) break;
+      const removed = selected[replaceIdx];
+      const rmCat = removed.category || 'Uncategorized';
+      categoryCounts.set(rmCat, Math.max(0, (categoryCounts.get(rmCat) || 1) - 1));
+      publisherCounts.set(removed.publicationName, Math.max(0, (publisherCounts.get(removed.publicationName) || 1) - 1));
+      usedIds.delete(removed.id);
+      selected[replaceIdx] = cand.article;
+      const newCat = cand.article.category || 'Uncategorized';
+      categoryCounts.set(newCat, (categoryCounts.get(newCat) || 0) + 1);
+      publisherCounts.set(cand.article.publicationName, (publisherCounts.get(cand.article.publicationName) || 0) + 1);
+      usedIds.add(cand.article.id);
+      distinct.add(newCat);
+      if ((categoryCounts.get(rmCat) || 0) === 0) distinct.delete(rmCat);
+    }
+  }
 
-  // Interleaving is intentionally random/category-aware, but the Dashboard hero
-  // must make a strong first impression. Move the reserved highest-scoring card
-  // to index 0, then repair publisher repetition without changing membership.
-  const anchorIndex = startupAnchorId
-    ? categoryInterleavedFeed.findIndex(article => article.id === startupAnchorId)
-    : -1;
-  const heroFirstFeed = anchorIndex > 0
-    ? [categoryInterleavedFeed[anchorIndex], ...categoryInterleavedFeed.filter((_, index) => index !== anchorIndex)]
-    : categoryInterleavedFeed;
-  const orderedFeed = spaceArticlesByPublisher(heroFirstFeed, 3, startupAnchorId);
+  // Preserve variety without letting the final order create topic fatigue.
+  const interleaved = interleaveArticlesByCategory(selected);
 
-  console.log(`[Tranche Selector] High: ${pickedHigh.length}, Mid: ${pickedMid.length}, Tail: ${pickedTail.length}`);
+  // Move reserved startup anchor to position 0
+  const anchorIdx = interleaved.findIndex(a => a.id === startupAnchorId);
+  const heroFirst = anchorIdx > 0
+    ? [interleaved[anchorIdx], ...interleaved.filter((_, i) => i !== anchorIdx)]
+    : interleaved;
+  const ordered = spaceArticlesByPublisher(heroFirst, 3, startupAnchorId);
 
-  return orderedFeed;
+  console.log(`[Select Feed] Selected ${selected.length} of ${scoredList.length} candidates`);
+  return ordered;
 }
-
 /**
  * Cron that runs every 3 days to delete old low-quality articles.
  * Deletes the bottom 3% of articles older than 3 months,
@@ -881,6 +806,7 @@ export function assembleFeedWithTranches(
  */
 export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
   console.log('[Cron] Starting old article cleanup...');
+  const cfgMaintenance = (await loadScoringConfig()).maintenance;
   try {
     // Step 1: Immediately delete ALL paywalled articles.
     // Paywalled articles are never shown to users and never included in candidate pools.
@@ -891,7 +817,7 @@ export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
         .get();
 
       if (!paywallSnap.empty) {
-        const batchSize = 500;
+        const batchSize = cfgMaintenance.deleteBatchSize;
         let paywallDeleted = 0;
         for (let i = 0; i < paywallSnap.docs.length; i += batchSize) {
           const batch = db.batch();
@@ -910,16 +836,16 @@ export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
     // Step 2: Delete low-quality old articles (bottom performers older than 3 months).
     //
     // Instead of reading ALL old articles (which grows unbounded and costs
-    // proportionally more Firestore reads every cycle), we query the 500
-    // worst-scoring candidates directly via a composite index. The result is
-    // a fixed 500-read ceiling every 72 hours regardless of collection size.
-    const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+    // proportionally more Firestore reads every cycle), we query the worst-scoring
+    // candidates directly via a composite index. The result is a fixed read
+    // ceiling every 72 hours regardless of collection size.
+    const minAgeCutoff = Date.now() - (cfgMaintenance.cleanupMinAgeDays * 24 * 60 * 60 * 1000);
 
-    const SAMPLE_LIMIT = 500;
-    const DELETE_FRACTION = 0.03;
+    const SAMPLE_LIMIT = cfgMaintenance.cleanupSampleSize;
+    const DELETE_FRACTION = cfgMaintenance.cleanupDeleteFraction;
 
     const snapshot = await db.collection('articles')
-      .where('publishDate', '<', threeMonthsAgo)
+      .where('publishDate', '<', minAgeCutoff)
       .orderBy('peakTrendingScore', 'asc')
       .limit(SAMPLE_LIMIT)
       .get();
@@ -946,7 +872,7 @@ export const cronCleanupOldArticles = onSchedule('every 72 hours', async () => {
 
     console.log(`[Cron] ${oldArticles.length} old articles sampled. Deleting bottom ${deleteCount}.`);
 
-    const batchSize = 500;
+    const batchSize = cfgMaintenance.deleteBatchSize;
     for (let i = 0; i < toDelete.length; i += batchSize) {
       const batch = db.batch();
       const chunk = toDelete.slice(i, i + batchSize);
@@ -990,7 +916,6 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
   const configReadyAt = Date.now();
 
   let categoryWeights: Record<string, number> = {};
-  let categoryLengthWeights: Record<string, number> = {};
   let publisherWeights: Record<string, number> = {};
   let includeArchivedArticles = false;
   let totalArticlesRead = 0;
@@ -1003,7 +928,6 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
         throw new HttpsError('permission-denied', 'This account has been disabled.');
       }
       categoryWeights = data.categoryWeights || {};
-      categoryLengthWeights = data.categoryLengthWeights || {};
       publisherWeights = data.publisherWeights || {};
       includeArchivedArticles = data.includeArchivedArticles || false;
       totalArticlesRead = data.totalArticlesRead || 0;
@@ -1048,34 +972,26 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
     const scored = unseenArticles.map((article) => {
       const daysOld = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
 
-      const compKey = `${article.category}::${article.lengthStyle}`;
-      const catWeight = categoryLengthWeights[compKey] ?? categoryWeights[article.category] ?? 1.0;
-      const rawQuality = publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8;
+      const catWeight = categoryWeights[article.category] ?? 0;
+      const rawQuality = publisherQualities[article.publicationName] ?? cfg.latent.publisherSeed;
 
       const P = getPersonalizationScore(catWeight, article.publicationName, publisherWeights, cfg);
-      const T = normalizeT(article.trendingScore || 0, cfg.scoring.maxTrendingScore);
-      const R = normalizeR(daysOld);
-      const Q = normalizeQ(rawQuality);
+      const T = normalizeT(article.trendingScore || 0, cfg.scoring.trendingHalfSat);
+      const R = normalizeR(daysOld, cfg.scoring.recencyDaysConstant);
+      const Q = normalizeQ(rawQuality, cfg.sigmoid.steepness);
 
       const fullScore = scorePersonalized(P, T, R, Q, cfg.scoring);
-      const tailScore = scoreTail(T, R, {
-        trending: cfg.scoring.tailTrending,
-        recency: cfg.scoring.tailRecency,
-      });
 
-      return { article, fullScore, tailScore };
+      return { article, fullScore, P, T, R, Q };
     });
 
-    const finalFeed = assembleFeedWithTranches(scored, cfg.tranche.feedSize, totalArticlesRead, {
-      highThreshold: cfg.tranche.highThreshold,
-      midThreshold: cfg.tranche.midThreshold,
-      highSize: cfg.tranche.highSize,
-      midSize: cfg.tranche.midSize,
-      tailSize: cfg.tranche.tailSize,
-      publisherCap: cfg.tranche.publisherCap,
-      newUserThreshold: cfg.tranche.newUserThreshold,
-      maxArticlesPerCategory: cfg.tranche.maxArticlesPerCategory,
-      minDistinctCategories: cfg.tranche.minDistinctCategories,
+    const finalFeed = selectFeed(scored, cfg.selection.feedSize, totalArticlesRead, {
+      categoryPenaltyStep: cfg.selection.categoryPenaltyStep,
+      publisherPenaltyStep: cfg.selection.publisherPenaltyStep,
+      discoverySlotInterval: cfg.selection.discoverySlotInterval,
+      jitterRange: cfg.selection.jitterRange,
+      maxArticlesPerCategory: cfg.selection.maxArticlesPerCategory,
+      minDistinctCategories: cfg.selection.minDistinctCategories,
     });
     const selectionReadyAt = Date.now();
 
@@ -1084,18 +1000,10 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
     if (process.env.FUNCTIONS_EMULATOR === 'true') {
       console.log(`[getRankedFeed] --- Top 5 by fullScore ---`);
       [...scored].sort((a, b) => b.fullScore - a.fullScore).slice(0, 5).forEach((s, i) => {
-        const daysOld = Math.max(0, (Date.now() - s.article.publishDate) / (1000 * 60 * 60 * 24));
-        const compKey = `${s.article.category}::${s.article.lengthStyle}`;
-        const catWeight = categoryLengthWeights[compKey] ?? categoryWeights[s.article.category] ?? 1.0;
-        const rawQuality = publisherQualities[s.article.publicationName] ?? s.article.qualityScore ?? 0.8;
-        const P = getPersonalizationScore(catWeight, s.article.publicationName, publisherWeights, cfg);
-        const T = normalizeT(s.article.trendingScore || 0, cfg.scoring.maxTrendingScore);
-        const R = normalizeR(daysOld);
-        const Q = normalizeQ(rawQuality);
         console.log(
           `  #${i + 1} "${s.article.title.substring(0, 50)}..." ` +
-          `fullScore=${s.fullScore.toFixed(3)} tailScore=${s.tailScore.toFixed(3)} ` +
-          `P=${P.toFixed(2)} T=${T.toFixed(2)} R=${R.toFixed(2)} Q=${Q.toFixed(2)}`
+          `score=${s.fullScore.toFixed(3)} ` +
+          `P=${s.P?.toFixed(2) ?? '?'} T=${s.T?.toFixed(2) ?? '?'} R=${s.R?.toFixed(2) ?? '?'} Q=${s.Q?.toFixed(2) ?? '?'}`
         );
       });
     }
@@ -1124,34 +1032,23 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
       distinctCategories.add(article.category);
 
       const tranche =
-        s.fullScore > cfg.tranche.highThreshold ? 'high' :
-        s.fullScore > cfg.tranche.midThreshold ? 'mid' : 'tail';
+        s.fullScore > 0.40 ? 'high' :
+        s.fullScore > 0.20 ? 'mid' : 'tail';
 
-      // Dominant component: which of the 4 contributes most to fullScore.
-      const dayCheck = Math.max(0, (Date.now() - article.publishDate) / (1000 * 60 * 60 * 24));
-      const compP = getPersonalizationScore(
-        categoryLengthWeights[`${article.category}::${article.lengthStyle}`] ?? categoryWeights[article.category] ?? 1.0,
-        article.publicationName,
-        publisherWeights,
-        cfg
-      );
-      const compT = normalizeT(article.trendingScore || 0, cfg.scoring.maxTrendingScore);
-      const compR = normalizeR(dayCheck);
-      const compQ = normalizeQ(publisherQualities[article.publicationName] ?? article.qualityScore ?? 0.8);
       const contributions: [string, number][] = [
-        ['P', cfg.scoring.personalization * compP],
-        ['T', cfg.scoring.trending * compT],
-        ['R', cfg.scoring.recency * compR],
-        ['Q', cfg.scoring.quality * compQ],
+        ['P', cfg.scoring.personalization * (s.P ?? 0)],
+        ['T', cfg.scoring.trending * (s.T ?? 0)],
+        ['R', cfg.scoring.recency * (s.R ?? 0)],
+        ['Q', cfg.scoring.quality * (s.Q ?? 0)],
       ];
       const dominantComponent = contributions.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
 
       if (isAdminCaller && includeScores) {
         scoreDetailById.set(article.id, {
-          scoreP: compP,
-          scoreT: compT,
-          scoreR: compR,
-          scoreQ: compQ,
+          scoreP: s.P ?? 0,
+          scoreT: s.T ?? 0,
+          scoreR: s.R ?? 0,
+          scoreQ: s.Q ?? 0,
           finalScore: s.fullScore,
           tranche,
           dominant: dominantComponent as 'P' | 'T' | 'R' | 'Q',
@@ -1160,11 +1057,8 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
 
       const impressionId = `${feedId}:${index}`;
       const hasPublisherHistory = Object.prototype.hasOwnProperty.call(publisherWeights, article.publicationName);
-      const categoryWeight = categoryLengthWeights[`${article.category}::${article.lengthStyle}`]
-        ?? categoryWeights[article.category]
-        ?? 1.0;
-      // A neutral category has no expressed onboarding preference or learned signal yet.
-      const isDiscoveryCategory = Math.abs(categoryWeight - 1.0) < 0.0001;
+      const categoryWeight = categoryWeights[article.category] ?? 0;
+      const isDiscoveryCategory = Math.abs(categoryWeight) < 0.05;
 
       feedArticleShownEvents.push({
         name: 'article_shown',
@@ -1183,10 +1077,10 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
           category_id: article.category,
           tranche,
           dominant_component: dominantComponent,
-          score_p: compP,
-          score_t: compT,
-          score_r: compR,
-          score_q: compQ,
+          score_p: s.P ?? 0,
+          score_t: s.T ?? 0,
+          score_r: s.R ?? 0,
+          score_q: s.Q ?? 0,
           final_score: s.fullScore,
           position: index,
         },
@@ -1206,15 +1100,15 @@ export const getRankedFeed = onCall({ secrets: [gaApiSecret, controlDashboardSec
 
         tranche_high_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.fullScore > cfg.tranche.highThreshold;
+          return s && s.fullScore > 0.40;
         }).length,
         tranche_mid_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.fullScore > cfg.tranche.midThreshold && s.fullScore <= cfg.tranche.highThreshold;
+          return s && s.fullScore > 0.20 && s.fullScore <= 0.40;
         }).length,
         tranche_tail_count: finalFeed.filter((_, i) => {
           const s = scoredById.get(finalFeed[i].id);
-          return s && s.fullScore <= cfg.tranche.midThreshold;
+          return s && s.fullScore <= 0.20;
         }).length,
         distinct_publisher_count: distinctPublishers.size,
         distinct_category_count: distinctCategories.size,

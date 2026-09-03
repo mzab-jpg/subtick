@@ -10,10 +10,11 @@ import { BehaviorEvent, BehaviorEventType, UserProfile } from './types.js';
 import { updateWeights, computeAttentionFactor, READ_VISIT_TYPES } from './weightUpdater.js';
 import { controlDashboardSecret, gaApiSecret, sendGAEvents } from './analytics.js';
 import { isControlDashboardAdmin } from './dashboardAuth.js';
-import { loadScoringConfig, prepareConfig, classifyRead, ScoringConfig } from './scoringConfig.js';
+import { loadScoringConfig, prepareConfig, classifyRead, ScoringConfig, clampLatent } from './scoringConfig.js';
 
 // --- Configuration ---
-const DEFAULT_PUBLISHER_QUALITY = 0.8;
+// Publisher seed latent is configurable via `latent.publisherSeed` in the
+// scoring config (loaded per call below).
 
 // C5 Fix: Module-level publisher cache with 10-minute TTL.
 // The publishers collection (35 docs) was being read in full on every single
@@ -108,23 +109,23 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret, controlDashboa
     return event !== null;
   });
 
+    // Single source of truth for all tunable values (cached ~60s per instance).
+  // H3 Fix: a preview configOverride is honored ONLY for Control Dashboard
+  // admins (valid dashboard_secret). Regular app users silently get the
+  // published config — any override they send is ignored.
+  const cfg = prepareConfig(isControlDashboardAdmin(request) ? data.configOverride : undefined) ?? await loadScoringConfig();
+
   // Input size cap: prevent batch overflow (Firestore limits batches to 500 ops)
   // and rate-limit abuse. The high-fidelity matrix can send up to feedSize (≤100)
   // events per feed; the real app normally sends ≤20 per flush.
-  if (events.length > 100) {
-    console.warn(`[syncBehaviorEvents] Truncating ${events.length} events to 100 (possible abuse or oversized flush)`);
-    events = events.slice(0, 100);
+  if (events.length > cfg.ingestion.maxEventsPerSync) {
+    console.warn(`[syncBehaviorEvents] Truncating ${events.length} events to ${cfg.ingestion.maxEventsPerSync} (possible abuse or oversized flush)`);
+    events = events.slice(0, cfg.ingestion.maxEventsPerSync);
   }
 
   if (!events.length) {
     return { synced: 0, errors: 0 };
   }
-
-  // Single source of truth for all tunable values (cached ~60s per instance).
-  // H3 Fix: a preview configOverride is honored ONLY for Control Dashboard
-  // admins (valid dashboard_secret). Regular app users silently get the
-  // published config — any override they send is ignored.
-  const cfg = prepareConfig(isControlDashboardAdmin(request) ? data.configOverride : undefined) ?? await loadScoringConfig();
 
   // The authenticated profile is the sole source of truth for reading pace.
   // Fetch it once per batch, never trust a client-provided WPM value.
@@ -221,7 +222,7 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret, controlDashboa
       // inert; skims discounted). Deliberate tap-actions keep full strength.
       const isReadVisit = READ_VISIT_TYPES.has(event.eventType);
       const attention = isReadVisit
-        ? computeAttentionFactor(event.scrollDepth, event.sessionDuration, event.actualWordCount, cfg)
+        ? computeAttentionFactor(event.scrollDepth, event.sessionDuration, event.actualWordCount, cfg, userWpm)
         : 1;
 
       const trendingDelta = event.articleId ? getTrendingIncrement(cfg, event.eventType) * attention : 0;
@@ -310,7 +311,7 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret, controlDashboa
       const pubDocs = await db.getAll(...pubRefs);
       pubDocs.forEach((doc) => {
         if (doc.exists) {
-          existingPublisherQuality[doc.id] = (doc.data()?.qualityScore ?? DEFAULT_PUBLISHER_QUALITY);
+          existingPublisherQuality[doc.id] = (doc.data()?.qualityScore ?? cfg.latent.publisherSeed);
         }
       });
     } catch (err: any) {
@@ -345,19 +346,21 @@ export const syncBehaviorEvents = onCall({ secrets: [gaApiSecret, controlDashboa
       const pubName = publisherNames[sanitizedDocId];
       const publisherRef = db.collection('publishers').doc(sanitizedDocId);
 
+      // Publisher latent y — additive update, clamped to safe write band, no [0.2,1.0] legacy clamp.
+      const rawLatent = (existingPublisherQuality[sanitizedDocId] ?? cfg.latent.publisherSeed) + netDelta;
+      const clampedLatent = clampLatent(rawLatent);
       if (existingPublisherIds.has(sanitizedDocId)) {
-        // Existing publisher — safe to use atomic increment
+        // Existing publisher — merge with safe write-time clamp
         batch.set(publisherRef, {
           name: pubName,
-          qualityScore: (existingPublisherQuality[sanitizedDocId] ?? DEFAULT_PUBLISHER_QUALITY) + netDelta,
+          qualityScore: clampedLatent,
           lastUpdated: Date.now(),
         }, { merge: true });
       } else {
-        // New publisher — seed at DEFAULT_PUBLISHER_QUALITY + delta to avoid starting at 0
-        const initialScore = Math.max(0.2, Math.min(1.0, DEFAULT_PUBLISHER_QUALITY + netDelta));
+        // New publisher — seed at latent.publisherSeed + delta
         batch.set(publisherRef, {
           name: pubName,
-          qualityScore: initialScore,
+          qualityScore: clampedLatent,
           lastUpdated: Date.now(),
         });
         existingPublisherIds.add(sanitizedDocId);

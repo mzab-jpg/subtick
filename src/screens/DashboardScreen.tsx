@@ -466,7 +466,7 @@ export default function DashboardScreen() {
               <Inbox size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No articles yet</Text>
               <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Articles from your favorite Substacks will appear here once they're fetched.
+                Articles from your favorite Substacks will appear here once they&apos;re fetched.
               </Text>
             </View>
           ) : null}

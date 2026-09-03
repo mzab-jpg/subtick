@@ -95,7 +95,7 @@ export function getTopCategory(profile: UserProfile | null): string {
   let topCat = '—';
   let topWeight = 0;
   Object.entries(weights).forEach(([cat, w]) => {
-    if (!cat.includes('::') && !cat.startsWith('pub::') && w > topWeight) {
+    if (!cat.includes('::') && w > topWeight) {
       topWeight = w;
       topCat = cat;
     }

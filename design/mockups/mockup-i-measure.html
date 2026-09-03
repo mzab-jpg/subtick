@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent Mockup — Measure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --sans: 'IBM Plex Sans', sans-serif; --serif: 'DM Serif Display', serif; --mono: 'IBM Plex Mono', monospace; }
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'IBM Plex Sans', sans-serif;background:#888;color:#222;line-height:1.4}
+.page-header{padding:32px 40px 24px}
+.page-header h1{font-size:2rem;margin-bottom:6px}
+.page-header p{max-width:640px;opacity:.85}
+.nav-sticky{position:sticky;top:0;z-index:100;background:#333;color:#fff;padding:10px 40px;display:flex;flex-wrap:wrap;gap:8px;font-size:12px}
+.nav-sticky a{color:#fff;text-decoration:none;padding:4px 8px;border-radius:4px;background:#444}
+.nav-sticky a:hover{background:#555}
+.screen-block{padding:32px 40px;border-bottom:1px solid #ccc;background:#ddd}
+.screen-title{font-size:1.1rem;margin-bottom:16px;text-transform:uppercase;letter-spacing:.1em;color:#444}
+.pair{display:flex;flex-wrap:wrap;gap:24px;justify-content:center}
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.mode-tag{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.08em}
+.phone{width:280px;height:580px;border-radius:32px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.35);border:6px solid #1a1a1a;display:flex;flex-direction:column;position:relative}
+.status-bar{height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.screen-body{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0;font-size:11px;position:relative}
+.home-indicator{height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.home-indicator::after{content:'';width:100px;height:4px;background:currentColor;opacity:.25;border-radius:2px}
+.nav-header{display:flex;align-items:center;padding:10px 12px;gap:8px;font-weight:600;font-size:12px;border-bottom:1px solid var(--border)}
+.back{background:none;border:none;font-size:16px;cursor:pointer;color:inherit}
+.spacer{flex:1}
+.section-label{font-size:8px;letter-spacing:.12em;color:var(--muted);padding:10px 12px 4px}
+.card{background:var(--surface);border:1px solid var(--border);margin:0 12px 8px;border-radius:8px;overflow:hidden}
+.row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);font-size:11px}
+.row:last-child{border-bottom:none}
+.muted{color:var(--muted);font-size:10px}
+.split{display:flex;padding:0}
+.cell{flex:1;padding:12px;text-align:center;font-size:11px;border-right:1px solid var(--border)}
+.segment{display:flex;gap:2px;font-size:9px}
+.segment span{padding:3px 6px;border-radius:4px;background:var(--border)}
+.segment .on{background:var(--bg);font-weight:600}
+.toggle{width:36px;height:20px;border-radius:10px;background:var(--border);position:relative}
+.toggle.on{background:var(--accent)}
+.toggle.on::after{content:'';position:absolute;right:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#fff}
+.list-item{padding:10px 12px;border-bottom:1px solid var(--border)}
+.list-title{font-size:11px;font-weight:500}
+.list-meta{font-size:9px;color:var(--muted);margin-top:2px}
+.stat-chip{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:10px;background:var(--surface)}
+.stat-chip.on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.primary-btn{padding:12px;border-radius:8px;font-weight:600;font-size:12px;margin:12px}
+.modal-scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end}
+.modal{background:var(--surface);width:100%;padding:16px;border-radius:16px 16px 0 0}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 12px}
+.modal h3{font-size:14px;margin-bottom:10px}
+.modal textarea{width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:8px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--text);resize:none}
+.modal .primary-btn{width:calc(100% - 24px)}
+.danger-zone .danger{color:var(--accent)}
+.hud-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress{height:3px;background:var(--border);flex-shrink:0}
+.progress-fill{height:100%;background:var(--accent)}
+.reader-article{padding:12px}
+.reader-article .byline{font-size:10px;color:var(--muted);margin:4px 0 10px}
+.reader-article p{font-size:11px;margin-bottom:10px;line-height:1.5}
+@keyframes blink{50%{opacity:0}}
+.fit-section{padding:32px 40px;background:#eee}
+.fit-section h2{margin-bottom:12px}
+.fit-section ul{max-width:720px;padding-left:20px}
+.fit-section li{margin-bottom:8px}
+
+
+:root { --accent: #C23B22; }
+.page-header { background: linear-gradient(135deg, #F4F0E8, #E8E2D6); }
+.page-header h1 { font-family: var(--serif); }
+.measure-light { --bg:#F4F0E8; --surface:#FFFDF9; --text:#1A1A1A; --muted:#6B6560; --border:#D4CEC4; --accent:#C23B22; background:var(--bg); color:var(--text); font-family:var(--sans); position:relative; }
+.measure-light::before { content:''; position:absolute; inset:0; background: repeating-linear-gradient(0deg, transparent, transparent 7px, rgba(194,59,34,.06) 7px, rgba(194,59,34,.06) 8px); pointer-events:none; }
+.measure-dark { --bg:#141210; --surface:#1E1C19; --text:#F0EBE3; --muted:#9A948C; --border:#3A3530; --accent:#E04E35; background:var(--bg); color:var(--text); font-family:var(--sans); }
+.brand { font-family:var(--serif); letter-spacing:.18em; font-size:11px; }
+.startup-motto { font-family:var(--mono); font-size:13px; color:var(--accent); }
+.startup-motto .cursor { animation:blink 1s step-end infinite; }
+.hero-card { border-left:3px solid var(--accent); padding-left:10px; }
+.stats-pill { font-family:var(--mono); font-size:10px; border:1px solid var(--border); border-radius:2px; padding:6px 10px; }
+.chip { font-size:10px; border:1px solid var(--border); padding:6px 8px; border-radius:2px; background:var(--surface); }
+.chip-sel { background:var(--text); color:var(--bg); border-color:var(--text); }
+.chip-not { opacity:.45; text-decoration:line-through; }
+.row-card { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.row-card .mini { font-size:9px; border-top:2px solid var(--accent); padding-top:6px; }
+.discover-row { display:flex; gap:6px; margin-top:auto; }
+.pill-btn { flex:1; font-family:var(--mono); font-size:9px; padding:8px; border:1px solid var(--border); text-align:center; border-radius:2px; }
+.hud { backdrop-filter:blur(8px); background:rgba(255,253,249,.88); border-bottom:1px solid var(--border); padding:8px; display:flex; align-items:center; gap:6px; font-size:10px; }
+.measure-dark .hud { background:rgba(30,28,25,.9); }
+.reader-article h1 { font-family:var(--serif); font-size:16px; line-height:1.2; }
+.grid-ruler { position:absolute; right:4px; top:40px; bottom:30px; width:1px; background:var(--accent); opacity:.3; }
+</style>
+</head>
+<body>
+<header class="page-header">
+  <h1>Mockup I — Measure</h1>
+  <p>Editorial compositor — baseline grid, visible rulers, 1.62 modular scale</p>
+</header>
+<nav class="nav-sticky"><a href="#startup">Startup</a><a href="#onboarding">Onboarding</a><a href="#dashboard">Dashboard</a><a href="#reader">Reader</a><a href="#settings">Settings</a><a href="#account">Account</a><a href="#history">History</a><a href="#saved">Saved Reads</a><a href="#categories">Category Preferences</a><a href="#stats">Dashboard Stats</a><a href="#feedback">Feedback</a><a href="#feedrequest">Feed Request</a><a href="#developer">Developer Options</a></nav>
+
+<section class="screen-block" id="startup">
+  <h2 class="screen-title">Startup</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:16px;height:100%;display:flex;flex-direction:column"><div class="brand">TANGENT</div><div style="flex:1;display:flex;align-items:center"><div class="startup-motto">sapere aude<span class="cursor">|</span></div></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:16px;height:100%;display:flex;flex-direction:column"><div class="brand">TANGENT</div><div style="flex:1;display:flex;align-items:center"><div class="startup-motto">sapere aude<span class="cursor">|</span></div></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="onboarding">
+  <h2 class="screen-title">Onboarding</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:14px"><div class="brand">TANGENT</div><h2 style="font-family:var(--serif);font-size:18px;margin:20px 0 12px">What do you want to read?</h2><div style="display:flex;flex-wrap:wrap;gap:5px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div><button class="primary-btn" style="margin-top:auto;width:100%">Start Reading</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:14px"><div class="brand">TANGENT</div><h2 style="font-family:var(--serif);font-size:18px;margin:20px 0 12px">What do you want to read?</h2><div style="display:flex;flex-wrap:wrap;gap:5px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div><button class="primary-btn" style="margin-top:auto;width:100%">Start Reading</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="dashboard">
+  <h2 class="screen-title">Dashboard</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:12px;display:flex;flex-direction:column;height:100%"><div style="display:flex;justify-content:space-between;align-items:center"><div class="brand">TANGENT</div><span>⚙</span></div><div class="stats-pill" style="margin:10px 0"><span class="metric">🔥 12</span><span class="metric-sep">·</span><span class="metric">⏳ 4.2</span><span class="metric-sep">·</span><span class="metric">⏱️ 245</span></div><div class="hero-card" style="flex:1.2;margin-bottom:8px"><div style="font-size:9px;color:var(--muted)">The Diff</div><div style="font-family:var(--serif);font-size:15px;line-height:1.2">Why Software Margins Are Collapsing</div></div><div class="row-card" style="flex:1"><div class="mini"><div style="color:var(--muted);font-size:8px">Stratechery</div>The AI Integration Question</div><div class="mini"><div style="color:var(--muted);font-size:8px">Astral Codex Ten</div>Book Review: The Scout Mindset</div></div><div class="discover-row"><div class="pill-btn">Discover</div><div class="pill-btn">Shuffle</div></div><div class="grid-ruler"></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:12px;display:flex;flex-direction:column;height:100%"><div style="display:flex;justify-content:space-between;align-items:center"><div class="brand">TANGENT</div><span>⚙</span></div><div class="stats-pill" style="margin:10px 0"><span class="metric">🔥 12</span><span class="metric-sep">·</span><span class="metric">⏳ 4.2</span><span class="metric-sep">·</span><span class="metric">⏱️ 245</span></div><div class="hero-card" style="flex:1.2;margin-bottom:8px"><div style="font-size:9px;color:var(--muted)">The Diff</div><div style="font-family:var(--serif);font-size:15px;line-height:1.2">Why Software Margins Are Collapsing</div></div><div class="row-card" style="flex:1"><div class="mini"><div style="color:var(--muted);font-size:8px">Stratechery</div>The AI Integration Question</div><div class="mini"><div style="color:var(--muted);font-size:8px">Astral Codex Ten</div>Book Review: The Scout Mindset</div></div><div class="discover-row"><div class="pill-btn">Discover</div><div class="pill-btn">Shuffle</div></div><div class="grid-ruler"></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="reader">
+  <h2 class="screen-title">Reader</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar"></div><div class="screen-body"><div class="hud"><button class="hud-x">✕</button><span class="hud-title">Why Software Margins Are Collapsing</span><div class="hud-actions"><span class="heart">♥</span><span class="save">🔖</span></div></div><div class="progress"><div class="progress-fill" style="width:42%"></div></div><article class="reader-article"><h1>Why Software Margins Are Collapsing</h1><p class="byline">The Diff · Business</p><p>Platform economics and the new cost structure of AI-native products…</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p><p>Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p></article></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar"></div><div class="screen-body"><div class="hud"><button class="hud-x">✕</button><span class="hud-title">Why Software Margins Are Collapsing</span><div class="hud-actions"><span class="heart">♥</span><span class="save">🔖</span></div></div><div class="progress"><div class="progress-fill" style="width:42%"></div></div><article class="reader-article"><h1>Why Software Margins Are Collapsing</h1><p class="byline">The Diff · Business</p><p>Platform economics and the new cost structure of AI-native products…</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p><p>Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p></article></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="settings">
+  <h2 class="screen-title">Settings</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="account">
+  <h2 class="screen-title">Account</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Account</span><span class="spacer"></span></header>
+<div class="card">
+  <div class="row"><span>Status</span><span class="muted">Anonymous</span></div>
+  <div class="row"><span>Link Google Account</span><span>→</span></div>
+</div>
+<div class="card danger-zone">
+  <div class="row"><span>Sign Out</span></div>
+  <div class="row"><span>Reset Reading Data</span></div>
+  <div class="row danger"><span>Delete Account</span></div>
+</div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Account</span><span class="spacer"></span></header>
+<div class="card">
+  <div class="row"><span>Status</span><span class="muted">Anonymous</span></div>
+  <div class="row"><span>Link Google Account</span><span>→</span></div>
+</div>
+<div class="card danger-zone">
+  <div class="row"><span>Sign Out</span></div>
+  <div class="row"><span>Reset Reading Data</span></div>
+  <div class="row danger"><span>Delete Account</span></div>
+</div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="history">
+  <h2 class="screen-title">History</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>History</span><span class="spacer"></span></header><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>History</span><span class="spacer"></span></header><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="saved">
+  <h2 class="screen-title">Saved Reads</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Saved Reads</span><span class="spacer"></span></header><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Saved Reads</span><span class="spacer"></span></header><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="categories">
+  <h2 class="screen-title">Category Preferences</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Categories</span><span class="spacer"></span></header><p style="font-size:10px;color:var(--muted);margin-bottom:8px">Tap to cycle: interested → neutral → not interested</p><div style="display:flex;flex-wrap:wrap;gap:5px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Categories</span><span class="spacer"></span></header><p style="font-size:10px;color:var(--muted);margin-bottom:8px">Tap to cycle: interested → neutral → not interested</p><div style="display:flex;flex-wrap:wrap;gap:5px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="stats">
+  <h2 class="screen-title">Dashboard Stats</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Dashboard Stats</span><span class="spacer"></span></header><p style="font-size:10px;color:var(--muted)">Choose up to 3</p><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><button class="stat-chip on">🔥 Streak Days</button><button class="stat-chip on">📊 Weekly Reads</button><button class="stat-chip ">⏳ Hours Read</button><button class="stat-chip on">⏱️ Avg WPM</button><button class="stat-chip ">📚 Finished</button><button class="stat-chip ">📈 Top Category</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Dashboard Stats</span><span class="spacer"></span></header><p style="font-size:10px;color:var(--muted)">Choose up to 3</p><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"><button class="stat-chip on">🔥 Streak Days</button><button class="stat-chip on">📊 Weekly Reads</button><button class="stat-chip ">⏳ Hours Read</button><button class="stat-chip on">⏱️ Avg WPM</button><button class="stat-chip ">📚 Finished</button><button class="stat-chip ">📈 Top Category</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="feedback">
+  <h2 class="screen-title">Feedback</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Send Feedback</h3><textarea placeholder="Tell us what you think…"></textarea><button class="primary-btn">Submit</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Send Feedback</h3><textarea placeholder="Tell us what you think…"></textarea><button class="primary-btn">Submit</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="feedrequest">
+  <h2 class="screen-title">Feed Request</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Request a Feed</h3><textarea placeholder="https://newsletter.example.com/feed"></textarea><button class="primary-btn">Submit URL</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>Request a Feed</h3><textarea placeholder="https://newsletter.example.com/feed"></textarea><button class="primary-btn">Submit URL</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="developer">
+  <h2 class="screen-title">Developer Options</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone measure-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Developer Options</span><span class="spacer"></span></header><div class="card"><div class="row"><span>Sandbox Reader</span><span>→</span></div><div class="row danger"><span>Clear Local Data</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone measure-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Developer Options</span><span class="spacer"></span></header><div class="card"><div class="row"><span>Sandbox Reader</span><span>→</span></div><div class="row danger"><span>Clear Local Data</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+<section class="fit-section">
+  <h2>How this design fits Tangent's capabilities</h2>
+  <ul>
+<li><strong>Startup typewriter + "sapere aude"</strong> — matches StartupScreen's staged motto before Dashboard cards appear.</li>
+<li><strong>Hero + 2-row grid + stats pill</strong> — mirrors Dashboard's hero-at-0, two secondary cards, and ≤3 configurable metrics with layout-stable placeholder.</li>
+<li><strong>Discover / Shuffle pills</strong> — both trigger fresh ranked-feed requests excluding seen + on-screen IDs (real callable behavior).</li>
+<li><strong>3-state category chips</strong> — interested / neutral / not-interested maps to onboarding and CategoryPreferences auto-save weights.</li>
+<li><strong>Reader HUD + progress bar</strong> — scroll-up reveals HUD; bottom bar tracks article depth from WebView postMessage.</li>
+<li><strong>Settings decomposition</strong> — Account, Library, Preferences, Support, Dev — same navigation graph as RootNavigator.</li>
+</ul>
+</section>
+</body>
+</html>

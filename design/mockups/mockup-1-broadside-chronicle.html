@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent — Broadside</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-display: 'Cinzel', serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* Light: Laid Paper & Carbon */
+  --bg-light: #F7F5EE;
+  --surface-light: #FFFFFF;
+  --text-main-light: #151412;
+  --text-muted-light: #5A564C;
+  --text-sub-light: #888274;
+  --border-light: #D6CEBE;
+  --hairline-light: #E4DDCF;
+  --accent-light: #B42F16;
+
+  /* Dark: Basalt Slate & Editorial Ivory */
+  --bg-dark: #111215;
+  --surface-dark: #17191D;
+  --text-main-dark: #EDE7DC;
+  --text-muted-dark: #989284;
+  --text-sub-dark: #666155;
+  --border-dark: #2B2F37;
+  --hairline-dark: #20232A;
+  --accent-dark: #E44A2E;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0D0E11;
+  color: #CCC;
+  font-family: var(--font-serif);
+  padding: 40px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.device-stage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 56px;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Hardware Phone Shell */
+.phone {
+  width: 384px;
+  height: 790px;
+  border-radius: 46px;
+  border: 12px solid #1A1C22;
+  box-shadow: 0 32px 85px rgba(0,0,0,0.85);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.theme-light {
+  --bg: var(--bg-light);
+  --surface: var(--surface-light);
+  --text: var(--text-main-light);
+  --muted: var(--text-muted-light);
+  --sub: var(--text-sub-light);
+  --border: var(--border-light);
+  --hairline: var(--hairline-light);
+  --accent: var(--accent-light);
+  background: var(--bg);
+  color: var(--text);
+}
+.theme-dark {
+  --bg: var(--bg-dark);
+  --surface: var(--surface-dark);
+  --text: var(--text-main-dark);
+  --muted: var(--text-muted-dark);
+  --sub: var(--text-sub-dark);
+  --border: var(--border-dark);
+  --hairline: var(--hairline-dark);
+  --accent: var(--accent-dark);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Native Status Bar */
+.phone-status {
+  height: 38px;
+  padding: 12px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sub);
+  flex-shrink: 0;
+}
+
+.app-screen-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen-pane {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 16px 24px 20px;
+  display: none;
+  flex-direction: column;
+}
+.screen-pane.active {
+  display: flex;
+}
+.screen-pane::-webkit-scrollbar { width: 3px; }
+.screen-pane::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* Minimalist Editorial Masthead */
+.broadsheet-masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 6px;
+  margin-bottom: 20px;
+}
+.masthead-brand {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  line-height: 1;
+  color: var(--text);
+}
+.masthead-date {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+.masthead-queue {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.5px;
+}
+
+/* Primary Lead Story */
+.lead-story-panel {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+.provenance-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.source-tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.est-time {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--sub);
+}
+.lead-story-title {
+  font-family: var(--font-serif);
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.4px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.lead-story-excerpt {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Secondary Feature */
+.secondary-feature-panel {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  cursor: pointer;
+}
+.secondary-feature-title {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.secondary-feature-deck {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Tertiary Briefing Row */
+.compact-briefing-row {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.compact-briefing-title {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+.compact-briefing-source {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--sub);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Integrated Editorial Discovery Feature */
+.discovery-dispatch-feature {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0 16px;
+  margin-bottom: 18px;
+  cursor: pointer;
+}
+.discovery-tagline {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.discovery-feature-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+/* In-App Reader Screen */
+.reader-top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.reader-exit-btn {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text);
+  cursor: pointer;
+}
+.reader-rack-btns {
+  display: flex;
+  gap: 8px;
+}
+.reader-tool-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.reader-hairline-track {
+  height: 2px;
+  background: var(--hairline);
+  margin-bottom: 16px;
+}
+.reader-hairline-fill {
+  height: 100%;
+  width: 48%;
+  background: var(--accent);
+}
+.article-full-headline {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.article-full-byline {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+.article-prose-body p {
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 14px;
+  text-align: justify;
+}
+.article-prose-body p:first-of-type::first-letter {
+  font-family: var(--font-display);
+  float: left;
+  font-size: 46px;
+  line-height: 0.8;
+  padding-right: 8px;
+  padding-top: 2px;
+  color: var(--accent);
+}
+
+/* In-App Saved Catalogue */
+.catalogue-header {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+.saved-entry-row {
+  border-bottom: 1px solid var(--hairline);
+  padding: 12px 0;
+  cursor: pointer;
+}
+.saved-entry-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.saved-entry-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* In-App Stats Ledger */
+.ledger-stat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.ledger-stat-tile {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 14px;
+}
+.ledger-stat-val {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.ledger-stat-tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ledger-row-entry {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hairline);
+  padding: 9px 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* In-App Settings & Topics */
+.pref-group-title {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}
+.pref-row-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.pref-row-hint {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+/* Bespoke Editorial Typographic Navigation Bar */
+.phone-bottom-nav {
+  height: 52px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-shrink: 0;
+  z-index: 30;
+  padding: 0 8px;
+}
+.editorial-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--sub);
+  cursor: pointer;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  transition: color 0.15s ease;
+}
+.editorial-nav-tab.active {
+  color: var(--accent);
+}
+.nav-indicator-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+</style>
+</head>
+<body>
+
+<main class="device-stage">
+
+  <!-- LIGHT VIEWPORT -->
+  <div class="phone theme-light" id="phone-light">
+    <div class="phone-status">
+      <span>09:41</span>
+      <span>TANGENT · RSS</span>
+    </div>
+
+    <div class="app-screen-container">
+      
+      <!-- SCREEN 1: FEED -->
+      <div class="screen-pane active" id="pane-light-feed">
+        <div class="broadsheet-masthead">
+          <span class="masthead-brand">TANGENT</span>
+          <span class="masthead-date">Thursday, Sept 3</span>
+          <span class="masthead-queue">30 Unread</span>
+        </div>
+
+        <!-- COMMANDING LEAD ARTICLE -->
+        <article class="lead-story-panel" onclick="openReader('phone-light', 'How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz', '9 min read')">
+          <div class="provenance-line">
+            <span class="source-tag">The Pragmatic Engineer</span>
+            <span class="est-time">9 min read</span>
+          </div>
+          <h2 class="lead-story-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+          <p class="lead-story-excerpt">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized over pure architectural output.</p>
+        </article>
+
+        <!-- SECONDARY FEATURE -->
+        <article class="secondary-feature-panel" onclick="openReader('phone-light', 'The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson', '7 min read')">
+          <div class="provenance-line">
+            <span class="source-tag" style="color: var(--muted);">Stratechery</span>
+            <span class="est-time">7 min read</span>
+          </div>
+          <h3 class="secondary-feature-title">The Real Economics of the AI Platform Shift</h3>
+          <p class="secondary-feature-deck">Value capture continues to migrate upward to proprietary data moats and downward to compute aggregation, squeezing middleware.</p>
+        </article>
+
+        <!-- TERTIARY BRIEFING ROW -->
+        <div class="compact-briefing-row" onclick="openReader('phone-light', 'The Frontier Models Open-Weights Dilemma', 'Platformer · Casey Newton', '6 min read')">
+          <div class="compact-briefing-title">The Frontier Models Open-Weights Dilemma</div>
+          <div class="compact-briefing-source">Platformer · 6m</div>
+        </div>
+
+        <!-- SEAMLESS DISCOVERY FEATURE -->
+        <div class="discovery-dispatch-feature" onclick="openReader('phone-light', 'The Lost Construction Techniques of Gothic Vaults', 'Antiquities Quarterly', '14 min read')">
+          <div class="discovery-tagline">DISCOVERY</div>
+          <h3 class="discovery-feature-title">The Lost Construction Techniques of Gothic Vaults in Northern France</h3>
+          <div class="provenance-line" style="margin-top: 4px; margin-bottom: 0;">
+            <span class="est-time">Antiquities Quarterly</span>
+            <span class="est-time">14 min read</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 2: READER -->
+      <div class="screen-pane" id="pane-light-reader">
+        <div class="reader-top-nav">
+          <button class="reader-exit-btn" onclick="switchTab('phone-light', 'feed')">← FEED</button>
+          <div class="reader-rack-btns">
+            <button class="reader-tool-btn" onclick="this.textContent = this.textContent === 'LIKE' ? 'LIKED' : 'LIKE'">LIKE</button>
+            <button class="reader-tool-btn" onclick="this.textContent = this.textContent === 'SAVE' ? 'SAVED' : 'SAVE'">SAVE</button>
+          </div>
+        </div>
+        <div class="reader-hairline-track"><div class="reader-hairline-fill"></div></div>
+        <article>
+          <h1 class="article-full-headline" id="light-reader-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h1>
+          <div class="article-full-byline" id="light-reader-meta">The Pragmatic Engineer · Gergely Orosz · 9 min read</div>
+          <div class="article-prose-body">
+            <p>For more than a decade, senior engineering careers were framed around deep technical specialism: mastering distributed databases, microservice boundaries, or complex frontend lifecycles.</p>
+            <p>Today, executive calibration committees look for something fundamentally different: organizational leverage. As automated tooling reduces the friction of producing code, the primary bottleneck has shifted to system clarity and architectural verification.</p>
+            <p>In this analysis, we examine how top technology companies have restructured their principal and director-level evaluation rubric over the past eighteen months.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- SCREEN 3: SAVED -->
+      <div class="screen-pane" id="pane-light-saved">
+        <div class="catalogue-header">SAVED ARTICLES</div>
+        <div class="saved-entry-row" onclick="openReader('phone-light', 'The Economics of Machine Attention', 'Stratechery · Ben Thompson', '12 min read')">
+          <div class="saved-entry-title">The Economics of Machine Attention</div>
+          <div class="saved-entry-meta"><span>Stratechery</span><span>Saved yesterday · 12m</span></div>
+        </div>
+        <div class="saved-entry-row" onclick="openReader('phone-light', 'Reflections on Classical Architecture', 'The Honest Broker · Ted Gioia', '15 min read')">
+          <div class="saved-entry-title">Reflections on Classical Architecture</div>
+          <div class="saved-entry-meta"><span>The Honest Broker</span><span>Saved Aug 28 · 15m</span></div>
+        </div>
+        <div class="saved-entry-row" onclick="openReader('phone-light', 'Frontier Labs and the Compute Ceiling', 'The Diff · Byrne Hobart', '8 min read')">
+          <div class="saved-entry-title">Frontier Labs and the Compute Ceiling</div>
+          <div class="saved-entry-meta"><span>The Diff</span><span>Saved Aug 25 · 8m</span></div>
+        </div>
+      </div>
+
+      <!-- SCREEN 4: STATS -->
+      <div class="screen-pane" id="pane-light-stats">
+        <div class="catalogue-header">READING STATS</div>
+        <div class="ledger-stat-cards">
+          <div class="ledger-stat-tile">
+            <div class="ledger-stat-val">14</div>
+            <div class="ledger-stat-tag">Day Streak</div>
+          </div>
+          <div class="ledger-stat-tile">
+            <div class="ledger-stat-val">245</div>
+            <div class="ledger-stat-tag">Avg WPM</div>
+          </div>
+        </div>
+        <div class="ledger-row-entry"><span>Articles Finished This Week</span><strong>18</strong></div>
+        <div class="ledger-row-entry"><span>Total Reading Time</span><strong>14.2 Hours</strong></div>
+        <div class="ledger-row-entry"><span>Primary Topic</span><strong>Technology (42%)</strong></div>
+        <div class="ledger-row-entry"><span>Offline Cached Pool</span><strong>30 Articles</strong></div>
+      </div>
+
+      <!-- SCREEN 5: SETTINGS -->
+      <div class="screen-pane" id="pane-light-settings">
+        <div class="catalogue-header">SETTINGS</div>
+        <div class="pref-group-title">Preferences</div>
+        <div class="pref-row-item" onclick="toggleSingleTheme('phone-light')">
+          <span>Theme Palette</span>
+          <span class="pref-row-hint">Toggle Light / Dark</span>
+        </div>
+        <div class="pref-row-item">
+          <span>Topic Preferences</span>
+          <span class="pref-row-hint">5 Active Topics →</span>
+        </div>
+        <div class="pref-row-item">
+          <span>Include Archived Articles</span>
+          <span class="pref-row-hint">Enabled</span>
+        </div>
+        <div class="pref-group-title">Account</div>
+        <div class="pref-row-item">
+          <span>Google Account</span>
+          <span class="pref-row-hint">Connected</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BESPOKE EDITORIAL TYPOGRAPHIC NAVIGATION BAR -->
+    <nav class="phone-bottom-nav">
+      <button class="editorial-nav-tab active" onclick="switchTab('phone-light', 'feed', this)">
+        <span class="nav-indicator-dot"></span>
+        <span>Feed</span>
+      </button>
+      <button class="editorial-nav-tab" onclick="switchTab('phone-light', 'saved', this)">
+        <span>Saved</span>
+      </button>
+      <button class="editorial-nav-tab" onclick="switchTab('phone-light', 'stats', this)">
+        <span>Stats</span>
+      </button>
+      <button class="editorial-nav-tab" onclick="switchTab('phone-light', 'settings', this)">
+        <span>Settings</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- DARK VIEWPORT -->
+  <div class="phone theme-dark" id="phone-dark">
+    <div class="phone-status">
+      <span>09:41</span>
+      <span>TANGENT · RSS</span>
+    </div>
+
+    <div class="app-screen-container">
+      
+      <!-- SCREEN 1: FEED (DARK) -->
+      <div class="screen-pane active" id="pane-dark-feed">
+        <div class="broadsheet-masthead">
+          <span class="masthead-brand">TANGENT</span>
+          <span class="masthead-date">Thursday, Sept 3</span>
+          <span class="masthead-queue">30 Unread</span>
+        </div>
+
+        <article class="lead-story-panel" onclick="openReader('phone-dark', 'How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz', '9 min read')">
+          <div class="provenance-line">
+            <span class="source-tag">The Pragmatic Engineer</span>
+            <span class="est-time">9 min read</span>
+          </div>
+          <h2 class="lead-story-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+          <p class="lead-story-excerpt">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized over pure architectural output.</p>
+        </article>
+
+        <article class="secondary-feature-panel" onclick="openReader('phone-dark', 'The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson', '7 min read')">
+          <div class="provenance-line">
+            <span class="source-tag" style="color: var(--muted);">Stratechery</span>
+            <span class="est-time">7 min read</span>
+          </div>
+          <h3 class="secondary-feature-title">The Real Economics of the AI Platform Shift</h3>
+          <p class="secondary-feature-deck">Value capture continues to migrate upward to proprietary data moats and downward to compute aggregation, squeezing middleware.</p>
+        </article>
+
+        <div class="compact-briefing-row" onclick="openReader('phone-dark', 'The Frontier Models Open-Weights Dilemma', 'Platformer · Casey Newton', '6 min read')">
+          <div class="compact-briefing-title">The Frontier Models Open-Weights Dilemma</div>
+          <div class="compact-briefing-source">Platformer · 6m</div>
+        </div>
+
+        <div class="discovery-dispatch-feature" onclick="openReader('phone-dark', 'The Lost Construction Techniques of Gothic Vaults', 'Antiquities Quarterly', '14 min read')">
+          <div class="discovery-tagline">DISCOVERY</div>
+          <h3 class="discovery-feature-title">The Lost Construction Techniques of Gothic Vaults in Northern France</h3>
+          <div class="provenance-line" style="margin-top: 4px; margin-bottom: 0;">
+            <span class="est-time">Antiquities Quarterly</span>
+            <span class="est-time">14 min read</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 2: READER (DARK) -->
+      <div class="screen-pane" id="pane-dark-reader">
+        <div class="reader-top-nav">
+          <button class="reader-exit-btn" onclick="switchTab('phone-dark', 'feed')">← FEED</button>
+          <div class="reader-rack-btns">
+            <button class="reader-tool-btn" onclick="this.textContent = this.textContent === 'LIKE' ? 'LIKED' : 'LIKE'">LIKE</button>
+            <button class="reader-tool-btn" onclick="this.textContent = this.textContent === 'SAVE' ? 'SAVED' : 'SAVE'">SAVE</button>
+          </div>
+        </div>
+        <div class="reader-hairline-track"><div class="reader-hairline-fill"></div></div>
+        <article>
+          <h1 class="article-full-headline" id="dark-reader-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h1>
+          <div class="article-full-byline" id="dark-reader-meta">The Pragmatic Engineer · Gergely Orosz · 9 min read</div>
+          <div class="article-prose-body">
+            <p>For more than a decade, senior engineering careers were framed around deep technical specialism: mastering distributed databases, microservice boundaries, or complex frontend lifecycles.</p>
+            <p>Today, executive calibration committees look for something fundamentally different: organizational leverage. As automated tooling reduces the friction of producing code, the primary bottleneck has shifted to system clarity and architectural verification.</p>
+            <p>In this analysis, we examine how top technology companies have restructured their principal and director-level evaluation rubric over the past eighteen months.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- SCREEN 3: SAVED (DARK) -->
+      <div class="screen-pane" id="pane-dark-saved">
+        <div class="catalogue-header">SAVED ARTICLES</div>
+        <div class="saved-entry-row" onclick="openReader('phone-dark', 'The Economics of Machine Attention', 'Stratechery · Ben Thompson', '12 min read')">
+          <div class="saved-entry-title">The Economics of Machine Attention</div>
+          <div class="saved-entry-meta"><span>Stratechery</span><span>Saved yesterday · 12m</span></div>
+        </div>
+        <div class="saved-entry-row" onclick="openReader('phone-dark', 'Reflections on Classical Architecture', 'The Honest Broker · Ted Gioia', '15 min read')">
+          <div class="saved-entry-title">Reflections on Classical Architecture</div>
+          <div class="saved-entry-meta"><span>The Honest Broker</span><span>Saved Aug 28 · 15m</span></div>
+        </div>
+        <div class="saved-entry-row" onclick="openReader('phone-dark', 'Frontier Labs and the Compute Ceiling', 'The Diff · Byrne Hobart', '8 min read')">
+          <div class="saved-entry-title">Frontier Labs and the Compute Ceiling</div>
+          <div class="saved-entry-meta"><span>The Diff</span><span>Saved Aug 25 · 8m</span></div>
+        </div>
+      </div>
+
+      <!-- SCREEN 4: STATS (DARK) -->
+      <div class="screen-pane" id="pane-dark-stats">
+        <div class="catalogue-header">READING STATS</div>
+        <div class="ledger-stat-cards">
+          <div class="ledger-stat-tile">
+            <div class="ledger-stat-val">14</div>
+            <div class="ledger-stat-tag">Day Streak</div>
+          </div>
+          <div class="ledger-stat-tile">
+            <div class="ledger-stat-val">245</div>
+            <div class="ledger-stat-tag">Avg WPM</div>
+          </div>
+        </div>
+        <div class="ledger-row-entry"><span>Articles Finished This Week</span><strong>18</strong></div>
+        <div class="ledger-row-entry"><span>Total Reading Time</span><strong>14.2 Hours</strong></div>
+        <div class="ledger-row-entry"><span>Primary Topic</span><strong>Technology (42%)</strong></div>
+        <div class="ledger-row-entry"><span>Offline Cached Pool</span><strong>30 Articles</strong></div>
+      </div>
+
+      <!-- SCREEN 5: SETTINGS (DARK) -->
+      <div class="screen-pane" id="pane-dark-settings">
+        <div class="catalogue-header">SETTINGS</div>
+        <div class="pref-group-title">Preferences</div>
+        <div class="pref-row-item" onclick="toggleSingleTheme('phone-dark')">
+          <span>Theme Palette</span>
+          <span class="pref-row-hint">Toggle Light / Dark</span>
+        </div>
+        <div class="pref-row-item">
+          <span>Topic Preferences</span>
+          <span class="pref-row-hint">5 Active Topics →</span>
+        </div>
+        <div class="pref-row-item">
+          <span>Include Archived Articles</span>
+          <span class="pref-row-hint">Enabled</span>
+        </div>
+        <div class="pref-group-title">Account</div>
+        <div class="pref-row-item">
+          <span>Google Account</span>
+          <span class="pref-row-hint">Connected</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BESPOKE EDITORIAL TYPOGRAPHIC NAVIGATION BAR -->
+    <nav class="phone-bottom-nav">
+      <button class="editorial-nav-tab active" onclick="switchTab('phone-dark', 'feed', this)">
+        <span class="nav-indicator-dot"></span>
+        <span>Feed</span>
+      </button>
+      <button class="editorial-nav-tab" onclick="switchTab('phone-dark', 'saved', this)">
+        <span>Saved</span>
+      </button>
+      <button class="editorial-nav-tab" onclick="switchTab('phone-dark', 'stats', this)">
+        <span>Stats</span>
+      </button>
+      <button class="editorial-nav-tab" onclick="switchTab('phone-dark', 'settings', this)">
+        <span>Settings</span>
+      </button>
+    </nav>
+  </div>
+
+</main>
+
+<script>
+function switchTab(phoneId, tabName, btnEl) {
+  const phone = document.getElementById(phoneId);
+  const isLight = phoneId === 'phone-light';
+  const prefix = isLight ? 'pane-light-' : 'pane-dark-';
+  
+  phone.querySelectorAll('.screen-pane').forEach(pane => pane.classList.remove('active'));
+  
+  const target = document.getElementById(prefix + tabName);
+  if (target) target.classList.add('active');
+  
+  if (btnEl) {
+    phone.querySelectorAll('.editorial-nav-tab').forEach(btn => {
+      btn.classList.remove('active');
+      const dot = btn.querySelector('.nav-indicator-dot');
+      if (dot) dot.remove();
+    });
+    btnEl.classList.add('active');
+    const newDot = document.createElement('span');
+    newDot.className = 'nav-indicator-dot';
+    btnEl.prepend(newDot);
+  } else {
+    phone.querySelectorAll('.editorial-nav-tab').forEach(btn => {
+      const label = btn.querySelector('span:last-child')?.textContent?.toLowerCase();
+      if (label === tabName || (tabName === 'feed' && label === 'feed')) {
+        btn.classList.add('active');
+        if (!btn.querySelector('.nav-indicator-dot')) {
+          const newDot = document.createElement('span');
+          newDot.className = 'nav-indicator-dot';
+          btn.prepend(newDot);
+        }
+      } else {
+        btn.classList.remove('active');
+        const dot = btn.querySelector('.nav-indicator-dot');
+        if (dot) dot.remove();
+      }
+    });
+  }
+}
+
+function openReader(phoneId, title, meta, readTime) {
+  const isLight = phoneId === 'phone-light';
+  const titleEl = document.getElementById(isLight ? 'light-reader-title' : 'dark-reader-title');
+  const metaEl = document.getElementById(isLight ? 'light-reader-meta' : 'dark-reader-meta');
+  
+  if (titleEl && title) titleEl.textContent = title;
+  if (metaEl && meta) metaEl.textContent = meta + (readTime ? ` · ${readTime}` : '');
+  
+  switchTab(phoneId, 'reader');
+}
+
+function toggleSingleTheme(phoneId) {
+  const phone = document.getElementById(phoneId);
+  if (phone.classList.contains('theme-light')) {
+    phone.classList.replace('theme-light', 'theme-dark');
+  } else {
+    phone.classList.replace('theme-dark', 'theme-light');
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent Mockup — Instrument</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --sans: 'Space Grotesk', sans-serif; --serif: 'Space Grotesk', sans-serif; --mono: 'JetBrains Mono', monospace; }
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Space Grotesk', sans-serif;background:#888;color:#222;line-height:1.4}
+.page-header{padding:32px 40px 24px}
+.page-header h1{font-size:2rem;margin-bottom:6px}
+.page-header p{max-width:640px;opacity:.85}
+.nav-sticky{position:sticky;top:0;z-index:100;background:#333;color:#fff;padding:10px 40px;display:flex;flex-wrap:wrap;gap:8px;font-size:12px}
+.nav-sticky a{color:#fff;text-decoration:none;padding:4px 8px;border-radius:4px;background:#444}
+.nav-sticky a:hover{background:#555}
+.screen-block{padding:32px 40px;border-bottom:1px solid #ccc;background:#ddd}
+.screen-title{font-size:1.1rem;margin-bottom:16px;text-transform:uppercase;letter-spacing:.1em;color:#444}
+.pair{display:flex;flex-wrap:wrap;gap:24px;justify-content:center}
+.phone-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.mode-tag{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.08em}
+.phone{width:280px;height:580px;border-radius:32px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.35);border:6px solid #1a1a1a;display:flex;flex-direction:column;position:relative}
+.status-bar{height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.screen-body{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0;font-size:11px;position:relative}
+.home-indicator{height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.home-indicator::after{content:'';width:100px;height:4px;background:currentColor;opacity:.25;border-radius:2px}
+.nav-header{display:flex;align-items:center;padding:10px 12px;gap:8px;font-weight:600;font-size:12px;border-bottom:1px solid var(--border)}
+.back{background:none;border:none;font-size:16px;cursor:pointer;color:inherit}
+.spacer{flex:1}
+.section-label{font-size:8px;letter-spacing:.12em;color:var(--muted);padding:10px 12px 4px}
+.card{background:var(--surface);border:1px solid var(--border);margin:0 12px 8px;border-radius:8px;overflow:hidden}
+.row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);font-size:11px}
+.row:last-child{border-bottom:none}
+.muted{color:var(--muted);font-size:10px}
+.split{display:flex;padding:0}
+.cell{flex:1;padding:12px;text-align:center;font-size:11px;border-right:1px solid var(--border)}
+.segment{display:flex;gap:2px;font-size:9px}
+.segment span{padding:3px 6px;border-radius:4px;background:var(--border)}
+.segment .on{background:var(--bg);font-weight:600}
+.toggle{width:36px;height:20px;border-radius:10px;background:var(--border);position:relative}
+.toggle.on{background:var(--accent)}
+.toggle.on::after{content:'';position:absolute;right:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#fff}
+.list-item{padding:10px 12px;border-bottom:1px solid var(--border)}
+.list-title{font-size:11px;font-weight:500}
+.list-meta{font-size:9px;color:var(--muted);margin-top:2px}
+.stat-chip{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:10px;background:var(--surface)}
+.stat-chip.on{border-color:var(--accent);background:var(--accent);color:var(--bg)}
+.primary-btn{padding:12px;border-radius:8px;font-weight:600;font-size:12px;margin:12px}
+.modal-scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end}
+.modal{background:var(--surface);width:100%;padding:16px;border-radius:16px 16px 0 0}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 12px}
+.modal h3{font-size:14px;margin-bottom:10px}
+.modal textarea{width:100%;height:80px;border:1px solid var(--border);border-radius:8px;padding:8px;font-family:inherit;font-size:11px;background:var(--bg);color:var(--text);resize:none}
+.modal .primary-btn{width:calc(100% - 24px)}
+.danger-zone .danger{color:var(--accent)}
+.hud-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.progress{height:3px;background:var(--border);flex-shrink:0}
+.progress-fill{height:100%;background:var(--accent)}
+.reader-article{padding:12px}
+.reader-article .byline{font-size:10px;color:var(--muted);margin:4px 0 10px}
+.reader-article p{font-size:11px;margin-bottom:10px;line-height:1.5}
+@keyframes blink{50%{opacity:0}}
+.fit-section{padding:32px 40px;background:#eee}
+.fit-section h2{margin-bottom:12px}
+.fit-section ul{max-width:720px;padding-left:20px}
+.fit-section li{margin-bottom:8px}
+
+
+:root { --phosphor: #39FF14; --amber: #FFB000; }
+.page-header { background: #0A1628; color: var(--phosphor); font-family: var(--mono); }
+.instrument-light { --bg:#E8EEF4; --surface:#F4F8FC; --text:#0A1628; --muted:#5A6B7D; --border:#C5D3E0; --accent:#0066CC; --phosphor:#00875A; --amber:#CC7700; background:var(--bg); color:var(--text); font-family:var(--sans); }
+.instrument-dark { --bg:#0A1628; --surface:#0F1F35; --text:#C8E6FF; --muted:#6B8FAD; --border:#1E3A5F; --accent:#4DA6FF; --phosphor:#39FF14; --amber:#FFB000; background:var(--bg); color:var(--text); font-family:var(--sans); }
+.brand { font-family:var(--mono); font-size:10px; color:var(--phosphor); letter-spacing:.2em; }
+.panel { border:1px solid var(--border); background:var(--surface); padding:8px; font-family:var(--mono); font-size:9px; position:relative; }
+.panel::before { content:''; position:absolute; top:0;left:0;right:0;height:2px; background:linear-gradient(90deg, var(--phosphor), var(--amber)); }
+.gauge-row { display:flex; gap:4px; margin:8px 0; }
+.gauge { flex:1; border:1px solid var(--border); padding:4px; text-align:center; font-size:8px; font-family:var(--mono); }
+.gauge .val { font-size:12px; color:var(--phosphor); display:block; }
+.signal-hero { border:1px solid var(--phosphor); box-shadow:0 0 12px rgba(57,255,20,.15); padding:10px; }
+.waveform { height:24px; background: repeating-linear-gradient(90deg, var(--phosphor) 0 2px, transparent 2px 6px); opacity:.4; margin:6px 0; }
+.chip { font-family:var(--mono); font-size:8px; border:1px solid var(--border); padding:5px 6px; background:var(--surface); }
+.chip-sel { border-color:var(--phosphor); color:var(--phosphor); box-shadow:0 0 6px rgba(57,255,20,.2); }
+.hud { background:var(--surface); border-bottom:1px solid var(--phosphor); padding:8px; font-family:var(--mono); font-size:9px; display:flex; gap:6px; align-items:center; }
+.progress { background:var(--border); height:3px; }
+.progress-fill { background:var(--phosphor); height:100%; box-shadow:0 0 6px var(--phosphor); }
+.reader-article h1 { font-family:var(--mono); font-size:14px; }
+.orbit-ring { position:absolute; width:100px; height:100px; border:1px dashed var(--border); border-radius:50%; top:30%; right:-30px; opacity:.3; }
+</style>
+</head>
+<body>
+<header class="page-header">
+  <h1>Mockup IV — Instrument</h1>
+  <p>Signal laboratory — phosphor traces, orbital belts, nine-band frequency panel</p>
+</header>
+<nav class="nav-sticky"><a href="#startup">Startup</a><a href="#onboarding">Onboarding</a><a href="#dashboard">Dashboard</a><a href="#reader">Reader</a><a href="#settings">Settings</a><a href="#account">Account</a><a href="#history">History</a><a href="#saved">Saved Reads</a><a href="#categories">Category Preferences</a><a href="#stats">Dashboard Stats</a><a href="#feedback">Feedback</a><a href="#feedrequest">Feed Request</a><a href="#developer">Developer Options</a></nav>
+
+<section class="screen-block" id="startup">
+  <h2 class="screen-title">Startup</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><div class="orbit-ring"></div><div style="padding:16px;font-family:var(--mono)"><div class="brand">TANGENT</div><div style="margin-top:60px;font-size:11px;color:var(--phosphor)">&gt; initializing reader<span class="cursor">_</span></div><div style="margin-top:20px;font-size:10px;color:var(--muted)">sapere aude</div><div class="waveform" style="margin-top:40px"></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><div class="orbit-ring"></div><div style="padding:16px;font-family:var(--mono)"><div class="brand">TANGENT</div><div style="margin-top:60px;font-size:11px;color:var(--phosphor)">&gt; initializing reader<span class="cursor">_</span></div><div style="margin-top:20px;font-size:10px;color:var(--muted)">sapere aude</div><div class="waveform" style="margin-top:40px"></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="onboarding">
+  <h2 class="screen-title">Onboarding</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:12px"><div class="brand">TANGENT</div><div class="panel" style="margin:12px 0">CALIBRATE · 9-BAND FILTER</div><div style="display:flex;flex-wrap:wrap;gap:4px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div><button class="primary-btn" style="margin-top:12px;width:100%;font-family:var(--mono);background:var(--phosphor);color:#0A1628;border:none">ENGAGE FEED</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:12px"><div class="brand">TANGENT</div><div class="panel" style="margin:12px 0">CALIBRATE · 9-BAND FILTER</div><div style="display:flex;flex-wrap:wrap;gap:4px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div><button class="primary-btn" style="margin-top:12px;width:100%;font-family:var(--mono);background:var(--phosphor);color:#0A1628;border:none">ENGAGE FEED</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="dashboard">
+  <h2 class="screen-title">Dashboard</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:10px"><div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px"><div class="brand">TANGENT</div><span>[CFG]</span></div><div class="gauge-row"><div class="gauge"><span class="val">12</span>STREAK</div><div class="gauge"><span class="val">4.2</span>HRS</div><div class="gauge"><span class="val">245</span>WPM</div></div><div class="signal-hero panel"><div style="color:var(--amber)">SIG-001 · RANK 0.94</div><div style="font-size:12px;margin:4px 0">Why Software Margins Are Collapsing</div><div class="waveform"></div><div style="color:var(--muted)">The Diff</div></div><div class="panel" style="margin-top:6px">The AI Integration Question</div><div class="panel" style="margin-top:4px">Book Review: The Scout Mindset</div><div style="display:flex;gap:4px;margin-top:8px"><div class="pill-btn" style="flex:1;font-family:var(--mono);font-size:8px;border:1px solid var(--border);padding:6px;text-align:center">DISCOVER</div><div class="pill-btn" style="flex:1;font-family:var(--mono);font-size:8px;border:1px solid var(--border);padding:6px;text-align:center">SHUFFLE</div></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><div style="padding:10px"><div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px"><div class="brand">TANGENT</div><span>[CFG]</span></div><div class="gauge-row"><div class="gauge"><span class="val">12</span>STREAK</div><div class="gauge"><span class="val">4.2</span>HRS</div><div class="gauge"><span class="val">245</span>WPM</div></div><div class="signal-hero panel"><div style="color:var(--amber)">SIG-001 · RANK 0.94</div><div style="font-size:12px;margin:4px 0">Why Software Margins Are Collapsing</div><div class="waveform"></div><div style="color:var(--muted)">The Diff</div></div><div class="panel" style="margin-top:6px">The AI Integration Question</div><div class="panel" style="margin-top:4px">Book Review: The Scout Mindset</div><div style="display:flex;gap:4px;margin-top:8px"><div class="pill-btn" style="flex:1;font-family:var(--mono);font-size:8px;border:1px solid var(--border);padding:6px;text-align:center">DISCOVER</div><div class="pill-btn" style="flex:1;font-family:var(--mono);font-size:8px;border:1px solid var(--border);padding:6px;text-align:center">SHUFFLE</div></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="reader">
+  <h2 class="screen-title">Reader</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar"></div><div class="screen-body"><div class="hud"><button class="hud-x">✕</button><span class="hud-title">Why Software Margins Are Collapsing</span><div class="hud-actions"><span class="heart">♥</span><span class="save">🔖</span></div></div><div class="progress"><div class="progress-fill" style="width:42%"></div></div><div class="waveform" style="margin:0"></div><article class="reader-article"><h1>Why Software Margins Are Collapsing</h1><p class="byline">The Diff · Business</p><p>Platform economics and the new cost structure of AI-native products…</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p><p>Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p></article></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar"></div><div class="screen-body"><div class="hud"><button class="hud-x">✕</button><span class="hud-title">Why Software Margins Are Collapsing</span><div class="hud-actions"><span class="heart">♥</span><span class="save">🔖</span></div></div><div class="progress"><div class="progress-fill" style="width:42%"></div></div><div class="waveform" style="margin:0"></div><article class="reader-article"><h1>Why Software Margins Are Collapsing</h1><p class="byline">The Diff · Business</p><p>Platform economics and the new cost structure of AI-native products…</p><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p><p>Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p></article></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="settings">
+  <h2 class="screen-title">Settings</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Settings</span><span class="spacer"></span></header>
+<div class="section-label">ACCOUNT</div>
+<div class="card"><div class="row"><span>👤 Account</span><span class="muted">Anonymous →</span></div></div>
+<div class="section-label">LIBRARY</div>
+<div class="card split"><div class="cell">📜 History</div><div class="cell">🔖 Saved Reads</div></div>
+<div class="section-label">PREFERENCES</div>
+<div class="card">
+  <div class="row"><span>🎨 Theme</span><div class="segment"><span>Auto</span><span class="on">Light</span><span>Dark</span></div></div>
+  <div class="row"><span>🏷 Categories</span><span class="muted">4 selected →</span></div>
+  <div class="row"><span>📊 Dashboard Stats</span><span class="muted">3 active →</span></div>
+  <div class="row"><span>📦 Archived Articles</span><div class="toggle on"></div></div>
+</div>
+<div class="section-label">SUPPORT</div>
+<div class="card">
+  <div class="row"><span>💬 Feedback</span><span>→</span></div>
+  <div class="row"><span>📡 Request a Feed</span><span>→</span></div>
+</div>
+<div class="section-label">DEVELOPER</div>
+<div class="card"><div class="row"><span>⌨ Developer Options</span><span>→</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="account">
+  <h2 class="screen-title">Account</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Account</span><span class="spacer"></span></header>
+<div class="card">
+  <div class="row"><span>Status</span><span class="muted">Anonymous</span></div>
+  <div class="row"><span>Link Google Account</span><span>→</span></div>
+</div>
+<div class="card danger-zone">
+  <div class="row"><span>Sign Out</span></div>
+  <div class="row"><span>Reset Reading Data</span></div>
+  <div class="row danger"><span>Delete Account</span></div>
+</div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Account</span><span class="spacer"></span></header>
+<div class="card">
+  <div class="row"><span>Status</span><span class="muted">Anonymous</span></div>
+  <div class="row"><span>Link Google Account</span><span>→</span></div>
+</div>
+<div class="card danger-zone">
+  <div class="row"><span>Sign Out</span></div>
+  <div class="row"><span>Reset Reading Data</span></div>
+  <div class="row danger"><span>Delete Account</span></div>
+</div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="history">
+  <h2 class="screen-title">History</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>History</span><span class="spacer"></span></header><div class="panel">LOG · 4 entries</div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>History</span><span class="spacer"></span></header><div class="panel">LOG · 4 entries</div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="saved">
+  <h2 class="screen-title">Saved Reads</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Saved Reads</span><span class="spacer"></span></header><div class="panel">CACHE · offline HTML</div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Saved Reads</span><span class="spacer"></span></header><div class="panel">CACHE · offline HTML</div><div class="list-item"><div class="list-title">Why Software Margins Are Collapsing</div><div class="list-meta">The Diff · Business</div></div><div class="list-item"><div class="list-title">The AI Integration Question</div><div class="list-meta">Stratechery · Technology</div></div><div class="list-item"><div class="list-title">Book Review: The Scout Mindset</div><div class="list-meta">Astral Codex Ten · Science</div></div><div class="list-item"><div class="list-title">The Performance of Exhaustion</div><div class="list-meta">Culture Study · Culture</div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="categories">
+  <h2 class="screen-title">Category Preferences</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Categories</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Categories</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px"><button class="chip chip-sel">🏛️ Politics</button><button class="chip chip-neu">💼 Business</button><button class="chip chip-not">📈 Finance</button><button class="chip chip-sel">💻 Technology</button><button class="chip chip-neu">🔬 Science</button><button class="chip chip-neu">📜 History</button><button class="chip chip-not">🎨 Culture</button><button class="chip chip-sel">🌿 Lifestyle</button><button class="chip chip-neu">🎬 Entertainment</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="stats">
+  <h2 class="screen-title">Dashboard Stats</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Dashboard Stats</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px"><button class="stat-chip on">🔥 Streak Days</button><button class="stat-chip on">📊 Weekly Reads</button><button class="stat-chip ">⏳ Hours Read</button><button class="stat-chip on">⏱️ Avg WPM</button><button class="stat-chip ">📚 Finished</button><button class="stat-chip ">📈 Top Category</button></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>Dashboard Stats</span><span class="spacer"></span></header><div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px"><button class="stat-chip on">🔥 Streak Days</button><button class="stat-chip on">📊 Weekly Reads</button><button class="stat-chip ">⏳ Hours Read</button><button class="stat-chip on">⏱️ Avg WPM</button><button class="stat-chip ">📚 Finished</button><button class="stat-chip ">📈 Top Category</button></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="feedback">
+  <h2 class="screen-title">Feedback</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>TX · Feedback</h3><textarea placeholder="Input signal…"></textarea><button class="primary-btn">TRANSMIT</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>TX · Feedback</h3><textarea placeholder="Input signal…"></textarea><button class="primary-btn">TRANSMIT</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="feedrequest">
+  <h2 class="screen-title">Feed Request</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>RX · Feed Request</h3><textarea placeholder="URL endpoint"></textarea><button class="primary-btn">REGISTER</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><div class="modal-scrim"><div class="modal"><div class="modal-handle"></div><h3>RX · Feed Request</h3><textarea placeholder="URL endpoint"></textarea><button class="primary-btn">REGISTER</button></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="screen-block" id="developer">
+  <h2 class="screen-title">Developer Options</h2>
+  <div class="pair">
+    <div class="phone-wrap"><span class="mode-tag">Light</span>
+      <div class="phone instrument-light"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>DEV · Options</span><span class="spacer"></span></header><div class="card"><div class="row"><span>Sandbox Reader</span><span>→</span></div><div class="row danger"><span>Clear Local Data</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+    <div class="phone-wrap"><span class="mode-tag">Dark</span>
+      <div class="phone instrument-dark"><div class="status-bar">9:41</div><div class="screen-body"><header class="nav-header"><button class="back" aria-label="Back">←</button><span>DEV · Options</span><span class="spacer"></span></header><div class="card"><div class="row"><span>Sandbox Reader</span><span>→</span></div><div class="row danger"><span>Clear Local Data</span></div></div></div><div class="home-indicator"></div></div>
+    </div>
+  </div>
+</section>
+<section class="fit-section">
+  <h2>How this design fits Tangent's capabilities</h2>
+  <ul>
+<li><strong>Signal rank display</strong> — surfaces the v2 sigmoid score (P/T/R/Q) metaphorically; no new data needed — score already drives order.</li>
+<li><strong>9-band filter onboarding</strong> — 9 CATEGORIES from constants.ts contract; 3-state chips calibrate catLatent weights.</li>
+<li><strong>Gauge metrics</strong> — streak/hours/WPM map to behavior-synced profile stats with placeholder-until-verified pattern.</li>
+<li><strong>Waveform progress</strong> — scroll-depth percentage from useBehaviorTracker, same value driving ReaderProgressBar width.</li>
+<li><strong>DISCOVER/SHUFFLE as channel switches</strong> — both call getRankedFeed with session exclusion set — identical to production.</li>
+<li><strong>DEV panel</strong> — __DEV__ DeveloperOptionsScreen: sandbox reader + local data clear.</li>
+</ul>
+</section>
+</body>
+</html>

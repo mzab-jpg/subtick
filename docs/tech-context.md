@@ -133,12 +133,11 @@ From `firebase/functions/src/index.ts`:
 | `isActive` | `boolean?` | Defaults `true`; soft-delete flag — set to `false` in Firestore console to disable without deleting data |
 | `selectedCategoryIds` | `string[]` | Categories user selected as interested |
 | `notInterestedCategoryIds` | `string[]` | Categories user marked not interested |
-| `categoryWeights` | `Record<string, number>` | Learned per-category weights [0.1, 5.0] — server-only write |
-| `categoryLengthWeights` | `Record<string, number>` | Learned per-`"category::lengthStyle"` weights — server-only write |
+| `categoryWeights` | `Record<string, number>` | Latent x per category (0 = neutral) — server-only write |
+| `lengthWeights` | `Record<string, number>` | Global short/medium/long latent preferences — server-only write |
 | `publisherWeights` | `Record<string, number>` | Learned per-publisher weights — server-only write |
 | `weightUpdatedAt` | `number?` | Unix ms watermark — last event timestamp processed by `updateWeights()` |
-| `weightsDecayedAt` | `number?` | Unix ms of the last preference-decay application; separate from the event watermark |
-| `quickExitCategorySignals` | `Record<string, Record<string, number>>?` | Server-owned category → distinct quick-exit article ID → timestamp evidence, pruned/cleared after inference or positive engagement |
+| `weightsDecayedAt` | `number?` | Unix ms of the last latent-drift application; separate from the event watermark |
 | `themePreference` | `'system'|'light'|'dark'` | User theme choice |
 | `linkedGoogleAccount` | `boolean` | True after `linkGoogleAccount()` completes successfully |
 | `userEmail` | `string?` | Email from linked Google account; written by `linkGoogleAccount()` |
@@ -155,26 +154,27 @@ From `firebase/functions/src/index.ts`:
 
 ### WPM and Publisher Cold-Start Configuration
 
-The server loads `system/scoringConfig`, merges it over compiled defaults, clamps numeric values, and caches the effective configuration for about 60 seconds per warm Function instance. Relevant defaults are:
+### Scoring & Recommendation Configuration (v2 Sigmoid/Latent)
+
+The server loads the unified `system/scoringConfig`, deep-merges over compiled defaults, clamps every numeric leaf, and caches for ~60s per warm Function instance. Key defaults after the v2 transplant:
 
 | Setting | Default | Purpose |
 |---|---:|---|
-| `classification.quickExitDepth` | `0.20` | Below this depth plus a short session is a quick exit |
-| `classification.quickExitTimeoutSec` | `15` | Quick-exit duration threshold in seconds |
-| `classification.thoroughDepth` | `0.70` | Minimum deep-read depth — the "Finished" bar. Classification is geometry-only; pace no longer gates it |
-| `classification.thoroughTimeFraction` | `0.60` | **RETIRED** — retained in stored configs for compatibility, no longer consulted (the WPM-pace trial was removed from `classifyRead`) |
-| `classification.shallowDepth` | `0.40` | Minimum depth for shallow classification; also the weekly-read / streak bar |
-| `classification.flingWpm` | `1750` | Implied reading speed above this = a fling (attention factor `A = 0`). Wide-moat band against `MAX_PLAUSIBLE_WPM` (600); safe range [600, 50000] |
-| `scoring.publisherColdStartCategoryWeight` | `0.90` | Category share for a publisher with no stored user history |
-| `scoring.publisherColdStartPublisherWeight` | `0.10` | Publisher share for a publisher with no stored user history |
-| `learning.repeatedQuickExitThreshold` | `3` | Distinct quick exits in one category before weak category-only learning is inferred |
-| `learning.repeatedQuickExitLookbackDays` | `14` | Recent window used to count those quick exits |
-| `tranche.maxArticlesPerCategory` | `15` | Category selection cap when eligible alternatives can fill the feed |
-| `tranche.minDistinctCategories` | `4` | Desired category variety when eligible alternatives exist |
+| `scoring.personalization` / `trending` / `recency` / `quality` | 0.60 / 0.15 / 0.10 / 0.15 | Score weights (sum = 1.0) |
+| `scoring.trendingHalfSat` | 25 | Raw trending S for T=0.50 (~1% DAU) |
+| `scoring.recencyDaysConstant` | 14 | Days for R=0.50 |
+| `scoring.publisherColdStartCategoryWeight` / `publisherColdStartPublisherWeight` | 0.90 / 0.10 | Cold-start blend |
+| `engagement.fullRatio` / `skimRatio` / `flingRatio` | 1.25 / 2.0 / 3.0 | Speed-ratio thresholds for Engagement Index |
+| `engagement.skimPenalty` / `flingPenalty` | 0.50 / 0.0 | Pace penalty at 2× / ≥3× personal WPM |
+| `latent.clamp` | 20 | Write-time latent band (±20) |
+| `latent.nightlyDecay` | 0.95 | Daily drift factor toward 0.0 |
+| `latent.selectedLatent` / `notInterestedLatent` | 0.85 / -0.85 | Auto-select/reject UI thresholds |
+| `selection.categoryPenaltyStep` / `publisherPenaltyStep` | 0.15 / 0.25 | Subtractive penalty per prior pick |
+| `selection.discoverySlotInterval` / `jitterRange` | 5 / 0.03 | Every 5th card = discovery; jitter ±0.03 |
+| `classification.quickExitDepth` / `quickExitTimeoutSec` | 0.20 / 15 | Quick-exit threshold |
+| `classification.thoroughDepth` / `shallowDepth` | 0.70 / 0.40 | Finished / weekly-read depth |
 
-The two cold-start shares are normalized to total 1.0. Once `publisherWeights` has any property for a publisher—including a negative one—the normal 0.60 category / 0.40 publisher blend applies.
-
-Feed assembly reserves the highest-scoring eligible article in its normal tranche allocation and returns it at position 0 for the Dashboard hero. The remaining selected cards are randomized, then use fixed display-order anti-fatigue guards: no third consecutive category where another category remains, and no repeat publisher within the preceding three cards where another publisher remains. The Reader retains this backend order; a tapped card opens at its own position. These guards are deliberately not scoring-config sliders; scoring, tranche membership, discovery allocation, and the publisher cap remain unchanged.
+Feed assembly uses single-pass greedy selection with subtractive penalties and discovery slots (see `system-patterns.md §2f-h`). The two cold-start shares are normalized to total 1.0. A publisher with any stored interaction history (even a negative latent) uses the normal 60/40 blend.
 
 Reader timing uses the built-in React Native `AppState` API (no Expo package). `inactive` and `background` intervals are excluded from a Reader session; only `active` foreground time is sent as `sessionDuration`. This protects WPM calibration, server read classification, and total reading-time statistics from phone interruptions.
 
@@ -285,12 +285,10 @@ New post-deployment analytics fields are `analytics_environment`, `feed_id`, `im
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | Original publication name |
-| `qualityScore` | `number` | Crowd-sourced quality [0.20, 1.00]; new publishers seeded at DEFAULT (0.8) + delta |
+| `qualityScore` | `number` | Unbounded latent reputation y; new publishers seeded at 1.386 (σ≈0.80) |
 | `lastUpdated` | `number` | Unix ms of last write |
 
-Quality increments: `save +0.010 / like +0.005 / read_thorough +0.005 / read_skim +0.001 / swipe_not_interested -0.010 / quick_exit -0.005`
-
-**Security:** Admin SDK only.
+**Security:** Admin SDK only. Quality increments (latent y steps): `save +0.010 / like +0.005 / read_thorough +0.005 / swipe_not_interested -0.010 / quick_exit -0.010`. Read-visit deltas scaled by Engagement Index; explicit actions unscaled.
 
 ---
 
@@ -456,8 +454,8 @@ Moved to `firebase/scripts/oneoff/` (D6 fix). See `firebase/scripts/oneoff/READM
 | `resetPublisherQualities.js` | Resets all publisher quality scores to 0.80. Uses ADC authentication. |
 | `backfillRandomScore.js` | Assigns `random_score: Math.random()` to all existing articles that lack the field. Run once after deploying cost-optimisation changes. Safe to re-run. |
 | `cleanupArticles.js` | One-time cleanup of malformed/duplicate articles — **SPENT** |
-| `resetAndFetch.js` | ⚠️ Uses a truncated feed list (9 vs 35) — **update before any re-use** |
-| `forceFetchAll.js` | ⚠️ Uses a truncated paywall keyword list (8 vs 25) — **update before any re-use** |
+| `resetAndFetch.js` | ⚠️ Uses a truncated feed list (9 vs 42) — **update before any re-use** |
+| `forceFetchAll.js` | ⚠️ Uses a truncated paywall keyword list (8 vs 24) — **update before any re-use** |
 | `migrateUsers.js` | Migrated legacy user profile schema — **SPENT** |
 | `retroCategorize.js` | Back-filled `category` field on articles — **SPENT** |
 | `retroClean.js` | Removed legacy fields from articles — **SPENT** |

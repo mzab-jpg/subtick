@@ -25,10 +25,8 @@ import { requestInitialDashboardFeed } from '../services/initialDashboardFeed';
 import { CategoryChipGrid, type ChipState } from '../components/CategoryChipGrid';
 import { ScreenEntrance } from '../components/ScreenEntrance';
 import {
-  TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
-  TEXT_LG,
   TEXT_2XL,
 } from '../utils/constants';
 

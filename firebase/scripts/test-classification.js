@@ -10,9 +10,9 @@ const {
   classifyRead,
   prepareConfig,
 } = require('../functions/lib/scoringConfig.js');
-const { interleaveArticlesByCategory, spaceArticlesByPublisher, assembleFeedWithTranches } = require('../functions/lib/getRankedFeed.js');
+const { interleaveArticlesByCategory, spaceArticlesByPublisher, selectFeed } = require('../functions/lib/getRankedFeed.js');
 const { normalizeFeedUrl } = require('../functions/lib/feedValidation.js');
-const { applyDecay, computeAttentionFactor } = require('../functions/lib/weightUpdater.js');
+const { applyLatentDrift, applyQuickExitRejection, computeAttentionFactor } = require('../functions/lib/weightUpdater.js');
 const rankedFeedSource = require('fs').readFileSync(require('path').join(__dirname, '..', 'functions', 'src', 'getRankedFeed.ts'), 'utf8');
 
 let failed = false;
@@ -59,13 +59,15 @@ check('fast finish still counts as finished (pace judged by WPM band, not labels
 check('quick-exit boundary', classifyRead(cfg, 0.19, 14_999, 200, 450), 'quick_exit');
 check('just past quick-exit but under the weekly bar is not-interested', classifyRead(cfg, 0.25, 16_000, 200, 450), 'swipe_next');
 
-// Engagement-Credit Model — attention factor bands (wide-moat thresholds):
+// Engagement-Credit Model — attention factor (continuous pace interpolation vs the
+// user's personal average; E = depth × pacePenalty). Session WPM is COMPUTED from
+// consumed words ÷ active time, so durations are derived to hit the target speeds.
 const A_CFG = DEFAULT_SCORING_CONFIG;
-check('attention: genuine pace (400 WPM) gets full credit', computeAttentionFactor(0.8, 60_000, 500, A_CFG), 1);
-check('attention: skim band (1,200 WPM) discounted to 0.35', computeAttentionFactor(0.9, 90_000, 2_000, A_CFG), 0.35);
-check('attention: fling (15,000 WPM) is inert', computeAttentionFactor(1.0, 20_000, 5_000, A_CFG), 0);
-check('attention: missing word count defaults to full credit (raw-webpage edge)', computeAttentionFactor(0.8, 30_000, undefined, A_CFG), 1);
-check('attention: sub-floor consumption defaults to full credit (no pace signal)', computeAttentionFactor(0.3, 30_000, 100, A_CFG), 1);
+check('attention: genuine pace (matches personal average) earns full depth credit', computeAttentionFactor(0.8, 600_000, 5_000, A_CFG, 400), 0.8);
+checkClose('attention: double-speed read is discounted to half credit', computeAttentionFactor(0.8, 300_000, 5_000, A_CFG, 400), 0.4);
+check('attention: fling is inert', computeAttentionFactor(0.8, 125_000, 5_000, A_CFG, 400), 0);
+check('attention: missing word count defaults to depth-only credit (raw-webpage edge)', computeAttentionFactor(0.8, 30_000, undefined, A_CFG, 400), 0.8);
+check('attention: sub-floor consumption defaults to depth-only credit (no pace signal)', computeAttentionFactor(0.3, 30_000, 100, A_CFG, 400), 0.3);
 
 const normalized = prepareConfig({
   scoring: {
@@ -144,8 +146,38 @@ const publisherSkewedResult = spaceArticlesByPublisher(publisherSkewedFeed, 3, '
 check('publisher-skewed feed still preserves every article', new Set(publisherSkewedResult.map((article) => article.id)).size, publisherSkewedFeed.length);
 check('publisher-skewed feed completes when spacing is unavoidable', publisherSkewedResult.length, publisherSkewedFeed.length);
 
-checkClose('one-day decay preserves existing rate', applyDecay({ Technology: 2 }, 0.995).Technology, 1.995);
-checkClose('thirty-day decay applies rate thirty times', applyDecay({ Technology: 2 }, Math.pow(0.995, 30)).Technology, 1 + Math.pow(0.995, 30));
+// Drift floor — latents decay toward the floor, never past it, sign preserved.
+checkClose('one-day drift scales magnitude by rate', applyLatentDrift({ Technology: 2 }, 0.95, 0).Technology, 1.9);
+checkClose('thirty-day drift applies rate thirty times', applyLatentDrift({ Technology: 2 }, Math.pow(0.95, 30), 0).Technology, 2 * Math.pow(0.95, 30));
+checkClose('positive latent never decays below the floor', applyLatentDrift({ Technology: 3 }, Math.pow(0.95, 60), 0.5).Technology, 0.5);
+checkClose('negative latent never decays below floor (sign preserved)', applyLatentDrift({ Culture: -3 }, Math.pow(0.95, 60), 0.5).Culture, -0.5);
+checkClose('latents already below the floor are untouched', applyLatentDrift({ Finance: 0.2 }, 0.1, 0.5).Finance, 0.2);
+
+// Threshold-based quick-exit rejection — a single quick exit is a no-op.
+const rejectionCfg = DEFAULT_SCORING_CONFIG;
+const evidence = {};
+const qeLatents = {};
+const qeDeltas = {};
+const qeEvent = {
+  articleCategory: 'Politics',
+  lengthStyle: 'short',
+  publicationName: 'Alpha',
+  timestamp: Date.now(),
+};
+applyQuickExitRejection(qeEvent, rejectionCfg, evidence, qeLatents, qeDeltas, 0);
+check('a single quick exit applies no penalty', qeLatents.Politics === undefined && qeLatents['pub::Alpha'] === undefined, true);
+applyQuickExitRejection(qeEvent, rejectionCfg, evidence, qeLatents, qeDeltas, 0);
+check('threshold crossing applies one capped penalty to category', qeLatents.Politics, -0.6875);
+check('threshold crossing applies one capped penalty to publisher axis', qeLatents['pub::Alpha'], -0.6875);
+check('threshold crossing applies one capped penalty to length axis', qeLatents['short'], -0.6875);
+applyQuickExitRejection(qeEvent, rejectionCfg, evidence, qeLatents, qeDeltas, 0);
+check('further quick exits in the window are capped (no stacking)', qeLatents.Politics, -0.6875);
+
+// Window expiry — stale evidence restarts, so old exits can't combine with new.
+const windowExpiredEvidence = { Politics: { count: 1, windowStart: Date.now() - 3 * 24 * 60 * 60 * 1000 } };
+const expiredLatents = {};
+applyQuickExitRejection({ articleCategory: 'Politics', timestamp: Date.now() }, rejectionCfg, windowExpiredEvidence, expiredLatents, {}, 0);
+check('evidence outside the window does not combine with a new quick exit', expiredLatents.Politics, undefined);
 
 function scoredArticle(id, category, score) {
   return {
@@ -154,58 +186,53 @@ function scoredArticle(id, category, score) {
     tailScore: score,
   };
 }
-const categoryLimitedFeed = assembleFeedWithTranches([
+const categoryLimitedFeed = selectFeed([
   ...Array.from({ length: 5 }, (_, id) => scoredArticle(`tech_cap_${id}`, 'Technology', 0.8)),
   ...Array.from({ length: 3 }, (_, id) => scoredArticle(`science_cap_${id}`, 'Science', 0.75)),
   ...Array.from({ length: 3 }, (_, id) => scoredArticle(`culture_cap_${id}`, 'Culture', 0.7)),
   ...Array.from({ length: 3 }, (_, id) => scoredArticle(`history_cap_${id}`, 'History', 0.65)),
-], 6, 50, {
-  highThreshold: 0.4, midThreshold: 0.2, highSize: 6, midSize: 0, tailSize: 0,
-  publisherCap: 5, maxArticlesPerCategory: 2, minDistinctCategories: 3,
+], 6, 0, {
+  maxArticlesPerCategory: 2, minDistinctCategories: 3,
 });
 const categoryCounts = categoryLimitedFeed.reduce((counts, article) => ({ ...counts, [article.category]: (counts[article.category] || 0) + 1 }), {});
 check('category cap is respected when alternatives exist', categoryCounts.Technology <= 2, true);
 check('minimum distinct categories is reached when alternatives exist', Object.keys(categoryCounts).length >= 3, true);
 check('category limits preserve requested feed size', categoryLimitedFeed.length, 6);
 
-const anchoredStartupFeed = assembleFeedWithTranches([
+const anchoredStartupFeed = selectFeed([
   scoredArticle('high_best', 'Technology', 0.95),
   scoredArticle('high_other', 'Science', 0.80),
   scoredArticle('high_third', 'Culture', 0.70),
   scoredArticle('mid_discovery', 'History', 0.30),
   scoredArticle('tail_discovery', 'Business', 0.10),
-], 5, 50, {
-  highThreshold: 0.4, midThreshold: 0.2, highSize: 3, midSize: 1, tailSize: 1,
-  publisherCap: 5, maxArticlesPerCategory: 5, minDistinctCategories: 1,
+], 5, 0, {
+  maxArticlesPerCategory: 5, minDistinctCategories: 1,
 });
-check('highest High-tranche article anchors the startup card', anchoredStartupFeed[0].id, 'high_best');
+check('highest-scoring article anchors the startup card', anchoredStartupFeed[0].id, 'high_best');
 check('startup anchor preserves all selected articles', new Set(anchoredStartupFeed.map((article) => article.id)).size, 5);
 
-const midOnlyStartupFeed = assembleFeedWithTranches([
+const midOnlyStartupFeed = selectFeed([
   scoredArticle('mid_best', 'Technology', 0.39),
   scoredArticle('mid_other', 'Science', 0.30),
   scoredArticle('tail_only', 'Culture', 0.10),
-], 3, 50, {
-  highThreshold: 0.4, midThreshold: 0.2, highSize: 1, midSize: 1, tailSize: 1,
-  publisherCap: 5, maxArticlesPerCategory: 5, minDistinctCategories: 1,
+], 3, 0, {
+  maxArticlesPerCategory: 5, minDistinctCategories: 1,
 });
-check('highest Mid-tranche article anchors startup when High is empty', midOnlyStartupFeed[0].id, 'mid_best');
+check('highest-scoring article anchors startup when the pool is mid-tier only', midOnlyStartupFeed[0].id, 'mid_best');
 
-const tailOnlyStartupFeed = assembleFeedWithTranches([
+const tailOnlyStartupFeed = selectFeed([
   scoredArticle('tail_best', 'Technology', 0.19),
   scoredArticle('tail_other', 'Science', 0.10),
-], 2, 50, {
-  highThreshold: 0.4, midThreshold: 0.2, highSize: 0, midSize: 0, tailSize: 2,
-  publisherCap: 5, maxArticlesPerCategory: 5, minDistinctCategories: 1,
+], 2, 0, {
+  maxArticlesPerCategory: 5, minDistinctCategories: 1,
 });
-check('highest Tail-tranche article anchors startup when High and Mid are empty', tailOnlyStartupFeed[0].id, 'tail_best');
+check('highest-scoring article anchors startup when the pool is tail-tier only', tailOnlyStartupFeed[0].id, 'tail_best');
 
-const scarceCategoryFeed = assembleFeedWithTranches([
+const scarceCategoryFeed = selectFeed([
   ...Array.from({ length: 6 }, (_, id) => scoredArticle(`tech_scarce_${id}`, 'Technology', 0.8)),
   scoredArticle('science_scarce', 'Science', 0.7),
-], 6, 50, {
-  highThreshold: 0.4, midThreshold: 0.2, highSize: 6, midSize: 0, tailSize: 0,
-  publisherCap: 5, maxArticlesPerCategory: 2, minDistinctCategories: 4,
+], 6, 0, {
+  maxArticlesPerCategory: 2, minDistinctCategories: 4,
 });
 check('scarce category pool still fills the feed', scarceCategoryFeed.length, 6);
 check('scarce category pool keeps all selected articles unique', new Set(scarceCategoryFeed.map((article) => article.id)).size, 6);

@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubTick — Curve Playground (T / P / Q + custom)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23121212'/><text y='0.72em' x='0.5em' font-size='58' text-anchor='middle' dominant-baseline='middle'>📈</text></svg>">
+<link rel="stylesheet" href="design-tokens.css">
+<style>
+  :root {
+    --bg-dark: #121212;
+    --card-bg: #1B1B1B;
+    --card-border: #2A2A2A;
+    --accent-primary: #C94B4B;
+    --accent-primary-hover: #E05D5D;
+    --accent-success: #6FCF97;
+    --accent-warning: #E2B93B;
+    --accent-danger: #FF6B6B;
+    --text-main: #F5F5F5;
+    --text-muted: #777777;
+    --text-dim: #B5B5B5;
+    --input-bg: #1B1B1B;
+    --curve-T: #ff9e4e;
+    --curve-P: #4e9eff;
+    --curve-Q: #4ecca3;
+    --curve-R: #e94560;
+    --curve-X: #c084fc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-dark);
+    background-image:
+      radial-gradient(at 15% 15%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+      radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.10) 0px, transparent 50%);
+    color: var(--text-main);
+    min-height: 100vh;
+  }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; background: var(--card-bg);
+    backdrop-filter: blur(16px); border-bottom: 1px solid var(--card-border);
+    gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-logo { font-size: 26px; }
+  .brand-title { font-size: 19px; font-weight: 800; letter-spacing: -0.4px; }
+  .brand-subtitle { font-size: 12px; color: var(--text-muted); }
+  .header-badge {
+    font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+    background: rgba(255, 158, 78, 0.15); color: #fdba74; border: 1px solid rgba(255, 158, 78, 0.35);
+    white-space: nowrap;
+  }
+  .layout { display: grid; grid-template-columns: 420px 1fr; gap: 18px; padding: 18px 24px 30px; align-items: start; }
+  @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card-bg); backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border); border-radius: 16px; padding: 18px;
+    display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px;
+  }
+  .card-title {
+    font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-title .src { font-size: 10.5px; color: var(--text-dim); font-weight: 500; text-transform: none; letter-spacing: 0; }
+</style>
+<style>
+  .param-group { display: flex; flex-direction: column; gap: 10px; }
+  .param-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .param-row label { font-size: 13px; color: var(--text-main); font-weight: 500; flex: 1; }
+  .param-row .val { font-family: 'JetBrains Mono', monospace; color: var(--accent-primary); font-size: 13px; min-width: 56px; text-align: right; }
+  input[type="range"] { accent-color: var(--accent-primary); width: 170px; }
+  input[type="number"] {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px;
+    color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    padding: 4px 6px; width: 90px; text-align: right;
+  }
+  input[type="text"] {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px;
+    color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    padding: 6px 8px; width: 100%;
+  }
+  textarea {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 8px;
+    color: var(--text-main); font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    padding: 8px; width: 100%; min-height: 64px; resize: vertical;
+  }
+  .hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    background: var(--input-bg); border: 1px solid var(--card-border); color: var(--text-main);
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s ease;
+  }
+  .chip:hover { background: rgba(255,255,255,0.1); }
+  .chip.active { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(201,75,75,0.35); }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn-mini {
+    font-size: 11px; padding: 4px 9px; border-radius: 6px; border: 1px solid var(--card-border);
+    background: var(--input-bg); color: var(--text-muted); cursor: pointer; font-weight: 600;
+  }
+  .btn-mini:hover { color: var(--text-main); border-color: var(--text-dim); }
+  .step-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .step-cell {
+    background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 10px;
+    padding: 10px; text-align: center;
+  }
+  .step-cell .lbl { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .step-cell .num { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .step-cell .sub { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .up   { color: var(--accent-success); }
+  .down { color: var(--accent-danger); }
+  .neutral { color: var(--text-dim); }
+  .sym-row { display: grid; grid-template-columns: 64px 1fr 1fr 1fr; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .sym-row:last-child { border-bottom: none; }
+  .sym-row .x { font-family: 'JetBrains Mono', monospace; color: var(--text-muted); font-size: 12px; }
+  .sym-row .up, .sym-row .down { font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; }
+  .sym-header { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .bar-row { display: grid; grid-template-columns: 22px 1fr 90px; gap: 8px; align-items: center; padding: 5px 0; }
+  .bar-row .rank { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+  .bar-row .name { font-size: 12px; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .score { font-size: 11px; color: var(--text-main); font-family: 'JetBrains Mono', monospace; text-align: right; }
+  .bar-track { background: rgba(255,255,255,0.06); height: 8px; border-radius: 4px; overflow: hidden; display: flex; }
+  .bar-seg { height: 100%; }
+  .bar-P { background: var(--curve-P); }
+  .bar-T { background: var(--curve-T); }
+  .bar-R { background: var(--curve-R); }
+  .bar-Q { background: var(--curve-Q); }
+  canvas { display: block; width: 100%; height: 320px; background: #0E1117; border-radius: 12px; border: 1px solid var(--card-border); }
+  .small-canvas { height: 180px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--text-dim); }
+  .legend .swatch { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+  .formula { background: #05070d; border: 1px solid var(--card-border); border-radius: 8px; padding: 8px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e5e7eb; line-height: 1.5; }
+  .formula b { color: var(--accent-primary); }
+  .err { color: var(--accent-danger); font-size: 11px; }
+  .ok  { color: var(--accent-success); font-size: 11px; }
+  .reset-link { font-size: 11px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
+  .reset-link:hover { color: var(--text-main); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-logo">📈</div>
+    <div>
+      <div class="brand-title">Curve Playground</div>
+      <div class="brand-subtitle">Experiment with T, P, Q, R, and your own one-sided "slide-down" curves</div>
+    </div>
+  </div>
+  <div class="header-badge">EXPERIMENTAL · NOT LIVE</div>
+</header>
+
+<div class="layout">
+  <div id="leftCol">
+    <div class="card">
+      <div class="card-title">1. Pick a curve <span class="src">Switch canvas + symmetry panel</span></div>
+      <div class="chip-row" id="curveChips">
+        <div class="chip" data-curve="T"><span class="dot" style="background:var(--curve-T)"></span>T · Trending <span class="mono" style="color:var(--text-dim);font-size:10.5px">S/(S+k)</span></div>
+        <div class="chip" data-curve="P"><span class="dot" style="background:var(--curve-P)"></span>P · Personalization <span class="mono" style="color:var(--text-dim);font-size:10.5px">σ(x)</span></div>
+        <div class="chip" data-curve="Q"><span class="dot" style="background:var(--curve-Q)"></span>Q · Publisher Quality <span class="mono" style="color:var(--text-dim);font-size:10.5px">σ(y)</span></div>
+        <div class="chip" data-curve="X"><span class="dot" style="background:var(--curve-X)"></span>Custom · JS</div>
+      </div>
+    </div>
+
+    <div class="card" id="calibrationCard">
+      <div class="card-title" id="calibrationTitle">2. Calibration</div>
+      <div id="calibrationBody" class="param-group"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3. Feed weights <span class="src">SCORE_WEIGHTS · constants.ts</span></div>
+      <div class="param-group">
+        <div class="param-row"><label>w<sub>P</sub> · Personalization</label><span class="val mono" id="wPv">0.60</span><input type="range" id="wP" min="0" max="1" step="0.01" value="0.60"></div>
+        <div class="param-row"><label>w<sub>T</sub> · Trending</label><span class="val mono" id="wTv">0.15</span><input type="range" id="wT" min="0" max="1" step="0.01" value="0.15"></div>
+        <div class="param-row"><label>w<sub>R</sub> · Recency</label><span class="val mono" id="wRv">0.10</span><input type="range" id="wR" min="0" max="1" step="0.01" value="0.10"></div>
+        <div class="param-row"><label>w<sub>Q</sub> · Quality</label><span class="val mono" id="wQv">0.15</span><input type="range" id="wQ" min="0" max="1" step="0.01" value="0.15"></div>
+      </div>
+      <div class="hint" id="weightNormalised"></div>
+    </div>
+  </div>
+
+  <div id="rightCol">
+    <div class="card">
+      <div class="card-title">Curve shape <span class="src"><span id="currentCurveLabel">T</span> · <span id="currentCurveFormula"></span></span></div>
+      <canvas id="mainCanvas"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--curve-T)"></span>T (trending)</span>
+        <span><span class="swatch" style="background:var(--curve-P)"></span>P (personalization)</span>
+        <span><span class="swatch" style="background:var(--curve-Q)"></span>Q (publisher quality)</span>
+        <span><span class="swatch" style="background:var(--curve-X)"></span>Custom</span>
+        <span style="margin-left:auto"><span class="swatch" style="background:#ffffff;opacity:0.6"></span>Marker = current x</span>
+      </div>
+      <div class="hint">Click anywhere on the canvas to move the marker. Watch the symmetry numbers below change.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Step symmetry at the marker <span class="src">+0.1 vs −0.1 in the raw input (x or S)</span></div>
+      <div class="step-grid">
+        <div class="step-cell"><div class="lbl">Current x</div><div class="num mono" id="curX">0.0</div><div class="sub" id="curScore">→ 0.500</div></div>
+        <div class="step-cell"><div class="lbl">Step +0.1</div><div class="num mono up" id="stepUp">+0.025</div><div class="sub" id="stepUpTo">→ 0.525</div></div>
+        <div class="step-cell"><div class="lbl">Step −0.1</div><div class="num mono down" id="stepDown">−0.025</div><div class="sub" id="stepDownTo">→ 0.475</div></div>
+      </div>
+      <div class="hint" id="symHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Asymmetry sweep <span class="src">Equal ±0.1 steps at five points</span></div>
+      <div class="sym-row sym-header"><div class="x">x</div><div style="text-align:right">score(x)</div><div style="text-align:right">Δ on +0.1</div><div style="text-align:right">Δ on −0.1</div></div>
+      <div id="sweepBody"></div>
+      <div class="hint" style="margin-top:8px">If the up-step and down-step at the same x are equal, the curve is locally <b>symmetric</b> (the production logistic σ). If <span class="down">−Δ</span> is larger than <span class="up">+Δ</span> near the top, the curve "slides down" more easily than it climbs — exactly the property you wanted.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Return-to-neutral decay <span class="src">x<sub>n+1</sub> = x<sub>n</sub> · λ per day</span></div>
+      <canvas id="decayCanvas" class="small-canvas"></canvas>
+      <div class="param-row" style="margin-top:4px">
+        <label>Start x (and S for T)</label>
+        <span class="val mono" id="startXv">1.5</span>
+        <input type="number" id="startX" value="1.5" step="0.1">
+      </div>
+      <div class="param-row">
+        <label>Days to simulate</label>
+        <span class="val mono" id="daysV">60</span>
+        <input type="range" id="days" min="7" max="365" step="1" value="60">
+      </div>
+      <div class="hint" id="decayHint"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Mini feed simulation <span class="src">12 fake articles, ranked with current weights</span></div>
+      <div id="feedBody"></div>
+      <div class="hint">Stacked bars show the P/T/R/Q contribution to each article's final score.</div>
+    </div>
+  </div>
+</div>
+
+<div id="scriptAnchor"></div>
+<script>
+/* ============================================================
+   Production constants — keep in sync with
+   firebase/functions/src/constants.ts and scoringConfig.ts
+   ============================================================ */
+const PROD = {
+  TRENDING_HALF_SAT: 10,
+  RECENCY_DAYS_CONSTANT: 14,
+  LATENT_CLAMP: 20,
+  LATENT_NIGHTLY_DECAY: 0.95,
+  DEFAULT_PUBLISHER_LATENT: 1.386, // σ(1.386) = 0.8
+  FEEDBACK_DELTAS: {
+    save: 0.55, unsave: -0.55,
+    like: 0.40, unlike: -0.40,
+    read_thorough: 0.275,
+    read_skim: 0.10, read_shallow: 0.10,
+    swipe_next: 0.00,
+    quick_exit: -0.6875,
+    swipe_not_interested: -0.6875,
+  },
+  SCORE_WEIGHTS: { personalization: 0.60, trending: 0.15, recency: 0.10, quality: 0.15 },
+  PIVOT_TARGET_X: 2.20, // x at which P ≈ 0.90
+};
+
+/* ----- live state ----- */
+const state = {
+  curve: 'T',
+  markerX: 5,
+  k: PROD.TRENDING_HALF_SAT,
+  clamp: PROD.LATENT_CLAMP,   // hard safety beneath the hood
+  scaleP: 1.0,                // steepness: σ(x/s). 1.0 = production logistic
+  scaleQ: 1.0,                // steepness for Q (same shape)
+  decay: PROD.LATENT_NIGHTLY_DECAY,
+  pivotN: 5,
+  customExpr: '1 - Math.exp(-S / 8)',
+  weights: { ...PROD.SCORE_WEIGHTS },
+  startX: 1.5,
+  days: 60,
+};
+
+/* ============================================================
+   Curve implementations — keep in sync with source
+   ============================================================ */
+function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+/** Generalised logistic: σ(x/s). s=1 → standard sigmoid. s>1 → shallower. s<1 → steeper. */
+function sigmoidScaled(x, s) { return 1 / (1 + Math.exp(-x / Math.max(0.01, s))); }
+function clampX(x, c) { return Math.max(-c, Math.min(c, x)); }
+function curveT(S, k) { const s = Math.max(0, S); return s / (s + k); }
+function curveR(daysOld, tau) { return 1 / (1 + daysOld / tau); }
+
+function activeCurve() {
+  if (state.curve === 'T') return S => curveT(S, state.k);
+  if (state.curve === 'P') return x => sigmoidScaled(clampX(x, state.clamp), state.scaleP);
+  if (state.curve === 'Q') return y => sigmoidScaled(clampX(y, state.clamp), state.scaleQ);
+  if (state.curve === 'X') {
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('S', 'x', 'k', 'lambda', 'return (' + state.customExpr + ');');
+      return S => { const v = fn(S, S, state.k, state.decay); return Number.isFinite(v) ? v : NaN; };
+    } catch (e) { return () => NaN; }
+  }
+}
+
+function curveLabel(c) { return ({ T: 'T (Trending)', P: 'P (Personalization)', Q: 'Q (Publisher Quality)', X: 'Custom' })[c]; }
+function curveFormula(c) {
+  switch (c) {
+    case 'T': return 'S / (S + k),  k = ' + state.k;
+    case 'P': return 'σ(x / ' + state.scaleP.toFixed(1) + '),  s = ' + state.scaleP.toFixed(1);
+    case 'Q': return 'σ(y / ' + state.scaleQ.toFixed(1) + '),  s = ' + state.scaleQ.toFixed(1);
+    case 'X': return state.customExpr;
+  }
+}
+function curveColor(c) { return ({ T: '#ff9e4e', P: '#4e9eff', Q: '#4ecca3', X: '#c084fc' })[c]; }
+function curveRange(c) {
+  switch (c) {
+    case 'T': return [0, 60];
+    case 'P': return [-5, 5];
+    case 'Q': return [-5, 5];
+    case 'X': return [0, 60];
+  }
+}
+</script>
+<script>
+/* ============================================================
+   Canvas plotting helpers
+   ============================================================ */
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+function drawAxes(ctx, w, h, xMin, xMax, yMin, yMax, padL, padR, padT, padB) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.fillStyle = 'rgba(180,180,180,0.55)';
+  for (let i = 0; i <= 4; i++) {
+    const yv = yMin + (yMax - yMin) * (i / 4);
+    const py = padT + (h - padT - padB) * (1 - (yv - yMin) / (yMax - yMin));
+    ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(w - padR, py); ctx.stroke();
+    ctx.fillText(yv.toFixed(2), 4, py + 3);
+  }
+  for (let i = 0; i <= 6; i++) {
+    const xv = xMin + (xMax - xMin) * (i / 6);
+    const px = padL + (w - padL - padR) * ((xv - xMin) / (xMax - xMin));
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, h - padB); ctx.stroke();
+    ctx.fillText(xv.toFixed(xMax < 10 ? 1 : 0), px - 8, h - padB + 14);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.moveTo(padL, padT); ctx.lineTo(padL, h - padB); ctx.lineTo(w - padR, h - padB);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function plotCurve(ctx, fn, color, w, h, xMin, xMax, padL, padR, padT, padB, dashed) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  if (dashed) ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  const N = 240;
+  let started = false;
+  for (let i = 0; i <= N; i++) {
+    const xv = xMin + (xMax - xMin) * (i / N);
+    const yv = fn(xv);
+    if (!Number.isFinite(yv)) { started = false; continue; }
+    const yClamped = Math.max(0, Math.min(1, yv));
+    const px = padL + (w - padL - padR) * ((xv - xMin) / (xMax - xMin));
+    const py = padT + (h - padT - padB) * (1 - yClamped);
+    if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMarker(ctx, x, fn, color, w, h, xMin, xMax, padL, padR, padT, padB) {
+  const y = fn(x);
+  if (!Number.isFinite(y)) return null;
+  const px = padL + (w - padL - padR) * ((x - xMin) / (xMax - xMin));
+  const py = padT + (h - padT - padB) * (1 - Math.max(0, Math.min(1, y)));
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, h - padB); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(w - padR, py); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  return { px, py, x, y };
+}
+</script>
+<script>
+/* ============================================================
+   Main render — main canvas
+   ============================================================ */
+function renderMain() {
+  const canvas = document.getElementById('mainCanvas');
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 36, padR = 12, padT = 12, padB = 26;
+  const [xMin, xMax] = curveRange(state.curve);
+  drawAxes(ctx, w, h, xMin, xMax, 0, 1, padL, padR, padT, padB);
+
+  // Always show the other curves as faded context for comparison
+  const faders = [
+    { c: 'T', fn: S => curveT(S, state.k), color: '#ff9e4e' },
+    { c: 'P', fn: x => sigmoidScaled(clampX(x, state.clamp), state.scaleP), color: '#4e9eff' },
+    { c: 'Q', fn: y => sigmoidScaled(clampX(y, state.clamp), state.scaleQ), color: '#4ecca3' },
+  ];
+  if (state.curve === 'X') {
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('S', 'x', 'k', 'lambda', 'return (' + state.customExpr + ');');
+      faders.push({ c: 'X', fn: S => { const v = fn(S, S, state.k, state.decay); return Number.isFinite(v) ? v : NaN; }, color: '#c084fc' });
+    } catch (e) { /* skip */ }
+  }
+  for (const f of faders) {
+    if (f.c === state.curve) continue;
+    plotCurve(ctx, f.fn, f.color + '55', w, h, xMin, xMax, padL, padR, padT, padB, true);
+  }
+
+  // Active curve in full color
+  const fn = activeCurve();
+  plotCurve(ctx, fn, curveColor(state.curve), w, h, xMin, xMax, padL, padR, padT, padB, false);
+  drawMarker(ctx, state.markerX, fn, curveColor(state.curve), w, h, xMin, xMax, padL, padR, padT, padB);
+
+  document.getElementById('currentCurveLabel').textContent = curveLabel(state.curve);
+  document.getElementById('currentCurveFormula').textContent = curveFormula(state.curve);
+}
+
+function renderStepSymmetry() {
+  const fn = activeCurve();
+  const x = state.markerX;
+  const y0 = fn(x);
+  const yUp = fn(x + 0.1);
+  const yDn = fn(x - 0.1);
+  const dUp = (Number.isFinite(y0) && Number.isFinite(yUp)) ? yUp - y0 : NaN;
+  const dDn = (Number.isFinite(y0) && Number.isFinite(yDn)) ? yDn - y0 : NaN;
+
+  document.getElementById('curX').textContent = fmt(x, 2);
+  document.getElementById('curScore').textContent = '→ ' + fmt(y0, 3);
+  const upEl = document.getElementById('stepUp');
+  upEl.textContent = (dUp >= 0 ? '+' : '') + fmt(dUp, 4);
+  upEl.className = 'num mono ' + (dUp >= 0 ? 'up' : 'down');
+  document.getElementById('stepUpTo').textContent = '→ ' + fmt(yUp, 3);
+  const dnEl = document.getElementById('stepDown');
+  dnEl.textContent = (dDn >= 0 ? '+' : '') + fmt(dDn, 4);
+  dnEl.className = 'num mono ' + (dDn >= 0 ? 'up' : 'down');
+  document.getElementById('stepDownTo').textContent = '→ ' + fmt(yDn, 3);
+
+  const hint = document.getElementById('symHint');
+  if (!Number.isFinite(dUp) || !Number.isFinite(dDn)) {
+    hint.innerHTML = '<span class="err">Invalid expression or out-of-range x.</span>';
+    return;
+  }
+  const ratio = dUp === 0 ? Infinity : Math.abs(dDn / dUp);
+  if (Math.abs(dUp + dDn) < 1e-4) {
+    hint.innerHTML = '<span class="ok">Locally symmetric</span> (|Δ<sup>+</sup> + Δ<sup>−</sup>| ≈ 0). A <b>±0.1</b> step gives equal up and down movement. The production logistic σ behaves exactly this way.';
+  } else if (dDn < dUp) {
+    hint.innerHTML = '<span class="ok">Slides down more than up</span> at this point. A <b>−0.1</b> step drops the score ' + fmt(Math.abs(ratio), 2) + '× as much as a <b>+0.1</b> step raises it. This is the property you wanted.';
+  } else {
+    hint.innerHTML = '<span class="err">Slides up more than down</span> at this point — the opposite of what we want. The down-step is only ' + fmt(Math.abs(ratio), 2) + '× the up-step.';
+  }
+}
+
+function renderSweep() {
+  const fn = activeCurve();
+  const [xMin, xMax] = curveRange(state.curve);
+  const points = [xMin, xMin + (xMax - xMin) * 0.25, xMin + (xMax - xMin) * 0.5, xMin + (xMax - xMin) * 0.75, xMax];
+  const body = document.getElementById('sweepBody');
+  body.innerHTML = '';
+  for (const x of points) {
+    const y0 = fn(x);
+    const yUp = fn(x + 0.1);
+    const yDn = fn(x - 0.1);
+    const dUp = (Number.isFinite(y0) && Number.isFinite(yUp)) ? yUp - y0 : NaN;
+    const dDn = (Number.isFinite(y0) && Number.isFinite(yDn)) ? yDn - y0 : NaN;
+    const row = document.createElement('div');
+    row.className = 'sym-row';
+    row.innerHTML =
+      '<div class="x">' + fmt(x, 2) + '</div>' +
+      '<div class="mono" style="text-align:right">' + fmt(y0, 3) + '</div>' +
+      '<div class="up">' + (Number.isFinite(dUp) ? (dUp >= 0 ? '+' : '') + fmt(dUp, 4) : '—') + '</div>' +
+      '<div class="down">' + (Number.isFinite(dDn) ? (dDn >= 0 ? '+' : '') + fmt(dDn, 4) : '—') + '</div>';
+    body.appendChild(row);
+  }
+}
+
+function fmt(v, dp) { if (!Number.isFinite(v)) return '—'; return v.toFixed(dp); }
+</script>
+<script>
+/* ============================================================
+   Calibration panel — different controls per curve
+   ============================================================ */
+function renderCalibration() {
+  const body = document.getElementById('calibrationBody');
+  const title = document.getElementById('calibrationTitle');
+  if (state.curve === 'T') {
+    title.innerHTML = '2. Calibration · T <span class="src">TRENDING_HALF_SAT · constants.ts</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>k · half-saturation</label><span class="val mono" id="kV">' + state.k + '</span><input type="range" id="k" min="1" max="50" step="0.5" value="' + state.k + '"></div>' +
+      '<div class="param-row"><label>Reset to prod</label><button class="btn-mini" id="kReset">k = 10</button></div>' +
+      '<div class="formula">T = S / (S + k)   →   half-saturation at <b>S = k</b><br>' +
+      'k = 10 ⇒ T(10) = 0.500  ·  T(20) = 0.667  ·  T(40) = 0.800</div>' +
+      '<div class="hint">Smaller k = trending is more sensitive. Bigger k = harder to reach the top.</div>';
+    document.getElementById('k').addEventListener('input', e => { state.k = +e.target.value; document.getElementById('kV').textContent = state.k; updateAll(); });
+    document.getElementById('kReset').addEventListener('click', () => { state.k = PROD.TRENDING_HALF_SAT; document.getElementById('k').value = state.k; document.getElementById('kV').textContent = state.k; updateAll(); });
+  }
+  else if (state.curve === 'P') {
+    title.innerHTML = '2. Calibration · P <span class="src">σ(x/s) + step asymmetry</span>';
+    const delta = PROD.PIVOT_TARGET_X / state.pivotN;
+    body.innerHTML =
+      '<div class="param-row"><label>Steepness s (scale)</label><span class="val mono" id="scalePV">' + state.scaleP.toFixed(2) + '</span><input type="range" id="scaleP" min="0.2" max="4" step="0.1" value="' + state.scaleP + '"></div>' +
+      '<div class="param-row"><label>Pivot velocity N (reads to 0.90)</label><span class="val mono" id="pivotV">' + state.pivotN + '</span><input type="range" id="pivotN" min="1" max="20" step="1" value="' + state.pivotN + '"></div>' +
+      '<div class="param-row"><label>Nightly decay λ</label><span class="val mono" id="decayV">' + state.decay.toFixed(3) + '</span><input type="range" id="decay" min="0.5" max="1" step="0.005" value="' + state.decay + '"></div>' +
+      '<div class="param-row"><label>Reset to prod</label><button class="btn-mini" id="pReset">s=1.0 λ=0.95 N=5</button></div>' +
+      '<div class="formula">P = σ(x / s) = 1 / (1 + e^(-x/s))' +
+      '<br>s = <b>' + state.scaleP.toFixed(1) + '</b> (steepness). s=1 → standard sigmoid.' +
+      '<br>δ<sub>pos</sub> = 2.20 / N = <b>' + delta.toFixed(3) + '</b> per thorough read' +
+      '<br>δ<sub>neg</sub> = −2.5 × δ<sub>pos</sub> = <b>' + (delta * -2.5).toFixed(3) + '</b> (quick_exit)</div>' +
+      '<div class="hint">Bigger s = shallower curve (more x to reach top). Smaller s = steeper (faster saturates).<br>The "slide down" comes from δ<sub>neg</sub> being 2.5× larger than δ<sub>pos</sub>, not from the curve shape.</div>';
+    document.getElementById('scaleP').addEventListener('input', e => { state.scaleP = +e.target.value; document.getElementById('scalePV').textContent = state.scaleP.toFixed(2); updateAll(); });
+    document.getElementById('pivotN').addEventListener('input', e => { state.pivotN = +e.target.value; document.getElementById('pivotV').textContent = state.pivotN; updateAll(); });
+    document.getElementById('decay').addEventListener('input', e => { state.decay = +e.target.value; document.getElementById('decayV').textContent = state.decay.toFixed(3); updateAll(); });
+    document.getElementById('pReset').addEventListener('click', () => { state.clamp = PROD.LATENT_CLAMP; state.scaleP = 1.0; state.decay = PROD.LATENT_NIGHTLY_DECAY; state.pivotN = 5; renderCalibration(); updateAll(); });
+  }
+  else if (state.curve === 'Q') {
+    title.innerHTML = '2. Calibration · Q <span class="src">σ(y/s) + Veto Ratio</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>Steepness s (scale)</label><span class="val mono" id="scaleQV">' + state.scaleQ.toFixed(2) + '</span><input type="range" id="scaleQ" min="0.2" max="4" step="0.1" value="' + state.scaleQ + '"></div>' +
+      '<div class="param-row"><label>Reset to prod</label><button class="btn-mini" id="qReset">s=1.0</button></div>' +
+      '<div class="formula">Q = σ(y / s) = 1 / (1 + e^(-y/s))' +
+      '<br>optimistic seed y = 1.386 → σ = 0.80' +
+      '<br>γ<sub>+</sub> ≈ +0.005 per thorough read' +
+      '<br>γ<sub>−</sub> ≈ −0.05 per quick_exit (10× stronger — the "Veto Ratio")</div>' +
+      '<div class="hint">Bigger s = curve shallower = Q needs more evidence to move.<br>Smaller s = curve steeper = Q saturates faster per unit y.</div>';
+    document.getElementById('scaleQ').addEventListener('input', e => { state.scaleQ = +e.target.value; document.getElementById('scaleQV').textContent = state.scaleQ.toFixed(2); updateAll(); });
+    document.getElementById('qReset').addEventListener('click', () => { state.clamp = PROD.LATENT_CLAMP; state.scaleQ = 1.0; renderCalibration(); updateAll(); });
+  }
+  else if (state.curve === 'X') {
+    title.innerHTML = '2. Calibration · Custom <span class="src">Your own one-sided function</span>';
+    body.innerHTML =
+      '<div class="param-row"><label>JS expression (S is the input)</label></div>' +
+      '<textarea id="customExpr" rows="2">' + state.customExpr + '</textarea>' +
+      '<div class="param-row" style="margin-top:6px"><label>Presets</label><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="btn-mini" data-preset="1 - Math.exp(-S / 8)">exponential</button>' +
+        '<button class="btn-mini" data-preset="S / (S + 10)">prod T (k=10)</button>' +
+        '<button class="btn-mini" data-preset="1 / (1 + Math.exp(-(S - 5) / 1.5))">shifted σ</button>' +
+        '<button class="btn-mini" data-preset="S > 10 ? 0.5 + 0.05 * (S - 10) : 0.5 * S / 10">linear-then-flat</button>' +
+      '</div></div>' +
+      '<div class="formula">S is the raw input. You can reference <b>k</b> (half-sat), <b>lambda</b> (nightly decay), and <b>x</b> (= S).</div>' +
+      '<div class="hint">Goal: at high S, a <b>−0.1</b> step should drop the score more than a <b>+0.1</b> raises it.</div>';
+    const ta = document.getElementById('customExpr');
+    ta.addEventListener('input', e => { state.customExpr = e.target.value; updateAll(); });
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => { state.customExpr = btn.getAttribute('data-preset'); ta.value = state.customExpr; updateAll(); });
+    });
+  }
+}
+</script>
+<script>
+/* ============================================================
+   Decay canvas — visualise nightly return to neutral
+   ============================================================ */
+function renderDecay() {
+  const canvas = document.getElementById('decayCanvas');
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 36, padR = 12, padT = 12, padB = 26;
+  const days = state.days;
+  const yMax = Math.max(2, state.startX * 1.2);
+  drawAxes(ctx, w, h, 0, days, 0, yMax, padL, padR, padT, padB);
+
+  const useRawT = (state.curve === 'T');
+  const fn = activeCurve();
+
+  // Trace latent x (or S) over time
+  const xSeries = [];
+  let xv = state.startX;
+  for (let d = 0; d <= days; d++) {
+    xSeries.push(xv);
+    xv = xv * state.decay;
+  }
+  // Score trace
+  const scoreSeries = xSeries.map(x => fn(x));
+
+  // Faded latent trace
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  for (let d = 0; d <= days; d++) {
+    const px = padL + (w - padL - padR) * (d / days);
+    const py = padT + (h - padT - padB) * (1 - Math.max(0, Math.min(1, xSeries[d] / yMax)));
+    if (d === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Color score trace
+  ctx.save();
+  ctx.strokeStyle = curveColor(state.curve);
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  for (let d = 0; d <= days; d++) {
+    const px = padL + (w - padL - padR) * (d / days);
+    const py = padT + (h - padT - padB) * (1 - Math.max(0, Math.min(1, scoreSeries[d])));
+    if (d === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Half-life marker
+  const halfLife = Math.log(0.5) / Math.log(state.decay);
+  if (halfLife > 0 && halfLife < days) {
+    const px = padL + (w - padL - padR) * (halfLife / days);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, h - padB); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(220,220,220,0.9)';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.fillText('½ in ' + halfLife.toFixed(1) + 'd', px + 4, padT + 12);
+    ctx.restore();
+  }
+
+  const endScore = scoreSeries[days];
+  const endX = xSeries[days];
+  document.getElementById('decayHint').innerHTML =
+    'Starting ' + (useRawT ? 'S' : 'x') + ' = <b>' + state.startX.toFixed(2) + '</b>, ' +
+    'after <b>' + days + '</b> days of no interaction: ' +
+    (useRawT ? 'S' : 'x') + ' = <b>' + endX.toFixed(3) + '</b>  ·  score = <b>' + endScore.toFixed(3) + '</b>' +
+    '  ·  half-life ≈ ' + halfLife.toFixed(1) + ' days';
+}
+</script>
+<script>
+/* ============================================================
+   Mini feed simulation — 12 fake articles
+   ============================================================ */
+const FAKE_ARTICLES = [
+  { name: 'The AI Race Is Already Over',          cat: 'Tech',      P_x:  2.1, T_S: 38, daysOld: 0,  Q_y:  1.4 },
+  { name: "Why Inflation Won't Quit",             cat: 'Finance',   P_x: -0.6, T_S: 12, daysOld: 4,  Q_y:  1.0 },
+  { name: 'The Last Honest Newspaper',           cat: 'Politics',  P_x:  1.2, T_S:  6, daysOld: 1,  Q_y:  0.8 },
+  { name: 'GPT-6 and the End of Coding',         cat: 'Tech',      P_x:  1.8, T_S: 22, daysOld: 1,  Q_y:  1.2 },
+  { name: 'A Quiet Revolution in Energy',        cat: 'Business',  P_x:  0.3, T_S:  3, daysOld: 9,  Q_y:  1.0 },
+  { name: 'The Housing Trap',                    cat: 'Finance',   P_x:  0.0, T_S:  9, daysOld: 3,  Q_y:  0.9 },
+  { name: 'What 2026 Will Really Look Like',     cat: 'Politics',  P_x: -1.0, T_S: 45, daysOld: 0,  Q_y:  0.2 },
+  { name: 'Why I Quit Twitter (Again)',          cat: 'Tech',      P_x:  0.7, T_S:  1, daysOld: 12, Q_y:  0.6 },
+  { name: 'The Boring Case for Bonds',           cat: 'Finance',   P_x:  1.0, T_S:  4, daysOld: 6,  Q_y:  1.3 },
+  { name: 'Notes from a Quiet Year',             cat: 'Culture',   P_x:  0.2, T_S:  2, daysOld: 21, Q_y:  1.1 },
+  { name: 'The Subsidy Economy',                 cat: 'Business',  P_x:  0.5, T_S:  7, daysOld: 2,  Q_y:  0.7 },
+  { name: 'The Memo That Changed Everything',    cat: 'Politics',  P_x:  0.4, T_S: 15, daysOld: 1,  Q_y:  0.5 },
+];
+
+function renderFeed() {
+  const w = state.weights;
+  const total = w.personalization + w.trending + w.recency + w.quality;
+  document.getElementById('weightNormalised').textContent =
+    'Auto-normalised so they sum to 1.0 (currently ' + total.toFixed(2) + ').';
+
+  const items = FAKE_ARTICLES.map(a => {
+    const P = sigmoidScaled(clampX(a.P_x, state.clamp), state.scaleP);
+    const T = curveT(a.T_S, state.k);
+    const R = curveR(a.daysOld, PROD.RECENCY_DAYS_CONSTANT);
+    const Q = sigmoidScaled(clampX(a.Q_y, state.clamp), state.scaleQ);
+    const score = (w.personalization * P + w.trending * T + w.recency * R + w.quality * Q) / Math.max(0.0001, total);
+    return { ...a, P, T, R, Q, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const body = document.getElementById('feedBody');
+  body.innerHTML = '';
+  items.forEach((a, i) => {
+    const segP = (w.personalization * a.P) / total;
+    const segT = (w.trending * a.T) / total;
+    const segR = (w.recency * a.R) / total;
+    const segQ = (w.quality * a.Q) / total;
+    const totalSeg = segP + segT + segR + segQ;
+    const widths = totalSeg > 0 ? [segP / totalSeg, segT / totalSeg, segR / totalSeg, segQ / totalSeg] : [0, 0, 0, 0];
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML =
+      '<div class="rank">' + (i + 1) + '.</div>' +
+      '<div class="name">' + a.name + ' <span class="mono" style="color:var(--text-muted);font-size:10.5px">· ' + a.cat + '</span></div>' +
+      '<div class="score">' + a.score.toFixed(3) + '</div>' +
+      '<div class="bar-track" style="grid-column: 1 / span 3; margin-top:2px">' +
+        '<div class="bar-seg bar-P" style="width:' + (widths[0] * 100).toFixed(1) + '%"></div>' +
+        '<div class="bar-seg bar-T" style="width:' + (widths[1] * 100).toFixed(1) + '%"></div>' +
+        '<div class="bar-seg bar-R" style="width:' + (widths[2] * 100).toFixed(1) + '%"></div>' +
+        '<div class="bar-seg bar-Q" style="width:' + (widths[3] * 100).toFixed(1) + '%"></div>' +
+      '</div>';
+    body.appendChild(row);
+  });
+}
+</script>
+<script>
+/* ============================================================
+   Wire-up + main update loop
+   ============================================================ */
+function updateAll() {
+  renderMain();
+  renderStepSymmetry();
+  renderSweep();
+  renderDecay();
+  renderFeed();
+}
+
+function setActiveCurve(c) {
+  state.curve = c;
+  // Re-centre marker in the new domain
+  const [xMin, xMax] = curveRange(c);
+  if (state.markerX < xMin || state.markerX > xMax) state.markerX = (xMin + xMax) / 2;
+  // Mark chips active
+  document.querySelectorAll('#curveChips .chip').forEach(chip => {
+    chip.classList.toggle('active', chip.getAttribute('data-curve') === c);
+  });
+  renderCalibration();
+  updateAll();
+}
+
+// Canvas click → move marker
+function attachCanvasClick() {
+  const canvas = document.getElementById('mainCanvas');
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const padL = 36, padR = 12;
+    const [xMin, xMax] = curveRange(state.curve);
+    const xFrac = Math.max(0, Math.min(1, (px - padL) / (rect.width - padL - padR)));
+    state.markerX = xMin + xFrac * (xMax - xMin);
+    // snap to 0.05 grid for nicer numbers
+    state.markerX = Math.round(state.markerX * 20) / 20;
+    updateAll();
+  });
+}
+
+// Weight sliders
+function attachWeightSliders() {
+  const ids = ['wP', 'wT', 'wR', 'wQ'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    const out = document.getElementById(id + 'v');
+    el.addEventListener('input', e => {
+      state.weights[id.slice(1)] = +e.target.value;
+      out.textContent = state.weights[id.slice(1)].toFixed(2);
+      renderFeed();
+    });
+  });
+}
+
+// Decay controls
+function attachDecayControls() {
+  const startX = document.getElementById('startX');
+  const startXv = document.getElementById('startXv');
+  const days = document.getElementById('days');
+  const daysV = document.getElementById('daysV');
+  startX.addEventListener('input', e => { state.startX = +e.target.value || 0; startXv.textContent = state.startX.toFixed(2); renderDecay(); });
+  days.addEventListener('input', e => { state.days = +e.target.value; daysV.textContent = state.days; renderDecay(); });
+}
+
+// Curve chips
+function attachCurveChips() {
+  document.querySelectorAll('#curveChips .chip').forEach(chip => {
+    chip.addEventListener('click', () => setActiveCurve(chip.getAttribute('data-curve')));
+  });
+}
+
+window.addEventListener('load', () => {
+  attachCurveChips();
+  attachCanvasClick();
+  attachWeightSliders();
+  attachDecayControls();
+  setActiveCurve('T');
+});
+window.addEventListener('resize', () => { renderMain(); renderDecay(); });
+</script>
+</body>
+</html>
+

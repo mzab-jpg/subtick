@@ -4,7 +4,7 @@
 // Link/Unlink, Sign Out, Reset Data, Delete Account.
 // ============================================================
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
@@ -36,8 +35,6 @@ import {
   TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
-  TEXT_LG,
-  TEXT_XL,
 } from '../utils/constants';
 import {
   Link,

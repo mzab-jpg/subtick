@@ -14,7 +14,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { UserProfile, ThemeMode, RootStackParamList } from '../types';
@@ -28,7 +27,6 @@ import {
   TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
-  TEXT_LG,
 } from '../utils/constants';
 import {
   BarChart3,

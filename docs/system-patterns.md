@@ -81,45 +81,45 @@ The backend adds `analytics_environment` to every Measurement Protocol event. It
 Source: `getRankedFeed.ts: normalizeP()`
 
 ```typescript
-const MIN_W = 0.1, MAX_W = 5.0, RANGE = 4.9;
-catFraction = (categoryWeight - MIN_W) / RANGE
-pubFraction = (publisherWeight - MIN_W) / RANGE
-P = catFraction × categoryShare + pubFraction × publisherShare
+// Latent scores x stored in Firestore (unbounded, neutral = 0.0).
+// At runtime, sigmoid(x) = 1/(1+e^(-x)) maps to [0,1].
+P = categoryShare × sigmoid(catLatent) + publisherShare × sigmoid(pubLatent)
 ```
 
 For a publisher with **any stored interaction history**, category gets 60% of P and publisher gets 40%.
 
-For a publisher with **no stored publisher weight at all**, the configurable cold-start shares apply: category 90%, publisher 10% by default. The two cold-start shares are normalized to total 1.0 when config is loaded. Presence—not whether the stored publisher weight is positive—is what makes a publisher known. Thus a publisher with a recorded negative weight remains known and receives the normal 60/40 calculation.
+For a publisher with **no stored publisher weight at all**, the configurable cold-start shares apply: category 90%, publisher 10% by default. The unknown publisher latent defaults to 0.0 (neutral, σ(0)=0.50).
 
-| Situation | Publisher history? | catWeight | pubWeight | P |
+| Situation | Publisher history? | catLatent | pubLatent | P (approx) |
 |---|---|---:|---:|---:|
-| New user (neutral) | No | 1.0 | 1.0 | ≈ 0.18 |
-| Likes category | No | 3.0 | 1.0 | ≈ 0.55 |
-| Likes category | Yes | 3.0 | 1.0 | ≈ 0.43 |
-| Loves both | Yes | 4.5 | 3.5 | ≈ 0.82 |
-| Hates category | Yes | 0.1 | 1.0 | ≈ 0.07 |
-| Maximum | Yes | 5.0 | 5.0 | 1.00 |
+| New user (neutral) | No | 0.0 | 0.0 | 0.50 |
+| Likes category | No | 1.0 | 0.0 | 0.66 |
+| Likes category | Yes | 1.0 | 0.0 | 0.60 |
+| Loves both | Yes | 2.2 | 2.2 | 0.90 |
+| Hates category | Yes | -2.2 | 1.0 | 0.43 |
 
-Weights come from the user profile (3D matrix: category × category+length composite × publisher). Neutral = 1.0, max = 5.0, min = 0.1.
-
-**Known caveat (audit Point 1, not yet resolved):** `normalizeP` reads `MIN_W`/`MAX_W`
-hardcoded as 0.1/5.0 inline, duplicating the config's `learning.minWeight`/`maxWeight`.
-Today they agree (both default 0.1/5.0), so nothing is broken — but if you ever tune
-the weight range from the Control Dashboard (which permits changing those dials),
-the scorer would keep normalising against 0.1/5.0 while the true clamps changed,
-silently diluting the effect. Either wire `normalizeP` to read the config'd bounds
-or remove those dashboard dials. Tracked as an open decision.
+Latent scores are unbounded; the old [0.1, 5.0] weight scale has been fully replaced. Neutral = 0.0 (true 50% score). No config-level clamp is duplicated in normalizeP — the sigmoid naturally handles any x value.
 
 ### 2c. T — Trending [0, 1]
 
 Source: `getRankedFeed.ts: normalizeT()`, decay in `cronDecayTrendingScores`
 
 ```typescript
-T = min(trendingScore, MAX_TRENDING_SCORE) / MAX_TRENDING_SCORE
-// MAX_TRENDING_SCORE = 50
+T = S / (S + k)   // S = raw trending score, k = trendingHalfSat (default 25)
 ```
 
-`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days). The decay cron only processes articles with `trendingScore > 1.0` (raised from 0.1 to reduce write costs — C1 fix).
+Half-saturation at k=25 means: a raw score of 25 → T=0.50. At k=25 this calibrates to ~1% of DAU. Saturation is asymptotic — no hard cap, viral runaways flatten naturally.
+
+| Raw score S | T (k=25) |
+|---|---|
+| 0 (new) | 0.00 |
+| 5 | 0.17 |
+| 10 | 0.29 |
+| 25 | 0.50 |
+| 50 | 0.67 |
+| 100 | 0.80 |
+
+`trendingScore` is incremented when users engage with an article. It decays daily at **×0.9057** (halves every 7 days).
 
 Trending increments (`syncBehaviorEvents.ts`):
 | Action | trendingScore increment |
@@ -147,81 +147,69 @@ records created before that change.
 
 Source: `getRankedFeed.ts: normalizeR()`
 
-Two-phase decay:
 ```typescript
-if (daysOld <= 7):
-    R = 1.0 - (daysOld / 7) × 0.2      // 1.0 → 0.8
-else:
-    R = 0.8 × (7 / daysOld)^1.5         // Power-law after day 7
+R = 1 / (1 + daysOld / τ)   // τ = recencyDaysConstant (default 14)
 ```
 
-| Age | R value |
+Single monotone decay — no piecewise curve. At τ=14 days: an article half-loses its recency score every 14 days.
+
+| Age | R value (τ=14) |
 |---|---|
 | 0 days | 1.00 |
-| 3 days | 0.91 |
-| 7 days | 0.80 |
-| 14 days | 0.43 |
-| 28 days | 0.15 |
-| 60 days | 0.04 |
+| 3 days | 0.82 |
+| 7 days | 0.67 |
+| 14 days | 0.50 |
+| 28 days | 0.33 |
+| 60 days | 0.19 |
 
 ### 2e. Q — Publisher Quality [0, 1]
 
 Source: `getRankedFeed.ts: normalizeQ()`
 
 ```typescript
-Q = (publisherQualityScore - 0.2) / 0.8
-// qualityScore clamped to [0.20, 1.00]
+Q = sigmoid(publisherLatent) = 1 / (1 + e^(-y))
+// publisherLatent y stored in publishers/{id}.qualityScore (unbounded)
 ```
 
-| Raw quality | Q |
+Publisher reputation is stored as an unbounded latent y. At runtime, sigmoid maps it to [0,1]. New publishers seed at y=1.386 → Q=0.80 (optimistic). Collective feedback applies tiny quality increments:
+
+| Action | γ (latent change) |
 |---|---|
-| 0.20 (worst) | 0.00 |
-| 0.80 (default new) | 0.75 |
-| 1.00 (best) | 1.00 |
+| Save | +0.010 |
+| Like | +0.005 |
+| Thorough read | +0.005 |
+| Swipe not interested | -0.010 |
+| Quick exit | -0.010 |
 
-Quality increments (`syncBehaviorEvents.ts`):
-```
-save: +0.010 / like: +0.005 / read_thorough: +0.005 / read_skim: +0.001
-swipe_not_interested: -0.010 / quick_exit: -0.005
-```
+This establishes a 2:1 veto ratio — a publisher's reputation rises only when ≥66.7% of readers thoroughly engage. Read-visit deltas are scaled by the Engagement Index; explicit actions are unscaled. Latents are write-time clamped to ±20 (configurable).
 
-Read-visit quality deltas are scaled by the attention factor `A` (flings → 0,
-skims → 0.35×); deliberate actions are unscaled. The clamp noted above is applied
-to **new** publisher writes at creation; an earlier audit found existing-publisher
-writes could drift above 1.0 (e.g. Dan Luu at 1.349 in storage), while ranking
-re-clamps to [0.2, 1.0] on read, so no live ranking impact.
+| Stored latent y | Q |
+|---|---|
+| -2.20 (worst) | 0.10 |
+| -0.69 | 0.33 |
+| 0.00 | 0.50 |
+| 1.386 (default new) | 0.80 |
+| 2.20 (excellent) | 0.90 |
 
-### 2f. Diversity — Publisher Cap and Topic Anti-Fatigue
+### 2f. Diversity — Single-Pass Greedy Selection
 
-Diversity is not a scoring component. A hard per-publisher cap of **5 articles** is enforced during selection in `assembleFeedWithTranches()`. A configurable `maxArticlesPerCategory` limit is also applied during selection. Both limits relax only when the remaining eligible candidate pool cannot otherwise fill the requested feed.
+Diversity is enforced through subtractive penalty steps during sequential greedy selection in `selectFeed()`. No hard per-publisher cap — instead, each prior pick of a category subtracts 0.15 from candidates in that category, and each prior pick of a publisher subtracts 0.25 from candidates from that publisher. A configurable `maxArticlesPerCategory` hard cap remains as a safety net. Discovery slots (every 5th card, positions 4/9/14/19/24/29) zero out personalization entirely for that pick. Stochastic jitter (±0.03) keeps the feed organic. A `minDistinctCategories` fixup replaces the weakest overrepresented-category article with the strongest missing-category candidate when eligible alternatives exist.
 
-After normal selection, the backend attempts to meet configurable `minDistinctCategories`: it replaces the weakest removable article from an overrepresented category with the strongest unseen candidate from a missing category, provided that candidate respects the publisher cap. The reserved startup anchor is never replaced. After selection, the feed is randomized/category-interleaved so it will not place a third consecutive card from the same category if another category remains. The reserved highest-scoring article is moved to position 0. Finally, a publisher-spacing pass keeps every later publisher at least three cards away from its prior appearance whenever another publisher remains; it relaxes only when every remaining card would repeat a recent publisher. Reader preserves this final backend order. These safeguards change display order only: scoring formulas, tranches, membership, and publisher-cap rules remain intact.
+### 2g. Scoring Formula (Single Formula)
 
-### 2g. Scoring Formulas by Tranche
-
-**High & Mid tranches (personalized):**
 ```
 fullScore = 0.60×P + 0.15×T + 0.10×R + 0.15×Q
 ```
 
-**Tail tranche (trending + recency only):**
-```
-tailScore = 0.43×T + 0.57×R
-```
+One formula is used for both selection and ordering. No separate tail formula exists in v2. Weights are in `firebase/functions/src/constants.ts` (`SCORE_WEIGHTS`). Sum = 1.0. Output: [0, 1].
 
-Weights in `firebase/functions/src/constants.ts` (`SCORE_WEIGHTS` / `SCORE_WEIGHTS_TAIL`). Sum = 1.0. Output: [0, 1].
+### 2h. Feed Assembly (Single-Pass Selector)
 
-### 2h. Tranche Assembly
-
-Articles are scored with the 4-component `fullScore` and then bucketed:
-
-| Tranche | fullScore threshold | Target | Selection |
-|---|---|---|---|
-| High | > 0.40 | 12 | Random selection after any global startup anchor is reserved, max 5 per publisher |
-| Mid | > 0.20 | 8 | Random selection after any global startup anchor is reserved, max 5 per publisher |
-| Tail | ≤ 0.20 | 10 | Sorted by tailScore (T+R) after any global startup anchor is reserved, max 5 per publisher; randomized for users with <30 reads |
-
-Overflow cascades down. The highest eligible article, whether it falls in High, Mid, or Tail, is reserved in its normal tranche allocation and returned at position 0 for the Dashboard hero. The other selected cards retain their randomized/category-varied order after the final three-card publisher-spacing pass. Bucketing is by the full 4-component score, not P alone.
+1. Sort all candidates by fullScore descending. Lock the highest-scoring article into position 0 (hero anchor).
+2. For positions 1–29, re-score every remaining candidate: `Adjusted = BaseScore − (0.15 × N_cat) − (0.25 × N_pub) + jitter(±0.03)`.
+3. Discovery slots (every 5th card) use only T+R+Q (w_P=0.0).
+4. The candidate with the highest adjusted score wins; N_cat and N_pub increment for future picks.
+5. After selection: category interleave + publisher spacing (3-card gap) as display-order polish.
 
 ### 2i. Deferred Personalization Designs
 
@@ -246,96 +234,66 @@ This uses a composite index (`publishDate` ASC + `peakTrendingScore` ASC) and ne
 
 ## 3. Weight Learning System
 
-### 3a. Feedback Delta Multipliers (Δ)
+### 3a. Feedback Latent Steps (δ)
 
-Source: `firebase/functions/src/constants.ts` (server) and `src/utils/constants.ts` (client — identical values)
-
-```typescript
-save: +0.55 / like: +0.40 / read_thorough: +0.30 / read_skim: +0.10
-read_shallow: 0.00 / swipe_next: 0.00
-quick_exit: 0.00 / swipe_not_interested: -0.40
-```
-
-**Attention factor (Engagement-Credit Model):** read-session deltas (`read_thorough`,
-`read_skim`, `read_shallow`, `swipe_next`) are multiplied by an Attention Factor `A`
-computed from the visit's implied reading speed (consumed words ÷ active minutes).
-Deliberate tap-actions (save/like/unlike/unsave/not-interested) ship unscaled at
-full strength — intent is not pace-measured.
-
-| Implied speed | A | Meaning |
-|---|---|---|
-| ≤ `MAX_PLAUSIBLE_WPM` (600) | 1.00 | genuine reading — full credit |
-| 600 – `FLING_WPM` (1750) | 0.35 | skimmed through — partial trust |
-| > `FLING_WPM` (1750) | 0 | fling — algorithmically inert |
-
-Visits without a usable word count (raw-webpage archived mode) default to `A = 1`;
-this is a documented, accepted edge. The two thresholds are wide-moat absolute
-constants — measurement noise (~±2×) is tiny compared to the gaps between reading,
-skimming, and scrolling, so sessions cannot accidentally cross a band.
-
-### 3b. Dimension-Specific Learning Rates
+Source: `firebase/functions/src/constants.ts`
 
 ```typescript
-categoryL  = 0.08  // LEARNING_RATE × 1.0
-lengthL    = 0.12  // LEARNING_RATE × 1.5
-publisherL = 0.16  // LEARNING_RATE × 2.0
+// Latent steps applied directly to user preference latent x.
+// Read-session steps are scaled by the Engagement Index E; explicit actions unscaled.
+// Quick-exit uses asymmetric rejection: -2.5 × read_thorough.
+save: +0.55 / unsave: -0.55
+like: +0.40 / unlike: -0.40
+read_thorough: +0.275 / read_skim: +0.10 / read_shallow: +0.10
+swipe_next: 0.00
+quick_exit: -0.6875 / swipe_not_interested: -0.6875
 ```
 
-Each event updates three dimensions: `category += Δ × 0.08`, `length += Δ × 0.12`, `publisher += Δ × 0.16`.
+**Pivot velocity (N=8):** 8 consecutive thorough reads (E=1.0) move a user from neutral (x=0, P=0.50) to enthusiastic (x=2.20, P≈0.90). δ_cat = 2.20/8 = 0.275.
+
+### 3b. Engagement-Index Scaling
+
+Read-session deltas are multiplied by the continuous Engagement Index `E = scrollDepth × pacePenalty`, where pacePenalty is derived from the user's session WPM divided by their personal `averageWpm`:
+
+| Relative speed R_s | Pace Penalty |
+|---|---|
+| ≤1.25× personal average | 1.00 |
+| =2.0× personal average | 0.50 |
+| ≥3.0× personal average | 0.00 |
+
+Deliberate tap-actions (save/like/unlike/unsave/not-interested) ship unscaled.
 
 ### 3c. Watermark-Based Event Processing
 
-`updateWeights()` uses `weightUpdatedAt` to process only new events, with no replay. Preference aging uses its separate `weightsDecayedAt` timestamp.
+`updateWeights()` uses `weightUpdatedAt` to process only new events. Latent drift uses a separate `weightsDecayedAt` timestamp.
 
-### 3d. Clamping
+### 3d. Latent Clamping
 
-`weight = max(0.1, min(5.0, weight))`
+`x = clampLatent(x, cfg)` — clamped to ±`latent.clamp` (default 20) at write time.
 
-### 3e. Time-Accurate Daily Decay
+### 3e. Nightly Latent Drift
 
-`decayedWeight = 1.0 + (weight - 1.0) × dailyDecayRate^elapsedFullDays` — category, category+length, and publisher weights drift toward neutral (1.0) at the configured daily rate for every full day since the last decay. `weightsDecayedAt` is separate from the event watermark so a long inactive period cannot be mistaken for only one day of decay.
+`x_{t+1} = x_t × λ^elapsedDays` — every full day since last drift pulls latents toward neutral 0.0 at λ=0.]95 (5% per day).
 
-### 3f. Repeated Quick-Exit Evidence
+### 3f. Asymmetric Rejection (thresholded v2)
 
-A single `quick_exit` remains neutral for personal preference learning. The backend stores recent distinct quick-exit article IDs by category only. If the number within `learning.repeatedQuickExitLookbackDays` reaches `learning.repeatedQuickExitThreshold`, it applies `feedback.quick_exit × category learning rate` **once** to that top-level category and clears the pending evidence. It never changes publisher or category+length weights. A `read_thorough`, `read_skim`, Like, or Save in that category clears pending evidence before inference.
+A quick exit is certified as a real rejection by **repeated evidence**, not applied per
+tap. Quick exits are counted per axis — category, length-style, and publisher — inside a
+rolling `rejection.windowMs` (24h); one capped penalty (−0.6875) applies when an axis
+crosses its `rejection.*MinQuickExits` (default 2). A positive signal on the same axis
+clears its evidence. This stops accidental taps from suppressing a category at full
+strength. A read_thorough, read_skim, like, or save during the same batch applies its own
+delta normally.
 
 ### 3g. WPM Calibration and Read-Time Estimates
 
-New user profiles begin at `averageWpm = 200`. On every Reader exit with positive
-word count and positive active foreground time, the app uses the live WebView word
-count when available and otherwise the stored article count.
-
-**WPM is independent of read classification** — any visit may recalibrate speed —
-but it is guarded by a **human-plausibility band** so a single bad session can
-never corrupt the yardstick:
-
-- **Only consumed words count:** session words = article word count × furthest
-  scroll depth reached (never the full article length, so a partially-read essay
-  cannot compute a fantasy speed).
-- **Plausibility band:** calibrating sessions must imply 80–600 WPM
-  (`MIN_PLAUSIBLE_WPM` / `MAX_PLAUSIBLE_WPM`). Faster-than-human sessions (skims,
-  flings, abandoned opens — your observed 10,000 WPM case) are excluded from
-  calibration. Accepted sessions are clamped before blending.
-- **Word floor:** a session must consume at least `MIN_WPM_CALIBRATION_WORDS`
-  (150) words — tiny snippets carry no reliable pace signal.
-
-```text
-sessionWpm = consumedWords / (sessionDurationMs / 60,000)   // consumedWords = words × depth
-newAverageWpm = round(oldAverageWpm × 0.80 + sessionWpm × 0.20)   // only if in [80, 600]
-```
-
-Because skims and flings can no longer inflate the baseline, `averageWpm` stays
-near truth — and since it feeds read classification / read-time estimates, the
-ruler cannot be stretched by the very activity it measures. WPM drives the live
-Dashboard and Reader `min read` estimate: `max(1, ceil(wordCount / averageWpm))`.
-Stored article `estimatedReadMinutes` remains a separate ingestion-time generic
-estimate using fixed 250 WPM, primarily retained in saved/history metadata.
+(WPM calibration unchanged from audit)
 
 ### 3h. UI Sync Thresholds
 
-- `weight <= 0.2` → add to `notInterestedCategoryIds`
-- `weight >= 1.5` → add to `selectedCategoryIds`
-- `0.2 < weight < 1.5` (if was notInterested) → remove from `notInterestedCategoryIds`
+- `latent <= -0.85` → add to `notInterestedCategoryIds` (σ ≈ 0.30)
+- `latent >= 0.85` → add to `selectedCategoryIds` (σ ≈ 0.70)
+- Between: remove from arrays if previously flagged
 
 ---
 

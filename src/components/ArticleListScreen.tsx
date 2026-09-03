@@ -15,14 +15,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
-import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { ScreenHeader } from './ScreenHeader';
 import { ScreenEntrance } from './ScreenEntrance';
-import { AlertTriangle } from 'lucide-react-native';
-import { LucideIcon } from 'lucide-react-native';
+import { AlertTriangle, LucideIcon } from 'lucide-react-native';
 import { TEXT_XS, TEXT_SM, TEXT_LG } from '../utils/constants';
 
 interface ArticleMeta {

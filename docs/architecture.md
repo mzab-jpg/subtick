@@ -187,10 +187,10 @@ cronCleanupOldArticles (every 3 days):
 ```
 DashboardScreen → feedService.getRankedFeed(seenIds) — includes client_id from getClientId()
   → Cloud Function: getOrUpdateCandidatePool → filter seen → 4-component scoring (P, T, R, Q)
-  → Tranche assembly: High 12 / Mid 8 / Tail 10; the highest-scoring eligible article is reserved in its own tranche, remaining High/Mid slots are random, and Tail is sorted by tailScore for established users
+  → Single-pass greedy selection with subtractive penalties and discovery slots → category interleave + publisher spacing → hero at position 0
   → Archived Articles off → current-RSS-only candidate pool; on → mixed current/archived pool
   → Backend final safety filter again removes archived items when the setting is off
-  → Hard per-publisher cap of 5 and configurable category maximum applied during picking; overflow cascades
+  → Soft subtractive penalties (0.15 per same-category, 0.25 per same-publisher); maxArticlesPerCategory hard cap as safety net
   → Configurable minimum distinct categories is filled with eligible alternatives when available
   → Category-aware final interleave: avoids a third same-category card when another category remains
   → Highest eligible article is reserved and returned first for the Dashboard hero; a final publisher-spacing pass then keeps each later publisher at least three cards apart whenever another publisher remains
@@ -245,7 +245,7 @@ ReaderScreen → behaviorTracker records foreground-only duration, maximum scrol
       explicit Like/Save/Not Interested actions stay unchanged
       Stores the final event type; trending + peakTrendingScore update in one batch
       Read-session trending/quality/weight deltas are scaled by the attention factor
-      A (≤600→1.0, 601–1750→0.35, >1750→0); deliberate actions unscaled
+      A (≤1.25×→1.0, 2.0×→0.50, ≥3.0×→0.0 (personalized)); deliberate actions unscaled
       Publisher quality aggregated (10-min TTL cache — C5)
       → updateWeights(userId, clientId, cfg) [watermark-based, no replay]
       → repeated quick exits from distinct articles may create one category-only weak signal after live threshold/window; positive category engagement clears pending evidence

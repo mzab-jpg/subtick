@@ -5,18 +5,21 @@
 // --- Type Scale ---
 // Every fontSize in the app must use one of these 6 values.
 // Do not use arbitrary font sizes anywhere.
-export const TEXT_XS   = 11;  // Publisher eyebrow labels (uppercase, tight tracking)
+// Hero article headline
+
+import { CategoryDefinition } from '../types';  export const TEXT_XS   = 11;  // Publisher eyebrow labels (uppercase, tight tracking)
 export const TEXT_SM   = 13;  // Metadata, timestamps, captions, helper text
 export const TEXT_BASE = 16;  // Body, buttons, inputs, category names
 export const TEXT_LG   = 18;  // Screen headers, section titles, article list titles
 export const TEXT_XL   = 24;  // App name / primary screen title
-export const TEXT_2XL  = 28;  // Hero article headline
-
-import { CategoryDefinition } from '../types';
+export const TEXT_2XL  = 28;
 
 // --- Category Definitions (9 categories) ---
-// CONTRACT: this list must stay in sync with DASHBOARD_CATEGORIES in
-// firebase/functions/src/index.ts. Update both together when categories change.
+// CONTRACT: this list must stay in sync with the SERVER's canonical copy in
+// firebase/functions/src/categories.ts (`DASHBOARD_CATEGORIES_ARRAY`).
+// `npm run test:category-contract` fails loudly if they drift. Update BOTH
+// together when categories change. Future: move this list into the server's
+// system/scoringConfig and fetch it, so there is exactly one source.
 export const CATEGORIES: CategoryDefinition[] = [
   {
     id: 'Politics',
@@ -75,9 +78,9 @@ export const CATEGORIES: CategoryDefinition[] = [
 ];
 
 // --- Default Category Weights ---
-export const DEFAULT_SELECTED_WEIGHT = 1.5;
-export const DEFAULT_NOT_INTERESTED_WEIGHT = 0.2;
-export const DEFAULT_NEUTRAL_WEIGHT = 1.0;
+export const DEFAULT_SELECTED_WEIGHT = 0.85;   // latent x → σ ≈ 0.70
+export const DEFAULT_NOT_INTERESTED_WEIGHT = -0.85; // latent x → σ ≈ 0.30
+export const DEFAULT_NEUTRAL_WEIGHT = 0.0;     // latent x → σ = 0.50
 
 // --- Feed Configuration ---
 export const MAX_FEED_ARTICLES = 30;

@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent — Mockup II: The Cybernetic Chronograph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Space Grotesk', sans-serif;
+
+  /* Light: Drafting Vellum & Precision Cobalt */
+  --bg-light: #F2EFE9;
+  --surface-light: #FCFBF8;
+  --surface-accent-light: #E8E3DA;
+  --text-main-light: #11141A;
+  --text-sub-light: #4A505E;
+  --text-dim-light: #848A96;
+  --border-light: #D2CCC0;
+  --accent-primary-light: #0D3BD9;
+  --accent-signal-light: #E64A19;
+  --grid-line-light: rgba(13, 59, 217, 0.05);
+
+  /* Dark: Tactical Obsidian & Phosphor Amber */
+  --bg-dark: #0A0B0E;
+  --surface-dark: #12141A;
+  --surface-accent-dark: #1A1D26;
+  --text-main-dark: #EDF0F5;
+  --text-sub-dark: #9AA0AF;
+  --text-dim-dark: #585F70;
+  --border-dark: #222633;
+  --accent-primary-dark: #FFB300;
+  --accent-signal-dark: #00F0FF;
+  --grid-line-dark: rgba(255, 179, 0, 0.04);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #060709;
+  color: #C0C5D0;
+  font-family: var(--font-sans);
+  padding: 40px 24px;
+}
+
+header.meta-banner {
+  max-width: 1400px;
+  margin: 0 auto 36px;
+  padding: 24px 32px;
+  background: #0E1015;
+  border: 1px solid #1C202B;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.meta-banner h1 {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  letter-spacing: 1px;
+  color: #FFF;
+  margin-bottom: 6px;
+}
+.meta-banner p {
+  color: #7E8698;
+  font-size: 13px;
+  max-width: 760px;
+  line-height: 1.5;
+}
+.badge-capsule {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 8px;
+  background: #171A23;
+  border: 1px solid #2B3244;
+  color: #FFB300;
+  border-radius: 3px;
+  letter-spacing: 1px;
+}
+
+.controls-bar {
+  max-width: 1400px;
+  margin: 0 auto 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.screen-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.screen-tab-btn {
+  background: #10131B;
+  color: #8D95A7;
+  border: 1px solid #222838;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  transition: all 0.2s ease;
+}
+.screen-tab-btn:hover {
+  background: #181D29;
+  color: #FFF;
+}
+.screen-tab-btn.active {
+  background: #FFB300;
+  color: #0A0B0E;
+  border-color: #FFB300;
+  font-weight: 700;
+}
+.mode-toggle-btn {
+  background: #141824;
+  border: 1px solid #2B3246;
+  color: #FFF;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Device Shells */
+.showcase-grid {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 40px;
+  justify-content: center;
+}
+.frame-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.frame-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #6E7586;
+}
+.phone-viewport {
+  width: 380px;
+  height: 760px;
+  border-radius: 36px;
+  border: 10px solid #161922;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.05);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+/* Theme classes */
+.theme-light {
+  --bg: var(--bg-light);
+  --surface: var(--surface-light);
+  --surface-accent: var(--surface-accent-light);
+  --text-main: var(--text-main-light);
+  --text-sub: var(--text-sub-light);
+  --text-dim: var(--text-dim-light);
+  --border: var(--border-light);
+  --accent-primary: var(--accent-primary-light);
+  --accent-signal: var(--accent-signal-light);
+  --grid-line: var(--grid-line-light);
+  background: var(--bg);
+  color: var(--text-main);
+}
+.theme-dark {
+  --bg: var(--bg-dark);
+  --surface: var(--surface-dark);
+  --surface-accent: var(--surface-accent-dark);
+  --text-main: var(--text-main-dark);
+  --text-sub: var(--text-sub-dark);
+  --text-dim: var(--text-dim-dark);
+  --border: var(--border-dark);
+  --accent-primary: var(--accent-primary-dark);
+  --accent-signal: var(--accent-signal-dark);
+  --grid-line: var(--grid-line-dark);
+  background: var(--bg);
+  color: var(--text-main);
+}
+
+.mobile-status-bar {
+  height: 38px;
+  padding: 10px 20px 0;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.mobile-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.mobile-content::-webkit-scrollbar { width: 3px; }
+.mobile-content::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* Instrument Header & Vector Coordinates */
+.instrument-header {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 10px 14px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.brand-callsign {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--text-main);
+}
+.callsign-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--accent-primary);
+}
+.telemetry-vector-readout {
+  display: flex;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.vector-tag {
+  color: var(--text-dim);
+}
+.vector-val {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* 3-Slot Physical Odometer / Metric Tape */
+.telemetry-tape {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.tape-slot {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 10px;
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.tape-slot::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; width: 3px; height: 100%;
+  background: var(--accent-primary);
+}
+.tape-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.tape-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+
+/* Feed Cards: Kinetic Telemetry Strip */
+.queue-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 12px 14px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.queue-card:hover {
+  transform: translateX(2px);
+  border-color: var(--accent-primary);
+}
+.card-slot-idx {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.queue-source {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.queue-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+.queue-telemetry-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dashed var(--border);
+  padding-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-dim);
+}
+.vector-mini-meter {
+  display: flex;
+  gap: 8px;
+}
+.mini-meter-item strong {
+  color: var(--text-main);
+}
+
+/* Discovery Slot 04 / Instrument Anomaly */
+.discovery-card-cyber {
+  border: 1px solid var(--accent-signal);
+  background: var(--surface-accent);
+  padding: 12px 14px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  position: relative;
+}
+.discovery-anomaly-tag {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--accent-signal);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+/* Reader View — Tactical HUD */
+.reader-tactical-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.engagement-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meter-fill-bar {
+  width: 60px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.meter-fill-inner {
+  height: 100%;
+  width: 68%;
+  background: var(--accent-primary);
+}
+.reader-article-cyber {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-main);
+}
+.reader-article-cyber h1 {
+  font-size: 18px;
+  line-height: 1.25;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+.reader-article-cyber p {
+  margin-bottom: 12px;
+}
+
+/* Priming Matrix (Onboarding) */
+.toggle-latent-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.latent-switch {
+  padding: 3px 8px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--accent-primary);
+  color: #000;
+}
+
+/* Odometer Stats View */
+.odometer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.odometer-box {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 14px;
+  border-radius: 4px;
+}
+.odometer-num {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+
+/* Command Pill */
+.command-scrub-bar {
+  margin-top: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.scrub-btn {
+  background: var(--accent-primary);
+  color: #000;
+  font-weight: 700;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+/* Capability Dossier */
+.capability-dossier {
+  max-width: 1400px;
+  margin: 48px auto 0;
+  padding: 28px 32px;
+  background: #0E1016;
+  border: 1px solid #1D222E;
+  border-radius: 8px;
+}
+.capability-dossier h3 {
+  font-family: var(--font-mono);
+  color: #FFB300;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.dossier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  font-size: 13px;
+  color: #8E96A8;
+}
+.dossier-item strong {
+  color: #EDF0F5;
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+</style>
+</head>
+<body>
+
+<header class="meta-banner">
+  <div>
+    <span class="badge-capsule">MOCKUP II · CYBERNETIC CHRONOGRAPH</span>
+    <h1>The Kinetic Latent Telemetry Instrument</h1>
+    <p>Exposing Tangent's algorithmic truth: double-sided sigmoids, real-time relative WPM ratios, 5-card preloading lookaheads, and greedy selection penalties rendered as a precision tactile telemetry deck.</p>
+  </div>
+  <div>
+    <button class="mode-toggle-btn" onclick="toggleAllThemes()">
+      <span id="themeModeIcon">⚡</span> Invert Polarity (Light/Dark)
+    </button>
+  </div>
+</header>
+
+<div class="controls-bar">
+  <div class="screen-tabs">
+    <button class="screen-tab-btn active" onclick="showScreen('dashboard')">1. Queue Tape (Feed)</button>
+    <button class="screen-tab-btn" onclick="showScreen('reader')">2. Telemetry Reader</button>
+    <button class="screen-tab-btn" onclick="showScreen('onboarding')">3. Latent Vector Seeder</button>
+    <button class="screen-tab-btn" onclick="showScreen('stats')">4. Diagnostics & Velocity</button>
+    <button class="screen-tab-btn" onclick="showScreen('library')">5. Storage Registry</button>
+    <button class="screen-tab-btn" onclick="showScreen('settings')">6. Scorer Params</button>
+  </div>
+  <span style="font-family: var(--font-mono); font-size: 11px; color: #585F70;">Vellum Light & Obsidian Dark</span>
+</div>
+
+<main class="showcase-grid">
+
+  <!-- LIGHT VIEWPORT (VELLUM) -->
+  <div class="frame-column">
+    <div class="frame-label">Specimen A: Technical Vellum (Day)</div>
+    <div class="phone-viewport theme-light" id="viewport-light">
+      <div class="mobile-status-bar">
+        <span>09:41:22</span>
+        <span>LATENT·FEED // 30 CARDS</span>
+      </div>
+
+      <!-- DASHBOARD (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-dashboard">
+        <div class="instrument-header">
+          <div>
+            <div class="brand-callsign">TANGENT // CHRONO</div>
+            <div class="callsign-sub">30-CARD RECOM RUNTIME</div>
+          </div>
+          <div class="telemetry-vector-readout">
+            <div><span class="vector-tag">P:</span><span class="vector-val">.91</span></div>
+            <div><span class="vector-tag">T:</span><span class="vector-val">.74</span></div>
+            <div><span class="vector-tag">Q:</span><span class="vector-val">.85</span></div>
+          </div>
+        </div>
+
+        <div class="telemetry-tape">
+          <div class="tape-slot">
+            <div class="tape-label">Streak</div>
+            <div class="tape-value">14d</div>
+          </div>
+          <div class="tape-slot">
+            <div class="tape-label">Baseline</div>
+            <div class="tape-value">245 WPM</div>
+          </div>
+          <div class="tape-slot">
+            <div class="tape-label">Lookahead</div>
+            <div class="tape-value">5 RDY</div>
+          </div>
+        </div>
+
+        <!-- HERO SLOT 00 -->
+        <div class="queue-card">
+          <span class="card-slot-idx">#00 · HERO</span>
+          <div class="queue-source">Astral Codex Ten · Scott Alexander</div>
+          <h2 class="queue-title">Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h2>
+          <div class="queue-telemetry-meta">
+            <div class="vector-mini-meter">
+              <span class="mini-meter-item">FIT: <strong>0.94</strong></span>
+              <span class="mini-meter-item">WORDS: <strong>2,140</strong></span>
+            </div>
+            <span>8 MIN EST</span>
+          </div>
+        </div>
+
+        <!-- SLOT 01 -->
+        <div class="queue-card">
+          <span class="card-slot-idx">#01</span>
+          <div class="queue-source">Stratechery · Ben Thompson</div>
+          <h2 class="queue-title">The AI Integration Question & Value Migration</h2>
+          <div class="queue-telemetry-meta">
+            <div class="vector-mini-meter">
+              <span class="mini-meter-item">FIT: <strong>0.88</strong></span>
+              <span class="mini-meter-item">RECENCY: <strong>1.0</strong></span>
+            </div>
+            <span>6 MIN EST</span>
+          </div>
+        </div>
+
+        <!-- SLOT 04 · DISCOVERY SLOT (ANOMALY w_P = 0.0) -->
+        <div class="discovery-card-cyber">
+          <div class="discovery-anomaly-tag">
+            <span>✦ DISCOVERY SLOT #04 (w_P = 0.0)</span>
+            <span>HEAT: 0.82</span>
+          </div>
+          <h3 class="queue-title" style="margin-bottom: 6px;">The Lost Geometry of Renaissance Stone Masonry</h3>
+          <div class="queue-telemetry-meta" style="border: none; padding: 0;">
+            <span>Antiquities Journal</span>
+            <span style="color: var(--accent-signal); font-weight: 700;">SERENDIPITY PIVOT</span>
+          </div>
+        </div>
+
+        <div class="command-scrub-bar">
+          <span>26 CANDIDATES IN BUFFER</span>
+          <button class="scrub-btn">SHUFFLE ↻</button>
+        </div>
+      </div>
+
+      <!-- READER (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-reader" style="display: none;">
+        <div class="reader-tactical-hud">
+          <button style="background:none;border:none;font-family:var(--font-mono);cursor:pointer;color:var(--text-main)" onclick="showScreen('dashboard')">← QUEUE</button>
+          <div class="engagement-meter">
+            <span>ENGAGEMENT E:</span>
+            <div class="meter-fill-bar"><div class="meter-fill-inner"></div></div>
+            <span style="font-weight: 700;">.68</span>
+          </div>
+          <div style="color: var(--accent-primary); font-weight: 700;">R_s: 1.05</div>
+        </div>
+
+        <article class="reader-article-cyber">
+          <div style="font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); margin-bottom: 6px;">SRC: ASTRAL CODEX TEN // GUID: ACT-2026-0903</div>
+          <h1>Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h1>
+          <p>The assumption behind traditional software valuation was that intellectual property formed an impregnable moat. Once an algorithm or architecture was constructed, the marginal cost of distribution plummeted to zero.</p>
+          <p>Yet as generative synthesis and multi-agent systems mature, we discover something far more disconcerting: code is no longer scarce. Code has become an abundant, depreciating commodity.</p>
+          <p>When generation costs asymptotically approach zero, economic capture shifts entirely to verification, human attentional filters, and curated trust.</p>
+        </article>
+      </div>
+
+      <!-- ONBOARDING (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-onboarding" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">LATENT SEED PROTOCOL</div>
+          <div class="callsign-sub">INITIAL VECTOR COORDINATES</div>
+        </div>
+        <p style="font-size: 11px; margin-bottom: 14px; color: var(--text-sub);">Configure starting weights for personal fit sigmoid P(x) = 1/(1+e^-x):</p>
+        
+        <div class="toggle-latent-cell">
+          <span>Technology & Architectures</span>
+          <span class="latent-switch">+0.44 [HIGH]</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Philosophy & Epistemics</span>
+          <span class="latent-switch">+0.44 [HIGH]</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Economics & Markets</span>
+          <span style="font-size: 9px; color: var(--text-dim);">0.00 [NEUTRAL]</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span style="text-decoration: line-through; opacity: 0.5;">Politics & Partisanship</span>
+          <span style="font-size: 9px; color: var(--accent-signal); font-weight: 700;">-0.68 [SUPPRESSED]</span>
+        </div>
+        
+        <button class="scrub-btn" style="width: 100%; margin-top: auto; padding: 10px;" onclick="showScreen('dashboard')">INITIALIZE FEED ENGINE →</button>
+      </div>
+
+      <!-- STATS (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-stats" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">TELEMETRY DIAGNOSTICS</div>
+          <div class="callsign-sub">BEHAVIORAL RUNTIME MATRIX</div>
+        </div>
+        <div class="odometer-grid">
+          <div class="odometer-box">
+            <div class="tape-label">Streak Days</div>
+            <div class="odometer-num">14</div>
+          </div>
+          <div class="odometer-box">
+            <div class="tape-label">Mean WPM</div>
+            <div class="odometer-num">245</div>
+          </div>
+          <div class="odometer-box">
+            <div class="tape-label">Total Read Ms</div>
+            <div class="odometer-num">18.4h</div>
+          </div>
+          <div class="odometer-box">
+            <div class="tape-label">Thorough Ratio</div>
+            <div class="odometer-num">88%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIBRARY (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-library" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">OFFLINE BYTE REGISTRY</div>
+          <div class="callsign-sub">LOCAL SECURESTORE/FS PAYLOADS</div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-source">OFFLINE CACHED · 240 KB</div>
+          <div class="queue-title">The Economics of Scarcity in Artificial Minds</div>
+          <div class="queue-telemetry-meta">
+            <span>Stratechery</span>
+            <span>SANITIZED HTML OK</span>
+          </div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-source">OFFLINE CACHED · 310 KB</div>
+          <div class="queue-title">Notes on the Architecture of Cathedrals</div>
+          <div class="queue-telemetry-meta">
+            <span>The Honest Broker</span>
+            <span>SANITIZED HTML OK</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-settings" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">SYSTEM / SCORING CONFIG</div>
+          <div class="callsign-sub">TTL: 60 SECONDS</div>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Auth Profile UID</span>
+          <span style="font-size: 9px; color: var(--accent-primary);">morde-auth-791a</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Formula Weight w_P</span>
+          <span>0.60 (Personal Fit)</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Formula Weight w_T</span>
+          <span>0.15 (Trending)</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Preloader Lookahead</span>
+          <span>5 Cards (Android Kotlin)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DARK VIEWPORT (OBSIDIAN) -->
+  <div class="frame-column">
+    <div class="frame-label">Specimen B: Tactical Obsidian (Night)</div>
+    <div class="phone-viewport theme-dark" id="viewport-dark">
+      <div class="mobile-status-bar">
+        <span>09:41:22</span>
+        <span>LATENT·FEED // 30 CARDS</span>
+      </div>
+
+      <!-- DASHBOARD (DARK) -->
+      <div class="mobile-content screen-view" id="dark-dashboard">
+        <div class="instrument-header">
+          <div>
+            <div class="brand-callsign">TANGENT // CHRONO</div>
+            <div class="callsign-sub">30-CARD RECOM RUNTIME</div>
+          </div>
+          <div class="telemetry-vector-readout">
+            <div><span class="vector-tag">P:</span><span class="vector-val">.91</span></div>
+            <div><span class="vector-tag">T:</span><span class="vector-val">.74</span></div>
+            <div><span class="vector-tag">Q:</span><span class="vector-val">.85</span></div>
+          </div>
+        </div>
+
+        <div class="telemetry-tape">
+          <div class="tape-slot">
+            <div class="tape-label">Streak</div>
+            <div class="tape-value">14d</div>
+          </div>
+          <div class="tape-slot">
+            <div class="tape-label">Baseline</div>
+            <div class="tape-value">245 WPM</div>
+          </div>
+          <div class="tape-slot">
+            <div class="tape-label">Lookahead</div>
+            <div class="tape-value">5 RDY</div>
+          </div>
+        </div>
+
+        <div class="queue-card">
+          <span class="card-slot-idx">#00 · HERO</span>
+          <div class="queue-source">Astral Codex Ten · Scott Alexander</div>
+          <h2 class="queue-title">Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h2>
+          <div class="queue-telemetry-meta">
+            <div class="vector-mini-meter">
+              <span class="mini-meter-item">FIT: <strong>0.94</strong></span>
+              <span class="mini-meter-item">WORDS: <strong>2,140</strong></span>
+            </div>
+            <span>8 MIN EST</span>
+          </div>
+        </div>
+
+        <div class="queue-card">
+          <span class="card-slot-idx">#01</span>
+          <div class="queue-source">Stratechery · Ben Thompson</div>
+          <h2 class="queue-title">The AI Integration Question & Value Migration</h2>
+          <div class="queue-telemetry-meta">
+            <div class="vector-mini-meter">
+              <span class="mini-meter-item">FIT: <strong>0.88</strong></span>
+              <span class="mini-meter-item">RECENCY: <strong>1.0</strong></span>
+            </div>
+            <span>6 MIN EST</span>
+          </div>
+        </div>
+
+        <div class="discovery-card-cyber">
+          <div class="discovery-anomaly-tag">
+            <span>✦ DISCOVERY SLOT #04 (w_P = 0.0)</span>
+            <span>HEAT: 0.82</span>
+          </div>
+          <h3 class="queue-title" style="margin-bottom: 6px;">The Lost Geometry of Renaissance Stone Masonry</h3>
+          <div class="queue-telemetry-meta" style="border: none; padding: 0;">
+            <span>Antiquities Journal</span>
+            <span style="color: var(--accent-signal); font-weight: 700;">SERENDIPITY PIVOT</span>
+          </div>
+        </div>
+
+        <div class="command-scrub-bar">
+          <span>26 CANDIDATES IN BUFFER</span>
+          <button class="scrub-btn">SHUFFLE ↻</button>
+        </div>
+      </div>
+
+      <!-- READER (DARK) -->
+      <div class="mobile-content screen-view" id="dark-reader" style="display: none;">
+        <div class="reader-tactical-hud">
+          <button style="background:none;border:none;font-family:var(--font-mono);cursor:pointer;color:var(--text-main)" onclick="showScreen('dashboard')">← QUEUE</button>
+          <div class="engagement-meter">
+            <span>ENGAGEMENT E:</span>
+            <div class="meter-fill-bar"><div class="meter-fill-inner"></div></div>
+            <span style="font-weight: 700;">.68</span>
+          </div>
+          <div style="color: var(--accent-primary); font-weight: 700;">R_s: 1.05</div>
+        </div>
+
+        <article class="reader-article-cyber">
+          <div style="font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); margin-bottom: 6px;">SRC: ASTRAL CODEX TEN // GUID: ACT-2026-0903</div>
+          <h1>Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h1>
+          <p>The assumption behind traditional software valuation was that intellectual property formed an impregnable moat. Once an algorithm or architecture was constructed, the marginal cost of distribution plummeted to zero.</p>
+          <p>Yet as generative synthesis and multi-agent systems mature, we discover something far more disconcerting: code is no longer scarce. Code has become an abundant, depreciating commodity.</p>
+          <p>When generation costs asymptotically approach zero, economic capture shifts entirely to verification, human attentional filters, and curated trust.</p>
+        </article>
+      </div>
+
+      <!-- ONBOARDING (DARK) -->
+      <div class="mobile-content screen-view" id="dark-onboarding" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">LATENT SEED PROTOCOL</div>
+          <div class="callsign-sub">INITIAL VECTOR COORDINATES</div>
+        </div>
+        <p style="font-size: 11px; margin-bottom: 14px; color: var(--text-sub);">Configure starting weights for personal fit sigmoid P(x) = 1/(1+e^-x):</p>
+        
+        <div class="toggle-latent-cell">
+          <span>Technology & Architectures</span>
+          <span class="latent-switch">+0.44 [HIGH]</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Philosophy & Epistemics</span>
+          <span class="latent-switch">+0.44 [HIGH]</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Economics & Markets</span>
+          <span style="font-size: 9px; color: var(--text-dim);">0.00 [NEUTRAL]</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span style="text-decoration: line-through; opacity: 0.5;">Politics & Partisanship</span>
+          <span style="font-size: 9px; color: var(--accent-signal); font-weight: 700;">-0.68 [SUPPRESSED]</span>
+        </div>
+        
+        <button class="scrub-btn" style="width: 100%; margin-top: auto; padding: 10px;" onclick="showScreen('dashboard')">INITIALIZE FEED ENGINE →</button>
+      </div>
+
+      <!-- STATS (DARK) -->
+      <div class="mobile-content screen-view" id="dark-stats" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">TELEMETRY DIAGNOSTICS</div>
+          <div class="callsign-sub">BEHAVIORAL RUNTIME MATRIX</div>
+        </div>
+        <div class="odometer-grid">
+          <div class="odometer-box">
+            <div class="tape-label">Streak Days</div>
+            <div class="odometer-num">14</div>
+          </div>
+          <div class="odometer-box">
+            <div class="tape-label">Mean WPM</div>
+            <div class="odometer-num">245</div>
+          </div>
+          <div class="odometer-box">
+            <div class="tape-label">Total Read Ms</div>
+            <div class="odometer-num">18.4h</div>
+          </div>
+          <div class="odometer-box">
+            <div class="tape-label">Thorough Ratio</div>
+            <div class="odometer-num">88%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIBRARY (DARK) -->
+      <div class="mobile-content screen-view" id="dark-library" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">OFFLINE BYTE REGISTRY</div>
+          <div class="callsign-sub">LOCAL SECURESTORE/FS PAYLOADS</div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-source">OFFLINE CACHED · 240 KB</div>
+          <div class="queue-title">The Economics of Scarcity in Artificial Minds</div>
+          <div class="queue-telemetry-meta">
+            <span>Stratechery</span>
+            <span>SANITIZED HTML OK</span>
+          </div>
+        </div>
+        <div class="queue-card">
+          <div class="queue-source">OFFLINE CACHED · 310 KB</div>
+          <div class="queue-title">Notes on the Architecture of Cathedrals</div>
+          <div class="queue-telemetry-meta">
+            <span>The Honest Broker</span>
+            <span>SANITIZED HTML OK</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS (DARK) -->
+      <div class="mobile-content screen-view" id="dark-settings" style="display: none;">
+        <div class="instrument-header">
+          <div class="brand-callsign">SYSTEM / SCORING CONFIG</div>
+          <div class="callsign-sub">TTL: 60 SECONDS</div>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Auth Profile UID</span>
+          <span style="font-size: 9px; color: var(--accent-primary);">morde-auth-791a</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Formula Weight w_P</span>
+          <span>0.60 (Personal Fit)</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Formula Weight w_T</span>
+          <span>0.15 (Trending)</span>
+        </div>
+        <div class="toggle-latent-cell">
+          <span>Preloader Lookahead</span>
+          <span>5 Cards (Android Kotlin)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<section class="capability-dossier">
+  <h3>System Specification Alignment · The Cybernetic Chronograph</h3>
+  <div class="dossier-grid">
+    <div class="dossier-item">
+      <strong>1. Real-Time Relative Speed Ratio ($R_s$)</strong>
+      The HUD actively measures $R_s = \text{Session WPM} / \text{averageWpm}$. When $R_s \le 1.25$, pace penalty is 1.0 (full credit). When scrolling at fling speeds ($R_s \ge 3.0$), the meter drops to 0.0, neutralizing telemetry.
+    </div>
+    <div class="dossier-item">
+      <strong>2. Continuous Engagement Scalar ($E$)</strong>
+      Eliminating brittle discrete geometry labels in favor of $E = \text{Scroll Depth} \times \text{Pace Penalty}$. Displayed cleanly on top of the reader HUD as a high-precision decimal.
+    </div>
+    <div class="dossier-item">
+      <strong>3. Single-Pass MMR Additive Penalties</strong>
+      The 30-card queue cards display their dynamic fit score and slot indexes directly, making the anti-clustering penalties ($P_{cat}=0.15, P_{pub}=0.25$) transparent to power readers.
+    </div>
+    <div class="dossier-item">
+      <strong>4. Cold-Start Exploration Blend</strong>
+      The seeder sets latent values directly to $x = 0.0$ for neutral, $x = 2.20$ for high interest, eliminating legacy 18% compression bugs.
+    </div>
+  </div>
+</section>
+
+<script>
+function showScreen(screenId) {
+  document.querySelectorAll('.screen-tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  
+  document.querySelectorAll('.screen-view').forEach(view => view.style.display = 'none');
+  
+  const lightTarget = document.getElementById(`light-${screenId}`);
+  const darkTarget = document.getElementById(`dark-${screenId}`);
+  if (lightTarget) lightTarget.style.display = 'flex';
+  if (darkTarget) darkTarget.style.display = 'flex';
+}
+
+function toggleAllThemes() {
+  const vLight = document.getElementById('viewport-light');
+  const vDark = document.getElementById('viewport-dark');
+  const isCurrentlyLight = vLight.classList.contains('theme-light');
+  
+  if (isCurrentlyLight) {
+    vLight.classList.replace('theme-light', 'theme-dark');
+    vDark.classList.replace('theme-dark', 'theme-light');
+  } else {
+    vLight.classList.replace('theme-dark', 'theme-light');
+    vDark.classList.replace('theme-light', 'theme-dark');
+  }
+}
+</script>
+</body>
+</html>

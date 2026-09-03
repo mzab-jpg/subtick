@@ -1,0 +1,53 @@
+run-001 — spawn-ori-eval tracker
+Repo: c:\2SubTick (Tangent / 2SubTick — Expo SDK 57, Firebase v2, deterministic ranking, no LLM in product runtime)
+Operator: coding agent invoking the spawn-ori-eval skill
+Started: 2026-09-01
+
+Step 5  [x] Run lookup or install for the `ori` binary
+            → Not on PATH. Downloaded `ori-windows-x64.exe` from the GitHub release
+              (OpenRouterLabs/ori-releases/latest) directly. Bash installer needs WSL.
+            → Landed at: C:\Users\morde\.local\bin\ori.exe (100.4 MB)
+            → Version: 0.12.1+e1631f8 (well above the 0.3.0 minimum the skill requires)
+Step 6  [x] If still missing, run `~/.local/bin/ori` fallback  → not needed; binary works
+Step 7  [x] Run `ori auth` and branch on exit status / message
+            → User pasted key via Option A. `ori login --with-key` succeeded.
+              Signed in as user_3GSXYKJkLYPzvw4BVjtGhr4SHSR.
+              Credentials at C:\Users\morde\.ori\credentials.json.
+            → Re-ran `ori auth` → { ok: true, authenticated: true, source: "global" }
+Step 8  [x] Check for `bun`; stop if missing
+            → bun 1.4.0 found at C:\Users\morde\AppData\Roaming\npm\bun.ps1
+Step 9  [x] Read the eval surface (`ori --help`, `ori eval --help`); continue even if commands error
+            → Done. `ori eval` accepts a target file or directory, has --hermetic, --pilot,
+              --baseline {last|best|model:<slug>}, --require-login, --report <path>.
+              Credentials resolve in this order: OPENROUTER_API_KEY → stored `ori login`
+              credential → workspace-local or global → project dotenv.
+Step 10 [x] Tell the user where the binary landed
+            → C:\Users\morde\.local\bin\ori.exe (105344000 bytes, version 0.12.1+e1631f8).
+              Also written: ori.exe.version pointer file alongside it.
+              PATH for this session includes ~/.local/bin.
+Step 11 [x] Tell the user what the run will do (from step 9)
+            → Run an LLM agent on this repo (2SubTick/Tangent), with a prompt written at
+              step 14, against the pinned RUN_MODEL = openai/gpt-5.6-terra. The agent will
+              explore the repo, ask 1+ clarifying questions, write a *.eval.ts file that
+              exercises the repo, and run it through `bun test` against 5 candidate models
+              via OpenRouter. JUDGE_MODEL = openai/gpt-5.6-terra will grade the results.
+              Output: a scored table (model | catch | p50 | $/PR | result) and a per-run
+              cost summary.
+Step 12 [x] Inform the user the run takes 10–30 min and can spend more than one credit
+Step 13 [x] Inform the user they get a scored table; a question can restart the run
+Step 14 [ ] Write the task prompt file (appendix C)
+            → NEXT: need user's input on what the eval should grade. Stopping here.
+Step 15 [ ] Start one run from repo root, capture answer + error files (appendix D)
+Step 16 [ ] Wait for run to exit, read the answer file (appendix E)
+Step 17 [ ] Show user Ori's narration lines in plain language
+Step 18 [ ] If a tagged question is present, continue to step 19; else proceed to step 20
+Step 19 [ ] Print Ori's full context for the first question in an ordinary message
+Step 20 [ ] Update steps.txt between the context message and the question
+Step 21 [ ] Relay the first question to the user; record a contract violation if a second appears
+Step 22 [ ] Wait for the user's answer; restart from the prompt file with the next attempt number
+Step 23 [ ] On final completion, build a cost-and-timing table from each answer file's summary line
+Step 24 [ ] Print the cost/timing table and a one-line total summary
+
+Pins (do not change without rewriting this file):
+  RUN_MODEL   = openai/gpt-5.6-terra
+  JUDGE_MODEL = openai/gpt-5.6-terra

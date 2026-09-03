@@ -21,10 +21,8 @@ import { auth, db } from '../services/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import {
   DASHBOARD_METRIC_DEFS,
-  TEXT_XS,
   TEXT_SM,
   TEXT_BASE,
-  TEXT_LG,
 } from '../utils/constants';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScreenEntrance } from '../components/ScreenEntrance';

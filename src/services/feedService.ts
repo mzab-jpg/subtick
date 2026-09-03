@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // SubTick — Feed Service (barrel)
 // The feed domain is split into single-purpose modules under
 // ./feed/. This file re-exports the full surface so existing

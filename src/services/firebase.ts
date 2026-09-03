@@ -3,9 +3,8 @@
 // ============================================================
 
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { initializeAuth, getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
 // @ts-ignore — getReactNativePersistence exists at runtime in Firebase v12, TS types lag
-import { getReactNativePersistence } from 'firebase/auth';
+import { initializeAuth, getAuth, connectAuthEmulator, Auth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator, Functions } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -78,7 +77,7 @@ if (USE_EMULATORS) {
   connectFunctionsEmulator(functions, FIREBASE_EMULATOR_CONFIG.functions.host, FIREBASE_EMULATOR_CONFIG.functions.port);
   console.log('[SubTick] ✅ Firebase Emulators connected');
 } else {
-  console.log('[SubTick] ☁️ Using production Firebase (project: subtick-bbd55)');
+  if (__DEV__) console.log('[SubTick] ☁️ Using production Firebase (project: subtick-bbd55)');
 }
 
 // --- Analytics Client ID (GA4 Measurement Protocol, web stream) ---

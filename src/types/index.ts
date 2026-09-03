@@ -9,9 +9,9 @@ export interface UserProfile {
   isActive?: boolean; // Default true; soft-delete flag for admin safety
   selectedCategoryIds: string[];
   notInterestedCategoryIds: string[];
-  categoryWeights: Record<string, number>;
-  categoryLengthWeights?: Record<string, number>;
-  publisherWeights?: Record<string, number>;
+  categoryWeights: Record<string, number>;      // latent x per category (0 = neutral)
+  lengthWeights?: Record<string, number>;       // global short/medium/long latent
+  publisherWeights?: Record<string, number>;    // latent x per publisher
   themePreference: 'system' | 'light' | 'dark';
   linkedGoogleAccount: boolean;
   userEmail?: string; // Email from linked Google account
@@ -25,8 +25,7 @@ export interface UserProfile {
   includeArchivedArticles?: boolean; // Whether user opts-in to reading raw Substack URIs for old articles
   totalReadTimeMs?: number; // total active reading time in ms
   weightUpdatedAt?: number; // Watermark: timestamp of the last event processed by updateWeights
-  weightsDecayedAt?: number; // Timestamp of the last time preference decay was applied
-  quickExitCategorySignals?: Record<string, Record<string, number>>; // server-owned category -> distinct article IDs -> quick-exit timestamps
+  weightsDecayedAt?: number; // Timestamp of the last time latent drift was applied
   lastUpdated: number;
 }
 

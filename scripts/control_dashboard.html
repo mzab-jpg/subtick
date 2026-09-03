@@ -409,6 +409,9 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
         <b>Config not loaded yet.</b><br>
         Click <b>Load current config</b> to fetch the exact values the algorithm is using right now.
       </div>
+      <div class="hint" id="sectionLegend" style="display:none">
+        🎚️ <b>Reading the dials:</b> rows tinted <span style="color:#818cf8;font-weight:700">indigo</span> differ from the default — deeper tint = bigger change (the badge shows the % difference). <b>↺</b> resets one dial. <span style="color:var(--error);font-weight:700">Red</span> = value out of range. Hover any <b>?</b> for a plain-English explanation.
+      </div>
       <div id="configSections" style="display:none"></div>
     </div>
   </main>
@@ -425,81 +428,132 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     const TIPS = {
   dashboard: {
     // ---- scoring (final-score components P/T/R/Q + tail + ceiling) ----
-    'scoring.personalization':  "Strength of the personalization factor (P) in the final article score. Raising it makes the feed track the user's category/publisher tastes more aggressively; too high risks an echo chamber. Range 0-1.5; default 0.60.",
-    'scoring.trending':         "Strength of the trending factor (T). Higher values surface content many people are engaging with right now — adds serendipity/viral lift off a user's usual path. Range 0-1.5; default 0.15.",
-    'scoring.recency':          "Strength of the recency factor (R). Pushes newer articles up the feed to keep it fresh. Range 0-1.5; default 0.10.",
-    'scoring.quality':          "Strength of the publisher-quality factor (Q). Rewards articles from publishers with strong historical engagement. Range 0-1.5; default 0.15.",
-    'scoring.tailTrending':     "Trending weight for tail-tranche articles only — how much trending lifts the backfill/discovery tier. Default 0.43.",
-    'scoring.tailRecency':      "Recency weight for tail-tranche articles only. Default 0.57.",
-    'scoring.maxTrendingScore': "The trending-score value at which factor T normalises to 1.0. Articles at/above it get full T credit; below it, T scales up linearly from 0. Default 50.",
-    'scoring.publisherColdStartCategoryWeight': "For a publisher with no prior user interaction, the category share of personalization. The two cold-start shares are automatically normalized to total 100%. Default 0.90.",
-    'scoring.publisherColdStartPublisherWeight': "For a publisher with no prior user interaction, the publisher share of personalization. The two cold-start shares are automatically normalized to total 100%. Default 0.10.",
+    'scoring.personalization': "How much of each article's score comes from THIS user's own taste — the categories and publishers they have read, liked and saved. Raise it and the feed follows personal history harder; lower it and the feed leans on trending, freshness and publisher quality instead. Very high values risk an 'echo chamber' where nothing outside the user's usual interests ever surfaces. The four dials below are compared against each other — the defaults (0.60/0.15/0.10/0.15) sum to 1.0 and the dashboard warns when the sum drifts. Values above 1.0 deliberately let one factor dominate. Range 0-1.5, step 0.01. Default 0.60.",
+    'scoring.trending': "How much of each article's score comes from how popular it is with ALL readers right now. Raising it surfaces viral content even when it does not match the user's usual tastes — good for discovery. Lowering it makes the feed care less about what is trendy. Default 0.15 keeps trending as gentle seasoning rather than the main course.",
+    'scoring.recency': "How much of each article's score comes from simply being NEW. Raise it to prioritise fresh posts and push older ones down; lower it so evergreen essays stay competitive with this week's news. Default 0.10 — freshness matters, but a great week-old essay should still beat a mediocre hour-old one.",
+    'scoring.quality': "How much of each article's score comes from the PUBLISHER's earned reputation. Publishers build quality when readers engage (reads, saves, likes) and lose it when readers bail (quick exits, not-interested). Raise it to favour proven sources; lower it to give smaller and newer writers a fairer shot. Default 0.15.",
+    'scoring.publisherColdStartCategoryWeight': "When a publisher is brand-new (no reader history yet) the system cannot judge the source itself, so it falls back on the article's CATEGORY plus a neutral guess. This dial sets how much of that fallback comes from the category. The two cold-start dials are automatically normalised to 100%, so 0.90 here means the category gets 90% of the vote. Default 0.90 — for an unknown source, what the article is about matters far more than who wrote it.",
+    'scoring.publisherColdStartPublisherWeight': "The other half of the cold-start fallback: how much the (still unknown) publisher itself counts. Automatically normalised with the category dial above to total 100%. Default 0.10.",
 
     // ---- feedback (per-action learning delta) ----
-    'feedback.save':              "Weight change when a user saves an article. Larger = saves teach the model faster. Default +0.55.",
-    'feedback.unsave':            "Weight change when a user unsaves. Default -0.55 (symmetric to save).",
-    'feedback.like':              "Weight change per like. Default +0.40.",
-    'feedback.unlike':            "Weight change per unlike. Default -0.40.",
-    'feedback.read_thorough':     "Weight change when the app reports a thorough read. Default +0.30.",
-    'feedback.read_skim':         "Weight change for a skim read. Default +0.10.",
-    'feedback.read_shallow':      "Weight change for a shallow read (almost none). Default 0.00.",
-    'feedback.swipe_next':        "Weight change for swiping past without opening (neutral). Default 0.00.",
-    'feedback.quick_exit':        "Category-only weight change applied once after the configured repeated-quick-exit threshold is reached. A single quick exit remains neutral; publisher/length weights are never changed. Default 0.00.",
-        'feedback.swipe_not_interested': "Weight change when a user actively flags 'not interested'. Default -0.40.",
+    // Scale: these points are added to (or removed from) preference scores.
+    // 0 is neutral; the strength curve turns them into feed influence.
+    'feedback.save': "Points added to the category's and publisher's preference when someone SAVES an article. Saving is a strong, deliberate signal — the user explicitly wants to come back to this. Raise it to make saves teach faster; keep the unsave below symmetric so undoing cancels cleanly. Default +0.55.",
+    'feedback.unsave': "Points removed when someone un-saves — the mirror of save, so an undo cancels the original save exactly. Default -0.55.",
+    'feedback.like': "Points added per LIKE. A lighter positive signal than saving — it is quick to tap, so it earns less. Default +0.40.",
+    'feedback.unlike': "Points removed when a like is taken back. Default -0.40.",
+    'feedback.read_thorough': "Points added when someone reads 70%+ of an article (see Read Classification). This is the workhorse signal — the main way a category earns trust, one genuine read at a time. Default +0.275.",
+    'feedback.read_skim': "Legacy label kept so old stored data still applies. The current classifier only produces thorough / shallow / quick-exit, so this rarely fires on new sessions. Default +0.10.",
+    'feedback.read_shallow': "Points added for a partial read (40-70% of the page). Still positive — they chose to open it — but weaker than a thorough read. Shallow reads also count toward weekly-read totals and streaks. Default +0.10.",
+    'feedback.swipe_next': "Points for swiping past WITHOUT opening. Deliberately zero: skipping without looking is not evidence of dislike — users skip good articles all the time. Make it negative only if you want every skip to actively suppress a category. Default 0.00.",
+    'feedback.quick_exit': "RETIRED — the v2 rejection system does NOT read this value. Quick exits are handled by the Quick-Exit Rejection section instead: counted per axis and capped. Kept only so old stored configs still load.",
+    'feedback.swipe_not_interested': "Points removed when someone swipes 'not interested'. This is a deliberate, strong rejection — 2.5x a thorough read, applied immediately (unlike quick exits, which need repeated evidence first). Default -0.6875.",
 
     // ---- learning ----
-    'learning.baseRate':            "Core learning rate — how fast weights move per feedback event. Smaller = slower/smoother, resilient to noise; larger = faster adaptation but more volatile. Range 0-1; default 0.05.",
-    'learning.categoryMultiplier':  "Multiplier on the learning rate for category weights vs the base. Default 1.0 (same rate as everywhere).",
-    'learning.lengthMultiplier':    "Multiplier for length-style weights (short/medium/long). Default 1.5 (~50% faster learning).",
-    'learning.publisherMultiplier': "Multiplier for publisher-quality learning. Default 2.0 (fastest-adapting signal).",
-    'learning.minWeight':           "Floor for a category/publisher weight — keeps the model from fully 'zeroing out' a category. Default 0.5.",
-    'learning.maxWeight':           "Ceiling for weights — prevents one category from dominating. Default 2.0.",
-    'learning.dailyDecayRate':      "Daily multiplicative decay pulling weights toward 1.0 (e.g. 0.98). Too low = rapid forgetting; too high = stale preferences. Range 0.5-1; default 0.98.",
-    'learning.defaultSelectedWeight':      "Starting weight for a brand-new selected category (new-user onboarding). Default 1.5.",
-    'learning.defaultNotInterestedWeight': "Starting weight for a 'not interested' category. Default 0.5.",
-    'learning.defaultNeutralWeight':       "Starting weight for categories with no signal yet (neutral). Default 1.0.",
-    'learning.repeatedQuickExitThreshold': "Distinct quick exits from one category needed before weak category-only evidence is applied once. A single quick exit remains neutral. Default 3.",
-    'learning.repeatedQuickExitLookbackDays': "How many recent days count toward the repeated quick-exit threshold. Default 14 days.",
 
     // ---- trending ----
-    'trending.decayRate':  "Daily decay applied to article trending scores (e.g. 0.95 -> -5%/day). Keeps trending content fresh. Default 0.95.",
-    'trending.save':       "Trending-score bump when an article is saved. Range -10..10; default +3.0.",
-    'trending.unsave':     "Trending-score drop when unsaved. Default -3.0.",
-    'trending.like':       "Trending bump per like. Default +2.0.",
-    'trending.unlike':     "Trending drop per unlike. Default -2.0.",
-    'trending.read_thorough': "Trending bump for a thorough read. Default +1.5.",
-    'trending.read_skim':     "Trending bump for a skim. Default +0.5.",
-    'trending.read_shallow':  "Trending bump for a shallow read (kept slightly positive). Default +0.2.",
+    // Trending is the crowd signal: a score per article that rises as readers engage.
+    'trending.decayRate': "Each day, every article's trending score is multiplied by this. 0.95 means yesterday's buzz fades about 5% per day, so a viral hit is basically forgotten within two weeks. Lower = faster cooling (only today's hits matter); higher = longer memory. Default 0.95.",
+    'trending.save': "Trending bump when an article is saved. Saves are rare and deliberate, so they earn the biggest bump. Default +3.0.",
+    'trending.unsave': "Trending drop when a save is undone. Default -3.0.",
+    'trending.like': "Trending bump per like. Likes are cheap to give, so each one moves trending less than a save. Default +2.0.",
+    'trending.unlike': "Trending drop when a like is removed. Default -2.0.",
+    'trending.read_thorough': "Trending bump for a full read. The most common signal, so it is modest per event — it adds up across many readers. Default +1.5.",
+    'trending.read_skim': "Legacy label — the current classifier no longer produces skims. Default +0.5.",
+    'trending.read_shallow': "Trending bump for a partial read, kept slightly positive so opening an article still helps it a little. Default +0.2.",
 
     // ---- quality ----
-    'quality.save':              "Publisher quality change per save. Default +0.010.",
-    'quality.unsave':            "Publisher quality change per unsave. Default -0.010.",
-    'quality.like':              "Publisher quality change per like. Default +0.005.",
-    'quality.unlike':            "Publisher quality change per unlike. Default -0.005.",
-    'quality.read_thorough':     "Publisher quality change per thorough read. Default +0.005.",
-    'quality.read_skim':         "Publisher quality change per skim. Default +0.001.",
-    'quality.swipe_not_interested': "Publisher quality change per 'not interested'. Default -0.010.",
-    'quality.quick_exit':        "Publisher quality change per quick exit. Default -0.005.",
+    // Publisher reputation: starts at latent.publisherSeed and moves in small
+    // steps as readers react. Feeds the Q factor of the final score.
+    'quality.save': "Quality gain for the publisher when one of their articles is saved. The numbers are small on purpose — reputation should be earned across many articles, not made by a single hit. Default +0.010.",
+    'quality.unsave': "Quality loss when a save is undone. Default -0.010.",
+    'quality.like': "Quality gain per like. Default +0.005.",
+    'quality.unlike': "Quality loss per unlike. Default -0.005.",
+    'quality.read_thorough': "Quality gain per thorough read — the steadiest way a publisher builds reputation over time. Default +0.005.",
+    'quality.read_skim': "Legacy label — the current classifier no longer produces skims. Default +0.001.",
+    'quality.swipe_not_interested': "Quality loss when a reader swipes 'not interested' on this publisher — an active rejection of the source. Default -0.010.",
+    'quality.quick_exit': "Quality loss per quick exit. Kept small on purpose: one bounced reader should not sink a publisher, and repeated failures are handled at the preference level by the thresholded rejection system. Default -0.005.",
 
     // ---- tranche ----
-    'tranche.highThreshold':    "Final-score cutoff for the High tranche (top tier). Articles scoring >= this are 'High'. Range 0-1; default 0.40.",
-    'tranche.midThreshold':     "Final-score cutoff for the Mid tranche. Between midThreshold and highThreshold = Mid; below = Tail. Default 0.20.",
-    'tranche.highSize':         "Max articles pulled into the High tranche from candidates. Default 12.",
-    'tranche.midSize':          "Max articles for the Mid tranche. Default 8.",
-    'tranche.tailSize':         "Max articles for the Tail tranche (long-tail discovery). Default 10.",
-    'tranche.publisherCap':     "Hard cap on how many articles from one publisher can appear in a single 30-article feed. Prevents dominance. Range 1-30; default 5.",
-    'tranche.newUserThreshold': "A user is treated as 'new user' until they have this many total reads — they then get the new-user (more exploratory) feed mix. Default 30.",
-            'tranche.feedSize':         "Total articles returned per feed request. Default 30.",
-    'tranche.maxArticlesPerCategory': "Maximum cards from one category in a feed when eligible alternatives exist. Relaxed only to avoid underfilling a scarce/skewed pool. Default 15.",
-    'tranche.minDistinctCategories': "Desired number of different categories in a feed when eligible alternatives exist. Default 4.",
 
     // ---- classification ----
-    'classification.quickExitDepth':     "Articles scrolled LESS than this fraction are classified as 'quick_exit' when their session time is also below the quick-exit timeout. The backend applies this rule to every raw reading session. Default 0.2.",
-    'classification.quickExitTimeoutSec': "If session time is below this and scroll < quickExitDepth, the read is classified as 'quick_exit'. Default 15s.",
-    'classification.thoroughDepth':      "Scroll fraction at/above which a read can qualify as 'thorough'. Default 0.70.",
-    'classification.thoroughTimeFraction': "Session time (as a fraction of expected read time for the article's length) needed to call a read 'thorough'. Default 0.60.",
-    'classification.shallowDepth':       "Articles scrolled between shallowDepth and thoroughDepth, or not meeting thorough criteria, are 'shallow'. Default 0.40.",
-    'classification.flingWpm':           "Implied reading speed (words actually consumed ÷ active time) above this is a fling — the visit carries NO engagement signal. Speeds between 600 WPM and this value count as skims. Keep far from 600 so measurement noise cannot flip bands. Default 1750.",
+    'classification.quickExitDepth': "If the reader scrolls less than this fraction of the article AND leaves within the timeout below, the session is a quick exit. Both conditions must be true — quickly finishing a short article you fully scrolled is NOT a quick exit. Default 0.20 (20% of the page).",
+    'classification.quickExitTimeoutSec': "The time half of the quick-exit test: leaving within this many seconds, combined with the shallow scroll above, marks the session as a quick exit. Default 15 seconds.",
+    'classification.thoroughDepth': "Scroll past this fraction of the article and the read can qualify as THOROUGH — the strongest positive signal reading can give. Default 0.70.",
+    'classification.shallowDepth': "Between this fraction and thoroughDepth a read is SHALLOW: real but partial. Below it (with the timeout) the session becomes a quick exit instead. Default 0.40.",
+
+    // ---- latent (preference latents — growth, retention floor, UI thresholds) ----
+    'latent.clamp':             "Write-time clamp applied to every preference latent (category/publisher/length). ±clamp is the hard outer bound; in practice sigmoid saturation flattens scores well before it binds. Default 20.",
+    'latent.nightlyDecay':      "Nightly drift factor: each full day with no activity multiplies every latent by this toward the drift floor. Lower = faster forgetting; 0.95 is steep so active users re-earn control fast. Default 0.95.",
+    'latent.driftFloor':        "Each preference is a single number per user: 0 = neutral, positive = likes it, negative = dislikes it. When a user is away, every night all their scores shrink a little toward zero. This floor is the never-below mark, measured in those same points — NOT percent. Think of it like a battery that drains while unused but stops at this level: 0.5 pts leaves a returning user at roughly 62% strength instead of a blank 50/50; 1.0 is stronger (about 73%); 0 lets preferences fade completely to neutral. Default 0.5.",
+    'latent.selectedLatent':    "Keeps the app's visible lists in sync with what is learned. If a category the user never picked keeps getting read and liked, its score climbs; the moment it passes this mark (0.85 pts = about 70% strength), the app automatically adds it to their Selected categories list — as if they had ticked it during onboarding. If behaviour cools and the score falls back into the neutral band, the category is quietly removed from the list again. Default 0.85.",
+    'latent.notInterestedLatent': "The mirror of the auto-select rule: if a category keeps getting quick-exited or swiped away and its score sinks below this mark (-0.85 pts = about 30% strength), the app automatically moves it to the Not-interested list and stops showing it. If the user starts engaging again and the score climbs back into the neutral band, it is removed from that list. Default -0.85.",
+    'latent.neutralLatent':     "Every brand-new preference (a category or publisher we have no history for yet) starts at this value. 0 = complete neutrality, the 50/50 point on the strength curve. There is rarely a reason to change it. Default 0.0.",
+    'paywallKeywords':          "Phrases that flag an article as paywalled so it is never stored or shown to users. Matched case-insensitively against the title, description, and body at ingestion time. One phrase per line; edits apply from the next ingestion run. Default: 24 common Substack paywall phrases.",
+    'scoring.trendingHalfSat': "How large the crowd's trending score must be before an article is considered genuinely trending (it reaches half strength here). LOWER makes trending easier to earn; HIGHER reserves trending for true viral hits. Default 25.",
+    'scoring.recencyDaysConstant': "How fresh an article must be to score well on freshness: after this many days, its freshness score halves. LOWER prioritizes brand-new posts; HIGHER keeps older essays competitive. Default 14.",
+    'latent.publisherSeed': "The reputation every NEW publisher starts with (0.5 would be neutral; 1.386 gives new sources a fair, optimistic start so they can compete with established ones). Default 1.386.",
+    // ---- sigmoid (preference strength curve shape) ----
+    'sigmoid.steepness': "This shapes exactly TWO conversions: how a user's preference points become feed strength, AND how publisher quality becomes its 0-1 score. It does NOT touch trending or freshness — those have their own dials (Trending half-saturation, Freshness half-life, in Score Weights). HIGHER = pickier: small taste changes swing the feed a lot. LOWER = gentler shifts. NOTE: changing it re-interprets ALL existing user history at once. Default 1.0 (the classic S-curve).",
+
+    // ---- learning (axis sensitivities) ----
+    'learning.categorySensitivity': "Master volume for CATEGORY learning. 1.0 = normal speed, 0.5 = every category signal counts half, 0 = categories never change from behaviour. Useful for A/B tests or if categories seem to overreact to a few sessions. Default 1.0.",
+    'learning.lengthSensitivity': "The same dial for LENGTH preferences (short / medium / long). Default 1.0.",
+    'learning.publisherSensitivity': "The same dial for PUBLISHER preferences. Default 1.0.",
+    'learning.positiveSensitivity': "Multiplier applied to all POSITIVE signals (reads, saves, likes). Lower = it is harder to earn a category's trust; higher = taste bonds faster. Default 1.0.",
+    'learning.rejectionSensitivity': "Multiplier applied to all NEGATIVE signals (quick-exit penalties, not-interested swipes). Lower = gentler rejections; higher = harsher. Default 1.0.",
+
+    // ---- rejection (thresholded quick-exit, v2) ----
+    'rejection.categoryMinQuickExits': "How many quick exits in the SAME category must be counted inside the window before one capped penalty applies. A single accidental tap does nothing. Default 2.",
+    'rejection.lengthMinQuickExits': "Same threshold, for the length axis (short/medium/long). Default 2.",
+    'rejection.publisherMinQuickExits': "Same threshold, for the publisher axis. Default 2.",
+    'rejection.windowMs': "Rolling window (in DAYS) within which quick exits are counted per axis. After the window lapses, evidence restarts. Default 1 day.",
+    'rejection.maxCategoryPenalty': "The single capped penalty applied ONCE when an axis reaches its quick-exit threshold. Keeps a bad day from stacking many penalties. Default 0.6875 (−2.5× a thorough read, but gated behind repeated evidence).",
+
+    // ---- engagement (attention factor / Engagement Index) ----
+    // Each user has a personal average reading pace. The session speed RATIO
+    // to that personal pace decides how much the read counts.
+    'engagement.fullRatio': "If the reader's speed is at or below this multiple of their own average pace, the read earns FULL credit. 1.25 means 'up to 25% faster than your norm is still genuine reading'. Default 1.25.",
+    'engagement.skimRatio': "At this speed ratio credit has dropped to the skim amount. Between fullRatio and skimRatio the credit slides smoothly from full to skim. Default 2.0 (twice their normal speed).",
+    'engagement.flingRatio': "At or above this ratio the session is a 'fling' — a blast through the page that contributes ZERO to learning. Reading at triple your normal speed is not reading. Default 3.0.",
+    'engagement.skimPenalty': "The credit multiplier applied at the skim ratio (interpolated between the full and fling ratios). 0.50 = a skim counts for half. Default 0.50.",
+    'engagement.flingPenalty': "The credit multiplier at or above the fling ratio. 0.0 = flings teach the model nothing. Default 0.0.",
+
+    // ---- selection (greedy feed assembly) ----
+    'selection.feedSize': "How many articles the personalised feed returns per request. Default 30.",
+    'selection.categoryPenaltyStep': "Each time the picker takes an article from a category it has already used, that category's remaining articles are docked by this much. Higher = more variety within one feed; lower = more of whatever scored best. Default 0.15.",
+    'selection.publisherPenaltyStep': "Same idea, per publisher. Set higher than the category step because repeats from one source are more noticeable than repeats from one topic. Default 0.25.",
+    'selection.discoverySlotInterval': "Roughly every Nth card becomes a 'discovery slot' that ignores personal taste entirely and picks on trending / freshness / quality alone — this is how genuinely new things break in. The exact position is randomised within each block so users cannot learn the pattern. Default 5.",
+    'selection.jitterRange': "A small random nudge added to each article's score during picking, so equal-quality articles do not always appear in the same order and feeds feel organic. Default 0.03.",
+    'selection.maxArticlesPerCategory': "Hard cap: no category may exceed this many cards in one feed no matter how well it scores. Safety net against one dominant category taking over. Default 15.",
+    'selection.minDistinctCategories': "The picker aims for at least this many different categories per feed, backfilling from the best alternative when one runs dry. Default 4.",
+
+    // ---- wpm (reading-speed plausibility bands) ----
+    'wpm.minPlausible':           "The slowest reading speed we consider real (words per minute). Sessions slower than this look like a parked app: they neither recalibrate the user\'s reading pace nor earn full attention credit. Lower only if very slow readers seem unfairly excluded. Default 80.",
+    'wpm.maxPlausible':           "The fastest speed we consider actual reading. Faster sessions are skimming: reduced attention credit, and they cannot recalibrate the user\'s reading pace. Also the fallback pace baseline for users we do not know yet. Default 600.",
+    'wpm.minCalibrationWords':   "Minimum words a person must actually consume before we trust the session\'s speed enough to update their personal reading pace. Raise for stricter evidence, lower to calibrate sooner but noisier. Default 150.",
+    // ---- pool (candidate pool construction) ----
+    'pool.boxQueryLimit':         "How many articles each of the four random-sampling queries may fetch when rebuilding the candidate shortlist (4 boxes, so worst case is 4x this many reads every 6 hours). More = bigger, more varied pool but higher read cost. Default 500.",
+    'pool.fallbackFreshCutoffDays': "If the stored pool is missing, the emergency fallback splits articles into NEWER-than-this and older halves. Default 28.",
+    'pool.fallbackQueryCap':     "Safety cap on how many articles each fallback half may query. Default 2000.",
+    'pool.minArticleWords':      "Articles shorter than this are excluded from the candidate pool (empty feeds, stubs, link-only posts). Default 150.",
+    // ---- ingestion (RSS + sync throughput) ----
+    'ingestion.feedChunkSize':   "How many feeds are fetched in parallel during each ingestion run. Higher = faster runs but more simultaneous connections, which some publishers rate-limit. Default 5.",
+    'ingestion.parseTimeoutSec': "Seconds to wait for a publisher\'s RSS feed to respond before giving up on that feed. One slow feed never blocks the others. Default 15.",
+    'ingestion.ogTimeoutSec':    "Seconds to wait when scraping an article\'s webpage for missing artwork or description. Default 6.",
+    'ingestion.maxEventsPerSync': "Maximum behaviour events accepted in one sync call. Protects against abuse and Firestore batch limits. Default 100.",
+    // ---- maintenance (housekeeping) ----
+    'maintenance.cleanupMinAgeDays': "Cleanup never touches articles younger than this. Protects fresh content from premature deletion. Default 90.",
+    'maintenance.cleanupSampleSize': "Each cleanup run samples this many of the oldest, least-popular articles and deletes the worst slice. Fixed cost regardless of database size. Default 500.",
+    'maintenance.cleanupDeleteFraction': "The share of sampled old articles that gets deleted (0.03 = worst 3 percent). Raise to clean more aggressively. Default 0.03.",
+    'maintenance.stickerExpiryDays': "Articles newer than this many days count as fresh for pool sampling. Default 28.",
+    'maintenance.stickerFlipCap': "Maximum freshness stickers flipped off per daily run (write-budget guard). Default 2000.",
+    'maintenance.trendingDecayMinScore': "Daily decay skips articles whose trending score is already below this, because decaying them changes nothing. Raise to save writes. Default 1.0.",
+    'maintenance.seenTrimOver': "When a user\'s seen-history grows past this many articles, it is trimmed. Default 5000.",
+    'maintenance.seenTrimKeep': "When trimming, keep this many of the newest seen articles. Default 4000.",
+    'maintenance.deleteBatchSize': "Batch size for account reset/delete and cron deletions. Firestore caps batches at 500 operations: do not raise above that. Default 400.",
+
+    // paywallKeywords is edited as a list (one phrase per line) in its own section.
   },
 };
 
@@ -560,7 +614,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     return secret;
   }
 
-  let state = { config: null, defaults: null, stored: null, source: null, updatedAt: null, updatedBy: null, dirty: false };
+  let state = { config: null, defaults: null, ranges: null, stored: null, source: null, updatedAt: null, updatedBy: null, dirty: false };
 
   // ------------------------------------------------------------------
   // Rendering metadata (label, min, max, step), shared action labels.
@@ -578,63 +632,140 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     'scoring.trending': ['Trending (T)', 0, 1.5, 0.01],
     'scoring.recency': ['Recency (R)', 0, 1.5, 0.01],
     'scoring.quality': ['Quality (Q)', 0, 1.5, 0.01],
-    'scoring.tailTrending': ['Tail: Trending (T)', 0, 1.5, 0.01],
-    'scoring.tailRecency': ['Tail: Recency (R)', 0, 1.5, 0.01],
-    'scoring.maxTrendingScore': ['Max trending score (T = 1.0 at)', 1, 200, 1],
     'scoring.publisherColdStartCategoryWeight': ['Unknown-publisher category share', 0, 1, 0.01],
     'scoring.publisherColdStartPublisherWeight': ['Unknown-publisher publisher share', 0, 1, 0.01],
-    'learning.baseRate': ['Base learning rate', 0, 1, 0.005],
-    'learning.categoryMultiplier': ['Category multiplier (× base)', 0, 5, 0.1],
-    'learning.lengthMultiplier': ['Length multiplier (× base)', 0, 5, 0.1],
-    'learning.publisherMultiplier': ['Publisher multiplier (× base)', 0, 5, 0.1],
-    'learning.minWeight': ['Minimum weight', 0.01, 1, 0.01],
-    'learning.maxWeight': ['Maximum weight', 1, 10, 0.1],
-    'learning.dailyDecayRate': ['Daily decay rate (pulls towards 1.0)', 0.5, 1, 0.001],
-    'learning.defaultSelectedWeight': ['Default selected-category weight', 1, 5, 0.1],
-    'learning.defaultNotInterestedWeight': ['Default not-interested weight', 0.01, 1, 0.01],
-    'learning.defaultNeutralWeight': ['Default neutral weight', 0.5, 2, 0.05],
-    'learning.repeatedQuickExitThreshold': ['Repeated quick-exit threshold', 1, 20, 1],
-    'learning.repeatedQuickExitLookbackDays': ['Quick-exit lookback (days)', 1, 90, 1],
-    'tranche.highThreshold': ['High tranche threshold', 0, 1, 0.01],
-    'tranche.midThreshold': ['Mid tranche threshold', 0, 1, 0.01],
-    'tranche.highSize': ['High tranche size (articles)', 1, 50, 1],
-    'tranche.midSize': ['Mid tranche size (articles)', 1, 50, 1],
-    'tranche.tailSize': ['Tail tranche size (articles)', 1, 50, 1],
-    'tranche.publisherCap': ['Max articles per publisher', 1, 30, 1],
-    'tranche.newUserThreshold': ['New-user threshold (total reads)', 0, 500, 1],
-    'tranche.feedSize': ['Feed size (articles)', 1, 100, 1],
-    'tranche.maxArticlesPerCategory': ['Maximum articles per category', 1, 100, 1],
-    'tranche.minDistinctCategories': ['Minimum distinct categories', 1, 20, 1],
     'classification.quickExitDepth': ['Quick-exit scroll depth (below)', 0, 1, 0.01],
     'classification.quickExitTimeoutSec': ['Quick-exit timeout (seconds, below)', 1, 120, 1],
     'classification.thoroughDepth': ['Thorough scroll depth (above)', 0, 1, 0.01],
-    'classification.thoroughTimeFraction': ['Thorough time — fraction of expected', 0.1, 2, 0.01],
     'classification.shallowDepth': ['Shallow scroll depth (above)', 0, 1, 0.01],
-    'classification.flingWpm': ['Fling speed threshold (WPM above)', 600, 50000, 50],
     'trending.decayRate': ['Trending decay rate (daily ×)', 0.5, 1, 0.001],
+    // ---- latent (preference latents) ----
+    'latent.clamp': ['Latent clamp (±)', 5, 50, 1],
+    'latent.nightlyDecay': ['Nightly decay rate (daily ×)', 0.5, 1, 0.001],
+    'latent.driftFloor': ['Retention floor (preference points)', 0, 3, 0.01],
+    'latent.selectedLatent': ['Auto-add to Selected above (+)', 0, 3, 0.01],
+    'latent.notInterestedLatent': ['Auto-add to Not-interested below (-)', -3, 0, 0.01],
+    'latent.neutralLatent': ['New preference starting value', -3, 3, 0.01],
+    // ---- rejection (thresholded quick-exit, v2) ----
+    'rejection.categoryMinQuickExits': ['Category quick-exits to count', 1, 20, 1],
+    'rejection.lengthMinQuickExits': ['Length quick-exits to count', 1, 20, 1],
+    'rejection.publisherMinQuickExits': ['Publisher quick-exits to count', 1, 20, 1],
+    'rejection.windowMs': ['Quick-exit counting window (days)', 1, 7, 1],
+    'rejection.maxCategoryPenalty': ['Single capped rejection penalty', 0.1, 2, 0.01],
+    // ---- engagement (attention factor / Engagement Index) ----
+    'engagement.fullRatio': ['Full-credit speed ratio', 0.5, 3, 0.01],
+    'engagement.skimRatio': ['Skim speed ratio', 1, 5, 0.01],
+    'engagement.flingRatio': ['Fling speed ratio', 1, 8, 0.01],
+    'engagement.skimPenalty': ['Skim credit multiplier', 0, 1, 0.01],
+    'engagement.flingPenalty': ['Fling credit multiplier', 0, 1, 0.01],
+    // ---- selection (greedy feed assembly) ----
+    'selection.feedSize': ['Feed size (articles)', 1, 100, 1],
+    'selection.categoryPenaltyStep': ['Category penalty per prior pick', 0, 0.5, 0.01],
+    'selection.publisherPenaltyStep': ['Publisher penalty per prior pick', 0, 0.5, 0.01],
+    'selection.discoverySlotInterval': ['Discovery slot interval (cards)', 1, 20, 1],
+    'selection.jitterRange': ['Selection jitter (±)', 0, 0.1, 0.01],
+    'selection.maxArticlesPerCategory': ['Max articles per category', 1, 100, 1],
+    'selection.minDistinctCategories': ['Min distinct categories', 1, 20, 1],
+    // ---- wpm (reading-speed plausibility bands) ----
+    'wpm.minPlausible': ['Min plausible WPM', 20, 300, 1],
+    'wpm.maxPlausible': ['Max plausible WPM', 200, 1500, 10],
+    'wpm.minCalibrationWords': ['Min words to calibrate WPM', 0, 1000, 10],
+    'scoring.trendingHalfSat': ['Trending half-saturation score', 1, 200, 1],
+    'scoring.recencyDaysConstant': ['Recency half-life (days)', 1, 90, 1],
+    'feedback.save': ['Save weight delta', -1, 1, 0.05],
+    'feedback.unsave': ['Unsave weight delta', -1, 1, 0.05],
+    'feedback.like': ['Like weight delta', -1, 1, 0.05],
+    'feedback.unlike': ['Unlike weight delta', -1, 1, 0.05],
+    'feedback.read_thorough': ['Thorough-read weight delta', -1, 1, 0.025],
+    'feedback.read_skim': ['Skim weight delta (legacy)', -1, 1, 0.05],
+    'feedback.read_shallow': ['Shallow-read weight delta', -1, 1, 0.05],
+    'feedback.swipe_next': ['Swipe-next weight delta', -1, 1, 0.05],
+    'feedback.quick_exit': ['Quick-exit weight delta (legacy)', -1, 1, 0.05],
+    'feedback.swipe_not_interested': ['Not-interested weight delta', -1, 1, 0.05],
+    'trending.save': ['Save trending increment', -10, 10, 0.5],
+    'trending.unsave': ['Unsave trending increment', -10, 10, 0.5],
+    'trending.like': ['Like trending increment', -10, 10, 0.5],
+    'trending.unlike': ['Unlike trending increment', -10, 10, 0.5],
+    'trending.read_thorough': ['Thorough-read trending increment', -10, 10, 0.1],
+    'trending.read_skim': ['Skim trending increment (legacy)', -10, 10, 0.1],
+    'trending.read_shallow': ['Shallow-read trending increment', -10, 10, 0.1],
+    'quality.save': ['Save publisher-quality increment', -0.2, 0.2, 0.005],
+    'quality.unsave': ['Unsave publisher-quality increment', -0.2, 0.2, 0.005],
+    'quality.like': ['Like publisher-quality increment', -0.2, 0.2, 0.005],
+    'quality.unlike': ['Unlike publisher-quality increment', -0.2, 0.2, 0.005],
+    'quality.read_thorough': ['Thorough-read publisher-quality increment', -0.2, 0.2, 0.005],
+    'quality.read_skim': ['Skim publisher-quality increment (legacy)', -0.2, 0.2, 0.005],
+    'quality.swipe_not_interested': ['Not-interested publisher-quality increment', -0.2, 0.2, 0.005],
+    'quality.quick_exit': ['Quick-exit publisher-quality increment', -0.2, 0.2, 0.005],
+    'latent.publisherSeed': ['Publisher seed latent', -3, 3, 0.01],
+    // ---- sigmoid (preference strength curve shape) ----
+    'sigmoid.steepness': ['Curve steepness', 0.25, 4, 0.05],
+    // ---- learning (axis sensitivities) ----
+    'learning.categorySensitivity': ['Category learning sensitivity', 0, 2, 0.05],
+    'learning.lengthSensitivity': ['Length learning sensitivity', 0, 2, 0.05],
+    'learning.publisherSensitivity': ['Publisher learning sensitivity', 0, 2, 0.05],
+    'learning.positiveSensitivity': ['Positive signal sensitivity', 0, 2, 0.05],
+    'learning.rejectionSensitivity': ['Rejection signal sensitivity', 0, 2, 0.05],
+    // ---- pool (candidate pool construction) ----
+    'pool.boxQueryLimit': ['Pool box query limit', 50, 1000, 50],
+    'pool.fallbackFreshCutoffDays': ['Fallback fresh cutoff (days)', 7, 90, 1],
+    'pool.fallbackQueryCap': ['Fallback query cap', 100, 5000, 100],
+    'pool.minArticleWords': ['Min article words (pool filter)', 0, 1000, 10],
+    // ---- ingestion (RSS + sync throughput) ----
+    'ingestion.feedChunkSize': ['Feed fetch chunk size', 1, 20, 1],
+    'ingestion.parseTimeoutSec': ['RSS parse timeout (sec)', 5, 60, 1],
+    'ingestion.ogTimeoutSec': ['OG scrape timeout (sec)', 2, 30, 1],
+    'ingestion.maxEventsPerSync': ['Max events per sync call', 20, 500, 10],
+    // ---- maintenance (housekeeping) ----
+    'maintenance.cleanupMinAgeDays': ['Cleanup min article age (days)', 30, 365, 1],
+    'maintenance.cleanupSampleSize': ['Cleanup sample size', 100, 2000, 50],
+    'maintenance.cleanupDeleteFraction': ['Cleanup delete fraction', 0, 0.2, 0.01],
+    'maintenance.stickerExpiryDays': ['Freshness sticker expiry (days)', 7, 90, 1],
+    'maintenance.stickerFlipCap': ['Sticker flips per day (cap)', 100, 10000, 100],
+    'maintenance.trendingDecayMinScore': ['Decay min trending score', 0, 10, 0.1],
+    'maintenance.seenTrimOver': ['Seen list trim trigger', 1000, 20000, 100],
+    'maintenance.seenTrimKeep': ['Seen list keep count', 500, 15000, 100],
+    'maintenance.deleteBatchSize': ['Delete batch size', 100, 500, 10],
   };
 
   const GROUP_DEFAULTS = {
     scoring: [0, 1.5, 0.01],
     feedback: [-1, 1, 0.05],
-    learning: [0, 5, 0.1],
     trending: [-10, 10, 0.1],
     quality: [-0.2, 0.2, 0.001],
-    tranche: [1, 50, 1],
     classification: [0, 1, 0.01],
+    latent: [0, 3, 0.01],
+    sigmoid: [0.25, 4, 0.05],
+    learning: [0, 2, 0.05],
+    rejection: [1, 20, 1],
+    engagement: [0, 3, 0.01],
+    selection: [0, 0.5, 0.01],
+    wpm: [0, 1000, 1],
+    pool: [1, 2000, 1],
+    ingestion: [1, 500, 1],
+    maintenance: [0, 5000, 0.01],
   };
 
   const GROUP_TITLES = {
     scoring: ['Score Weights', 'How much each factor contributes to the personalised feed score.'],
     feedback: ['Feedback Deltas', 'How strongly each action moves the learning weights.'],
-    learning: ['Learning & Weights', 'Learning speed, weight bounds, and daily decay.'],
     trending: ['Trending (T)', 'Article trending-score increments per action, plus daily decay.'],
     quality: ['Publisher Quality (Q)', 'How each action moves a publisher\u2019s quality score.'],
-    tranche: ['Tranche Assembly', 'High/Mid/Tail thresholds, sizes, publisher cap, feed size, new-user behaviour.'],
     classification: ['Read Classification', '\u201cWhat counts as a skim vs thorough read.\u201d The backend classifies every raw session from scroll, time, rendered words, and the user\'s stored WPM.'],
+    latent: ['Latent Learning', 'Preference latents — how strong they grow, the retention floor that keeps a returning user\'s feed recognisable, and the UI thresholds that auto-select/reject categories.'],
+    sigmoid: ['Taste & Quality Curves', 'Shapes how preference scores AND publisher quality convert into feed strength. Trending and freshness are NOT affected — they have their own dials (Trending half-saturation and Freshness half-life, in the Score Weights section).'],
+    learning: ['Learning Speed (multipliers)', 'Master multipliers applied ON TOP of the Feedback Deltas section. The final effect of an action = its delta x the axis dial x the positive/rejection dial. 1.0 = normal speed; 0 = freeze that part of learning.'],
+    rejection: ['Quick-Exit Rejection (v2)', 'Accidental taps no longer punish at full strength. Quick exits are counted per axis (category / length / publisher) inside a rolling window, and one capped penalty applies only after the configured minimum is reached.'],
+    engagement: ['Engagement Index', 'How much a read "counts" for weights based on reading speed vs the user\'s personal average. Explicit tap-actions are never scaled.'],
+    selection: ['Feed Selection', 'Greedy feed assembly — subtractive penalties, randomised discovery slots, per-category cap, and minimum-category variety.'],
+    wpm: ['Reading-Speed Bands', 'The plausibility bands that decide which sessions earn attention credit and can recalibrate a user\'s personal reading pace.'],
+    pool: ['Candidate Pool', 'How the 6-hourly cron samples the article shortlist that feeds get ranked from.'],
+    ingestion: ['RSS Ingestion and Sync', 'Feed-fetch throughput and timeouts, plus the behaviour-event sync cap.'],
+    maintenance: ['Housekeeping and Cleanup', 'Old-article cleanup, history pruning, and write-budget guardrails.'],
+    paywallKeywords: ['Paywall Phrases', 'Phrases that flag an article as paywalled so it is never stored or shown. One phrase per line.'],
   };
 
-  const SECTION_ORDER = ['scoring', 'feedback', 'learning', 'trending', 'quality', 'tranche', 'classification'];// ------------------------------------------------------------------
+  const SECTION_ORDER = ['scoring', 'feedback', 'latent', 'sigmoid', 'learning', 'rejection', 'engagement', 'selection', 'classification', 'wpm', 'trending', 'quality', 'ingestion', 'pool', 'maintenance', 'paywallKeywords'];// ------------------------------------------------------------------
   // Rendering
   // ------------------------------------------------------------------
       function labelFor(group, key) {
@@ -644,9 +775,29 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     return labeled(tipKey, text);
   }
   function metaFor(group, key) {
+    // Server rulebook first: the exact range the backend clamps this key to
+    // (plus the dial step). Falls back to local metadata only for keys the
+    // connected server does not know (pre-deploy gap).
+    const r = (state.ranges || {})[`${group}.${key}`];
+    if (r) return { min: r[0], max: r[1], step: r[2] !== undefined ? r[2] : 0.01 };
     const o = OVERRIDES[`${group}.${key}`];
     const d = GROUP_DEFAULTS[group] || [0, 10, 0.1];
     return o ? { min: o[1], max: o[2], step: o[3] } : { min: d[0], max: d[1], step: d[2] };
+  }
+
+  // Human-friendly display for select fields. Only `rejection.windowMs` is stored
+  // as raw milliseconds but shown as DAYS, so an admin types "1" not "86400000"
+  // (and can never mistake ms for hours). Add an entry here for any other field
+  // whose raw unit differs from its display unit.
+  const DISPLAY_DIVISORS = { 'rejection.windowMs': 24 * 60 * 60 * 1000 }; // raw ms → days
+  const COLLECT_MULTIPLIERS = { 'rejection.windowMs': 24 * 60 * 60 * 1000 }; // days → ms
+  function displayVal(group, key, raw) {
+    const d = DISPLAY_DIVISORS[`${group}.${key}`];
+    return (typeof raw === 'number' && d) ? +(raw / d).toFixed(3) : raw;
+  }
+  function rawVal(group, key, display) {
+    const m = COLLECT_MULTIPLIERS[`${group}.${key}`];
+    return m ? display * m : display;
   }
 
   function buildGroup(group, keyOrder) {
@@ -668,16 +819,21 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
       }
       if (typeof val === 'number') {
         const m = metaFor(group, k);
-        const dirty = val !== dval;
+        const showVal = displayVal(group, k, val);
+        const showDval = displayVal(group, k, dval);
+        const showMin = displayVal(group, k, m.min);
+        const showMax = displayVal(group, k, m.max);
+        const showStep = displayVal(group, k, m.step);
+        const dirty = showVal !== showDval;
         const label = labelFor(group, k);
-        const diffPct = dirty ? (Math.abs(val - dval) / Math.max(Math.abs(dval), 1e-9)) * 100 : 0;
+        const diffPct = dirty ? (Math.abs(showVal - showDval) / Math.max(Math.abs(showDval), 1e-9)) * 100 : 0;
         const tier = !dirty ? '' : (diffPct >= 75 ? 'lg' : diffPct >= 25 ? 'md' : 'sm');
-        const badge = dirty ? `<span class="diff-badge ${tier}">${val > dval ? '+' : '−'}${Math.round(diffPct)}%</span>` : '';
+        const badge = dirty ? `<span class="diff-badge ${tier}">${showVal > showDval ? '+' : '−'}${Math.round(diffPct)}%</span>` : '';
         return `<div class="cfg-row${dirty ? ' changed ' + tier : ''}">
-          <label>${label}<span class="deflt">default ${dval} · range ${m.min}–${m.max}</span></label>
+          <label>${label}<span class="deflt">default ${showDval} · range ${showMin}–${showMax}</span></label>
           ${badge}
-          <input type="number" data-path="${group}.${k}" min="${m.min}" max="${m.max}" step="${m.step}" value="${val}" title="range ${m.min}–${m.max}, step ${m.step}">
-          <button type="button" class="reset-field" data-reset="${group}.${k}" title="Reset to default (${dval})">↺</button>
+          <input type="number" data-path="${group}.${k}" min="${showMin}" max="${showMax}" step="${showStep}" value="${showVal}" title="range ${showMin}–${showMax}, step ${showStep}">
+          <button type="button" class="reset-field" data-reset="${group}.${k}" title="Reset to default (${showDval})">↺</button>
         </div>`;
       }
       return '';
@@ -699,9 +855,30 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
 
   function renderSections() {
     $('configSections').innerHTML = SECTION_ORDER.map((group) => {
+      // List groups (e.g. paywallKeywords) hold a string ARRAY, not key/value
+      // fields — render them with a dedicated one-entry-per-line editor.
+      if (Array.isArray(state.defaults[group])) return buildListSection(group);
       const keyOrder = Object.keys(state.defaults[group] || {});
       return buildGroup(group, keyOrder);
     }).join('');
+    // List editors need their own dirty/validation wiring.
+    $('configSections').querySelectorAll('[data-list]').forEach((el) => {
+      el.addEventListener('input', () => {
+        setDirty(true);
+        if (typeof validateConfig === 'function') validateConfig();
+      });
+    });
+  }
+
+  /** Sections whose config value is a string ARRAY (one entry per line). */
+  function buildListSection(group) {
+    const [title, sub] = GROUP_TITLES[group] || [group, ''];
+    const items = state.config[group] || [];
+    const defItems = state.defaults[group] || [];
+    const dirty = JSON.stringify(items) !== JSON.stringify(defItems);
+    return `<div class="section"><div class="section-title">${title}${dirty ? ' <span class="tag-changed">● changed</span>' : ''}</div><div class="section-sub">${sub}</div>
+      <textarea class="list-editor" data-list="${group}" rows="14" spellcheck="false" style="width:100%;font-family:var(--font-mono);font-size:var(--text-sm);padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">${items.map(i => String(i).replace(/&/g, '&amp;').replace(/</g, '&lt;')).join('\n')}</textarea>
+      <div class="section-sub">One entry per line. Matched case-insensitively at ingestion time; edits apply from the next run.</div></div>`;
   }
 
   function renderMeta() {
@@ -740,7 +917,11 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     document.querySelectorAll('#configSections [data-path]').forEach((el) => {
       const [group, key] = el.dataset.path.split('.');
       if (!out[group]) out[group] = {};
-      out[group][key] = el.type === 'checkbox' ? el.checked : parseFloat(el.value);
+      out[group][key] = el.type === 'checkbox' ? el.checked : rawVal(group, key, parseFloat(el.value));
+    });
+    // List groups (e.g. paywallKeywords): one textarea per group, one entry per line.
+    document.querySelectorAll('#configSections [data-list]').forEach((el) => {
+      out[el.dataset.list] = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
     });
     out.schemaVersion = state.config ? state.config.schemaVersion : 1;
     return out;
@@ -757,8 +938,9 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
       const res = await httpsCallable(functions, 'getScoringConfig')({});
       const d = res.data;
       state.config = d.config; state.defaults = d.defaults; state.stored = d.stored;
-      state.source = d.source; state.updatedAt = d.updatedAt; state.updatedBy = d.updatedBy;
+      state.ranges = d.ranges || {}; state.source = d.source; state.updatedAt = d.updatedAt; state.updatedBy = d.updatedBy;
       $('emptyState').style.display = 'none';
+      $('sectionLegend').style.display = 'block';
       $('configSections').style.display = 'block';
       renderMeta(); renderStored(); renderSections(); setDirty(false);
       if (window.__validateConfig) window.__validateConfig();
@@ -965,12 +1147,16 @@ let toastTimer = null;
           const [g, k] = el.dataset.path.split('.');
           const m = metaFor(g, k);
           const v = parseFloat(el.value);
-          if (!Number.isNaN(v) && (v < m.min || v > m.max)) {
+          // Convert the server's raw range into display units (e.g. ms → days)
+          // so the comparison uses the same units the admin sees.
+          const dispMin = displayVal(g, k, m.min);
+          const dispMax = displayVal(g, k, m.max);
+          if (!Number.isNaN(v) && (v < dispMin || v > dispMax)) {
             allOk = false;
             row.classList.add('invalid');
             const e = document.createElement('div');
             e.className = 'field-err';
-            e.textContent = `Must be between ${m.min} and ${m.max}`;
+            e.textContent = `Must be between ${dispMin} and ${dispMax}`;
             row.appendChild(e);
           }
         }
@@ -991,13 +1177,14 @@ let toastTimer = null;
     function resetToFieldDefault(grp, key, dval) {
       const input = document.querySelector(`#configSections [data-path="${grp}.${key}"]`);
       if (input) {
+        const defaultVal = displayVal(grp, key, dval);
         const oldVal = parseFloat(input.value);
-        input.value = dval;
+        input.value = defaultVal;
         setDirty(true);
         if (grp === 'scoring') updateSum();
         if (typeof validateConfig === 'function') validateConfig();
         showToast(`Reset ${key} to default`, 'Undo', () => {
-          input.value = Number.isNaN(oldVal) ? dval : oldVal;
+          input.value = Number.isNaN(oldVal) ? defaultVal : oldVal;
           setDirty(true);
           if (grp === 'scoring') updateSum();
           if (typeof validateConfig === 'function') validateConfig();

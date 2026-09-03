@@ -13,13 +13,13 @@ import {
   TouchableOpacity,
   Dimensions,
   PanResponder,
-} from 'react-native';
+ Linking , Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUser } from '../contexts/UserContext';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Article, RootStackParamList } from '../types';
+import { RootStackParamList } from '../types';
 import { useBehaviorTracker } from '../hooks/useBehaviorTracker';
 import {
   markArticleSeen,
@@ -29,13 +29,11 @@ import {
 } from '../services/feedService';
 import { flushBehaviorQueue } from '../services/behaviorSync';
 import { removeArticleFromCachedDashboardFeed } from '../services/dashboardFeedCache';
-import { Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 import * as NavigationBar from 'expo-navigation-bar';
-import { topInset, bottomInset } from '../utils/safeArea';
-import { Platform } from 'react-native';
-import { Compass, AlertCircle, Heart, Bookmark } from 'lucide-react-native';
+import { topInset } from '../utils/safeArea';
+import { Compass, AlertCircle } from 'lucide-react-native';
 import { TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_2XL } from '../utils/constants';
 
 // Feature hooks and components
@@ -234,7 +232,7 @@ export default function ReaderScreen() {
   // --- Feature hooks ---
   const {
     article, resolvedHtml, fetchError, unavailableFromRss, loading, slowLoading,
-    articleTimingRef, rssResolvedLinkRef, cacheRef, loadArticle, prefetchArticles, cancelPrefetch,
+    articleTimingRef, rssResolvedLinkRef, loadArticle, prefetchArticles, cancelPrefetch,
   } = useArticleLoader({
     articleId,
     isSavedMode,
@@ -252,8 +250,8 @@ export default function ReaderScreen() {
   const likeToggleRef = useRef<(() => void) | null>(null);
 
   const {
-    activeQueueIds, recommendationContexts, currentIndex, hasNext, hasPrev,
-    queueExhausted, preloading, setQueueExhausted, removeUnavailableFutureArticle, goToNext, goToPrev,
+    activeQueueIds, recommendationContexts, currentIndex,
+    queueExhausted, removeUnavailableFutureArticle, goToNext, goToPrev,
   } = useNavigationQueue({
     queueArticleIds: queueArticleIds || [],
     recommendationContexts: initialRecommendationContexts,
@@ -292,7 +290,6 @@ export default function ReaderScreen() {
   // article's HUD from lingering for the rest of its 2.5s visibility window.
   // Deliberately depends only on currentIndex so a tap-to-show on the current
   // article never immediately re-hides it.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!hudVisible) return;
     if (hudTimeoutRef.current) {
@@ -300,6 +297,7 @@ export default function ReaderScreen() {
       hudTimeoutRef.current = null;
     }
     setHudVisible(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex]);
 
   // --- Behavior tracker hook ---
@@ -507,7 +505,6 @@ export default function ReaderScreen() {
 
     const safeTitle = escapeHtml(article.title);
     const safePublicationName = escapeHtml(article.publicationName);
-    const safeAuthor = escapeHtml(article.author);
 
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const publishDate = article.publishDate ? new Date(article.publishDate) : null;
@@ -738,7 +735,7 @@ export default function ReaderScreen() {
           <Compass size={48} color={colors.textMuted} style={styles.emptyIcon} />
           <Text style={[styles.catchUpTitle, { color: colors.text }]}>Personalizing your next reads…</Text>
           <Text style={[styles.catchUpSubtitle, { color: colors.textSecondary }]}>
-            We're finding more articles matched to your taste.
+            We&apos;re finding more articles matched to your taste.
           </Text>
           <TouchableOpacity
             style={[styles.catchUpButton, { backgroundColor: colors.primary }]}

@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent — Current System Design Evolutions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=Outfit:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-display: 'Cinzel', serif;
+  --font-sans: 'Outfit', -apple-system, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* Current Coded Palette */
+  --curr-bg-light: #F8F7F4;
+  --curr-surface-light: #FFFFFF;
+  --curr-text-light: #111111;
+  --curr-muted-light: #999999;
+  --curr-sec-light: #666666;
+  --curr-border-light: #E8E5E1;
+  --curr-accent-light: #B63A3A;
+
+  --curr-bg-dark: #121212;
+  --curr-surface-dark: #1B1B1B;
+  --curr-text-dark: #F5F5F5;
+  --curr-muted-dark: #777777;
+  --curr-sec-dark: #B5B5B5;
+  --curr-border-dark: #2A2A2A;
+  --curr-accent-dark: #C94B4B;
+
+  /* Studio Refined Palette */
+  --ref-bg-light: #F7F5EE;
+  --ref-surface-light: #FFFFFF;
+  --ref-text-light: #151412;
+  --ref-muted-light: #5A564C;
+  --ref-sub-light: #888274;
+  --ref-border-light: #D6CEBE;
+  --ref-hairline-light: #E4DDCF;
+  --ref-accent-light: #B42F16;
+
+  --ref-bg-dark: #111215;
+  --ref-surface-dark: #17191D;
+  --ref-text-dark: #EDE7DC;
+  --ref-muted-dark: #989284;
+  --ref-sub-dark: #666155;
+  --ref-border-dark: #2B2F37;
+  --ref-hairline-dark: #20232A;
+  --ref-accent-dark: #E44A2E;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #090B0E;
+  color: #DDD;
+  font-family: var(--font-sans);
+  padding: 24px 20px 80px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Studio Toolbar */
+.top-toolbar {
+  max-width: 1280px;
+  margin: 0 auto 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-bottom: 1px solid #1A202C;
+  padding-bottom: 18px;
+}
+.toolbar-branding h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #FFF;
+  letter-spacing: -0.3px;
+}
+.toolbar-branding p {
+  font-size: 13px;
+  color: #718096;
+  font-family: var(--font-mono);
+}
+
+.evolution-tabs {
+  display: flex;
+  background: #12161F;
+  border: 1px solid #232936;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  color: #A0AEC0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.tab-btn.active {
+  background: #2D3748;
+  color: #FFF;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+/* Stage Area */
+.stage-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+.stage-notes {
+  background: #11151D;
+  border: 1px solid #202736;
+  border-left: 3px solid #E5A93C;
+  border-radius: 6px;
+  padding: 12px 20px;
+  width: 100%;
+  max-width: 900px;
+  font-size: 13px;
+  color: #CBD5E0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stage-notes strong { color: #FFF; }
+.stage-notes span.tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #E5A93C;
+  background: #1D2330;
+  padding: 3px 8px;
+  border-radius: 3px;
+}
+
+.device-pair {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 48px;
+  margin-top: 10px;
+}
+.device-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.device-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #718096;
+}
+
+/* Phone Chassis */
+.phone {
+  width: 384px;
+  height: 790px;
+  border-radius: 46px;
+  border: 12px solid #171920;
+  box-shadow: 0 32px 85px rgba(0,0,0,0.85);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.phone-status-bar {
+  height: 38px;
+  padding: 12px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.phone-viewport {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 26px 24px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.phone-viewport::-webkit-scrollbar { width: 3px; }
+.phone-viewport::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* ============================================================
+   SHARED / UNIVERSAL MOCKUP VIEWS
+============================================================ */
+
+/* ------------------------------------------------------------
+   VARIATION 0: EXACT CURRENT CODED BASELINE
+------------------------------------------------------------ */
+.var-current {
+  --bg: var(--curr-bg-light);
+  --surface: var(--curr-surface-light);
+  --text: var(--curr-text-light);
+  --sec: var(--curr-sec-light);
+  --muted: var(--curr-muted-light);
+  --border: var(--curr-border-light);
+  --accent: var(--curr-accent-light);
+}
+.theme-dark.var-current {
+  --bg: var(--curr-bg-dark);
+  --surface: var(--curr-surface-dark);
+  --text: var(--curr-text-dark);
+  --sec: var(--curr-sec-dark);
+  --muted: var(--curr-muted-dark);
+  --border: var(--curr-border-dark);
+  --accent: var(--curr-accent-dark);
+}
+
+.current-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+.current-header-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.current-icon-btn {
+  padding: 4px;
+  cursor: pointer;
+}
+
+.current-stats-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  margin-bottom: 42px; /* The 42px space gap from current code */
+}
+.current-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.current-stat-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+
+.current-hero-card {
+  margin-bottom: 24px;
+  cursor: pointer;
+}
+.current-hero-pub {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.current-hero-title {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 34px;
+  letter-spacing: -0.8px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.current-hero-desc {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--sec);
+  margin-bottom: 12px;
+}
+.current-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.current-row-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+.current-row-content { flex: 1; padding-right: 12px; }
+.current-row-pub {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--sec);
+  margin-bottom: 6px;
+}
+.current-row-title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 22px;
+  letter-spacing: -0.4px;
+  color: var(--text);
+}
+.current-row-time {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.current-pill-row {
+  display: flex;
+  align-items: stretch;
+  border-radius: 16px;
+  background: var(--text);
+  margin-top: 32px;
+  overflow: hidden;
+}
+.current-pill-spacer { width: 72px; }
+.current-pill-discover {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: var(--bg);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.current-pill-shuffle {
+  width: 72px;
+  background: var(--bg);
+  border: 2px solid var(--text);
+  border-left: none;
+  border-radius: 0 16px 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------
+   VARIATION A: THE TYPOGRAPHIC & SPACING POLISH
+   (Direct Drop-in Upgrade of Current Code)
+------------------------------------------------------------ */
+.var-polish {
+  --bg: var(--ref-bg-light);
+  --surface: var(--ref-surface-light);
+  --text: var(--ref-text-light);
+  --sec: var(--ref-muted-light);
+  --muted: var(--ref-sub-light);
+  --border: var(--ref-border-light);
+  --hairline: var(--ref-hairline-light);
+  --accent: var(--ref-accent-light);
+}
+.theme-dark.var-polish {
+  --bg: var(--ref-bg-dark);
+  --surface: var(--ref-surface-dark);
+  --text: var(--ref-text-dark);
+  --sec: var(--ref-muted-dark);
+  --muted: var(--ref-sub-dark);
+  --border: var(--ref-border-dark);
+  --hairline: var(--ref-hairline-dark);
+  --accent: var(--ref-accent-dark);
+}
+
+.polish-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+.polish-brand {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+.polish-date-hint {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.polish-user-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.polish-stats-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-radius: 6px; /* Tightened from 16 to 6 */
+  background: var(--surface);
+  border: 1px solid var(--border);
+  margin-bottom: 20px; /* Reduced from 42px to 20px! */
+}
+.polish-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.polish-hero-card {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+  cursor: pointer;
+}
+.polish-hero-kicker {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.polish-hero-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 31px;
+  letter-spacing: -0.4px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.polish-hero-desc {
+  font-size: 13.5px;
+  line-height: 21px;
+  color: var(--sec);
+  margin-bottom: 10px;
+}
+.polish-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+}
+
+.polish-row-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+}
+.polish-row-title {
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 21px;
+  color: var(--text);
+  max-width: 260px;
+}
+.polish-row-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.polish-row-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.polish-pill-row {
+  display: flex;
+  align-items: stretch;
+  border-radius: 8px;
+  background: var(--text);
+  margin-top: 24px;
+  overflow: hidden;
+}
+.polish-pill-discover {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px;
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.polish-pill-shuffle {
+  width: 54px;
+  background: var(--bg);
+  border: 1px solid var(--text);
+  border-left: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------
+   VARIATION B: THE BROADSHEET STREAMLINE
+   (Quiet Telemetry Baseline & In-Feed Discovery Insert)
+------------------------------------------------------------ */
+.streamline-masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 6px;
+  margin-bottom: 18px;
+}
+.streamline-whisper-bar {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+}
+.streamline-whisper-bar strong {
+  color: var(--text);
+}
+
+.streamline-discovery-slot {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 13px 0;
+  margin: 16px 0;
+  cursor: pointer;
+}
+.streamline-discovery-kicker {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.streamline-discovery-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.streamline-bottom-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 20px;
+}
+.streamline-shuffle-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ------------------------------------------------------------
+   VARIATION C: TACTILE MODERNIST HYBRID
+   (Token Ledger & Tactile Sheet Cards)
+------------------------------------------------------------ */
+.tactile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 6px;
+  margin-bottom: 16px;
+}
+.tactile-brand {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.tactile-token-ledger {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.tactile-token-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+}
+.tactile-token-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.tactile-token-lbl {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+.tactile-sheet-lead {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+.tactile-spine-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: var(--bg);
+  padding: 2px 6px;
+  border-radius: 2px;
+  margin-bottom: 6px;
+}
+
+/* ------------------------------------------------------------
+   READER OVERLAY MODAL (INTERACTIVE)
+------------------------------------------------------------ */
+.reader-modal {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  padding: 14px 24px 20px;
+  display: none;
+  flex-direction: column;
+  z-index: 50;
+  overflow-y: auto;
+}
+.reader-modal.open { display: flex; }
+.reader-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.reader-back {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.reader-progress {
+  height: 2px;
+  background: var(--hairline);
+  margin-bottom: 16px;
+}
+.reader-progress-fill {
+  height: 100%;
+  width: 45%;
+  background: var(--accent);
+}
+.reader-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.reader-byline {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.reader-body p {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.65;
+  margin-bottom: 14px;
+}
+
+/* Micro SVG Icon helper */
+.hairline-icon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: inline-block;
+  vertical-align: middle;
+}
+</style>
+</head>
+<body>
+
+<div class="top-toolbar">
+  <div class="toolbar-branding">
+    <h1>Current Codebase Design Evolutions</h1>
+    <p>Compare your current coded React Native screens directly against 3 high-craft studio evolutions</p>
+  </div>
+  <div class="evolution-tabs">
+    <button class="tab-btn active" onclick="switchEvolution('current', this)">00 · Current Baseline</button>
+    <button class="tab-btn" onclick="switchEvolution('polish', this)">01 · Typographic Polish</button>
+    <button class="tab-btn" onclick="switchEvolution('streamline', this)">02 · Broadsheet Streamline</button>
+    <button class="tab-btn" onclick="switchEvolution('tactile', this)">03 · Tactile Modernist</button>
+  </div>
+</div>
+
+<main class="stage-container">
+
+  <!-- Interactive Annotation Banner -->
+  <div class="stage-notes" id="annotation-box">
+    <div>
+      <strong id="notes-title">Current Coded Baseline:</strong>
+      <span id="notes-desc">Matches your current DashboardScreen.tsx layout, 42px stats pill margin, 24px Georgia headline, and bottom split pill.</span>
+    </div>
+    <span class="tag" id="notes-tag">Exact Code Match</span>
+  </div>
+
+  <div class="device-pair">
+
+    <!-- LIGHT VIEWPORT -->
+    <div class="device-wrapper">
+      <span class="device-label">Light Mode</span>
+      <div class="phone var-current" id="phone-light">
+        <div class="phone-status-bar">
+          <span>09:41</span>
+          <span>TANGENT · RSS</span>
+        </div>
+
+        <div class="phone-viewport" id="viewport-light">
+          <!-- Dynamic Content Injected Here via JS -->
+        </div>
+
+        <!-- Reader Modal -->
+        <div class="reader-modal" id="reader-light">
+          <div class="reader-nav">
+            <button class="reader-back" onclick="closeReader('light')">← DASHBOARD</button>
+            <div style="font-family: var(--font-mono); font-size: 9px; color: var(--muted);">9 MIN READ</div>
+          </div>
+          <div class="reader-progress"><div class="reader-progress-fill"></div></div>
+          <h1 class="reader-title" id="reader-title-light">How Big Tech Evaluates Senior Engineering Leaders in 2026</h1>
+          <div class="reader-byline" id="reader-byline-light">The Pragmatic Engineer · Gergely Orosz</div>
+          <div class="reader-body">
+            <p>For more than a decade, senior engineering careers were framed around deep technical specialism: mastering distributed databases, microservice boundaries, or complex frontend lifecycles.</p>
+            <p>Today, executive calibration committees look for something fundamentally different: organizational leverage. As automated tooling reduces the friction of producing code, the primary bottleneck has shifted to system clarity and architectural verification.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DARK VIEWPORT -->
+    <div class="device-wrapper">
+      <span class="device-label">Dark Mode</span>
+      <div class="phone theme-dark var-current" id="phone-dark">
+        <div class="phone-status-bar">
+          <span>09:41</span>
+          <span>TANGENT · RSS</span>
+        </div>
+
+        <div class="phone-viewport" id="viewport-dark">
+          <!-- Dynamic Content Injected Here via JS -->
+        </div>
+
+        <!-- Reader Modal -->
+        <div class="reader-modal" id="reader-dark">
+          <div class="reader-nav">
+            <button class="reader-back" onclick="closeReader('dark')">← DASHBOARD</button>
+            <div style="font-family: var(--font-mono); font-size: 9px; color: var(--muted);">9 MIN READ</div>
+          </div>
+          <div class="reader-progress"><div class="reader-progress-fill"></div></div>
+          <h1 class="reader-title" id="reader-title-dark">How Big Tech Evaluates Senior Engineering Leaders in 2026</h1>
+          <div class="reader-byline" id="reader-byline-dark">The Pragmatic Engineer · Gergely Orosz</div>
+          <div class="reader-body">
+            <p>For more than a decade, senior engineering careers were framed around deep technical specialism: mastering distributed databases, microservice boundaries, or complex frontend lifecycles.</p>
+            <p>Today, executive calibration committees look for something fundamentally different: organizational leverage. As automated tooling reduces the friction of producing code, the primary bottleneck has shifted to system clarity and architectural verification.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const templates = {
+  current: {
+    tag: 'Exact Code Match',
+    title: 'Current Coded Baseline',
+    desc: 'Direct reflection of DashboardScreen.tsx as written today: 42px stats pill margin, 24px Georgia title, and bottom split discover/shuffle pill.',
+    html: `
+      <!-- Header -->
+      <div class="current-header-row">
+        <span class="current-header-title">TANGENT</span>
+        <div class="current-icon-btn">
+          <svg class="hairline-icon" style="width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+      </div>
+
+      <!-- Stats Pill (Current 42px space) -->
+      <div class="current-stats-pill">
+        <div class="current-stat-item">
+          <span>🔥</span>
+          <span>14d</span>
+        </div>
+        <div class="current-stat-divider"></div>
+        <div class="current-stat-item">
+          <span>📖</span>
+          <span>18</span>
+        </div>
+        <div class="current-stat-divider"></div>
+        <div class="current-stat-item">
+          <span>⚡</span>
+          <span>Tech</span>
+        </div>
+      </div>
+
+      <!-- Hero Card -->
+      <article class="current-hero-card" onclick="openReader('How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz')">
+        <div class="current-hero-pub">THE PRAGMATIC ENGINEER</div>
+        <h2 class="current-hero-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+        <p class="current-hero-desc">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized over pure architectural output.</p>
+        <div class="current-card-meta">
+          <span>Technology</span>
+          <span>9 min read</span>
+        </div>
+      </article>
+
+      <!-- Row Card 1 -->
+      <div class="current-row-card" onclick="openReader('The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson')">
+        <div class="current-row-content">
+          <div class="current-row-pub">Stratechery</div>
+          <div class="current-row-title">The Real Economics of the AI Platform Shift</div>
+        </div>
+        <div class="current-row-time">7m</div>
+      </div>
+
+      <!-- Row Card 2 -->
+      <div class="current-row-card" onclick="openReader('The Frontier Models Open-Weights Dilemma', 'Platformer · Casey Newton')">
+        <div class="current-row-content">
+          <div class="current-row-pub">Platformer</div>
+          <div class="current-row-title">The Frontier Models Open-Weights Dilemma</div>
+        </div>
+        <div class="current-row-time">6m</div>
+      </div>
+
+      <!-- Bottom Split Pill -->
+      <div class="current-pill-row">
+        <div class="current-pill-spacer"></div>
+        <div class="current-pill-discover">Discover</div>
+        <div class="current-pill-shuffle">
+          <svg class="hairline-icon" style="width: 18px; height: 18px;" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.6-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l2.2 2.9"/><path d="m14.7 13.4 1.9 2.5c.8 1.1 2 1.7 3.3 1.7H22"/><path d="m18 14 4 4-4 4"/></svg>
+        </div>
+      </div>
+    `
+  },
+
+  polish: {
+    tag: 'Recommended Quick Win',
+    title: 'Evolution 01: Typographic & Spacing Polish',
+    desc: 'Keeps 100% of your current components! Reduces stats margin from 42px to 20px, tightens hero leading, elevates title to 26px, and refines icon hairline stroke.',
+    html: `
+      <!-- Polish Header -->
+      <div class="polish-header-row">
+        <span class="polish-brand">TANGENT</span>
+        <span class="polish-date-hint">Thursday, Sept 3 · 30 Unread</span>
+        <button class="polish-user-btn">
+          <svg class="hairline-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+      </div>
+
+      <!-- Tightened Stats Pill (Saves 22px height!) -->
+      <div class="polish-stats-pill">
+        <div class="polish-stat-item">
+          <svg class="hairline-icon" style="color: var(--accent);" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          <span>14d Streak</span>
+        </div>
+        <div class="current-stat-divider"></div>
+        <div class="polish-stat-item">
+          <svg class="hairline-icon" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>18 Finished</span>
+        </div>
+        <div class="current-stat-divider"></div>
+        <div class="polish-stat-item">
+          <svg class="hairline-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          <span>Tech (42%)</span>
+        </div>
+      </div>
+
+      <!-- Commanding Hero Card -->
+      <article class="polish-hero-card" onclick="openReader('How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz')">
+        <div class="polish-hero-kicker">The Pragmatic Engineer · Gergely Orosz</div>
+        <h2 class="polish-hero-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+        <p class="polish-hero-desc">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized over pure architectural output.</p>
+        <div class="polish-card-meta">
+          <span>Technology · Lead Feature</span>
+          <span>9 min read</span>
+        </div>
+      </article>
+
+      <!-- Row Card 1 (Refined) -->
+      <div class="polish-row-card" onclick="openReader('The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson')">
+        <div>
+          <h3 class="polish-row-title">The Real Economics of the AI Platform Shift</h3>
+          <div class="polish-row-meta">Stratechery · Ben Thompson</div>
+        </div>
+        <span class="polish-row-time">7m read</span>
+      </div>
+
+      <!-- Row Card 2 (Refined) -->
+      <div class="polish-row-card" onclick="openReader('The Frontier Models Open-Weights Dilemma', 'Platformer · Casey Newton')">
+        <div>
+          <h3 class="polish-row-title">The Frontier Models Open-Weights Dilemma</h3>
+          <div class="polish-row-meta">Platformer · Casey Newton</div>
+        </div>
+        <span class="polish-row-time">6m read</span>
+      </div>
+
+      <!-- Refined Pill Row -->
+      <div class="polish-pill-row">
+        <div class="polish-pill-discover">Discover Next Article</div>
+        <div class="polish-pill-shuffle" title="Shuffle Feed">
+          <svg class="hairline-icon" style="width: 16px; height: 16px;" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.6-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l2.2 2.9"/><path d="m14.7 13.4 1.9 2.5c.8 1.1 2 1.7 3.3 1.7H22"/><path d="m18 14 4 4-4 4"/></svg>
+        </div>
+      </div>
+    `
+  },
+
+  streamline: {
+    tag: 'Architectural Elegance',
+    title: 'Evolution 02: Broadsheet Streamline',
+    desc: 'Quiet 1-line telemetry under the header. Card #4 becomes an in-feed Discovery Insert (matching mathematical spec w_P = 0). Bottom bar stays clean.',
+    html: `
+      <!-- Masthead -->
+      <div class="streamline-masthead">
+        <span class="polish-brand">TANGENT</span>
+        <span class="polish-date-hint">Thursday, Sept 3</span>
+        <span style="font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;">30 Unread</span>
+      </div>
+
+      <!-- Whisper Telemetry Bar -->
+      <div class="streamline-whisper-bar">
+        <span>🔥 <strong>14d</strong> Streak</span>
+        <span>📖 <strong>18</strong> Read this week</span>
+        <span>⚡ <strong>245</strong> Avg WPM</span>
+      </div>
+
+      <!-- Hero Card -->
+      <article class="polish-hero-card" onclick="openReader('How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz')">
+        <div class="polish-hero-kicker">The Pragmatic Engineer</div>
+        <h2 class="polish-hero-title">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+        <p class="polish-hero-desc">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized over pure architectural output.</p>
+        <div class="polish-card-meta">
+          <span>Technology</span>
+          <span>9 min read</span>
+        </div>
+      </article>
+
+      <!-- Row Card -->
+      <div class="polish-row-card" onclick="openReader('The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson')">
+        <div>
+          <h3 class="polish-row-title">The Real Economics of the AI Platform Shift</h3>
+          <div class="polish-row-meta">Stratechery · Ben Thompson</div>
+        </div>
+        <span class="polish-row-time">7m read</span>
+      </div>
+
+      <!-- In-Feed Discovery Insert (Slot 4 spec) -->
+      <div class="streamline-discovery-slot" onclick="openReader('The Lost Construction Techniques of Gothic Vaults', 'Antiquities Quarterly')">
+        <div class="streamline-discovery-kicker">✦ DISCOVERY · UNFAMILIAR HORIZON</div>
+        <h3 class="streamline-discovery-title">The Lost Construction Techniques of Gothic Vaults in Northern France</h3>
+        <div class="polish-card-meta" style="margin-top: 4px;">
+          <span>Antiquities Quarterly</span>
+          <span>14 min read</span>
+        </div>
+      </div>
+
+      <!-- Compact Bottom Action Bar -->
+      <div class="streamline-bottom-hud">
+        <button class="streamline-shuffle-btn" onclick="alert('Shuffled feed queue')">
+          <svg class="hairline-icon" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.6-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/></svg>
+          <span>Shuffle Queue</span>
+        </button>
+        <span style="font-family: var(--font-mono); font-size: 10px; color: var(--muted);">Swipe to dismiss cards</span>
+      </div>
+    `
+  },
+
+  tactile: {
+    tag: 'Physical Folio Feel',
+    title: 'Evolution 03: Tactile Modernist Hybrid',
+    desc: 'Combines your current metrics into a 3-token archival ledger. Cards gain tactile spine badges with crisp physical print discipline.',
+    html: `
+      <!-- Masthead -->
+      <div class="tactile-header">
+        <span class="tactile-brand">Tangent.</span>
+        <span style="font-family: var(--font-mono); font-size: 9.5px; color: var(--muted);">DAILY EDITION · 30</span>
+      </div>
+
+      <!-- 3-Token Archival Ledger -->
+      <div class="tactile-token-ledger">
+        <div class="tactile-token-cell">
+          <span class="tactile-token-val">14 Days</span>
+          <span class="tactile-token-lbl">Cadence</span>
+        </div>
+        <div class="tactile-token-cell">
+          <span class="tactile-token-val">18 Articles</span>
+          <span class="tactile-token-lbl">Velocity</span>
+        </div>
+        <div class="tactile-token-cell">
+          <span class="tactile-token-val">245 WPM</span>
+          <span class="tactile-token-lbl">Pacing</span>
+        </div>
+      </div>
+
+      <!-- Tactile Sheet Lead Card -->
+      <div class="tactile-sheet-lead" onclick="openReader('How Big Tech Evaluates Senior Engineering Leaders in 2026', 'The Pragmatic Engineer · Gergely Orosz')">
+        <span class="tactile-spine-badge">LEAD · ENGINEERING</span>
+        <h2 class="polish-hero-title" style="font-size: 22px; line-height: 28px;">How Big Tech Evaluates Senior Engineering Leaders in 2026</h2>
+        <p class="polish-hero-desc">A field report from inside executive compensation loops, calibration committees, and why organizational leverage is prized.</p>
+        <div class="polish-card-meta">
+          <span>The Pragmatic Engineer</span>
+          <span>9 MIN READ</span>
+        </div>
+      </div>
+
+      <!-- Tactile Sub Cards -->
+      <div class="polish-row-card" onclick="openReader('The Real Economics of the AI Platform Shift', 'Stratechery · Ben Thompson')">
+        <div>
+          <h3 class="polish-row-title">The Real Economics of the AI Platform Shift</h3>
+          <div class="polish-row-meta">Stratechery · Ben Thompson</div>
+        </div>
+        <span class="polish-row-time">7M</span>
+      </div>
+
+      <div class="polish-row-card" onclick="openReader('The Frontier Models Open-Weights Dilemma', 'Platformer · Casey Newton')">
+        <div>
+          <h3 class="polish-row-title">The Frontier Models Open-Weights Dilemma</h3>
+          <div class="polish-row-meta">Platformer · Casey Newton</div>
+        </div>
+        <span class="polish-row-time">6M</span>
+      </div>
+
+      <!-- Refined Pill Row -->
+      <div class="polish-pill-row" style="margin-top: 20px;">
+        <div class="polish-pill-discover">Discover Folio</div>
+        <div class="polish-pill-shuffle">
+          <svg class="hairline-icon" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.6-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/></svg>
+        </div>
+      </div>
+    `
+  }
+};
+
+function renderViewports(type) {
+  const tpl = templates[type];
+  document.getElementById('viewport-light').innerHTML = tpl.html;
+  document.getElementById('viewport-dark').innerHTML = tpl.html;
+
+  document.getElementById('notes-title').textContent = tpl.title + ':';
+  document.getElementById('notes-desc').textContent = tpl.desc;
+  document.getElementById('notes-tag').textContent = tpl.tag;
+
+  // Sync phone classes
+  const pLight = document.getElementById('phone-light');
+  const pDark = document.getElementById('phone-dark');
+
+  pLight.className = `phone ${type === 'current' ? 'var-current' : 'var-polish'}`;
+  pDark.className = `phone theme-dark ${type === 'current' ? 'var-current' : 'var-polish'}`;
+}
+
+function switchEvolution(type, btnEl) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  renderViewports(type);
+}
+
+function openReader(title, byline) {
+  document.getElementById('reader-title-light').textContent = title;
+  document.getElementById('reader-byline-light').textContent = byline;
+  document.getElementById('reader-title-dark').textContent = title;
+  document.getElementById('reader-byline-dark').textContent = byline;
+
+  document.getElementById('reader-light').classList.add('open');
+  document.getElementById('reader-dark').classList.add('open');
+}
+
+function closeReader(theme) {
+  document.getElementById('reader-light').classList.remove('open');
+  document.getElementById('reader-dark').classList.remove('open');
+}
+
+// Initial render
+const urlParams = new URLSearchParams(window.location.search);
+const initialTab = urlParams.get('tab') || 'current';
+const matchingBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.getAttribute('onclick')?.includes(initialTab));
+if (matchingBtn) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  matchingBtn.classList.add('active');
+}
+renderViewports(initialTab);
+</script>
+</body>
+</html>

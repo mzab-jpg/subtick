@@ -6,10 +6,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { httpsCallable } from 'firebase/functions';
-import { functions, getClientId } from './firebase';
+import { auth, functions, getClientId } from './firebase';
 import { PendingBehaviorEvent, BehaviorEventType, RecommendationContext } from '../types';
 import { BEHAVIOR_QUEUE_KEY, SYNC_BATCH_SIZE, MAX_QUEUE_SIZE } from '../utils/constants';
-import { auth } from './firebase';
 import { createStorageMutex } from './asyncStorageMutex';
 
 const storageMutex = createStorageMutex();
@@ -115,7 +114,7 @@ async function flushBehaviorQueueOnce(): Promise<number> {
     );
     const result = await syncFn({ events: batch, client_id: clientId });
     const syncedCount = result.data.synced ?? batch.length;
-    console.log(`[BehaviorSync] Cloud Function synced ${syncedCount}/${batch.length} events`);
+    if (__DEV__) console.log(`[BehaviorSync] Cloud Function synced ${syncedCount}/${batch.length} events`);
 
     // Step 3: Write back the updated queue — serialized via mutex.
     await storageMutex.enqueue(async () => {

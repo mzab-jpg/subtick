@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangent — Mockup III: The Monastic Index</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Light: Pure Washi Paper & Sumi Ink */
+  --bg-light: #F9F7F2;
+  --surface-light: #F4F1EB;
+  --text-main-light: #181716;
+  --text-sub-light: #5A5852;
+  --text-dim-light: #9B988F;
+  --border-light: #E5E0D6;
+  --accent-light: #B23A2B;
+  --discovery-accent-light: #7E6B56;
+
+  /* Dark: Sumi Midnight & Bone Parchment */
+  --bg-dark: #121312;
+  --surface-dark: #1A1C1A;
+  --text-main-dark: #E4DFD5;
+  --text-sub-dark: #9E9B92;
+  --text-dim-dark: #585955;
+  --border-dark: #272927;
+  --accent-dark: #D45342;
+  --discovery-accent-dark: #A8957F;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0B0C0B;
+  color: #CCC;
+  font-family: var(--font-sans);
+  padding: 40px 24px;
+  line-height: 1.6;
+}
+
+header.meta-banner {
+  max-width: 1400px;
+  margin: 0 auto 36px;
+  padding: 24px 32px;
+  background: #141514;
+  border: 1px solid #232523;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.meta-banner h1 {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: #FFF;
+  margin-bottom: 4px;
+}
+.meta-banner p {
+  color: #7D807A;
+  font-size: 13px;
+  max-width: 760px;
+}
+.badge-capsule {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #D45342;
+  margin-bottom: 6px;
+}
+
+.controls-bar {
+  max-width: 1400px;
+  margin: 0 auto 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.screen-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.screen-tab-btn {
+  background: #141514;
+  color: #8C8F88;
+  border: 1px solid #242624;
+  padding: 8px 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 1px;
+  transition: all 0.2s ease;
+}
+.screen-tab-btn:hover {
+  background: #1C1E1C;
+  color: #FFF;
+}
+.screen-tab-btn.active {
+  background: #D45342;
+  color: #FFF;
+  border-color: #D45342;
+}
+.mode-toggle-btn {
+  background: #141514;
+  border: 1px solid #242624;
+  color: #FFF;
+  padding: 8px 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+/* Device Shells */
+.showcase-grid {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 40px;
+  justify-content: center;
+}
+.frame-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.frame-label {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #6F726D;
+}
+.phone-viewport {
+  width: 380px;
+  height: 760px;
+  border-radius: 40px;
+  border: 10px solid #1A1C1A;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.85);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+/* Themes */
+.theme-light {
+  --bg: var(--bg-light);
+  --surface: var(--surface-light);
+  --text-main: var(--text-main-light);
+  --text-sub: var(--text-sub-light);
+  --text-dim: var(--text-dim-light);
+  --border: var(--border-light);
+  --accent: var(--accent-light);
+  --discovery-accent: var(--discovery-accent-light);
+  background: var(--bg);
+  color: var(--text-main);
+}
+.theme-dark {
+  --bg: var(--bg-dark);
+  --surface: var(--surface-dark);
+  --text-main: var(--text-main-dark);
+  --text-sub: var(--text-sub-dark);
+  --text-dim: var(--text-dim-dark);
+  --border: var(--border-dark);
+  --accent: var(--accent-dark);
+  --discovery-accent: var(--discovery-accent-dark);
+  background: var(--bg);
+  color: var(--text-main);
+}
+
+.mobile-status-bar {
+  height: 38px;
+  padding: 12px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.mobile-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+}
+.mobile-content::-webkit-scrollbar { display: none; }
+
+/* Zen Brand Header */
+.zen-header {
+  margin-bottom: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.zen-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: 3px;
+  color: var(--text-main);
+}
+.zen-streak {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+
+/* Subtle Whisper Bar */
+.zen-stats-whisper {
+  display: flex;
+  gap: 16px;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.zen-stat-item span {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+/* Radical Story Index (Zero Cards, Pure Typography) */
+.story-entry {
+  margin-bottom: 28px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.story-entry:hover {
+  opacity: 0.75;
+}
+.story-index-num {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.story-hero-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+.story-body-snippet {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-sub);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.story-meta-whisper {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+/* Discovery Item (Quiet Asterism Marker) */
+.story-discovery {
+  margin-bottom: 28px;
+  padding-left: 14px;
+  border-left: 2px solid var(--discovery-accent);
+}
+.discovery-symbol {
+  color: var(--discovery-accent);
+  font-size: 11px;
+  margin-bottom: 4px;
+  display: block;
+}
+
+/* Whisper Bottom Dock */
+.zen-bottom-bar {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.zen-action-quiet {
+  background: none;
+  border: none;
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+/* Zen Reader */
+.zen-reader-progress {
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 24px;
+}
+.zen-reader-progress-fill {
+  height: 100%;
+  width: 35%;
+  background: var(--accent);
+}
+.zen-reader-article h1 {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.2;
+  margin-bottom: 12px;
+  color: var(--text-main);
+}
+.zen-reader-byline {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+.zen-reader-body {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--text-main);
+}
+.zen-reader-body p {
+  margin-bottom: 18px;
+}
+
+/* Zen Onboarding (Word Garden) */
+.zen-garden {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0;
+}
+.garden-item {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.garden-item.focused {
+  color: var(--text-main);
+  font-size: 20px;
+}
+.garden-item.muted-topic {
+  opacity: 0.3;
+  text-decoration: line-through;
+}
+.garden-indicator {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+/* Zen Stats */
+.zen-reflection-block {
+  margin-bottom: 28px;
+}
+.reflection-big {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 300;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.reflection-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Capability Dossier */
+.capability-dossier {
+  max-width: 1400px;
+  margin: 48px auto 0;
+  padding: 28px 32px;
+  background: #141514;
+  border: 1px solid #222422;
+  border-radius: 4px;
+}
+.capability-dossier h3 {
+  font-family: var(--font-sans);
+  color: #D45342;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.dossier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  font-size: 13px;
+  color: #8C9089;
+}
+.dossier-item strong {
+  color: #E4DFD5;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<header class="meta-banner">
+  <div>
+    <span class="badge-capsule">MOCKUP III · MONASTIC INDEX</span>
+    <h1>Radical Quietude & Pure Spatial Tension</h1>
+    <p>Zero cards, zero borders, zero artificial badges. Reduced to pristine typography and contemplative whitespace, transforming Tangent into a digital monastery for uninterrupted thought.</p>
+  </div>
+  <div>
+    <button class="mode-toggle-btn" onclick="toggleAllThemes()">
+      <span id="themeModeIcon">○</span> Toggle Day / Night
+    </button>
+  </div>
+</header>
+
+<div class="controls-bar">
+  <div class="screen-tabs">
+    <button class="screen-tab-btn active" onclick="showScreen('dashboard')">1. The Index (Feed)</button>
+    <button class="screen-tab-btn" onclick="showScreen('reader')">2. Silent Sanctuary (Reader)</button>
+    <button class="screen-tab-btn" onclick="showScreen('onboarding')">3. Word Garden (Priming)</button>
+    <button class="screen-tab-btn" onclick="showScreen('stats')">4. Contemplations (Stats)</button>
+    <button class="screen-tab-btn" onclick="showScreen('library')">5. Quiet Archive</button>
+    <button class="screen-tab-btn" onclick="showScreen('settings')">6. Disciplines (Settings)</button>
+  </div>
+  <span style="font-size: 11px; letter-spacing: 1px; color: #6F726D;">Washi Day & Sumi Night</span>
+</div>
+
+<main class="showcase-grid">
+
+  <!-- LIGHT VIEWPORT (WASHI) -->
+  <div class="frame-column">
+    <div class="frame-label">Specimen A: Washi Paper (Day)</div>
+    <div class="phone-viewport theme-light" id="viewport-light">
+      <div class="mobile-status-bar">
+        <span>09:41</span>
+        <span>TANGENT · 30</span>
+      </div>
+
+      <!-- DASHBOARD (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-dashboard">
+        <div class="zen-header">
+          <div class="zen-title">Tangent</div>
+          <div class="zen-streak">14 Dawns</div>
+        </div>
+
+        <div class="zen-stats-whisper">
+          <div class="zen-stat-item"><span>245</span> wpm pace</div>
+          <div class="zen-stat-item"><span>30</span> inquiries today</div>
+        </div>
+
+        <!-- HERO STORY (00) -->
+        <article class="story-entry">
+          <div class="story-index-num">I · Astral Codex Ten</div>
+          <h2 class="story-hero-title">Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h2>
+          <p class="story-body-snippet">An exhaustive inquiry into intelligence market dynamics, the commoditization of technical intuition, and why intellectual monopolies dissolve.</p>
+          <div class="story-meta-whisper">Scott Alexander · 8 min read</div>
+        </article>
+
+        <!-- STORY (01) -->
+        <article class="story-entry">
+          <div class="story-index-num">II · Stratechery</div>
+          <h2 class="story-hero-title" style="font-size: 18px;">The AI Integration Question</h2>
+          <div class="story-meta-whisper">Ben Thompson · 6 min read</div>
+        </article>
+
+        <!-- DISCOVERY STORY (04) -->
+        <article class="story-discovery">
+          <span class="discovery-symbol">⁂ Discovery Dispatch</span>
+          <h2 class="story-hero-title" style="font-size: 17px; font-style: italic;">The Lost Geometry of Renaissance Stone Masonry in Florence</h2>
+          <div class="story-meta-whisper">Antiquities Journal · 14 min</div>
+        </article>
+
+        <div class="zen-bottom-bar">
+          <span>26 remaining</span>
+          <button class="zen-action-quiet">Shuffle ↻</button>
+        </div>
+      </div>
+
+      <!-- READER (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-reader" style="display: none;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <button class="zen-action-quiet" onclick="showScreen('dashboard')">← Index</button>
+          <span style="font-size: 10px; color: var(--text-dim);">8 min read</span>
+        </div>
+        <div class="zen-reader-progress"><div class="zen-reader-progress-fill"></div></div>
+        <article class="zen-reader-article">
+          <div class="zen-reader-byline">Astral Codex Ten · Scott Alexander</div>
+          <h1>Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h1>
+          <div class="zen-reader-body">
+            <p>The assumption behind traditional software valuation was that intellectual property formed an impregnable moat. Once an algorithm or architecture was constructed, the marginal cost of distribution plummeted to zero.</p>
+            <p>Yet as generative synthesis and multi-agent systems mature, we discover something far more disconcerting: code is no longer scarce. Code has become an abundant, depreciating commodity.</p>
+            <p>When generation costs asymptotically approach zero, economic capture shifts entirely to verification, human attentional filters, and curated trust.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- ONBOARDING (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-onboarding" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 6px;">Taste Garden</div>
+        <p style="font-size: 12px; color: var(--text-sub); margin-bottom: 20px;">Tap to invite into your thoughts; cross to keep outside.</p>
+        
+        <div class="zen-garden">
+          <div class="garden-item focused">
+            <span>Philosophy</span>
+            <span class="garden-indicator" style="color: var(--accent);">PRIORITY</span>
+          </div>
+          <div class="garden-item focused">
+            <span>Technology</span>
+            <span class="garden-indicator" style="color: var(--accent);">PRIORITY</span>
+          </div>
+          <div class="garden-item">
+            <span>Science</span>
+            <span class="garden-indicator">NEUTRAL</span>
+          </div>
+          <div class="garden-item muted-topic">
+            <span>Politics</span>
+            <span class="garden-indicator">MUTED</span>
+          </div>
+          <div class="garden-item">
+            <span>Culture & Art</span>
+            <span class="garden-indicator">NEUTRAL</span>
+          </div>
+        </div>
+
+        <button class="zen-action-quiet" style="margin-top: auto; padding: 12px 0; text-align: left;" onclick="showScreen('dashboard')">Open the Sanctuary →</button>
+      </div>
+
+      <!-- STATS (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-stats" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 20px;">Contemplations</div>
+        
+        <div class="zen-reflection-block">
+          <div class="reflection-big">14</div>
+          <div class="reflection-sub">Consecutive Mornings in Focus</div>
+        </div>
+        <div class="zen-reflection-block">
+          <div class="reflection-big">245</div>
+          <div class="reflection-sub">Words per Minute Natural Cadence</div>
+        </div>
+        <div class="zen-reflection-block">
+          <div class="reflection-big">18.4</div>
+          <div class="reflection-sub">Hours Spent in Thoughtful Inquiry</div>
+        </div>
+      </div>
+
+      <!-- LIBRARY (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-library" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 20px;">Quiet Archive</div>
+        <div class="story-entry">
+          <h2 class="story-hero-title" style="font-size: 16px;">The Economics of Scarcity in Artificial Minds</h2>
+          <div class="story-meta-whisper">Stratechery · Saved for reflection</div>
+        </div>
+        <div class="story-entry">
+          <h2 class="story-hero-title" style="font-size: 16px;">Notes on the Architecture of Cathedrals</h2>
+          <div class="story-meta-whisper">The Honest Broker · Saved for reflection</div>
+        </div>
+      </div>
+
+      <!-- SETTINGS (LIGHT) -->
+      <div class="mobile-content screen-view" id="light-settings" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 20px;">Disciplines</div>
+        <div class="garden-item">
+          <span style="font-size: 14px;">Connected Account</span>
+          <span style="font-size: 10px; color: var(--text-dim);">morde@tangent</span>
+        </div>
+        <div class="garden-item">
+          <span style="font-size: 14px;">Reading Mode</span>
+          <span style="font-size: 10px; color: var(--accent);">Washi Day</span>
+        </div>
+        <div class="garden-item">
+          <span style="font-size: 14px;">Archived Substack Pulls</span>
+          <span style="font-size: 10px; color: var(--text-dim);">Quietly Included</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- DARK VIEWPORT (SUMI) -->
+  <div class="frame-column">
+    <div class="frame-label">Specimen B: Sumi Midnight (Night)</div>
+    <div class="phone-viewport theme-dark" id="viewport-dark">
+      <div class="mobile-status-bar">
+        <span>09:41</span>
+        <span>TANGENT · 30</span>
+      </div>
+
+      <!-- DASHBOARD (DARK) -->
+      <div class="mobile-content screen-view" id="dark-dashboard">
+        <div class="zen-header">
+          <div class="zen-title">Tangent</div>
+          <div class="zen-streak">14 Dawns</div>
+        </div>
+
+        <div class="zen-stats-whisper">
+          <div class="zen-stat-item"><span>245</span> wpm pace</div>
+          <div class="zen-stat-item"><span>30</span> inquiries today</div>
+        </div>
+
+        <article class="story-entry">
+          <div class="story-index-num">I · Astral Codex Ten</div>
+          <h2 class="story-hero-title">Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h2>
+          <p class="story-body-snippet">An exhaustive inquiry into intelligence market dynamics, the commoditization of technical intuition, and why intellectual monopolies dissolve.</p>
+          <div class="story-meta-whisper">Scott Alexander · 8 min read</div>
+        </article>
+
+        <article class="story-entry">
+          <div class="story-index-num">II · Stratechery</div>
+          <h2 class="story-hero-title" style="font-size: 18px;">The AI Integration Question</h2>
+          <div class="story-meta-whisper">Ben Thompson · 6 min read</div>
+        </article>
+
+        <article class="story-discovery">
+          <span class="discovery-symbol">⁂ Discovery Dispatch</span>
+          <h2 class="story-hero-title" style="font-size: 17px; font-style: italic;">The Lost Geometry of Renaissance Stone Masonry in Florence</h2>
+          <div class="story-meta-whisper">Antiquities Journal · 14 min</div>
+        </article>
+
+        <div class="zen-bottom-bar">
+          <span>26 remaining</span>
+          <button class="zen-action-quiet">Shuffle ↻</button>
+        </div>
+      </div>
+
+      <!-- READER (DARK) -->
+      <div class="mobile-content screen-view" id="dark-reader" style="display: none;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <button class="zen-action-quiet" onclick="showScreen('dashboard')">← Index</button>
+          <span style="font-size: 10px; color: var(--text-dim);">8 min read</span>
+        </div>
+        <div class="zen-reader-progress"><div class="zen-reader-progress-fill"></div></div>
+        <article class="zen-reader-article">
+          <div class="zen-reader-byline">Astral Codex Ten · Scott Alexander</div>
+          <h1>Why Software Margins and Epistemic Confidence Are Collapsing in Tandem</h1>
+          <div class="zen-reader-body">
+            <p>The assumption behind traditional software valuation was that intellectual property formed an impregnable moat. Once an algorithm or architecture was constructed, the marginal cost of distribution plummeted to zero.</p>
+            <p>Yet as generative synthesis and multi-agent systems mature, we discover something far more disconcerting: code is no longer scarce. Code has become an abundant, depreciating commodity.</p>
+            <p>When generation costs asymptotically approach zero, economic capture shifts entirely to verification, human attentional filters, and curated trust.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- ONBOARDING (DARK) -->
+      <div class="mobile-content screen-view" id="dark-onboarding" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 6px;">Taste Garden</div>
+        <p style="font-size: 12px; color: var(--text-sub); margin-bottom: 20px;">Tap to invite into your thoughts; cross to keep outside.</p>
+        
+        <div class="zen-garden">
+          <div class="garden-item focused">
+            <span>Philosophy</span>
+            <span class="garden-indicator" style="color: var(--accent);">PRIORITY</span>
+          </div>
+          <div class="garden-item focused">
+            <span>Technology</span>
+            <span class="garden-indicator" style="color: var(--accent);">PRIORITY</span>
+          </div>
+          <div class="garden-item">
+            <span>Science</span>
+            <span class="garden-indicator">NEUTRAL</span>
+          </div>
+          <div class="garden-item muted-topic">
+            <span>Politics</span>
+            <span class="garden-indicator">MUTED</span>
+          </div>
+          <div class="garden-item">
+            <span>Culture & Art</span>
+            <span class="garden-indicator">NEUTRAL</span>
+          </div>
+        </div>
+
+        <button class="zen-action-quiet" style="margin-top: auto; padding: 12px 0; text-align: left;" onclick="showScreen('dashboard')">Open the Sanctuary →</button>
+      </div>
+
+      <!-- STATS (DARK) -->
+      <div class="mobile-content screen-view" id="dark-stats" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 20px;">Contemplations</div>
+        
+        <div class="zen-reflection-block">
+          <div class="reflection-big">14</div>
+          <div class="reflection-sub">Consecutive Mornings in Focus</div>
+        </div>
+        <div class="zen-reflection-block">
+          <div class="reflection-big">245</div>
+          <div class="reflection-sub">Words per Minute Natural Cadence</div>
+        </div>
+        <div class="zen-reflection-block">
+          <div class="reflection-big">18.4</div>
+          <div class="reflection-sub">Hours Spent in Thoughtful Inquiry</div>
+        </div>
+      </div>
+
+      <!-- LIBRARY (DARK) -->
+      <div class="mobile-content screen-view" id="dark-library" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 20px;">Quiet Archive</div>
+        <div class="story-entry">
+          <h2 class="story-hero-title" style="font-size: 16px;">The Economics of Scarcity in Artificial Minds</h2>
+          <div class="story-meta-whisper">Stratechery · Saved for reflection</div>
+        </div>
+        <div class="story-entry">
+          <h2 class="story-hero-title" style="font-size: 16px;">Notes on the Architecture of Cathedrals</h2>
+          <div class="story-meta-whisper">The Honest Broker · Saved for reflection</div>
+        </div>
+      </div>
+
+      <!-- SETTINGS (DARK) -->
+      <div class="mobile-content screen-view" id="dark-settings" style="display: none;">
+        <div class="zen-title" style="margin-bottom: 20px;">Disciplines</div>
+        <div class="garden-item">
+          <span style="font-size: 14px;">Connected Account</span>
+          <span style="font-size: 10px; color: var(--text-dim);">morde@tangent</span>
+        </div>
+        <div class="garden-item">
+          <span style="font-size: 14px;">Reading Mode</span>
+          <span style="font-size: 10px; color: var(--accent);">Sumi Night</span>
+        </div>
+        <div class="garden-item">
+          <span style="font-size: 14px;">Archived Substack Pulls</span>
+          <span style="font-size: 10px; color: var(--text-dim);">Quietly Included</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<section class="capability-dossier">
+  <h3>System Specification Alignment · The Monastic Index</h3>
+  <div class="dossier-grid">
+    <div class="dossier-item">
+      <strong>1. Radical Visual Calming of Telemetry</strong>
+      Complex recommendation maths continue to execute in Cloud Functions v2 and SQLite, but the client deliberately sheds all visual noise to prioritize flow-state reading.
+    </div>
+    <div class="dossier-item">
+      <strong>2. Natural Gestural Discovery</strong>
+      Discovery slots are marked with the silent asterism ⁂ and subtle typographic italicization, maintaining the $w_P = 0.0$ discovery role without screaming badges.
+    </div>
+    <div class="dossier-item">
+      <strong>3. Zero-Interference WebView Reader</strong>
+      The article content occupies 100% of the screen. Reading speed is passively calculated on scroll depth and word count, with no visible overlays blocking the author's prose.
+    </div>
+    <div class="dossier-item">
+      <strong>4. Nightly Latent Drift Support</strong>
+      Matches the mathematical drift formula $x_{t+1} = x_t \times \lambda$, allowing interests to naturally decay back toward tranquility without manual pruning.
+    </div>
+  </div>
+</section>
+
+<script>
+function showScreen(screenId) {
+  document.querySelectorAll('.screen-tab-btn').forEach(btn => btn.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  
+  document.querySelectorAll('.screen-view').forEach(view => view.style.display = 'none');
+  
+  const lightTarget = document.getElementById(`light-${screenId}`);
+  const darkTarget = document.getElementById(`dark-${screenId}`);
+  if (lightTarget) lightTarget.style.display = 'flex';
+  if (darkTarget) darkTarget.style.display = 'flex';
+}
+
+function toggleAllThemes() {
+  const vLight = document.getElementById('viewport-light');
+  const vDark = document.getElementById('viewport-dark');
+  const isCurrentlyLight = vLight.classList.contains('theme-light');
+  
+  if (isCurrentlyLight) {
+    vLight.classList.replace('theme-light', 'theme-dark');
+    vDark.classList.replace('theme-dark', 'theme-light');
+  } else {
+    vLight.classList.replace('theme-dark', 'theme-light');
+    vDark.classList.replace('theme-light', 'theme-dark');
+  }
+}
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Tangent — Progress & Status
 
-> **Last verified:** 26 August 2026 (attention-factor engagement model, body-relative scroll measurement, WPM plausibility guards, geometry-only classification, stats-spec rewrite, M6 pull-to-refresh, M5 expo-constants, H2/H3/M1 audit fixes).
+> **Last verified:** 27 August 2026 (v2 sigmoid/latent transplant — single-formula scoring, Engagement Index, single-pass greedy selection, asymmetric rejection, nightly latent drift).
 > All status claims are based on reading the actual code.
 
 ---
@@ -32,9 +32,8 @@
 - ✅ **Old article cleanup cron** — Every 3 days: delete paywalled + query 500 worst-scoring articles by peakTrendingScore ASC, delete bottom 3% (fixed 500-read ceiling, composite index)
 - ✅ **peakTrendingScore tracking** — All-time high, never decays, same batch as trendingScore update
 - ✅ **Like/Unlike and Save/Unsave toggle** — Negative increments + per-user per-article dedup
-- ✅ **Normalized 4-component ranked feed** — All components [0,1]; two formulas (fullScore + tailScore). Diversity enforced by hard per-publisher cap of 5 during assembly.
-- ✅ **Tranche-based feed assembly** — 3 buckets: the highest-scoring eligible article is reserved within its normal High/Mid/Tail allocation and placed first as the opening Dashboard card; remaining High/Mid slots are random, and Tail is sorted by T+R for established users; configurable category maximum/minimum-distinct safeguards apply when eligible alternatives exist; final category-aware interleave avoids a third same-category card, then publisher spacing keeps repeats at least three cards apart whenever alternatives remain. Reader preserves this final backend order.
-- ✅ **Dynamic publisher quality** — `publishers` collection, 10-min TTL cache (C5), atomic increments
+- ✅ **v2 Sigmoid/Latent Transplant (27 Aug)** — P = sigmoid-blend of category+pub latents; T = S/(S+k) saturation; R = 1/(1+d/τ) monotone; Q = sigmoid(unbounded latent y, seed 1.386→0.80). Single formula (0.60P+0.15T+0.10R+0.15Q) for both selection and ordering. Publisher quality stored/updated as latent. Latent learning with δ=0.275 per thorough read, asymmetric rejection δ=-0.6875. Engagement Index E scales learning deltas via personalized WPM ratio. Nightly drift λ=0.95 toward 0.0. Single-pass greedy selection with subtractive penalties and discovery slots.
+- ✅ **Latent publisher quality** — `publishers` collection stores unbounded latent y (10-min TTL cache); write-time clamp ±20; optimized batch writes
 - ✅ **Archive-safe feed retrieval** — The archived-article preference is honored by the normal candidate pool, backend on-the-fly fallback and cache, final server filter, and phone-side Functions-outage fallback; current-only client fallback uses the `isPaywalled + rssStatus + publishDate` index
 - ✅ **Idempotent event sync** — `event.id` as Firestore doc ID
 - ✅ **Launch-ready recommendation attribution** — Each ranked article has a transient feed/impression ID; Reader actions retain it, allowing BigQuery to connect one exact recommendation appearance to its later outcome. Feed analytics also record reporting-only user stage, profile concentration, and discovery flags.
@@ -44,15 +43,19 @@
 - ✅ **Backend-authoritative reading sessions** — Client sends raw `read_session` telemetry; backend validates it, applies live Dashboard thresholds, and stores the final read outcome. Legacy read-family events are reclassified during rollout; explicit Like/Save/Not Interested actions are preserved.
 - ✅ **Personalized server WPM classification** — Backend validates raw telemetry server-side using action thresholds, then stores a final outcome. Read classification is **geometry-only** (quick-exit / thorough ≥70% / shallow ≥40% / else swipe-next); pace is handled separately by the attention factor. `read_skim` is no longer emitted by the classifier.
 - ✅ **WPM plausibility guards** — WPM is calibrated on any Reader visit, independent of read classification, but only from **consumed** words (word count × scroll depth) within the human-plausibility band [80, 600] and above a 150-word floor. Skims/flings/abandoned opens that would compute absurd speeds (e.g. 10,000 WPM) never corrupt the baseline.
-- ✅ **Attention-factor engagement model** — Read-session weight/trending/quality deltas are scaled by an Attention Factor `A` from implied WPM: ≤600 → 1.00, 600–1,750 → 0.35, >1,750 → 0 (fling, inert). Deliberate like/save/unlike/unsave ship unscaled.
+- ✅ **Latent feedback deltas** — `save +0.55, like +0.40, read_thorough +0.275, quick_exit -0.6875` etc. Read-session δ scaled by Engagement Index E.
 - ✅ **Body-relative scroll measurement** — Depth and word count are measured against the article body (not the whole document + recommendation modules), live geometry, throttled to 200 ms with a final-position capture on exit.
 - ✅ **Quick-exit double-fire fix** — Shared `sessionSnapshotRef` prevents duplicate raw session reports; cleanup retains latest scroll depth and rendered word count.
 - ✅ **Background pause protection** — React Native `AppState` excludes `inactive`/`background` intervals from normal, explicit-action, and cleanup session durations, preventing interruption time from corrupting WPM or reading-time statistics.
 - ✅ **AsyncStorage behavior queue** — 500-item cap, mutex-serialized (via shared `asyncStorageMutex`) (B6)
 - ✅ **Flush race condition fixed** — Same mutex for read/write; network outside mutex (B6)
 - ✅ **Offline sync with retry** — `offlineManager.ts`, 30s cooldown. Normal Reader close awaits local session queueing and immediately attempts the existing authenticated flush, so server-authoritative stats update without an avoidable queue delay; offline sessions remain queued honestly until reconnect.
-- ✅ **Watermark-based weight update** — `weightUpdatedAt` prevents replay; separate `weightsDecayedAt` applies the configured daily decay for every full elapsed day across category, length, and publisher preferences.
-- ✅ **Repeated quick-exit learning** — A single quick exit remains neutral. Distinct quick exits in one category accumulate only within the configurable time window; meeting the configurable threshold applies the existing `feedback.quick_exit` value once to that category only. Positive reads/Likes/Saves clear pending evidence.
+- ✅ **Watermark-based latent update** — `weightUpdatedAt` prevents replay; separate `weightsDecayedAt` applies nightly drift for every full elapsed day across latents.
+- ✅ **Asymmetric rejection learning (thresholded v2)** — Quick exits are counted per
+  axis (category / length / publisher) in a rolling 24h window; one capped penalty
+  (−0.6875) applies only after the configured minimum (default 2) is reached within the
+  window. A single mis-tap applies nothing; a positive signal clears the evidence. All
+  knobs live in `rejection.*` scoring config for the future Control Dashboard.
 - ✅ **Publisher cold-start balance** — No stored interaction for a publisher uses configurable 90% category / 10% publisher personalization; any stored publisher weight uses normal 60% / 40% weighting. A known negative publisher remains known and is not treated as unknown.
 - ✅ **WPM calibration** — Starts at 200. Any Reader exit supplies consumed words (word count × furthest scroll); WPM is words consumed ÷ active foreground time and updates with an 80% old / 20% new rolling average **only when the implied speed falls in the human-plausibility band [80, 600] and clears a 150-consumed-word floor**. Independent of read classification. Skims and flings cannot inflate it.
 - ✅ **Reading streak & weekly count** — `updateReadStats()` recounts weekly reads from this account's `read_thorough`/`read_shallow`/legacy-`read_skim` events in the rolling seven days on every sync (H2 fix — accurate across phones, never inflates). A streak day is a visit at/above the 40% depth bar; a save/like day alone cannot extend a streak. `UserContext` displays the same qualifying-event rule locally.

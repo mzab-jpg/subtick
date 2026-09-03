@@ -7,13 +7,9 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from './firebaseAdmin.js';
 import Parser from 'rss-parser';
 import { createHash } from 'crypto';
-import { SUBSTACK_FEEDS, PAYWALL_KEYWORDS } from './constants.js';
+import { SUBSTACK_FEEDS } from './constants.js';
+import { loadScoringConfig } from './scoringConfig.js';
 import { Article, FeedSource } from './types.js';
-
-const parser = new Parser({
-  timeout: 15000,
-  headers: { 'User-Agent': 'SubTick/1.0 RSS Collector' },
-});
 
 interface OgMetadata {
   headerImageUrl?: string;
@@ -25,13 +21,13 @@ interface OgMetadata {
 /**
  * Fallback metadata scraper that extracts Open Graph details from an article's live webpage.
  */
-async function fetchOgMetadata(url: string): Promise<OgMetadata> {
+async function fetchOgMetadata(url: string, timeoutSec: number): Promise<OgMetadata> {
   const metadata: OgMetadata = {};
   if (!url) return metadata;
 
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 6000); // 6 second timeout for scraper fallback
+    const id = setTimeout(() => controller.abort(), timeoutSec * 1000);
 
     const response = await fetch(url, {
       signal: controller.signal,
@@ -132,10 +128,10 @@ export function extractGuid(item: any): string {
   return item.guid || item.link || '';
 }
 
-function checkIsPaywalled(title: string, description: string, bodyHtml: string): boolean {
+function checkIsPaywalled(title: string, description: string, bodyHtml: string, keywords: string[]): boolean {
   const contentToCheck = `${title} ${description} ${bodyHtml}`.toLowerCase();
   
-  const isPaywalled = PAYWALL_KEYWORDS.some((keyword) =>
+  const isPaywalled = keywords.some((keyword) =>
     contentToCheck.includes(keyword.toLowerCase())
   );
 
@@ -163,6 +159,11 @@ function chunkArray<T>(array: T[], size: number): T[][] {
  */
 export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ totalNew: number; totalErrors: number; totalPaywalledSkipped: number }> {
   console.log('[rssCollector] Starting RSS collection...');
+  const cfg = await loadScoringConfig();
+  const parser = new Parser({
+    timeout: cfg.ingestion.parseTimeoutSec * 1000,
+    headers: { 'User-Agent': 'SubTick/1.0 RSS Collector' },
+  });
   let totalNew = 0;
   let totalErrors = 0;
   let totalPaywalledSkipped = 0;
@@ -191,8 +192,8 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
     feedsList = SUBSTACK_FEEDS.map(f => ({ ...f, isActive: true, forceArchived: false }));
   }
 
-  // Process feeds concurrently in smaller batches of 5 to avoid connection issues or rate limits
-  const feedChunks = chunkArray(feedsList, 5);
+  // Process feeds concurrently in smaller batches to avoid connection issues or rate limits
+  const feedChunks = chunkArray(feedsList, cfg.ingestion.feedChunkSize);
 
   for (const chunk of feedChunks) {
     await Promise.allSettled(
@@ -247,7 +248,7 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
               if (wordCount < 800) lengthStyle = 'short';
               else if (wordCount > 2000) lengthStyle = 'long';
 
-              const isPaywalled = checkIsPaywalled(title, description, bodyHtml);
+              const isPaywalled = checkIsPaywalled(title, description, bodyHtml, cfg.paywallKeywords);
 
               // Audit fix: paywalled articles are never displayed and never enter
               // candidate pools; skipping the write avoids paying to store them and
@@ -260,7 +261,7 @@ export async function collectRssFeeds(feedOverride?: FeedSource[]): Promise<{ to
               // 3. Automated Web-Scraping Fallback for incomplete/missing metadata
               if (!headerImageUrl || !description || author === 'Unknown' || title === 'Untitled') {
                 console.log(`[rssCollector] Missing metadata for "${title}". Scraping live webpage: ${link}`);
-                const og = await fetchOgMetadata(link);
+                const og = await fetchOgMetadata(link, cfg.ingestion.ogTimeoutSec);
                 
                 if (!headerImageUrl && og.headerImageUrl) {
                   headerImageUrl = og.headerImageUrl;
