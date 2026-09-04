@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tangent Control Dashboard — Pipeline Mockup v3 (exact mappings)</title>
+<style>
+:root{--bg:#12151c;--surface:#1a1f2b;--border:#2a3142;--text:#e8eaf0;--muted:#9aa3b5;
+--accent:#4ecca3;--accent2:#6366f1;--amber:#f59e0b;--red:#ef4444;--radius:10px;--mono:'Consolas','SF Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,'Segoe UI',Roboto,sans-serif;padding:24px}
+.wrap{max-width:1240px;margin:0 auto}
+.banner{background:#1a2332;border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--radius);padding:12px 16px;margin-bottom:18px;font-size:13px;color:var(--muted)}
+.banner b{color:var(--amber)}
+h1{font-size:20px;margin-bottom:4px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.gloss{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.gloss .term{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--muted);max-width:270px}
+.gloss .term b{color:var(--accent);font-family:var(--mono)}
+.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tab{padding:8px 18px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;font-weight:600;font-size:13px}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#0c1512}
+.view{display:none}.view.on{display:block}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.panel h2{font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.pipe{display:flex;align-items:stretch;flex-wrap:wrap;margin-bottom:4px}
+.stage{flex:1 1 0;min-width:92px;background:#151a26;border:1px solid var(--border);border-radius:8px;padding:9px 7px;cursor:pointer;transition:border-color .15s}
+.stage:hover{border-color:var(--accent)}
+.stage.sel{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2)}
+.stage .num{font-size:9.5px;color:var(--accent);font-weight:700;letter-spacing:1px}
+.stage .q{font-size:11px;font-weight:600;margin:3px 0 6px;line-height:1.3}
+.stage .val{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700;line-height:1.5}
+.stage .badge{margin-top:6px;font-family:var(--mono);font-size:10.5px;color:#0c1512;background:var(--accent);display:inline-block;padding:1px 6px;border-radius:999px;font-weight:700}
+.stage .badge.none{background:#2a3142;color:var(--muted)}
+.conn{display:flex;align-items:center;color:var(--border);font-size:16px;padding:0 1px}
+.info{background:#151a26;border:1px solid var(--border);border-left:3px solid var(--accent2);border-radius:8px;padding:14px 16px;margin-top:12px}
+.info h3{font-size:14px;margin-bottom:4px}
+.info .q{color:var(--accent2);font-size:12px;font-weight:700;margin-bottom:6px}
+.info p{font-size:13px;line-height:1.6}
+.info .sec{margin-top:8px;font-size:12px;color:var(--muted)}
+.info .sec b{color:var(--amber)}
+.trace-row{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px}
+.trace-row:last-child{border-bottom:none}
+.trace-row .left{flex:0 0 460px}
+.trace-row .lbl{color:var(--text)}
+.trace-row .sub2{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.trace-row .calc{font-family:var(--mono);color:var(--accent2);font-size:12.5px;padding-top:2px}
+.trace-row .out{font-family:var(--mono);font-weight:700;color:var(--text);margin-left:auto;padding-top:2px;white-space:nowrap}
+.trace-row.hl{background:#20263466}
+.trace-row.final .out{color:var(--accent);font-size:15px}
+.slider-row{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--border)}
+.slider-row:last-child{border:none}
+.slider-row .sl{flex:0 0 270px;font-size:13px}
+.slider-row .sl small{display:block;color:var(--muted);font-size:11px}
+.slider-row input[type=range]{flex:1;accent-color:var(--accent)}
+.slider-row .sv{font-family:var(--mono);width:84px;text-align:right;color:var(--accent);font-weight:700}
+.lever{display:flex;align-items:center;gap:12px;padding:9px 12px;border-bottom:1px solid var(--border)}
+.lever:last-child{border:none}
+.lever .rk{font-family:var(--mono);color:var(--muted);width:26px}
+.lever .ln{flex:1}
+.lever .ln small{display:block;color:var(--muted);font-size:11px}
+.lever .bar-wrap{flex:0 0 230px;height:8px;background:#202634;border-radius:4px;overflow:hidden}
+.lever .bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.lever .pv{font-family:var(--mono);width:190px;text-align:right;font-size:12px;color:var(--accent)}
+table.settings{width:100%;border-collapse:collapse;font-size:13px}
+table.settings td{padding:6px 10px;border-bottom:1px solid var(--border)}
+table.settings td.v{font-family:var(--mono);color:var(--accent);text-align:right;font-weight:700;white-space:nowrap;width:90px}
+table.settings td.g{color:var(--muted);font-size:12px}
+table.settings input[type=range]{width:190px;accent-color:var(--accent);vertical-align:middle}
+.chip{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:999px;background:#6366f126;color:#a5b4fc;border:1px solid #6366f140;cursor:pointer;white-space:nowrap}
+.note{font-size:12px;color:var(--muted);margin-top:10px}
+.pick{display:flex;gap:14px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.pick label{font-size:13px;color:var(--muted)}
+.pick select{background:#151a26;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px}
+.legend{font-size:11px;color:var(--muted);margin-top:6px}
+.btn{padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:#151a26;color:var(--text);cursor:pointer;font-weight:600;font-size:13px}
+.btn:hover{border-color:var(--accent)}
+.scenbar{background:#151a26;border:1px dashed var(--border);border-radius:8px;padding:8px 14px;margin-bottom:14px;font-size:12px;color:var(--muted);cursor:pointer}
+.scenbar:hover{border-color:var(--accent);color:var(--text)}
+@keyframes rowflash{0%{background:#f59e0b44}70%{background:#f59e0b22}100%{background:transparent}}
+tr.row-flash td{animation:rowflash 2.2s ease 1}
+tr.row-target td:first-child{border-left:3px solid var(--amber)}
+tr.stage-tint td{background:#6366f10d}
+.jumpcode{font-family:var(--mono);color:var(--accent)}
+.portal{position:fixed;z-index:60;width:330px;background:var(--surface);border:1px solid var(--accent2);border-radius:10px;padding:14px;box-shadow:0 10px 34px rgba(0,0,0,.55)}
+.portal h4{font-size:13px;margin-bottom:2px}
+.portal .pk{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px}
+.portal .pval{font-family:var(--mono);font-size:20px;color:var(--accent);font-weight:700;margin:8px 0 4px}
+.portal input[type=range]{width:100%;accent-color:var(--accent)}
+.portal .row{display:flex;gap:8px;margin-top:12px}
+.help{display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;border-radius:50%;background:#2a3142;color:var(--accent);font-size:10px;font-weight:700;cursor:help;vertical-align:middle;margin-left:6px;flex:0 0 auto}
+.help:hover,.help.pinned{background:var(--accent);color:#0c1512}
+#helptip{position:fixed;z-index:120;display:none;background:#202634;border:1px solid var(--accent2);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.55);pointer-events:none}
+#helptip .hk{font-family:var(--mono);font-size:10.5px;color:var(--muted);display:block;margin-bottom:6px}
+.imp{font-size:10px;color:var(--muted);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="banner"><b>MOCKUP v3 — exact mappings.</b> The trace is a literal port of <span style="font-family:var(--mono)">updateWeights</span> + the scoring normalizers: same order, same formulas (E = depth × pace-penalty with linear bands, P = 0.6·σ(cat)+0.4·σ(pub), T = s/(s+halfSat), R = 1/(1+d/τ)). Verified against the real compiled functions.</div>
+<h1>Tangent — the algorithm, faithfully drawn</h1>
+<div class="sub">Every stage, every multiplier, every curve — in the exact order the server applies them.</div>
+<div class="gloss" id="gloss"></div>
+<div class="tabs">
+  <button class="tab on" data-view="pipeline">① Pipeline &amp; live trace</button>
+  <button class="tab" data-view="levers">② Biggest levers</button>
+  <button class="tab" data-view="settings">③ All settings (editable)</button>
+</div>
+<div class="view on" id="view-pipeline">
+  <div class="scenbar" id="scenbar"></div>
+  <div class="panel" id="scenPanel" style="display:none;padding:12px 18px">
+    <h2>Scenario details</h2>
+    <div id="scenarioInputs"></div>
+    <div class="legend">Only the sliders relevant to the chosen action are shown — reading-session details hide for button actions, and vice versa.</div>
+  </div>
+  <div class="panel">
+    <h2>The pipeline — click a stage for the exact mechanics</h2>
+    <div class="pipe" id="pipe"></div>
+    <div class="info" id="stageInfo"></div>
+  </div>
+  <div class="panel">
+    <h2>Live trace — the server's arithmetic, step by step</h2>
+    <div class="trace" id="trace"></div>
+    <div class="note" id="traceNote"></div>
+  </div>
+</div>
+<div class="view" id="view-levers">
+  <div class="panel">
+    <h2>Biggest levers — measured across a basket of scenarios</h2>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px" id="leverIntro"></div>
+    <div id="levers"></div>
+    <div class="note">Impact = the largest relative output change across four scenarios (category thorough-read, publisher save, quick-exit threshold firing, reference-article scoring). Gate-type dials (thresholds, caps, windows) are binary triggers, not magnitudes — they show as such.</div>
+  </div>
+</div>
+<div class="view" id="view-settings">
+  <div class="panel">
+    <h2>All settings <button class="btn" id="resetBtn" style="float:right">↩ Reset all</button></h2>
+    <div class="note" id="jumpNote" style="display:none;margin:0 0 10px"></div>
+    <table class="settings" id="settingsTable"></table>
+    <div class="note">Each row shows its measured impact across the scenario basket. In production, ranges come from the server's NUM_RANGES and rows keep the full tooltips.</div>
+  </div>
+</div>
+<div class="portal" id="portal" style="display:none"></div>
+<div id="helptip" style="display:none"></div>
+</div>
+<script>
+'use strict';
+// ===== Exact copy of DEFAULT_SCORING_CONFIG numeric leaves =====
+const DEFAULTS = {
+  feedback: { save:0.55, unsave:-0.55, like:0.40, unlike:-0.40, read_thorough:0.275, read_shallow:0.10, swipe_next:0.00, swipe_not_interested:-0.6875 },
+  learning: { categorySensitivity:1.0, lengthSensitivity:1.0, publisherSensitivity:1.0, positiveSensitivity:1.0, rejectionSensitivity:1.0 },
+  engagement: { fullRatio:1.25, skimRatio:2.0, flingRatio:3.0, skimPenalty:0.50, flingPenalty:0.0 },
+  latent: { clamp:20, nightlyDecay:0.95, driftFloor:0.5, neutralLatent:0.0, publisherSeed:1.386, selectedLatent:0.85, notInterestedLatent:-0.85 },
+  sigmoid: { steepness:1.0 },
+  scoring: { personalization:0.60, trending:0.15, recency:0.10, quality:0.15, trendingHalfSat:25, recencyDaysConstant:14, publisherColdStartCategoryWeight:0.90, publisherColdStartPublisherWeight:0.10 },
+  rejection: { categoryMinQuickExits:2, lengthMinQuickExits:2, publisherMinQuickExits:2, windowMs:86400000, maxCategoryPenalty:0.6875 },
+  classification: { quickExitDepth:0.20, quickExitTimeoutSec:15, thoroughDepth:0.70, shallowDepth:0.40 },
+  wpm: { minPlausible:80, maxPlausible:600, minCalibrationWords:150 },
+  selection: { feedSize:30, categoryPenaltyStep:0.15, publisherPenaltyStep:0.25, discoverySlotInterval:5, jitterRange:0.03, maxArticlesPerCategory:15, minDistinctCategories:4 }
+};
+const CFG = JSON.parse(JSON.stringify(DEFAULTS));
+
+// ===== Exact ports of the server math =====
+const sigma = (x,k=CFG.sigmoid.steepness) => 1/(1+Math.exp(-(k*x)));            // scoringConfig.sigmoid
+const clampN = (v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const clampLatent = x => clampN(x, -CFG.latent.clamp, CFG.latent.clamp);        // clampLatent
+const fmt=(v,d=3)=>(v>=0?'+':'')+(+v).toFixed(d);
+const pct=v=>(v*100).toFixed(1)+'%';
+
+// computeEngagementIndex — literal port (scoringConfig.ts:380)
+function engagementIndex(depth, paceWpm, userAvgWpm, words){
+  const d = clampN(depth,0,1);
+  const consumed = Math.round(words*d);
+  if (!words || words<=0 || consumed < CFG.wpm.minCalibrationWords) return {E:d, pacePenalty:1, ratio:0, gated:true, consumed};
+  const baseline = userAvgWpm>0 ? userAvgWpm : CFG.wpm.maxPlausible;
+  const ratio = paceWpm/baseline;
+  const e = CFG.engagement;
+  let pp;
+  if (ratio <= e.fullRatio) pp = 1;
+  else if (ratio <= e.skimRatio){ const t=(ratio-e.fullRatio)/Math.max(1e-6,e.skimRatio-e.fullRatio); pp = 1 - t*(1-e.skimPenalty); }
+  else if (ratio <= e.flingRatio){ const t=(ratio-e.skimRatio)/Math.max(1e-6,e.flingRatio-e.skimRatio); pp = e.skimPenalty - t*(e.skimPenalty-e.flingPenalty); }
+  else pp = e.flingPenalty;
+  return {E:d*pp, pacePenalty:pp, ratio, gated:false, consumed};
+}
+// Normalizers — literal ports (getRankedFeed.ts:60-130)
+const normalizeP=(catL,pubL,catShare,pubShare)=>catShare*sigma(catL)+pubShare*sigma(pubL);
+const normalizeT=(s,halfSat)=>{const v=Math.max(0,s||0);return v/(v+halfSat);};
+const normalizeR=(days,tau)=>days<=0?1:1/(1+days/tau);
+const normalizeQ=(y)=>sigma(y);
+// Nightly drift (weightUpdater applyLatentDrift): sign-preserving toward floor
+function driftFn(x,days){
+  if(!days) return x;
+  const f=CFG.latent.driftFloor, lam=Math.pow(CFG.latent.nightlyDecay,days), m=Math.abs(x);
+  if(m<=f) return x;
+  return Math.sign(x)*(f+(m-f)*lam);
+}
+// ===== Scenario state =====
+const SCN = {
+  action:'read_thorough', axis:'category',
+  scrollDepth:0.85, paceWpm:250, userAvgWpm:250, articleWords:900,
+  idleDays:0, prevCat:1.0, prevPub:0.5, prevLen:0.2,
+  pubQualityLatent:1.386, trendingScore:12, daysOld:4
+};
+const ACTIONS={
+  read_thorough:{label:'Thorough read', key:'read_thorough', pol:'positive', isRead:true},
+  read_shallow:{label:'Shallow read', key:'read_shallow', pol:'positive', isRead:true},
+  save:{label:'Save', key:'save', pol:'positive', isRead:false},
+  like:{label:'Like', key:'like', pol:'positive', isRead:false},
+  swipe_not_interested:{label:'Not interested', key:'swipe_not_interested', pol:'rejection', isRead:false},
+  quick_exit:{label:'Quick exit (thresholded)', key:null, pol:'rejection', isRead:true, special:true}
+};
+const AXES={category:{sens:'categorySensitivity',min:'categoryMinQuickExits',prev:'prevCat'},publisher:{sens:'publisherSensitivity',min:'publisherMinQuickExits',prev:'prevPub'},length:{sens:'lengthSensitivity',min:'lengthMinQuickExits',prev:'prevLen'}};
+// ===== Trace engine: literal port of updateWeights event processing =====
+function computeTrace(){
+  const a=ACTIONS[SCN.action], S=[];
+  const add=(stage,lbl,sub,calc,out,final)=>S.push({stage,lbl,sub,calc,out,final});
+  const gate = CFG.classification;
+  let E=1;
+  // -- Stage 1: classification (client-side, gates from config) --
+  if(a.special){
+    const cls = (SCN.scrollDepth < gate.quickExitDepth) ? 'quick exit' : 'NOT a quick exit';
+    add(1,'Session classified: '+cls,
+      'Quick exit = scroll < '+(gate.quickExitDepth*100).toFixed(0)+'% AND leave \u2264 '+gate.quickExitTimeoutSec+'s. A quick exit takes the rejection branch below INSTEAD of the normal delta path.',
+      '', cls);
+  } else if(a.isRead){
+    const cls = SCN.scrollDepth >= gate.thoroughDepth ? 'thorough' : (SCN.scrollDepth >= gate.shallowDepth ? 'shallow' : 'weak (< '+(gate.shallowDepth*100).toFixed(0)+'%)');
+    add(1,'Session classified: '+cls,
+      'Scroll \u2265 '+(gate.thoroughDepth*100).toFixed(0)+'% = thorough (\u03b4 '+fmt(CFG.feedback.read_thorough,3)+'); \u2265 '+(gate.shallowDepth*100).toFixed(0)+'% = shallow (\u03b4 '+fmt(CFG.feedback.read_shallow,3)+'); below that the read barely counts.',
+      '', cls);
+  } else {
+    add(1,'Button action \u2014 no reading session to judge',
+      'Save, like, not-interested: the system never second-guesses a button press. Only reading sessions get classified by scroll and time.','','direct');
+  }
+  if(a.special){ // rejection branch (applyQuickExitRejection port)
+    return rejectionTrace(S);
+  }
+  // -- Stage 2: engagement E (reads only) --
+  if(a.isRead){
+    const eInfo = engagementIndex(SCN.scrollDepth, SCN.paceWpm, SCN.userAvgWpm, SCN.articleWords);
+    E = eInfo.E;
+    add(2,'E = depth '+SCN.scrollDepth.toFixed(2)+' \u00d7 pace-penalty '+eInfo.pacePenalty.toFixed(3)+' = '+E.toFixed(3),
+      eInfo.gated
+        ? 'Only '+eInfo.consumed+' words consumed (< '+CFG.wpm.minCalibrationWords+' minimum) \u2014 too little to judge pace, so E = depth alone.'
+        : 'Pace '+SCN.paceWpm+' \u00f7 their average '+SCN.userAvgWpm+' = ratio '+eInfo.ratio.toFixed(2)+'. Bands: \u2264'+CFG.engagement.fullRatio.toFixed(2)+' full \u2192 \u2264'+CFG.engagement.skimRatio.toFixed(1)+' linear to '+CFG.engagement.skimPenalty.toFixed(2)+' \u2192 \u2264'+CFG.engagement.flingRatio.toFixed(1)+' linear to '+CFG.engagement.flingPenalty.toFixed(2)+' \u2192 beyond = fling.',
+      '\u00d7'+E.toFixed(3), fmt(E,3));
+  } else {
+    add(2,'No attention check for button actions','A save is always a full save \u2014 pace and scroll depth never scale button actions. Reading sessions are the only thing attention-credited.','','full strength');
+  }
+  return learningTrace(S, a, E);
+}
+function rejectionTrace(S){
+  const ax = AXES[SCN.axis];
+  const min = CFG.rejection[ax.min];
+  const magnitude = CFG.rejection.maxCategoryPenalty * CFG.learning.rejectionSensitivity * CFG.learning[ax.sens];
+  S.push({stage:1,lbl:'Counter: '+(min-1)+' exits already in a '+Math.round(CFG.rejection.windowMs/86400000)+'-day window \u2014 this is exit #'+min,
+    sub:'Per-axis counter (category, length AND publisher each count separately, with their own thresholds). Window resets if stale. Penalty fires EXACTLY ONCE at the first crossing.',calc:'',out:'crosses'});
+  S.push({stage:1,lbl:'Penalty = '+CFG.rejection.maxCategoryPenalty.toFixed(4)+' \u00d7 bad-volume '+CFG.learning.rejectionSensitivity.toFixed(2)+' \u00d7 '+SCN.axis+' volume '+CFG.learning[ax.sens].toFixed(2),
+    sub:'The capped penalty scales by the rejection dial and this axis\u2019s learning multiplier \u2014 the same dials that scale positive signals.',calc:'\u2212'+magnitude.toFixed(4),out:fmt(-magnitude,4)});
+  const after = clampLatent(SCN[ax.prev] - magnitude);
+  S.push({stage:4,lbl:SCN.axis+' latent: '+SCN[ax.prev].toFixed(2)+' \u2212 '+magnitude.toFixed(4)+' \u2192 '+after.toFixed(3),
+    sub:'Subtracted directly from the stored score, clamped to \u00b1'+CFG.latent.clamp+'. (Quick exits touch category, length AND publisher counters at once.)',calc:'',out:after.toFixed(3)});
+  const s=strengthOf(after);
+  S.push({stage:6,lbl:'Strength \u03c3('+CFG.sigmoid.steepness.toFixed(2)+'\u00b7'+after.toFixed(2)+') = '+pct(s),
+    sub:'Points \u2192 pull via the S-curve.',calc:'S-curve',out:pct(s)});
+  S.push({stage:3,lbl:'Note: any positive event on this axis ERASES the counter',
+    sub:'In the real updater, a positive delta deletes that axis\u2019s rejection evidence \u2014 engaging positively proves the axis isn\u2019t actually disliked.',calc:'',out:''});
+  return S;
+}
+function learningTrace(S, a, E){
+  const delta = a.key ? CFG.feedback[a.key] : 0;
+  const raw = delta * E;
+  S.push({stage:2,lbl:'Points: '+fmt(delta,4)+' fixed \u00d7 E '+E.toFixed(3)+' = '+fmt(raw,4),
+    sub:'E slides 0\u21921 (this session: '+E.toFixed(3)+'). The fixed value comes from the Feedback Dials; button actions pin E at 1.00, so they always earn full points.',calc:'',out:fmt(raw,4)});
+  const dir = raw>0 ? CFG.learning.positiveSensitivity : CFG.learning.rejectionSensitivity;
+  S.push({stage:3,lbl:'\u00d7 '+(raw>0?'good':'bad')+'-signal volume \u00d7'+dir.toFixed(2),
+    sub:'Chosen automatically by the SIGN of the raw delta \u2014 not a separate decision. One dial scales all positive signals, one all negative.',calc:'\u00d7'+dir.toFixed(2),out:fmt(raw*dir,4)});
+  const axes=[['category',SCN.prevCat,'categorySensitivity'],['length',SCN.prevLen,'lengthSensitivity'],['publisher',SCN.prevPub,'publisherSensitivity']];
+  const updated={};
+  axes.forEach(([name,prev,sensKey])=>{
+    const d2 = raw*dir*CFG.learning[sensKey];
+    updated[name]=clampLatent(prev+d2);
+    S.push({stage:4,lbl:name+' latent: '+prev.toFixed(2)+' '+(d2>=0?'+':'\u2212')+' '+Math.abs(d2).toFixed(4)+' \u2192 '+updated[name].toFixed(3),
+      sub:'Every event updates all THREE axes at once, each scaled by its own volume dial ('+name+': \u00d7'+CFG.learning[sensKey].toFixed(2)+'). Clamp \u00b1'+CFG.latent.clamp+'.',calc:'\u00d7'+CFG.learning[sensKey].toFixed(2),out:updated[name].toFixed(3)});
+  });
+  const dCat=driftFn(updated.category,SCN.idleDays), dPub=driftFn(updated.publisher,SCN.idleDays);
+  if(SCN.idleDays>0){
+    S.push({stage:5,lbl:'After '+SCN.idleDays+' idle days: category \u2192 '+dCat.toFixed(3)+', publisher \u2192 '+dPub.toFixed(3),
+      sub:'Each idle day multiplies by '+CFG.latent.nightlyDecay.toFixed(2)+' ('+SCN.idleDays+' days = \u00d7'+Math.pow(CFG.latent.nightlyDecay,SCN.idleDays).toFixed(3)+'), toward the retention floor '+CFG.latent.driftFloor.toFixed(2)+' pts \u2014 never below it, sign preserved.',calc:'',out:'drifted'});
+  } else {
+    S.push({stage:5,lbl:'0 idle days \u2014 nightly drift does not apply',sub:'Runs once per full day away from the app.',calc:'',out:'unchanged'});
+  }
+  return scoringTrace(S, dCat, dPub);
+}
+function scoringTrace(S, dCat, dPub){
+  const P = normalizeP(dCat, dPub, 0.6, 0.4);
+  S.push({stage:6,lbl:'P = 0.6\u00b7\u03c3('+dCat.toFixed(2)+') + 0.4\u00b7\u03c3('+dPub.toFixed(2)+') = '+P.toFixed(3),
+    sub:'TWO separate S-curves (category and publisher strengths, each 50% at 0 pts), blended. Known publisher: 0.6/0.4; brand-new publisher: 0.9/0.1 (cold-start dials).',calc:'',out:P.toFixed(3)});
+  const T = normalizeT(SCN.trendingScore, CFG.scoring.trendingHalfSat);
+  S.push({stage:6,lbl:'T = '+SCN.trendingScore+' / ('+SCN.trendingScore+' + '+CFG.scoring.trendingHalfSat+') = '+T.toFixed(3),
+    sub:'Trending curve: hyperbolic, NOT sigmoid. At S = '+CFG.scoring.trendingHalfSat+' (the half-saturation dial) T = exactly 0.5.',calc:'',out:T.toFixed(3)});
+  const R = normalizeR(SCN.daysOld, CFG.scoring.recencyDaysConstant);
+  S.push({stage:6,lbl:'R = 1 / (1 + '+SCN.daysOld+' / '+CFG.scoring.recencyDaysConstant+') = '+R.toFixed(3),
+    sub:'Freshness curve: '+CFG.scoring.recencyDaysConstant+' days old \u2192 R = 0.5; published today \u2192 R = 1.',calc:'',out:R.toFixed(3)});
+  const Q = normalizeQ(SCN.pubQualityLatent);
+  S.push({stage:6,lbl:'Q = \u03c3('+SCN.pubQualityLatent.toFixed(2)+') = '+Q.toFixed(3),
+    sub:'Publisher quality latent through the same S-curve family (new publishers seed at '+CFG.latent.publisherSeed+' \u2192 0.80).',calc:'',out:Q.toFixed(3)});
+  const FS = CFG.scoring.personalization*P + CFG.scoring.trending*T + CFG.scoring.recency*R + CFG.scoring.quality*Q;
+  S.push({stage:7,lbl:'FS = '+CFG.scoring.personalization.toFixed(2)+'\u00b7P + '+CFG.scoring.trending.toFixed(2)+'\u00b7T + '+CFG.scoring.recency.toFixed(2)+'\u00b7R + '+CFG.scoring.quality.toFixed(2)+'\u00b7Q = '+FS.toFixed(3),
+    sub:'The four weights rank the feed. They may sum \u2260 1 \u2014 above 1.0 a factor deliberately dominates.',calc:'',out:FS.toFixed(3),final:true});
+  return S;
+}
+function strengthOf(pts){ return sigma(pts); }
+// ===== Pipeline strip: 7 stages, exact group ownership =====
+const STAGES=[
+  {n:1,name:'Classify',q:'What kind of event is this?',keys:['classification.quickExitDepth','classification.quickExitTimeoutSec','classification.thoroughDepth','classification.shallowDepth'],
+   live(){return (CFG.classification.quickExitDepth*100).toFixed(0)+'% / '+CFG.classification.quickExitTimeoutSec+'s | \u2265'+(CFG.classification.thoroughDepth*100).toFixed(0)+'% / \u2265'+(CFG.classification.shallowDepth*100).toFixed(0)+'%';},
+   text(){return 'Quick exit = scroll < '+(CFG.classification.quickExitDepth*100).toFixed(0)+'% within '+CFG.classification.quickExitTimeoutSec+'s. Thorough = scroll \u2265 '+(CFG.classification.thoroughDepth*100).toFixed(0)+'%. Shallow = \u2265 '+(CFG.classification.shallowDepth*100).toFixed(0)+'% but below thorough. Button actions skip this stage entirely. Section: Read Classification.';}},
+  {n:2,name:'Points \u00d7 attention',q:'How many points does this action earn?',keys:['feedback.read_thorough','feedback.read_shallow','feedback.save','feedback.like','feedback.unlike','feedback.unsave','feedback.swipe_next','feedback.swipe_not_interested','engagement.fullRatio','engagement.skimRatio','engagement.flingRatio','engagement.skimPenalty','engagement.flingPenalty','wpm.minCalibrationWords','wpm.maxPlausible'],
+   live(){const a=ACTIONS[SCN.action];if(a.special)return 'capped penalty';const e=a.isRead?engagementIndex(SCN.scrollDepth,SCN.paceWpm,SCN.userAvgWpm,SCN.articleWords).E:1;return '\u03b4 '+fmt(CFG.feedback[a.key],3)+' \u00d7 E '+e.toFixed(2);},
+   text(){return 'FINAL POINTS = the action\u2019s FIXED points \u00d7 E, where E is a sliding scale from 0 to 1. The fixed points come from the Feedback Dials and never change per session (a thorough read +'+CFG.feedback.read_thorough.toFixed(3)+', a save +'+CFG.feedback.save.toFixed(2)+'). Button actions PIN E at 1.00 \u2014 a save always earns its full points. Reading sessions compute E = scroll depth \u00d7 pace penalty: the pace ratio (session WPM \u00f7 that reader\u2019s own average, fallback '+CFG.wpm.maxPlausible+' WPM) slides E from 1.00 at '+CFG.engagement.fullRatio.toFixed(2)+'\u00d7 down to '+CFG.engagement.flingPenalty.toFixed(2)+' at '+CFG.engagement.flingRatio.toFixed(1)+'\u00d7 \u2014 a fling changes nothing. Under '+CFG.wpm.minCalibrationWords+' words there is not enough evidence to judge pace, so E = depth alone. Sections: Feedback Deltas + Engagement Index.';}},
+  {n:3,name:'Good/bad \u00d7',q:'Volume for this signal\u2019s sign?',keys:['learning.positiveSensitivity','learning.rejectionSensitivity'],
+   live(){return '\u00d7'+CFG.learning.positiveSensitivity.toFixed(2)+' / \u00d7'+CFG.learning.rejectionSensitivity.toFixed(2);},
+   text(){return 'Chosen automatically by whether the points are positive or negative \u2014 you never pick it directly. One dial scales every positive signal, the other every negative one. Section: Learning Speed.';}},
+  {n:4,name:'Axis \u00d7 + store',q:'Which preferences move, how fast?',keys:['learning.categorySensitivity','learning.publisherSensitivity','learning.lengthSensitivity','latent.clamp','latent.neutralLatent'],
+   live(){return 'cat \u00d7'+CFG.learning.categorySensitivity.toFixed(2)+' \u00b7 pub \u00d7'+CFG.learning.publisherSensitivity.toFixed(2)+' \u00b7 len \u00d7'+CFG.learning.lengthSensitivity.toFixed(2);},
+   text(){return 'EVERY event updates all three axes (category, publisher, length-style), each scaled by its own volume dial. Results are added to the stored scores (latents), clamped to \u00b1'+CFG.latent.clamp+'. Quick-exit penalties use these same dials. Section: Learning Speed + Latent Learning.';}},
+  {n:5,name:'Nightly drift',q:'What happens while they\u2019re away?',keys:['latent.nightlyDecay','latent.driftFloor'],
+   live(){return '\u00d7'+CFG.latent.nightlyDecay.toFixed(2)+'/day \u00b7 floor '+CFG.latent.driftFloor.toFixed(2);},
+   text(){return 'Once per full idle day: score \u00d7 '+CFG.latent.nightlyDecay.toFixed(2)+', but |score| never drops below the retention floor ('+CFG.latent.driftFloor.toFixed(2)+' pts \u2248 '+pct(strengthOf(CFG.latent.driftFloor))+' strength) and never flips sign. Runs in a separate nightly pass, not during events. Section: Latent Learning.';}},
+  {n:6,name:'Curves',q:'How do points become 0\u20131 scores?',keys:['sigmoid.steepness','scoring.trendingHalfSat','scoring.recencyDaysConstant','scoring.publisherColdStartCategoryWeight','scoring.publisherColdStartPublisherWeight','latent.publisherSeed'],
+   live(){return '\u03c3(k='+CFG.sigmoid.steepness.toFixed(2)+') | T\u00bd@'+CFG.scoring.trendingHalfSat+' | R\u00bd@'+CFG.scoring.recencyDaysConstant+'d';},
+   text(){return 'Four different curves: P and Q use the S-curve \u03c3(steepness\u00b7x) \u2014 P blends TWO of them (0.6 category + 0.4 publisher; 0.9/0.1 for new publishers, seed '+CFG.latent.publisherSeed+' \u2192 0.80). T is hyperbolic s/(s+'+CFG.scoring.trendingHalfSat+'). R is 1/(1+days/'+CFG.scoring.recencyDaysConstant+'). Sections: Taste & Quality Curves + Score Weights.';}},
+  {n:7,name:'Blend & rank',q:'What decides the feed order?',keys:['scoring.personalization','scoring.trending','scoring.recency','scoring.quality','selection.feedSize','selection.categoryPenaltyStep','selection.publisherPenaltyStep','selection.discoverySlotInterval','selection.jitterRange','selection.maxArticlesPerCategory','selection.minDistinctCategories'],
+   live(){return 'P '+CFG.scoring.personalization.toFixed(2)+' \u00b7 T '+CFG.scoring.trending.toFixed(2)+' \u00b7 R '+CFG.scoring.recency.toFixed(2)+' \u00b7 Q '+CFG.scoring.quality.toFixed(2);},
+   text(){return 'FS = wP\u00b7P + wT\u00b7T + wR\u00b7R + wQ\u00b7Q \u2014 the weights rank candidates. Then greedy assembly: each prior pick from a category docks its remaining articles by '+CFG.selection.categoryPenaltyStep.toFixed(2)+' (publishers '+CFG.selection.publisherPenaltyStep.toFixed(2)+'), a discovery slot ignores taste every ~'+CFG.selection.discoverySlotInterval+' cards, \u00b1'+CFG.selection.jitterRange.toFixed(2)+' jitter keeps order organic, caps and variety guards apply. Sections: Score Weights + Feed Selection.';}}
+];
+// ===== Dial metadata [label,min,max,step] + gate set =====
+const LBL={
+ 'classification.quickExitDepth':['Quick-exit depth',0,1,0.01],'classification.quickExitTimeoutSec':['Quick-exit timeout (s)',5,60,1],
+ 'classification.thoroughDepth':['Thorough depth',0,1,0.01],'classification.shallowDepth':['Shallow depth',0,1,0.01],
+ 'feedback.read_thorough':['Thorough read \u03b4',-1,1,0.005],'feedback.read_shallow':['Shallow read \u03b4',-1,1,0.005],
+ 'feedback.save':['Save \u03b4',-1,1,0.01],'feedback.unsave':['Unsave \u03b4',-1,1,0.01],'feedback.like':['Like \u03b4',-1,1,0.01],
+ 'feedback.unlike':['Unlike \u03b4',-1,1,0.01],'feedback.swipe_next':['Swipe-past \u03b4',-1,1,0.01],'feedback.swipe_not_interested':['Not-interested \u03b4',-1,1,0.005],
+ 'engagement.fullRatio':['Full-credit pace ratio',0.5,3,0.05],'engagement.skimRatio':['Skim ratio',1,5,0.05],'engagement.flingRatio':['Fling ratio',1,8,0.05],
+ 'engagement.skimPenalty':['Skim credit',0,1,0.01],'engagement.flingPenalty':['Fling credit',0,1,0.01],
+ 'wpm.minCalibrationWords':['Min words for pace judgment',0,500,10],'wpm.maxPlausible':['Fallback average WPM',200,900,10],'wpm.minPlausible':['Min plausible WPM',40,200,5],
+ 'learning.categorySensitivity':['Category volume',0,2,0.05],'learning.publisherSensitivity':['Publisher volume',0,2,0.05],
+ 'learning.lengthSensitivity':['Length volume',0,2,0.05],'learning.positiveSensitivity':['Good-signal volume',0,2,0.05],'learning.rejectionSensitivity':['Bad-signal volume',0,2,0.05],
+ 'latent.clamp':['Clamp (outer bound)',5,50,1],'latent.neutralLatent':['New-preference start',-3,3,0.01],
+ 'latent.nightlyDecay':['Nightly decay',0.5,1,0.001],'latent.driftFloor':['Retention floor (pts)',0,3,0.01],
+ 'latent.publisherSeed':['New-publisher seed',-3,3,0.01],'latent.selectedLatent':['Auto-add to Selected above',0,3,0.01],
+ 'latent.notInterestedLatent':['Auto-add to Not-interested below',-3,0,0.01],
+ 'sigmoid.steepness':['Curve steepness (P & Q)',0.25,4,0.05],
+ 'scoring.personalization':['P weight',0,1.5,0.01],'scoring.trending':['T weight',0,1.5,0.01],
+ 'scoring.recency':['R weight',0,1.5,0.01],'scoring.quality':['Q weight',0,1.5,0.01],
+ 'scoring.trendingHalfSat':['T half-saturation (S at T=0.5)',1,200,1],'scoring.recencyDaysConstant':['R half-life (days)',1,90,1],
+ 'scoring.publisherColdStartCategoryWeight':['Cold-start: category share',0,1,0.01],'scoring.publisherColdStartPublisherWeight':['Cold-start: publisher share',0,1,0.01],
+ 'rejection.categoryMinQuickExits':['Exits to trigger (category)',1,20,1],'rejection.lengthMinQuickExits':['Exits to trigger (length)',1,20,1],
+ 'rejection.publisherMinQuickExits':['Exits to trigger (publisher)',1,20,1],'rejection.windowMs':['Window (days)',1,7,1],
+ 'rejection.maxCategoryPenalty':['Capped penalty',0,3,0.01],
+ 'selection.feedSize':['Feed size',10,60,1],'selection.categoryPenaltyStep':['Category penalty per pick',0,0.5,0.01],
+ 'selection.publisherPenaltyStep':['Publisher penalty per pick',0,0.5,0.01],'selection.discoverySlotInterval':['Discovery slot interval',3,10,1],
+ 'selection.jitterRange':['Jitter (\u00b1)',0,0.15,0.005],'selection.maxArticlesPerCategory':['Max per category',5,30,1],'selection.minDistinctCategories':['Min distinct categories',1,10,1]
+};
+const GATES=new Set(['rejection.categoryMinQuickExits','rejection.lengthMinQuickExits','rejection.publisherMinQuickExits','rejection.windowMs','selection.feedSize','selection.maxArticlesPerCategory','selection.minDistinctCategories','selection.discoverySlotInterval','wpm.minCalibrationWords','classification.quickExitDepth','classification.quickExitTimeoutSec','classification.thoroughDepth','classification.shallowDepth']);
+const setVal=(p,v)=>{const[g,k]=p.split('.');CFG[g][k]=v;};
+const getVal=p=>{const[g,k]=p.split('.');return CFG[g][k];};
+// ===== Help texts (ported verbatim from the production dashboard TIPS) =====
+const HELP = {"classification.quickExitDepth":"If the reader scrolls less than this fraction of the article AND leaves within the timeout below, the session is a quick exit. Both conditions must be true — quickly finishing a short article you fully scrolled is NOT a quick exit. Default 0.20 (20% of the page).","classification.quickExitTimeoutSec":"The time half of the quick-exit test: leaving within this many seconds, combined with the shallow scroll above, marks the session as a quick exit. Default 15 seconds.","classification.thoroughDepth":"Scroll past this fraction of the article and the read can qualify as THOROUGH — the strongest positive signal reading can give. Default 0.70.","classification.shallowDepth":"Between this fraction and thoroughDepth a read is SHALLOW: real but partial. Below it (with the timeout) the session becomes a quick exit instead. Default 0.40.","feedback.read_thorough":"Points added when someone reads 70%+ of an article (see Read Classification). This is the workhorse signal — the main way a category earns trust, one genuine read at a time. Default +0.275.","feedback.read_shallow":"Points added for a partial read (40-70% of the page). Still positive — they chose to open it — but weaker than a thorough read. Shallow reads also count toward weekly-read totals and streaks. Default +0.10.","feedback.save":"Points added to the category's and publisher's preference when someone SAVES an article. Saving is a strong, deliberate signal — the user explicitly wants to come back to this. Raise it to make saves teach faster; keep the unsave below symmetric so undoing cancels cleanly. Default +0.55.","feedback.unsave":"Points removed when someone un-saves — the mirror of save, so an undo cancels the original save exactly. Default -0.55.","feedback.like":"Points added per LIKE. A lighter positive signal than saving — it is quick to tap, so it earns less. Default +0.40.","feedback.unlike":"Points removed when a like is taken back. Default -0.40.","feedback.swipe_next":"Points for swiping past WITHOUT opening. Deliberately zero: skipping without looking is not evidence of dislike — users skip good articles all the time. Make it negative only if you want every skip to actively suppress a category. Default 0.00.","feedback.swipe_not_interested":"Points removed when someone swipes 'not interested'. This is a deliberate, strong rejection — 2.5x a thorough read, applied immediately (unlike quick exits, which need repeated evidence first). Default -0.6875.","engagement.fullRatio":"If the reader's speed is at or below this multiple of their own average pace, the read earns FULL credit. 1.25 means 'up to 25% faster than your norm is still genuine reading'. Default 1.25.","engagement.skimRatio":"At this speed ratio credit has dropped to the skim amount. Between fullRatio and skimRatio the credit slides smoothly from full to skim. Default 2.0 (twice their normal speed).","engagement.flingRatio":"At or above this ratio the session is a 'fling' — a blast through the page that contributes ZERO to learning. Reading at triple your normal speed is not reading. Default 3.0.","engagement.skimPenalty":"The credit multiplier applied at the skim ratio (interpolated between the full and fling ratios). 0.50 = a skim counts for half. Default 0.50.","engagement.flingPenalty":"The credit multiplier at or above the fling ratio. 0.0 = flings teach the model nothing. Default 0.0.","wpm.minCalibrationWords":"Minimum words a person must actually consume before we trust the session's speed enough to update their personal reading pace. Raise for stricter evidence, lower to calibrate sooner but noisier. Default 150.","wpm.maxPlausible":"The fastest speed we consider actual reading. Faster sessions are skimming: reduced attention credit, and they cannot recalibrate the user's reading pace. Also the fallback pace baseline for users we do not know yet. Default 600.","wpm.minPlausible":"The slowest reading speed we consider real (words per minute). Sessions slower than this look like a parked app: they neither recalibrate the user's reading pace nor earn full attention credit. Lower only if very slow readers seem unfairly excluded. Default 80.","learning.categorySensitivity":"Master volume for CATEGORY learning. 1.0 = normal speed, 0.5 = every category signal counts half, 0 = categories never change from behaviour. Useful for A/B tests or if categories seem to overreact to a few sessions. Default 1.0.","learning.publisherSensitivity":"The same dial for PUBLISHER preferences. Default 1.0.","learning.lengthSensitivity":"The same dial for LENGTH preferences (short / medium / long). Default 1.0.","learning.positiveSensitivity":"Multiplier applied to all POSITIVE signals (reads, saves, likes). Lower = it is harder to earn a category's trust; higher = taste bonds faster. Default 1.0.","learning.rejectionSensitivity":"Multiplier applied to all NEGATIVE signals (quick-exit penalties, not-interested swipes). Lower = gentler rejections; higher = harsher. Default 1.0.","latent.clamp":"Write-time clamp applied to every preference latent (category/publisher/length). ±clamp is the hard outer bound; in practice sigmoid saturation flattens scores well before it binds. Default 20.","latent.neutralLatent":"Every brand-new preference (a category or publisher we have no history for yet) starts at this value. 0 = complete neutrality, the 50/50 point on the strength curve. There is rarely a reason to change it. Default 0.0.","latent.nightlyDecay":"Nightly drift factor: each full day with no activity multiplies every latent by this toward the drift floor. Lower = faster forgetting; 0.95 is steep so active users re-earn control fast. Default 0.95.","latent.driftFloor":"Each preference is a single number per user: 0 = neutral, positive = likes it, negative = dislikes it. When a user is away, every night all their scores shrink a little toward zero. This floor is the never-below mark, measured in those same points — NOT percent. Think of it like a battery that drains while unused but stops at this level: 0.5 pts leaves a returning user at roughly 62% strength instead of a blank 50/50; 1.0 is stronger (about 73%); 0 lets preferences fade completely to neutral. Default 0.5.","latent.publisherSeed":"The reputation every NEW publisher starts with (0.5 would be neutral; 1.386 gives new sources a fair, optimistic start so they can compete with established ones). Default 1.386.","latent.selectedLatent":"Keeps the app's visible lists in sync with what is learned. If a category the user never picked keeps getting read and liked, its score climbs; the moment it passes this mark (0.85 pts = about 70% strength), the app automatically adds it to their Selected categories list — as if they had ticked it during onboarding. If behaviour cools and the score falls back into the neutral band, the category is quietly removed from the list again. Default 0.85.","latent.notInterestedLatent":"The mirror of the auto-select rule: if a category keeps getting quick-exited or swiped away and its score sinks below this mark (-0.85 pts = about 30% strength), the app automatically moves it to the Not-interested list and stops showing it. If the user starts engaging again and the score climbs back into the neutral band, it is removed from that list. Default -0.85.","sigmoid.steepness":"This shapes exactly TWO conversions: how a user's preference points become feed strength, AND how publisher quality becomes its 0-1 score. It does NOT touch trending or freshness — those have their own dials (Trending half-saturation, Freshness half-life, in Score Weights). HIGHER = pickier: small taste changes swing the feed a lot. LOWER = gentler shifts. NOTE: changing it re-interprets ALL existing user history at once. Default 1.0 (the classic S-curve).","scoring.personalization":"How much of each article's score comes from THIS user's own taste — the categories and publishers they have read, liked and saved. Raise it and the feed follows personal history harder; lower it and the feed leans on trending, freshness and publisher quality instead. Very high values risk an 'echo chamber' where nothing outside the user's usual interests ever surfaces. The four dials below are compared against each other — the defaults (0.60/0.15/0.10/0.15) sum to 1.0 and the dashboard warns when the sum drifts. Values above 1.0 deliberately let one factor dominate. Range 0-1.5, step 0.01. Default 0.60.","scoring.trending":"How much of each article's score comes from how popular it is with ALL readers right now. Raising it surfaces viral content even when it does not match the user's usual tastes — good for discovery. Lowering it makes the feed care less about what is trendy. Default 0.15 keeps trending as gentle seasoning rather than the main course.","scoring.recency":"How much of each article's score comes from simply being NEW. Raise it to prioritise fresh posts and push older ones down; lower it so evergreen essays stay competitive with this week's news. Default 0.10 — freshness matters, but a great week-old essay should still beat a mediocre hour-old one.","scoring.quality":"How much of each article's score comes from the PUBLISHER's earned reputation. Publishers build quality when readers engage (reads, saves, likes) and lose it when readers bail (quick exits, not-interested). Raise it to favour proven sources; lower it to give smaller and newer writers a fairer shot. Default 0.15.","scoring.trendingHalfSat":"How large the crowd's trending score must be before an article is considered genuinely trending (it reaches half strength here). LOWER makes trending easier to earn; HIGHER reserves trending for true viral hits. Default 25.","scoring.recencyDaysConstant":"How fresh an article must be to score well on freshness: after this many days, its freshness score halves. LOWER prioritizes brand-new posts; HIGHER keeps older essays competitive. Default 14.","scoring.publisherColdStartCategoryWeight":"When a publisher is brand-new (no reader history yet) the system cannot judge the source itself, so it falls back on the article's CATEGORY plus a neutral guess. This dial sets how much of that fallback comes from the category. The two cold-start dials are automatically normalised to 100%, so 0.90 here means the category gets 90% of the vote. Default 0.90 — for an unknown source, what the article is about matters far more than who wrote it.","scoring.publisherColdStartPublisherWeight":"The other half of the cold-start fallback: how much the (still unknown) publisher itself counts. Automatically normalised with the category dial above to total 100%. Default 0.10.","rejection.categoryMinQuickExits":"How many quick exits in the SAME category must be counted inside the window before one capped penalty applies. A single accidental tap does nothing. Default 2.","rejection.lengthMinQuickExits":"Same threshold, for the length axis (short/medium/long). Default 2.","rejection.publisherMinQuickExits":"Same threshold, for the publisher axis. Default 2.","rejection.windowMs":"Rolling window (in DAYS) within which quick exits are counted per axis. After the window lapses, evidence restarts. Default 1 day.","rejection.maxCategoryPenalty":"The single capped penalty applied ONCE when an axis reaches its quick-exit threshold. Keeps a bad day from stacking many penalties. Default 0.6875 (−2.5× a thorough read, but gated behind repeated evidence).","selection.feedSize":"How many articles the personalised feed returns per request. Default 30.","selection.categoryPenaltyStep":"Each time the picker takes an article from a category it has already used, that category's remaining articles are docked by this much. Higher = more variety within one feed; lower = more of whatever scored best. Default 0.15.","selection.publisherPenaltyStep":"Same idea, per publisher. Set higher than the category step because repeats from one source are more noticeable than repeats from one topic. Default 0.25.","selection.discoverySlotInterval":"Roughly every Nth card becomes a 'discovery slot' that ignores personal taste entirely and picks on trending / freshness / quality alone — this is how genuinely new things break in. The exact position is randomised within each block so users cannot learn the pattern. Default 5.","selection.jitterRange":"A small random nudge added to each article's score during picking, so equal-quality articles do not always appear in the same order and feeds feel organic. Default 0.03.","selection.maxArticlesPerCategory":"Hard cap: no category may exceed this many cards in one feed no matter how well it scores. Safety net against one dominant category taking over. Default 15.","selection.minDistinctCategories":"The picker aims for at least this many different categories per feed, backfilling from the best alternative when one runs dry. Default 4."};
+
+// ===== Glossary + renderers =====
+const GLOSS=[
+ ['\u03b4 (delta)','the symbol shown on the points dials \u2014 every action is worth a fixed number of points'],
+ ['E (attention credit)','a sliding scale from 0 to 1 that multiplies the action\u2019s fixed points \u2014 button actions pin it at 1.00; reading sessions set it from depth \u00d7 pace'],
+ ['latent','stored preference score in points (0 = neutral, + likes, \u2212 dislikes)'],
+ ['strength / \u03c3','S-curve turning points into pull; 50% = neutral'],
+ ['P T R Q','taste-match / trending / freshness / publisher-quality scores, 0\u20131'],
+ ['retention floor','lowest points a faded preference keeps while a user is away']
+];
+let selStage=2;
+function renderGloss(){document.getElementById('gloss').innerHTML=GLOSS.map(g=>'<span class="term"><b>'+g[0]+'</b> \u2014 '+g[1]+'</span>').join('');}
+function renderPipe(map){
+  const el=document.getElementById('pipe'); el.innerHTML='';
+  STAGES.forEach((st,i)=>{
+    if(i>0){const c=document.createElement('div');c.className='conn';c.textContent='\u2192';el.appendChild(c);}
+    const d=document.createElement('div');d.className='stage'+(st.n===selStage?' sel':'');d.id='stage-'+st.n;
+    const b=map[st.n]!==undefined?'<span class="badge">'+map[st.n]+'</span>':'<span class="badge none">n/a</span>';
+    d.innerHTML='<div class="num">STAGE '+st.n+'</div><div class="q">'+st.q+'</div><div class="val">'+st.live()+'</div>'+b;
+    d.onclick=()=>{selStage=st.n;update();};
+    el.appendChild(d);
+  });
+}
+let lastJump=null, jumpFresh=false;
+function clearJump(){
+  lastJump=null;
+  const n=document.getElementById('jumpNote'); if(n) n.style.display='none';
+  document.querySelectorAll('tr.row-target,tr.stage-tint').forEach(tr=>tr.classList.remove('row-target','stage-tint'));
+}
+function applyJump(fresh){
+  if(!lastJump) return;
+  const table=document.getElementById('settingsTable');
+  if(!table) return;
+  if(lastJump.key){
+    const inp=table.querySelector('[data-path="'+lastJump.key+'"]');
+    if(inp){ const tr=inp.closest('tr'); tr.classList.add('row-target'); if(fresh) inp.scrollIntoView({behavior:'smooth',block:'center'}); }
+  } else if(lastJump.stage){
+    const st=STAGES.find(s=>s.n===lastJump.stage);
+    if(st) st.keys.forEach(k=>{ const inp=table.querySelector('[data-path="'+k+'"]'); if(inp) inp.closest('tr').classList.add('stage-tint'); });
+  }
+  const st2=lastJump.stage?STAGES.find(s=>s.n===lastJump.stage):STAGES.find(s=>s.keys.indexOf(lastJump.key)>=0);
+  const n=document.getElementById('jumpNote');
+  if(n){ n.style.display='block'; n.innerHTML='Jumped from Stage '+(st2?st2.n:'?')+' \u00b7 '+(st2?st2.name:'')+' \u2014 highlighted below. <span class="chip" id="clearJump">\u2715 clear highlight</span>'; }
+  const cj=document.getElementById('clearJump'); if(cj) cj.onclick=clearJump;
+}
+function jumpToDial(key){ lastJump={key:key}; jumpFresh=true; showView('settings'); applyJump(jumpFresh); jumpFresh=false; }
+function openStageInSettings(n){ lastJump={stage:n}; jumpFresh=true; showView('settings'); applyJump(jumpFresh); jumpFresh=false; }
+function renderInfo(){
+  const st=STAGES.find(s=>s.n===selStage);
+  document.getElementById('stageInfo').innerHTML='<h3>Stage '+st.n+' \u2014 '+st.name+'</h3><div class="q">'+st.q+'</div><p>'+st.text()+'</p>'+
+    '<div class="sec">Dials owned here (click to open in settings): '+st.keys.map(k=>'<span class="chip" data-goto2="'+k+'">'+k+'</span>').join(' ')+
+    ' <span class="chip" data-openstage="'+st.n+'">open all '+st.keys.length+' \u2192</span></div>';
+  document.querySelectorAll('[data-goto2]').forEach(c=>c.onclick=(e)=>openPortal(c.dataset.goto2,e));
+  document.querySelectorAll('[data-openstage]').forEach(c=>c.onclick=()=>openStageInSettings(+c.dataset.openstage));
+}
+function renderTrace(){
+  const steps=computeTrace();
+  const map={}; steps.forEach(s=>{if(s.out&&s.out!=='\u2014'&&s.out!=='unchanged')map[s.stage]=s.out;});
+  document.getElementById('trace').innerHTML=steps.map(s=>
+    '<div class="trace-row'+(s.stage===selStage?' hl':'')+(s.final?' final':'')+'">'+
+    '<span class="chip" data-goto="'+s.stage+'">S'+s.stage+'</span>'+
+    '<span class="left"><span class="lbl">'+s.lbl+'</span><span class="sub2">'+s.sub+'</span></span>'+
+    (s.calc?'<span class="calc">'+s.calc+'</span>':'')+
+    '<span class="out">'+s.out+'</span></div>').join('');
+  document.querySelectorAll('[data-goto]').forEach(c=>c.onclick=()=>{selStage=+c.dataset.goto;update();});
+  return map;
+}
+let scenOpen=false;
+function scenSummary(){
+  const a=ACTIONS[SCN.action];
+  let s=a.label+' on a '+SCN.axis;
+  if(a.isRead) s+=' \u00b7 '+(SCN.scrollDepth*100).toFixed(0)+'% scrolled \u00b7 '+SCN.paceWpm+' WPM (their avg '+SCN.userAvgWpm+') \u00b7 '+SCN.articleWords+'-word article';
+  s+=' \u00b7 away '+SCN.idleDays+'d';
+  if(!a.special) s+=' \u00b7 article '+SCN.daysOld+'d old, trending '+SCN.trendingScore;
+  return s;
+}
+function renderScenario(){
+  const bar=document.getElementById('scenbar');
+  bar.textContent='\u25b8 Scenario \u2014 '+scenSummary()+'  (click to '+(scenOpen?'hide':'edit')+')';
+  bar.onclick=()=>{scenOpen=!scenOpen;update();};
+  const panel=document.getElementById('scenPanel');
+  panel.style.display=scenOpen?'block':'none';
+  if(!scenOpen) return;
+  const el=document.getElementById('scenarioInputs'); el.innerHTML='';
+  const a=ACTIONS[SCN.action];
+  const defs=[
+    ['scrollDepth','Scroll depth of the session',0.05,1,0.05],
+    ['paceWpm','Session pace (WPM)',60,900,5],['userAvgWpm','That reader\u2019s average WPM',100,500,5],
+    ['articleWords','Article length (words)',100,3000,50],
+    ['prevCat','Previous CATEGORY preference (pts)',-3,3,0.05],
+    ['prevPub','Previous PUBLISHER preference (pts)',-3,3,0.05],['prevLen','Previous LENGTH preference (pts)',-3,3,0.05],
+    ['trendingScore','Article\u2019s crowd trending score',0,100,1],['daysOld','Article age (days)',0,60,1],
+    ['pubQualityLatent','Publisher quality latent',0,3,0.05]
+  ];
+  const sel=(label,opts,cur,onset)=>{
+    const w=document.createElement('div'); w.className='slider-row';
+    w.innerHTML='<span class="sl">'+label+'</span><select>'+opts.map(o=>'<option value="'+o[0]+'"'+(o[0]==cur?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';
+    el.appendChild(w);
+    w.querySelector('select').onchange=e=>{onset(isNaN(+e.target.value)?e.target.value:+e.target.value);update('scenario');};
+  };
+  const rng=(key,label,min,max,step)=>{
+    const w=document.createElement('div'); w.className='slider-row';
+    w.innerHTML='<span class="sl">'+label+'</span><input type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+SCN[key]+'"><span class="sv">'+SCN[key]+'</span>';
+    el.appendChild(w);
+    const inp=w.querySelector('input'),sv=w.querySelector('.sv');
+    inp.oninput=()=>{SCN[key]=+inp.value;sv.textContent=(+inp.value).toString();update('scenario');};
+  };
+  sel('Action:',Object.entries(ACTIONS).map(([k,x])=>[k,x.label]),SCN.action,v=>{SCN.action=v;});
+  sel('Axis:',Object.keys(AXES).map(k=>[k,k]),SCN.axis,v=>{SCN.axis=v;});
+  sel('User was away:',[[0,'0 days'],[1,'1 day'],[3,'3 days'],[7,'7 days'],[14,'14 days']],SCN.idleDays,v=>{SCN.idleDays=v;});
+  defs.forEach(d=>{
+    // context-aware: reading-session sliders only for real reads; pace/words need a judged session
+    if(!a.isRead && ['scrollDepth','paceWpm','userAvgWpm','articleWords'].indexOf(d[0])>=0) return;
+    if(a.special && ['paceWpm','userAvgWpm','articleWords'].indexOf(d[0])>=0) return;
+    rng(d[0],d[1],d[2],d[3],d[4]);
+  });
+}
+// ===== Levers: impact across a 4-scenario basket (all ports of real paths) =====
+function scenarioOutputs(){
+  const e1=engagementIndex(SCN.scrollDepth,SCN.paceWpm,SCN.userAvgWpm,SCN.articleWords);
+  const raw1=CFG.feedback.read_thorough*e1.E;
+  const cat1=clampLatent(SCN.prevCat+raw1*CFG.learning.positiveSensitivity*CFG.learning.categorySensitivity);
+  const pub1=clampLatent(SCN.prevPub+raw1*CFG.learning.positiveSensitivity*CFG.learning.publisherSensitivity);
+  const P1=normalizeP(driftFn(cat1,SCN.idleDays),driftFn(pub1,SCN.idleDays),0.6,0.4);
+  const pub2=clampLatent(SCN.prevPub+CFG.feedback.save*CFG.learning.positiveSensitivity*CFG.learning.publisherSensitivity);
+  const P2=sigma(pub2);
+  const mag=CFG.rejection.maxCategoryPenalty*CFG.learning.rejectionSensitivity*CFG.learning.categorySensitivity;
+  const cat3=clampLatent(SCN.prevCat-mag);
+  const P3=sigma(cat3);
+  const P0=normalizeP(SCN.prevCat,SCN.prevPub,0.6,0.4);
+  const T=normalizeT(SCN.trendingScore,CFG.scoring.trendingHalfSat);
+  const R=normalizeR(SCN.daysOld,CFG.scoring.recencyDaysConstant);
+  const Q=normalizeQ(SCN.pubQualityLatent);
+  const FS4=CFG.scoring.personalization*P0+CFG.scoring.trending*T+CFG.scoring.recency*R+CFG.scoring.quality*Q;
+  return [P1,P2,P3,FS4];
+}
+let IMPACT={};
+function renderLevers(){
+  const base=scenarioOutputs();
+  const rows=[];
+  Object.keys(LBL).forEach(p=>{
+    const v0=getVal(p); if(typeof v0!=='number') return;
+    if(GATES.has(p)){ IMPACT[p]=-1; rows.push({p,gate:true}); return; }
+    let im=0;
+    [v0*1.1,v0*0.9].forEach(v=>{ setVal(p,v);
+      const nb=scenarioOutputs();
+      nb.forEach((o,i)=>{ if(base[i]!==0){ const rel=Math.abs(o-base[i])/Math.abs(base[i]); if(rel>im) im=rel; } });
+      setVal(p,v0);
+    });
+    IMPACT[p]=im; rows.push({p,im});
+  });
+  rows.sort((a,b)=>(b.im||0)-(a.im||0));
+  const max=Math.max(...rows.map(r=>r.im||0),1e-9);
+  document.getElementById('leverIntro').textContent='Four scenarios measured: (1) thorough read on category+publisher, output P after learning; (2) save, publisher strength; (3) quick-exit threshold fires, category strength; (4) reference-article final feed score. Scenario baselines: '+base.map(b=>b.toFixed(3)).join(' / ')+'.';
+  document.getElementById('levers').innerHTML=rows.map((r,i)=>{
+    const label=LBL[r.p][0];
+    const pv=r.gate?'trigger (on/off)':('\u00b110% \u2192 \u00b1'+((r.im||0)*100).toFixed(1)+'% worst case');
+    const w=r.gate?8:Math.max(2,(r.im/max)*100);
+    return '<div class="lever"><span class="rk">'+(i+1)+'</span><span class="ln">'+label+helpHtml(r.p)+'<small>'+r.p+'</small></span>'+
+    '<span class="bar-wrap"><span class="bar" style="width:'+w+'%"></span></span><span class="pv">'+pv+'</span></div>';
+  }).join('');
+  hydrateHelp(document.getElementById('levers'));
+}
+// ===== Portal: edit one dial inline without leaving the pipeline =====
+let portalKey=null;
+function openPortal(key,evt){
+  portalKey=key;
+  const p=document.getElementById('portal');
+  const m=LBL[key], st=STAGES.find(s=>s.keys.indexOf(key)>=0);
+  p.innerHTML='<h4>'+m[0]+helpHtml(key)+'</h4><div class="pk">'+key+(st?' \u00b7 Stage '+st.n+' \u00b7 '+st.name:'')+'</div>'+
+    '<div class="pval" id="portalVal">'+getVal(key)+'</div>'+
+    '<input type="range" id="portalSlider" min="'+m[1]+'" max="'+m[2]+'" step="'+m[3]+'" value="'+getVal(key)+'">'+
+    '<div class="note" style="margin:6px 0 0">Edits apply instantly everywhere \u2014 view \u2462 shows the same value.</div>'+
+    '<div class="row"><button class="btn" id="portalClose">\u2715 close</button><button class="btn" id="portalJump">open in settings \u2197</button></div>';
+  p.style.display='block';
+  hydrateHelp(p);
+  const slider=p.querySelector('#portalSlider');
+  slider.oninput=()=>{ setVal(key,+slider.value); p.querySelector('#portalVal').textContent=(+slider.value); update(); };
+  p.querySelector('#portalClose').onclick=closePortal;
+  p.querySelector('#portalJump').onclick=()=>{ closePortal(); jumpToDial(key); };
+  const r=evt.target.getBoundingClientRect();
+  let L=r.left, T=r.bottom+8;
+  p.style.left='0px'; p.style.top='0px';
+  const pw=p.offsetWidth, ph=p.offsetHeight;
+  if(L+pw>window.innerWidth-12) L=window.innerWidth-pw-12;
+  if(T+ph>window.innerHeight-12) T=Math.max(12, r.top-ph-8);
+  p.style.left=L+'px'; p.style.top=T+'px';
+}
+function closePortal(){ portalKey = null; const p=document.getElementById('portal'); if(p) p.style.display='none'; hideTipForce(); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePortal(); hideTipForce(); } });
+document.addEventListener('click',()=>{ if(pinnedKey) hideTipForce(); });
+// ===== Per-dial help icons — single floating tip at body level (no CSS hover traps) =====
+const helpHtml = key => HELP[key] ? '<span class="help" data-hk="' + key + '">?</span>' : '';
+let pinnedKey = null;
+function showTip(key, icon){
+  const tip = document.getElementById('helptip');
+  tip.innerHTML = '<span class="hk">' + key + '</span>' + (HELP[key] || '');
+  tip.style.display = 'block';
+  const r = icon.getBoundingClientRect();
+  const tw = Math.min(340, window.innerWidth - 24);
+  let L = r.left + r.width / 2 - tw / 2;
+  L = Math.max(12, Math.min(L, window.innerWidth - tw - 12));
+  let T = r.bottom + 8;
+  tip.style.width = tw + 'px';
+  tip.style.left = '0px'; tip.style.top = '0px';
+  const th = tip.offsetHeight;
+  if (T + th > window.innerHeight - 12) T = Math.max(12, r.top - th - 8);
+  tip.style.left = L + 'px'; tip.style.top = T + 'px';
+}
+function hideTip(){ if (pinnedKey) return; const tip = document.getElementById('helptip'); if (tip) tip.style.display = 'none'; }
+function hideTipForce(){
+  pinnedKey = null;
+  document.querySelectorAll('.help.pinned').forEach(h => h.classList.remove('pinned'));
+  const tip = document.getElementById('helptip'); if (tip) tip.style.display = 'none';
+}
+function hydrateHelp(root){
+  (root || document).querySelectorAll('.help[data-hk]').forEach(h => {
+    if (h.dataset.bound) return; h.dataset.bound = '1';
+    h.onmouseenter = () => { if (pinnedKey && pinnedKey !== h.dataset.hk) hideTipForce(); showTip(h.dataset.hk, h); };
+    h.onmouseleave = hideTip;
+    h.onclick = e => {
+      e.stopPropagation();
+      if (pinnedKey === h.dataset.hk) { hideTipForce(); return; }
+      hideTipForce(); pinnedKey = h.dataset.hk; h.classList.add('pinned'); showTip(h.dataset.hk, h);
+    };
+  });
+}
+function renderSettings(){
+  const stageOf={}; STAGES.forEach(st=>st.keys.forEach(k=>{if(!(k in stageOf))stageOf[k]=st.n;}));
+  const groups={}; Object.keys(LBL).forEach(p=>{const g=p.split('.')[0];(groups[g]=groups[g]||[]).push(p);});
+  let html='';
+  Object.keys(groups).forEach(g=>{
+    html+='<tr><td class="g" colspan="4" style="background:#20263466;font-weight:700">'+g.toUpperCase()+'</td></tr>';
+    groups[g].forEach(p=>{
+      const m=LBL[p], imp=IMPACT[p];
+      const hint=imp===undefined?'':(imp===-1?'<span class="imp">trigger</span>':'<span class="imp">\u00b110% \u2192 \u00b1'+(imp*100).toFixed(1)+'%</span>');
+      html+='<tr><td style="width:230px">'+m[0]+helpHtml(p)+'</td>'+
+        '<td><input type="range" data-path="'+p+'" min="'+m[1]+'" max="'+m[2]+'" step="'+m[3]+'" value="'+getVal(p)+'"></td>'+
+        '<td class="v">'+getVal(p)+'</td>'+
+        '<td>'+(stageOf[p]?'<span class="chip" data-st="'+stageOf[p]+'">S'+stageOf[p]+'</span> ':'')+hint+'</td></tr>';
+    });
+  });
+  const el=document.getElementById('settingsTable'); el.innerHTML=html;
+  el.querySelectorAll('input[type=range]').forEach(inp=>{
+    inp.oninput=()=>{setVal(inp.dataset.path,+inp.value);inp.closest('tr').querySelector('.v').textContent=(+inp.value);update('settings');};
+  });
+  el.querySelectorAll('[data-st]').forEach(c=>c.onclick=()=>{showView('pipeline');selStage=+c.dataset.st;update();});
+  hydrateHelp(el);
+  applyJump(false);
+}
+// ===== Central update =====
+function update(source){
+  const map=renderTrace();
+  renderPipe(map);
+  renderInfo();
+  if(source!=='scenario') renderScenario();
+  renderLevers();
+  if(source!=='settings') renderSettings();
+}
+function showView(v){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.view===v));
+  document.querySelectorAll('.view').forEach(el=>el.classList.toggle('on',el.id==='view-'+v));
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>showView(t.dataset.view));
+document.getElementById('resetBtn').onclick=()=>{Object.keys(DEFAULTS).forEach(g=>{CFG[g]=JSON.parse(JSON.stringify(DEFAULTS[g]));});update();};
+renderGloss();
+update();
+</script>
+</body>
+</html>
+
+
