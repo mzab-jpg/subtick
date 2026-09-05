@@ -16,6 +16,35 @@ function check(label, pass) {
   if (!pass) failed = true;
 }
 
+// Shared helpers: pull a balanced {...} block after a marker, and read a
+// dotted leaf path from a nested object.
+function extractBraced(src, marker) {
+  const start = src.indexOf(marker);
+  if (start < 0) return null;
+  const brace = src.indexOf('{', start);
+  let depth = 0, inStr = null, end = -1;
+  for (let i = brace; i < src.length; i++) {
+    const ch = src[i];
+    if (inStr) { if (ch === '\\') { i++; continue; } if (ch === inStr) inStr = null; continue; }
+    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+    if (ch === '{') depth++;
+    if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  return end > 0 ? src.slice(brace, end + 1) : null;
+}
+function valAt(obj, p) {
+  return p.split('.').reduce((cur, k) => (cur == null ? undefined : cur[k]), obj);
+}
+function leafPaths(node, prefix, out) {
+  for (const k of Object.keys(node)) {
+    const p = prefix ? `${prefix}.${k}` : k;
+    const v = node[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) leafPaths(v, p, out);
+    else if (p !== 'schemaVersion') out.push(p);
+  }
+  return out;
+}
+
 // Collect all leaf paths from the server defaults (schemaVersion is an internal
 // marker, not a tunable knob — excluded from parity). Array-valued groups
 // (e.g. paywallKeywords) are tracked separately as LIST groups.
@@ -91,4 +120,101 @@ if (failed) {
   console.error('\nDASHBOARD PARITY BROKEN — sync scripts/control_dashboard.html with DEFAULT_SCORING_CONFIG.');
   process.exit(1);
 }
-console.log('\n✓ Dashboard↔config parity intact.');
+
+// ============================================================
+// 5. Mockup↔server contract (design/dashboard-redesign-mockup.html).
+// The redesign mockup must be an exact mirror of the backend config:
+// every server key present as a dial (no gaps, no dead dials), every
+// default value identical, help coverage complete, and every dial also
+// present on the production dashboard. Lives in the same gate so drift
+// fails the build the moment either side changes.
+// ============================================================
+const mockPath = path.join(root, 'design', 'dashboard-redesign-mockup.html');
+if (fs.existsSync(mockPath)) {
+  const mock = fs.readFileSync(mockPath, 'utf8');
+  const mockDefSrc = extractBraced(mock, 'const DEFAULTS');
+  const MOCK_DEFAULTS = mockDefSrc ? new Function('return (' + mockDefSrc + ');')() : null;
+  const mockPaths = MOCK_DEFAULTS ? leafPaths(MOCK_DEFAULTS, '', []) : [];
+  const mockLbl = [...new Set([...mock.matchAll(/'([a-zA-Z_]+(?:\.[a-zA-Z_]+)?)':\s*\[/g)].map((m) => m[1]))];
+  const mockHelpSrc = extractBraced(mock, 'const HELP = ');
+  const MOCK_HELP = mockHelpSrc ? JSON.parse(mockHelpSrc) : {};
+  const serverSet = new Set(configPaths);
+
+  // 5a. Every server key has a mockup dial (scalar or list).
+  const noMockDial = configPaths.filter((p) => !mockLbl.includes(p));
+  check(`every server config key has a mockup dial (missing: ${noMockDial.length})`, noMockDial.length === 0);
+  if (noMockDial.length) console.error('  missing mockup dials for: ' + noMockDial.join(', '));
+
+  // 5b. Every mockup dial points at a real server key.
+  const deadMock = mockLbl.filter((p) => !serverSet.has(p));
+  check(`every mockup dial points at a live config key (dead: ${deadMock.length})`, deadMock.length === 0);
+  if (deadMock.length) console.error('  dead mockup dials: ' + deadMock.join(', '));
+
+  // 5c. Mockup defaults are value-identical to the server defaults.
+  const drift = [];
+  if (MOCK_DEFAULTS) {
+    for (const p of configPaths) {
+      const sv = valAt(DEFAULT_SCORING_CONFIG, p);
+      const mv = valAt(MOCK_DEFAULTS, p);
+      if (JSON.stringify(sv) !== JSON.stringify(mv)) drift.push(`${p} server=${JSON.stringify(sv)} mockup=${JSON.stringify(mv)}`);
+    }
+  } else drift.push('mockup DEFAULTS block not found');
+  check(`mockup defaults are value-identical to server defaults (drift: ${drift.length})`, drift.length === 0);
+  if (drift.length) console.error('  value drift: ' + drift.join(' | '));
+
+  // 5d. Mockup help covers every server key (and nothing else).
+  const noMockHelp = configPaths.filter((p) => !(p in MOCK_HELP));
+  check(`every config key has a mockup help entry (missing: ${noMockHelp.length})`, noMockHelp.length === 0);
+  if (noMockHelp.length) console.error('  missing mockup help for: ' + noMockHelp.join(', '));
+  const deadMockHelp = Object.keys(MOCK_HELP).filter((p) => !serverSet.has(p));
+  check(`every mockup help entry points at a live config key (dead: ${deadMockHelp.length})`, deadMockHelp.length === 0);
+  if (deadMockHelp.length) console.error('  dead mockup help: ' + deadMockHelp.join(', '));
+
+  // 5e. Three-way: every mockup dial also exists on the production dashboard
+  // (as an override entry, or as a list editor for array-valued groups).
+  const coveredInDash = (p) => overridePaths.includes(p) || (listGroups.has(p) && html.includes('data-list='));
+  const noDashControl = mockLbl.filter((p) => !coveredInDash(p));
+  check(`every mockup dial has a production dashboard control (missing: ${noDashControl.length})`, noDashControl.length === 0);
+  if (noDashControl.length) console.error('  mockup dials with no production control: ' + noDashControl.join(', '));
+} else {
+  check('mockup file present for parity checks (design/dashboard-redesign-mockup.html)', false);
+}
+
+// ============================================================
+// 6. Tooltip truth check. A tooltip that states the wrong default is a
+// lie shown to every admin. Parse each production-dashboard tooltip for
+// a numeric "Default X" claim and compare it with DEFAULT_SCORING_CONFIG.
+// ============================================================
+{
+  const dashTipsSrc = extractBraced(html, 'const TIPS = {');
+  const tipText = {};
+  if (dashTipsSrc) {
+    for (const m of dashTipsSrc.matchAll(/'([a-zA-Z_.]+)':\s*"((?:[^"\\]|\\.)*)"/g)) {
+      try { tipText[m[1]] = JSON.parse('"' + m[2].replace(/\\'/g, "'") + '"'); } catch { /* unparseable tip: covered by key checks */ }
+    }
+  }
+  const claimRe = /[Dd]efault:?\s*([+-]?\d+(?:\.\d+)?)/;
+  const UNIT_MULT = { 'rejection.windowMs': 24 * 60 * 60 * 1000 }; // tooltip says days, config stores ms
+  const lies = [];
+  for (const p of configPaths) {
+    const tip = tipText[p];
+    if (!tip) continue;
+    const m = claimRe.exec(tip);
+    if (!m) continue; // tooltip makes no numeric default claim
+    const claim = parseFloat(m[1]);
+    const val = valAt(DEFAULT_SCORING_CONFIG, p);
+    const actual = Array.isArray(val) ? val.length : val;
+    const expected = UNIT_MULT[p] ? claim * UNIT_MULT[p] : claim;
+    if (typeof actual !== 'number' || Math.abs(expected - actual) > Math.max(1e-9, Math.abs(actual) * 1e-9)) {
+      lies.push(`${p} tooltip says ${m[1]} but server default is ${JSON.stringify(val)}`);
+    }
+  }
+  check(`every tooltip default claim matches the server default (wrong: ${lies.length})`, lies.length === 0);
+  if (lies.length) console.error('  wrong defaults: ' + lies.join(' | '));
+}
+
+if (failed) {
+  console.error('\nDASHBOARD PARITY BROKEN — sync the dashboard/mockup with DEFAULT_SCORING_CONFIG.');
+  process.exit(1);
+}
+console.log('\n✓ Dashboard↔config parity intact (dashboard, mockup, tooltips).');

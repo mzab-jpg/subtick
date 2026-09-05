@@ -42,6 +42,8 @@ const path = require('path');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'App.tsx'), 'utf8');
 const accountSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'AccountScreen.tsx'), 'utf8');
 const userContextSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'contexts', 'UserContext.tsx'), 'utf8');
+const provisionalSessionSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'provisionalSession.ts'), 'utf8');
+const dashboardMetricsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'dashboardMetrics.tsx'), 'utf8');
 const dashboardSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'DashboardScreen.tsx'), 'utf8');
 const readerSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'ReaderScreen.tsx'), 'utf8');
 const navigatorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'navigation', 'RootNavigator.tsx'), 'utf8');
@@ -83,17 +85,20 @@ check('Settings navigation retains the established modal configuration',
   navigatorSource.includes("name=\"Settings\"") && navigatorSource.includes("presentation: 'modal'"),
   true);
 check('provisional WPM is calculated as words divided by active time',
-  userContextSource.includes('calculateWpm') && userContextSource.includes('sessionWpm === null') && userContextSource.includes('setProvisionalProfile'),
+  dashboardMetricsSource.includes('export function calculateWpm')
+    && provisionalSessionSource.includes('let sessionWpm: number | null = null')
+    && provisionalSessionSource.includes('calculateWpm(consumedWords, summary.sessionDuration)')
+    && userContextSource.includes('setProvisionalProfile')
+    && userContextSource.includes('computeProvisionalSession'),
   true);
 check('WPM Fix: speed calibration is gated to genuine reads, consumed words, and the human-plausibility band (client + server)',
-  userContextSource.includes('MIN_PLAUSIBLE_WPM')
-    && userContextSource.includes('MAX_PLAUSIBLE_WPM')
-    && userContextSource.includes('MIN_WPM_CALIBRATION_WORDS')
-    && userContextSource.includes('consumedWords')
+  provisionalSessionSource.includes('MIN_PLAUSIBLE_WPM')
+    && provisionalSessionSource.includes('MAX_PLAUSIBLE_WPM')
+    && provisionalSessionSource.includes('MIN_WPM_CALIBRATION_WORDS')
+    && provisionalSessionSource.includes('consumedWords')
     && weightUpdaterSource.includes('cfg.wpm.minPlausible')
     && weightUpdaterSource.includes('cfg.wpm.maxPlausible')
     && weightUpdaterSource.includes('cfg.wpm.minCalibrationWords')
-    && userContextSource.includes('consumedWords')
     && weightUpdaterSource.includes('consumedWords')
     && !weightUpdaterSource.includes('const sessionWpm = wordCount / (event.sessionDuration / 60_000)'),
   true);
@@ -160,11 +165,11 @@ check('Dashboard uses the minimal Loading cursor only while cards themselves are
     && !dashboardSource.includes('ActivityIndicator')
     && homeLoadingStateSource.includes('<LoadingCursor />')
     && loadingCursorSource.includes('>Loading</Text>')
-    && loadingCursorSource.includes('>|</Animated.Text>')
+    && loadingCursorSource.includes('<Animated.View')
     && loadingCursorSource.includes('alignSelf: \'flex-start\'')
-    && startupScreenSource.includes('const OPENING_CURSOR_MS = 850')
-    && startupScreenSource.includes('const LETTER_INTERVAL_MS = 200')
-    && startupScreenSource.includes('const BETWEEN_WORD_PAUSE_MS = 500')
+    && startupScreenSource.includes('const OPENING_CURSOR_MS = 200')
+    && startupScreenSource.includes('const LETTER_INTERVAL_MS = 150')
+    && startupScreenSource.includes('const BETWEEN_WORD_PAUSE_MS = 400')
     && startupScreenSource.includes('const CURSOR_BLINK_HALF_CYCLE_MS = 500')
     && startupScreenSource.includes('<StatusBar hidden animated />')
     && startupScreenSource.includes("setTypingPhase('betweenWords')")

@@ -32,7 +32,7 @@ if (html.indexOf('const HELP =') >= 0) {
   fs.writeFileSync(mock, html.replace(reBlock, block.trim().replace(/^\/\/ ===== Help texts[^\n]*\n/, '// ===== Help texts (ported verbatim from the production dashboard TIPS) =====\n')));
   console.log('HELP block rebuilt:', Object.keys(HELP).length, 'entries');
 } else {
-  const anchor = "const getVal=p=>{const[g,k]=p.split('.');return CFG[g][k];};";
+  const anchor = "const getVal=p=>{const i=p.indexOf('.'); if(i<0) return CFG[p]; return CFG[p.slice(0,i)][p.slice(i+1)];};";
   if (!html.includes(anchor)) throw new Error('anchor not found');
   fs.writeFileSync(mock, html.replace(anchor, anchor + block));
   console.log('HELP block inserted:', Object.keys(HELP).length, 'entries,', block.length, 'chars');

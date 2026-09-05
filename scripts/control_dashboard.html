@@ -453,7 +453,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
 
     // ---- trending ----
     // Trending is the crowd signal: a score per article that rises as readers engage.
-    'trending.decayRate': "Each day, every article's trending score is multiplied by this. 0.95 means yesterday's buzz fades about 5% per day, so a viral hit is basically forgotten within two weeks. Lower = faster cooling (only today's hits matter); higher = longer memory. Default 0.95.",
+    'trending.decayRate': "Each day, every article's trending score is multiplied by this. 0.9057 means heat fades about 9.4% per day — a viral hit halves in roughly 7 days and is essentially forgotten within two weeks. Lower = faster cooling (only today's hits matter); higher = longer memory. Default 0.9057.",
     'trending.save': "Trending bump when an article is saved. Saves are rare and deliberate, so they earn the biggest bump. Default +3.0.",
     'trending.unsave': "Trending drop when a save is undone. Default -3.0.",
     'trending.like': "Trending bump per like. Likes are cheap to give, so each one moves trending less than a save. Default +2.0.",
@@ -472,7 +472,7 @@ input:checked + .slider:before { transform: translateX(20px); box-shadow: 0 2px 
     'quality.read_thorough': "Quality gain per thorough read — the steadiest way a publisher builds reputation over time. Default +0.005.",
     'quality.read_skim': "Legacy label — the current classifier no longer produces skims. Default +0.001.",
     'quality.swipe_not_interested': "Quality loss when a reader swipes 'not interested' on this publisher — an active rejection of the source. Default -0.010.",
-    'quality.quick_exit': "Quality loss per quick exit. Kept small on purpose: one bounced reader should not sink a publisher, and repeated failures are handled at the preference level by the thresholded rejection system. Default -0.005.",
+    'quality.quick_exit': "Quality loss per quick exit. Kept small on purpose: one bounced reader should not sink a publisher, and repeated failures are handled at the preference level by the thresholded rejection system. Default -0.010.",
 
     // ---- tranche ----
 
