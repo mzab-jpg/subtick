@@ -27,7 +27,7 @@ sequenceDiagram
       React->>ONB: initialRoute = Onboarding
     end
     Note over React: Non-essential setup deferred  setTimeout(..., 0): GoogleSignin.configure() + startOfflineManager()
-    Note over React: Background verification: ensureUserProfile + saveStartupSnapshot + verify route  __does not block cached cards__
+    Note over React: Background verification: the shared UserContext profile listener verifies the route + persists the snapshot  __does not block cached cards__
 ```
 
 ---
@@ -79,17 +79,21 @@ flowchart TD
 
 - **Order matters:** identity restore happens *first*; the local snapshot is read
   *only after* the UID is known — so cached cards can never leak between accounts. 
-- **Verification:** `verifyProfile()` runs in the background when a cached route existed
-  (`void verifyProfile().catch(...)`), and only blocks startup when no cached route exists.
+- **Verification:** the shared `UserContext` profile listener is the single profile
+  authority: it verifies the route (App.tsx reconciles declaratively), creates a
+  missing default profile, and persists the local snapshot only when its payload
+  changes. With a cached route this runs in the background; without one, App.tsx
+  awaits `refreshProfile()` so the route is known before the startup shell dismisses.
 - **Emulator hook:** `USE_EMULATORS = __DEV__ && EXPO_PUBLIC_USE_EMULATORS === 'true'`
   — connects Auth/Firestore/Functions emulators only in dev builds with the env var set.
 
 - **Startup timing logs:** `[Startup Timing]` messages are wrapped in `__DEV__` — they
   never appear in production.
 - **Startup dismissal condition:** the app dismisses the startup shell only when
-  `startupPreparationComplete` **and** `startupTypingComplete` both true — the
-  return-visitor card preparation and the typewriter animation both finish before the
-  shell gives way (no card-less flash).
+  `startupPreparationComplete` **and** `startupTypingComplete` both true - the
+  card preparation and the typewriter animation both finish before the shell gives
+  way (no card-less flash). First-ever launches (no cached route snapshot) also
+  wait for `routeVerified` - the shared profile listener confirming the entry route.
 
 
 ## 6. Where this lives

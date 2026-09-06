@@ -12,6 +12,31 @@
 
 ---
 
+## 5 September 2026 - Startup single-ownership batch (client)
+
+Completed simplifications; no user-facing behaviour change beyond a faster, cleaner startup:
+
+- **One profile owner.** The shared `UserContext` listener is the single profile
+  authority at startup: it verifies the onboarding route (App.tsx reconciles
+  declaratively), creates a missing default profile, and persists the local route
+  snapshot only when the snapshot payload changes. App.tsx no longer reads the
+  profile document at startup, removing a duplicate Firestore read every launch.
+  `refreshProfile()` now creates a missing profile so an offline first launch can
+  recover through "Tap to Retry".
+- **One feed-fetch owner.** App.tsx no longer calls `getRankedFeed` during startup on
+  an empty dashboard cache; DashboardScreen's single-request logic (H4) owns
+  first-feed fetching, so startup never blocks on Cloud Functions.
+- **One persistent auth listener.** UserContext exposes the authenticated user;
+  App.tsx derives mid-session UID-change remounts from it instead of attaching a
+  second `onAuthStateChanged`. The transient listener inside
+  `signInAnonymouslyIfNeeded` remains intentionally - it safely awaits session
+  restore before deciding to sign in.
+- **Hygiene.** Corrected the inaccurate "lazy imports for code splitting" comment in
+  RootNavigator (screens are static imports; Metro ships a single bundle), replaced
+  App.tsx module-level globals with component-scoped refs, and removed a
+  stale-closure startup log. `scripts/test-dashboard-metrics.js` updated to pin the
+  new ownership.
+
 ## 21 August 2026 - Security/cost audit batch (deployed)
 
 Completed and live in production (recorded so the deferred list stays accurate):

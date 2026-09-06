@@ -141,11 +141,13 @@ check('startup cache is UID-bound, expires, filters seen cards, and never stores
     && !startupCacheSource.includes('token')
     && !startupCacheSource.includes('password'),
   true);
-check('returning startup restores only after Firebase identity and stays cache-first (no background refetch)',
+check('returning startup restores only after Firebase identity and stays cache-first (single fetch owner)',
   appSource.includes('getStartupSnapshot(user.uid)')
-    && appSource.includes('Background profile verification failed')
-    && appSource.includes('restoreCachedDashboardFeed(user.uid, seenIds)')
-    && appSource.includes('setCachedDashboardFeed(user.uid, result.articles, [])')
+    && !appSource.includes('getRankedFeed')
+    && !appSource.includes('restoreCachedDashboardFeed')
+    && !appSource.includes('ensureUserProfile')
+    && userContextSource.includes('ensureUserProfile(nextUser)')
+    && userContextSource.includes("doc(db, 'users', nextUser.uid)")
     && dashboardSource.includes('restoreCachedDashboardFeed(userId, await getSeenArticleIdsLocally())')
     && dashboardSource.includes('H4 Fix: cached cards ARE the launch feed')
     && !dashboardSource.includes('refreshNextLaunchFeed'),

@@ -8,7 +8,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useTheme } from '../contexts/ThemeContext';
 import { RootStackParamList } from '../types';
 
-// Screens (lazy imports for code splitting)
+// Screens
 import OnboardingScreen from '../screens/OnboardingScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import ReaderScreen from '../screens/ReaderScreen';

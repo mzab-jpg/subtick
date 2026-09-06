@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          background: "#111317",
+          surface: "#111317",
+          "surface-dim": "#111317",
+          "surface-bright": "#37393d",
+          "surface-container-lowest": "#0c0e11",
+          "surface-container-low": "#1a1c1f",
+          "surface-container": "#1e2023",
+          "surface-container-high": "#282a2d",
+          "surface-container-highest": "#333538",
+          "surface-card": "#1a1e26",
+          "surface-obsidian": "#161920",
+          outline: "#8e9194",
+          "outline-variant": "#2b3038",
+          primary: "#ffffff",
+          "primary-container": "#f0f3f8",
+          "on-primary": "#0c0e13",
+          "on-primary-container": "#2d3133",
+          secondary: "#76b2df",
+          "secondary-light": "#a8d5f2",
+          "secondary-container": "#00557d",
+          "on-secondary": "#00344e",
+          "on-secondary-container": "#cae6ff",
+          tertiary: "#e2e5eb",
+          "on-tertiary": "#2b3138",
+          "on-surface": "#e2e2e6",
+          "on-surface-variant": "#9ba1a8",
+          "on-background": "#e2e2e6",
+          error: "#ffb4ab",
+          "error-container": "#93000a"
+        },
+        borderRadius: {
+          DEFAULT: "0.125rem",
+          lg: "0.25rem",
+          xl: "0.5rem",
+          full: "0.75rem"
+        },
+        fontFamily: {
+          "headline-lg": ["Space Grotesk", "sans-serif"],
+          "headline-md": ["Space Grotesk", "sans-serif"],
+          "headline-sm": ["Space Grotesk", "sans-serif"],
+          "body-lg": ["Manrope", "sans-serif"],
+          "body-md": ["Manrope", "sans-serif"],
+          "body-sm": ["Manrope", "sans-serif"],
+          "label-md": ["JetBrains Mono", "monospace"],
+          "label-sm": ["JetBrains Mono", "monospace"]
+        }
+      }
+    }
+  };
+</script>
+<style>
+    @layer base {
+      html, body {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #111317;
+        color: #e2e2e6;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        overscroll-behavior-y: none;
+      }
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 16px);
+      }
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+</style>
+</head>
+<body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen antialiased selection:bg-[#76b2df]/25" data-status="keep-spec">
+<!-- Sticky Clean Header -->
+<header class="fixed top-0 inset-x-0 z-40 bg-[#111317]/95 backdrop-blur-xl border-b border-[#2b3038] pt-safe">
+<div class="px-4 py-3 flex items-center justify-between">
+<a class="min-h-[40px] inline-flex items-center text-on-surface-variant hover:text-white font-label-md text-xs tracking-wider transition-colors" data-path="stacks" href="#">CANCEL</a>
+<h1 class="font-headline-md text-base text-on-surface tracking-tight font-medium text-center">
+<span class="text-[10px] text-on-surface-variant block font-label-sm uppercase tracking-widest text-[#76b2df]">Library &amp; Stacks</span>
+  Create Reading Stack
+</h1>
+<div class="flex items-center gap-1.5 text-[11px] font-label-sm text-[#e2e5eb]">
+<span class="material-symbols-outlined text-xs text-[#76b2df]" id="draft-icon">check_circle</span>
+<span class="tracking-wide" id="draft-status">Draft saved</span>
+</div>
+</div>
+</header>
+<!-- Main Scrollable Content -->
+<main class="flex-1 w-full pt-[68px] pb-36 px-4 space-y-5">
+<!-- Stack Name & Occasion Preset Pills -->
+<section class="pt-2 space-y-2.5">
+<div class="space-y-1.5">
+<div class="flex items-center justify-between">
+<label class="block font-label-sm text-[10px] uppercase tracking-wider text-[#a8d5f2] font-semibold" for="stack-name-input">Stack Name</label>
+<span class="font-label-sm text-[10px] text-on-surface-variant">Required</span>
+</div>
+<div class="relative">
+<input class="w-full h-11 px-3.5 rounded-xl bg-[#1a1c1f] border border-[#2b3038] text-on-surface placeholder:text-on-surface-variant/40 text-sm font-body-md focus:outline-none focus:border-[#76b2df] focus:ring-1 focus:ring-[#76b2df] transition-all" id="stack-name-input" placeholder="e.g., Sunday Longform, Frontier Tech..." type="text" value="Sunday Longform"/>
+</div>
+</div>
+</section>
+<!-- Section Header: Source Pathways -->
+<div class="flex items-center justify-between pt-1">
+<h2 class="font-label-sm text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">Select Source Pathways</h2>
+<span class="text-[11px] font-label-sm text-[#76b2df] tracking-wide">Tap to expand / collapse</span>
+</div>
+<!-- Accordion 1: My Saves & History -->
+<section class="rounded-xl bg-[#1a1c1f] border border-[#2b3038] overflow-hidden transition-all shadow-sm" id="accordion-saves">
+<button class="w-full p-3.5 flex items-center justify-between text-left hover:bg-[#1e2023]/60 transition-colors" onclick="toggleAccordion('saves')" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-[#161920] border border-[#2b3038] flex items-center justify-center text-[#76b2df] shrink-0">
+<span class="material-symbols-outlined text-lg">folder_special</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="font-body-md text-sm font-semibold text-on-surface">My Saves &amp; History</h3>
+<span class="px-2 py-0.5 rounded-full bg-[#76b2df]/15 text-[#a8d5f2] font-label-sm text-[10px] font-semibold border border-[#76b2df]/30">22 available</span>
+</div>
+<p class="font-body-sm text-[11px] text-on-surface-variant truncate">Personal reading queue, history &amp; stashed articles</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-[#76b2df] transition-transform duration-200 shrink-0 ml-2" id="arrow-saves">expand_less</span>
+</button>
+<!-- Collapsible Body for Accordion 1 -->
+<div class="p-3.5 pt-0 space-y-3 border-t border-[#2b3038]/70" id="body-saves">
+<!-- Segmented Tabs -->
+<div class="flex border-b border-[#2b3038] gap-1.5 pt-2.5">
+<button class="pb-1.5 text-xs font-label-sm font-medium text-white border-b-2 border-[#76b2df] flex items-center gap-1 shrink-0 transition-colors" id="tab-btn-queue" onclick="switchSavesTab('queue')" type="button">
+<span>Quick Queue</span>
+<span class="text-[10px] px-1 rounded bg-[#76b2df]/20 text-[#a8d5f2]">2</span>
+</button>
+<button class="pb-1.5 text-xs font-label-sm font-medium text-on-surface-variant hover:text-on-surface flex items-center gap-1 shrink-0 transition-colors" id="tab-btn-history" onclick="switchSavesTab('history')" type="button">
+<span>Reading History</span>
+<span class="text-[10px] px-1 rounded bg-[#282a2d] text-on-surface-variant">14</span>
+</button>
+<button class="pb-1.5 text-xs font-label-sm font-medium text-on-surface-variant hover:text-on-surface flex items-center gap-1 shrink-0 transition-colors" id="tab-btn-stash" onclick="switchSavesTab('stash')" type="button">
+<span>Permanent Stash</span>
+<span class="text-[10px] px-1 rounded bg-[#282a2d] text-on-surface-variant">6</span>
+</button>
+</div>
+<!-- Tab Content: Quick Queue -->
+<div class="space-y-2" id="tab-content-queue">
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/50 transition-colors">
+<div class="flex items-center gap-2.5 min-w-0 pr-2">
+<input checked="" class="w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-art-1" onchange="handleCheckboxToggle('art-1', 'The Liquidity Illusion in Tech Markets', 'Byrne Hobart · The Diff', 8, this.checked)" type="checkbox"/>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-on-surface truncate font-medium">The Liquidity Illusion in Tech Markets</p>
+<p class="text-[11px] text-on-surface-variant truncate font-body-sm">Byrne Hobart · The Diff · Substack</p>
+</div>
+</div>
+<span class="font-label-sm text-[11px] text-[#a8d5f2] shrink-0 font-medium">8 min</span>
+</label>
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/50 transition-colors">
+<div class="flex items-center gap-2.5 min-w-0 pr-2">
+<input checked="" class="w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-art-2" onchange="handleCheckboxToggle('art-2', 'Why Algorithmic Feeds Need Human Playlists', 'Packy McCormick · Not Boring', 7, this.checked)" type="checkbox"/>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-on-surface truncate font-medium">Why Algorithmic Feeds Need Human Playlists</p>
+<p class="text-[11px] text-on-surface-variant truncate font-body-sm">Packy McCormick · Not Boring</p>
+</div>
+</div>
+<span class="font-label-sm text-[11px] text-[#a8d5f2] shrink-0 font-medium">7 min</span>
+</label>
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/50 transition-colors">
+<div class="flex items-center gap-2.5 min-w-0 pr-2">
+<input class="w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-art-3" onchange="handleCheckboxToggle('art-3', 'Network States &amp; High-Agency Cities', 'Balaji Srinivasan · 1729', 16, this.checked)" type="checkbox"/>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-on-surface truncate font-medium">Network States &amp; High-Agency Cities</p>
+<p class="text-[11px] text-on-surface-variant truncate font-body-sm">Balaji Srinivasan · 1729 Substack</p>
+</div>
+</div>
+<span class="font-label-sm text-[11px] text-on-surface-variant shrink-0 font-medium">16 min</span>
+</label>
+</div>
+<!-- Tab Content: Reading History (Hidden by default) -->
+<div class="space-y-2 hidden" id="tab-content-history">
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/50 transition-colors">
+<div class="flex items-center gap-2.5 min-w-0 pr-2">
+<input class="w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-art-hist-1" onchange="handleCheckboxToggle('art-hist-1', 'The Epistemic Foundations of Silicon Valley', 'Dan Wang · Essays', 19, this.checked)" type="checkbox"/>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-on-surface truncate font-medium">The Epistemic Foundations of Silicon Valley</p>
+<p class="text-[11px] text-on-surface-variant truncate">Dan Wang · Read 3 days ago</p>
+</div>
+</div>
+<span class="font-label-sm text-[11px] text-on-surface-variant shrink-0 font-medium">19 min</span>
+</label>
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/50 transition-colors">
+<div class="flex items-center gap-2.5 min-w-0 pr-2">
+<input class="w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-art-hist-2" onchange="handleCheckboxToggle('art-hist-2', 'Superintelligence Architecture and Power Grids', 'SemiAnalysis', 13, this.checked)" type="checkbox"/>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-on-surface truncate font-medium">Superintelligence Architecture and Power Grids</p>
+<p class="text-[11px] text-on-surface-variant truncate">Dylan Patel · SemiAnalysis</p>
+</div>
+</div>
+<span class="font-label-sm text-[11px] text-on-surface-variant shrink-0 font-medium">13 min</span>
+</label>
+</div>
+<!-- Tab Content: Permanent Stash (Hidden by default) -->
+<div class="space-y-2 hidden" id="tab-content-stash">
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/50 transition-colors">
+<div class="flex items-center gap-2.5 min-w-0 pr-2">
+<input class="w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-art-stash-1" onchange="handleCheckboxToggle('art-stash-1', 'Notes on Craft: Typography in Digital Prose', 'Craig Mod · Roden', 22, this.checked)" type="checkbox"/>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-on-surface truncate font-medium">Notes on Craft: Typography in Digital Prose</p>
+<p class="text-[11px] text-on-surface-variant truncate">Craig Mod · Everlasting Archive</p>
+</div>
+</div>
+<span class="font-label-sm text-[11px] text-on-surface-variant shrink-0 font-medium">22 min</span>
+</label>
+</div>
+</div>
+</section>
+<!-- Accordion 2: Custom Discovery & Algorithmic Filters (Active) -->
+<section class="rounded-xl bg-[#1a1c1f] border-2 border-[#76b2df] overflow-hidden transition-all shadow-[0_4px_20px_rgba(118,178,223,0.12)]" id="accordion-discovery">
+<button class="w-full p-3.5 flex items-center justify-between text-left hover:bg-[#1e2023]/60 transition-colors" onclick="toggleAccordion('discovery')" type="button">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-[#161920] border border-[#76b2df]/40 flex items-center justify-center text-[#76b2df] shrink-0">
+<span class="material-symbols-outlined text-lg">tune</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="font-body-md text-sm font-semibold text-white">Custom Discovery &amp; Algorithmic Filters</h3>
+<span class="px-2 py-0.5 rounded-full bg-[#76b2df]/20 text-[#a8d5f2] font-label-sm text-[10px] font-semibold border border-[#76b2df]/40">Active</span>
+</div>
+<p class="font-body-sm text-[11px] text-on-surface-variant truncate">Filter Substack universe by topic, length &amp; quality resonance</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-[#76b2df] transition-transform duration-200 shrink-0 ml-2" id="arrow-discovery">expand_less</span>
+</button>
+<!-- Collapsible Body for Accordion 2 -->
+<div class="p-3.5 pt-0 space-y-4 border-t border-[#2b3038]/70" id="body-discovery">
+<!-- 4 Custom Modernist Editorial Dark Popover Dropdowns -->
+<div class="pt-2.5 space-y-2.5">
+<div class="flex items-center justify-between">
+<span class="text-[10px] font-label-sm uppercase tracking-wider text-on-surface-variant font-medium">Refine Candidates via Menus</span>
+<span class="text-[10px] font-label-sm text-[#76b2df]">4 Filters Applied</span>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<!-- Dropdown 1: Topic / Category -->
+<div class="space-y-1 relative">
+<label class="block font-label-sm text-[10px] text-on-surface-variant font-medium">Topic / Category</label>
+<button class="w-full h-9 px-2.5 rounded-lg bg-[#161920] border border-[#2b3038] text-on-surface text-xs font-body-sm flex items-center justify-between hover:border-[#76b2df]/60 transition-colors text-left" onclick="toggleDropdown('menu-topic', event)" type="button">
+<span class="truncate font-medium text-white" id="label-topic">AI &amp; Systems</span>
+<span class="material-symbols-outlined text-[#76b2df] text-base shrink-0 transition-transform duration-150" id="chevron-menu-topic">expand_more</span>
+</button>
+<!-- Editorial Dark Popover Menu -->
+<div class="dropdown-popover hidden absolute z-50 left-0 right-0 top-full mt-1.5 bg-[#161920] border border-[#2b3038] rounded-xl shadow-2xl p-1 max-h-56 overflow-y-auto no-scrollbar ring-1 ring-[#76b2df]/30" id="menu-topic">
+<div class="p-1 space-y-0.5">
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-white hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('topic', 'AI &amp; Systems')" type="button">
+<span class="truncate">AI &amp; Systems</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('topic', 'Macroeconomics')" type="button">
+<span class="truncate">Macroeconomics</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('topic', 'Philosophy')" type="button">
+<span class="truncate">Philosophy</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('topic', 'Energy &amp; Hardware')" type="button">
+<span class="truncate">Energy &amp; Hardware</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('topic', 'Culture &amp; Media')" type="button">
+<span class="truncate">Culture &amp; Media</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('topic', 'Venture &amp; Tech')" type="button">
+<span class="truncate">Venture &amp; Tech</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('topic', 'Design &amp; Type')" type="button">
+<span class="truncate">Design &amp; Type</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Dropdown 2: Reading Duration -->
+<div class="space-y-1 relative">
+<label class="block font-label-sm text-[10px] text-on-surface-variant font-medium">Reading Duration</label>
+<button class="w-full h-9 px-2.5 rounded-lg bg-[#161920] border border-[#2b3038] text-on-surface text-xs font-body-sm flex items-center justify-between hover:border-[#76b2df]/60 transition-colors text-left" onclick="toggleDropdown('menu-duration', event)" type="button">
+<span class="truncate font-medium text-white" id="label-duration">10–25 min</span>
+<span class="material-symbols-outlined text-[#76b2df] text-base shrink-0 transition-transform duration-150" id="chevron-menu-duration">expand_more</span>
+</button>
+<!-- Editorial Dark Popover Menu -->
+<div class="dropdown-popover hidden absolute z-50 left-0 right-0 top-full mt-1.5 bg-[#161920] border border-[#2b3038] rounded-xl shadow-2xl p-1 max-h-56 overflow-y-auto no-scrollbar ring-1 ring-[#76b2df]/30" id="menu-duration">
+<div class="p-1 space-y-0.5">
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('duration', '&lt; 10 min')" type="button">
+<span class="truncate">&lt; 10 min</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-white hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('duration', '10–25 min')" type="button">
+<span class="truncate">10–25 min</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('duration', '25+ min')" type="button">
+<span class="truncate">25+ min</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Dropdown 3: Resonance & Quality -->
+<div class="space-y-1 relative">
+<label class="block font-label-sm text-[10px] text-on-surface-variant font-medium">Resonance &amp; Quality</label>
+<button class="w-full h-9 px-2.5 rounded-lg bg-[#161920] border border-[#2b3038] text-on-surface text-xs font-body-sm flex items-center justify-between hover:border-[#76b2df]/60 transition-colors text-left" onclick="toggleDropdown('menu-resonance', event)" type="button">
+<span class="truncate font-medium text-white" id="label-resonance">Top 5% Resonant</span>
+<span class="material-symbols-outlined text-[#76b2df] text-base shrink-0 transition-transform duration-150" id="chevron-menu-resonance">expand_more</span>
+</button>
+<!-- Editorial Dark Popover Menu -->
+<div class="dropdown-popover hidden absolute z-50 left-0 right-0 top-full mt-1.5 bg-[#161920] border border-[#2b3038] rounded-xl shadow-2xl p-1 max-h-56 overflow-y-auto no-scrollbar ring-1 ring-[#76b2df]/30" id="menu-resonance">
+<div class="p-1 space-y-0.5">
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-white hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('resonance', 'Top 5% Resonant')" type="button">
+<span class="truncate">Top 5% Resonant</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('resonance', 'Curator Picks')" type="button">
+<span class="truncate">Curator Picks</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('resonance', 'All Fresh')" type="button">
+<span class="truncate">All Fresh</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Dropdown 4: Publication Source -->
+<div class="space-y-1 relative">
+<label class="block font-label-sm text-[10px] text-on-surface-variant font-medium">Publication Source</label>
+<button class="w-full h-9 px-2.5 rounded-lg bg-[#161920] border border-[#2b3038] text-on-surface text-xs font-body-sm flex items-center justify-between hover:border-[#76b2df]/60 transition-colors text-left" onclick="toggleDropdown('menu-source', event)" type="button">
+<span class="truncate font-medium text-white" id="label-source">All Substack Curated</span>
+<span class="material-symbols-outlined text-[#76b2df] text-base shrink-0 transition-transform duration-150" id="chevron-menu-source">expand_more</span>
+</button>
+<!-- Editorial Dark Popover Menu -->
+<div class="dropdown-popover hidden absolute z-50 left-0 right-0 top-full mt-1.5 bg-[#161920] border border-[#2b3038] rounded-xl shadow-2xl p-1 max-h-56 overflow-y-auto no-scrollbar ring-1 ring-[#76b2df]/30" id="menu-source">
+<div class="p-1 space-y-0.5">
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-white hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('source', 'All Substack Curated')" type="button">
+<span class="truncate">All Substack Curated</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('source', 'Specific Publications')" type="button">
+<span class="truncate">Specific Publications</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+<button class="w-full px-2.5 py-1.5 rounded-md text-left text-xs font-headline-sm text-on-surface hover:bg-[#1a1e26] hover:text-[#a8d5f2] flex items-center justify-between group transition-colors" onclick="selectDropdownOption('source', 'Top Followed Only')" type="button">
+<span class="truncate">Top Followed Only</span>
+<span class="material-symbols-outlined text-xs text-[#76b2df] checkmark-indicator hidden">check</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Filtered Matching Candidate Essays -->
+<div class="space-y-2 pt-1">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="font-label-sm text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">Matching Candidates</span>
+<span class="px-1.5 py-0.5 rounded bg-[#76b2df]/15 text-[#a8d5f2] text-[10px] font-label-sm font-semibold border border-[#76b2df]/30">3 found</span>
+</div>
+<button class="text-[11px] font-label-sm text-[#76b2df] hover:text-white font-semibold transition-colors cursor-pointer flex items-center gap-1" id="btn-select-all-candidates" onclick="toggleSelectAllCandidates()" type="button">
+<span class="material-symbols-outlined text-xs">done_all</span>
+<span id="select-all-candidates-label">Select All (3)</span>
+</button>
+</div>
+<div class="space-y-2">
+<!-- Candidate 1 -->
+<label class="flex items-start gap-2.5 p-3 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/60 transition-all block group">
+<input class="mt-1 w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-cand-1" onchange="handleCheckboxToggle('cand-1', 'The Cognitive Division of Labor in AI Labs', 'Pirate Wires • Solana', 14, this.checked)" type="checkbox"/>
+<div class="space-y-1 min-w-0 flex-1">
+<div class="flex items-center justify-between gap-1">
+<div class="flex items-center gap-1.5 min-w-0">
+<span class="w-4 h-4 rounded-full bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[9px] font-bold flex items-center justify-center shrink-0">PW</span>
+<span class="text-[11px] font-label-md text-[#e2e5eb] truncate">Pirate Wires • Solana</span>
+</div>
+<span class="font-label-sm text-[11px] text-[#a8d5f2] shrink-0 font-medium">14 min</span>
+</div>
+<p class="font-headline-sm text-xs font-medium text-white leading-snug">The Cognitive Division of Labor in AI Labs</p>
+<div class="flex items-center gap-2 pt-0.5">
+<span class="px-1.5 py-0.5 rounded bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[9px] font-label-sm">AI &amp; Systems</span>
+<span class="text-[10px] text-[#a8d5f2] font-label-sm flex items-center gap-0.5"><span>★</span> Top 5% Signal</span>
+</div>
+</div>
+</label>
+<!-- Candidate 2 -->
+<label class="flex items-start gap-2.5 p-3 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/60 transition-all block group">
+<input class="mt-1 w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-cand-2" onchange="handleCheckboxToggle('cand-2', 'Geothermal Base Loads and the Compute Crunch', 'Works in Progress • Nick Cowen', 12, this.checked)" type="checkbox"/>
+<div class="space-y-1 min-w-0 flex-1">
+<div class="flex items-center justify-between gap-1">
+<div class="flex items-center gap-1.5 min-w-0">
+<span class="w-4 h-4 rounded-full bg-[#111317] border border-[#2b3038] text-[#e2e5eb] text-[9px] font-bold flex items-center justify-center shrink-0">WP</span>
+<span class="text-[11px] font-label-md text-[#e2e5eb] truncate">Works in Progress • Nick Cowen</span>
+</div>
+<span class="font-label-sm text-[11px] text-[#a8d5f2] shrink-0 font-medium">12 min</span>
+</div>
+<p class="font-headline-sm text-xs font-medium text-white leading-snug">Geothermal Base Loads and the Compute Crunch</p>
+<div class="flex items-center gap-2 pt-0.5">
+<span class="px-1.5 py-0.5 rounded bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[9px] font-label-sm">Energy &amp; Hardware</span>
+<span class="text-[10px] text-[#a8d5f2] font-label-sm flex items-center gap-0.5"><span>★</span> High Resonance</span>
+</div>
+</div>
+</label>
+<!-- Candidate 3 -->
+<label class="flex items-start gap-2.5 p-3 rounded-lg bg-[#1a1e26] border border-[#2b3038] cursor-pointer hover:border-[#76b2df]/60 transition-all block group">
+<input class="mt-1 w-4 h-4 rounded border-[#4a4f56] text-[#76b2df] focus:ring-0 bg-[#0c0e11] accent-[#76b2df] shrink-0 cursor-pointer" id="chk-cand-3" onchange="handleCheckboxToggle('cand-3', 'The Compounding Flywheel of Sovereign Infra', 'Not Boring • Packy McCormick', 18, this.checked)" type="checkbox"/>
+<div class="space-y-1 min-w-0 flex-1">
+<div class="flex items-center justify-between gap-1">
+<div class="flex items-center gap-1.5 min-w-0">
+<span class="w-4 h-4 rounded-full bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[9px] font-bold flex items-center justify-center shrink-0">NB</span>
+<span class="text-[11px] font-label-md text-[#e2e5eb] truncate">Not Boring • Packy McCormick</span>
+</div>
+<span class="font-label-sm text-[11px] text-[#a8d5f2] shrink-0 font-medium">18 min</span>
+</div>
+<p class="font-headline-sm text-xs font-medium text-white leading-snug">The Compounding Flywheel of Sovereign Infra</p>
+<div class="flex items-center gap-2 pt-0.5">
+<span class="px-1.5 py-0.5 rounded bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[9px] font-label-sm">Venture &amp; Tech</span>
+<span class="text-[10px] text-[#a8d5f2] font-label-sm flex items-center gap-0.5"><span>★</span> Top 5% Signal</span>
+</div>
+</div>
+</label>
+</div>
+</div>
+</div>
+</section>
+<!-- Growing List / Stack Compilation Tray -->
+<section class="pt-1 space-y-2.5 rounded-xl p-3.5 bg-[#1a1c1f] border border-[#76b2df]/30" id="compilation-tray">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-base text-[#76b2df]">playlist_add_check</span>
+<h3 class="font-body-md text-xs font-semibold text-white uppercase tracking-wider">Selected Essays in This Stack</h3>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-[#76b2df]/20 text-[#a8d5f2] border border-[#76b2df]/30 font-label-sm text-[10px] font-bold" id="tray-badge">2 essays • 15 min</span>
+</div>
+<p class="text-[11px] font-body-sm text-on-surface-variant">These essays form your current reading playlist sequence. Drag or tap ✕ to prune.</p>
+<!-- Live Playlist Tray Cards Container -->
+<div class="space-y-2 pt-1" id="tray-list-container">
+<div class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] gap-2 transition-all hover:border-[#76b2df]/40">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-on-surface-variant/60 text-sm cursor-grab shrink-0">drag_indicator</span>
+<span class="w-5 h-5 rounded bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[10px] font-bold flex items-center justify-center shrink-0">1</span>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-white truncate font-medium">The Liquidity Illusion in Tech Markets</p>
+<p class="text-[10px] text-on-surface-variant truncate">Byrne Hobart · The Diff</p>
+</div>
+</div>
+<div class="flex items-center gap-2 shrink-0">
+<span class="font-label-sm text-[11px] text-[#a8d5f2] font-medium">8m</span>
+<button class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-[#ffb4ab] hover:bg-[#111317] transition-colors" onclick="removeFromStack('art-1')" title="Remove from stack" type="button">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+</div>
+<div class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] gap-2 transition-all hover:border-[#76b2df]/40">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-on-surface-variant/60 text-sm cursor-grab shrink-0">drag_indicator</span>
+<span class="w-5 h-5 rounded bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[10px] font-bold flex items-center justify-center shrink-0">2</span>
+<div class="min-w-0">
+<p class="font-body-sm text-xs text-white truncate font-medium">Why Algorithmic Feeds Need Human Playlists</p>
+<p class="text-[10px] text-on-surface-variant truncate">Packy McCormick · Not Boring</p>
+</div>
+</div>
+<div class="flex items-center gap-2 shrink-0">
+<span class="font-label-sm text-[11px] text-[#a8d5f2] font-medium">7m</span>
+<button class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-[#ffb4ab] hover:bg-[#111317] transition-colors" onclick="removeFromStack('art-2')" title="Remove from stack" type="button">
+<span class="material-symbols-outlined text-sm">close</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Persistent Bottom Action Bar -->
+<footer class="fixed bottom-0 inset-x-0 z-40 bg-[#111317]/95 backdrop-blur-xl border-t border-[#2b3038] pb-safe px-4 pt-3 shadow-[0_-8px_30px_rgba(0,0,0,0.8)]">
+<div class="max-w-md mx-auto flex flex-col gap-2">
+<!-- Selected Count & Total Duration -->
+<div class="flex items-center justify-between px-1 text-xs">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[#76b2df] text-base" id="status-icon">check_circle</span>
+<span class="font-label-md text-white font-semibold tracking-wide" id="bottom-summary-text">2 essays selected • 15 min</span>
+</div>
+<span class="text-[11px] font-label-sm text-[#a8d5f2]" id="ready-status">Ready to compile</span>
+</div>
+<!-- Primary CTA Button in bold high-contrast silver/white (#f0f3f8) with obsidian text (#0c0e13) -->
+<button class="w-full h-12 rounded-xl bg-[#f0f3f8] hover:bg-white active:scale-[0.98] text-[#0c0e13] font-headline-sm text-sm font-bold tracking-wide flex items-center justify-center gap-2 shadow-[0_4px_16px_rgba(240,243,248,0.2)] transition-all" id="create-btn" onclick="submitStack()" type="button">
+<span class="font-bold" id="create-btn-text">Create Stack (2 essays • 15 min) →</span>
+</button>
+</div>
+</footer>
+<!-- Modal: Add Custom Substack / RSS Link -->
+<div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4" id="custom-link-modal">
+<div class="w-full max-w-sm bg-[#161920] border border-[#2b3038] rounded-2xl p-5 space-y-4 shadow-2xl relative">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#76b2df] text-lg">link</span>
+<h3 class="font-headline-md text-base text-white">Add Custom Source</h3>
+</div>
+<button class="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:text-white hover:bg-[#1a1c1f] transition-colors" onclick="closeModal()" type="button">
+<span class="material-symbols-outlined text-base">close</span>
+</button>
+</div>
+<p class="text-xs font-body-sm text-on-surface-variant">Paste any Substack article or publication RSS feed to fetch and queue it.</p>
+<div class="space-y-2">
+<input class="w-full h-10 px-3 rounded-lg bg-[#111317] border border-[#2b3038] text-white placeholder:text-on-surface-variant/40 text-xs focus:outline-none focus:border-[#76b2df] transition-all" id="custom-url-input" placeholder="https://newsletter.substack.com/p/..." type="url"/>
+<input class="w-full h-10 px-3 rounded-lg bg-[#111317] border border-[#2b3038] text-white placeholder:text-on-surface-variant/40 text-xs focus:outline-none focus:border-[#76b2df] transition-all" id="custom-title-input" placeholder="Article Title (optional)" type="text"/>
+</div>
+<div class="flex gap-2 pt-1">
+<button class="flex-1 h-9 rounded-lg border border-[#2b3038] text-xs font-label-md text-on-surface-variant hover:text-white hover:bg-[#1a1c1f] transition-colors" onclick="closeModal()" type="button">
+        Cancel
+      </button>
+<button class="flex-1 h-9 rounded-lg bg-[#f0f3f8] hover:bg-white text-[#0c0e13] font-headline-sm text-xs font-bold transition-all" onclick="addCustomArticle()" type="button">
+        Add to Stack
+      </button>
+</div>
+</div>
+</div>
+<!-- Interactive Logic -->
+<script>
+  let stackItems = [
+    {
+      id: 'art-1',
+      title: 'The Liquidity Illusion in Tech Markets',
+      author: 'Byrne Hobart · The Diff',
+      minutes: 8
+    },
+    {
+      id: 'art-2',
+      title: 'Why Algorithmic Feeds Need Human Playlists',
+      author: 'Packy McCormick · Not Boring',
+      minutes: 7
+    }
+  ];
+
+  function renderTray() {
+    const container = document.getElementById('tray-list-container');
+    const badge = document.getElementById('tray-badge');
+    const bottomSummary = document.getElementById('bottom-summary-text');
+    const ctaText = document.getElementById('create-btn-text');
+
+    const totalMinutes = stackItems.reduce((acc, cur) => acc + cur.minutes, 0);
+    const count = stackItems.length;
+
+    if (badge) {
+      badge.textContent = `${count} ${count === 1 ? 'essay' : 'essays'} • ${totalMinutes} min`;
+    }
+    if (bottomSummary) {
+      bottomSummary.textContent = `${count} ${count === 1 ? 'essay' : 'essays'} selected • ${totalMinutes} min`;
+    }
+    if (ctaText) {
+      ctaText.textContent = count > 0 
+        ? `Create Stack (${count} ${count === 1 ? 'essay' : 'essays'} • ${totalMinutes} min) →`
+        : 'Create Stack (0 essays) →';
+    }
+
+    if (count === 0) {
+      container.innerHTML = `
+        <div class="p-4 rounded-lg bg-[#1a1e26]/60 border border-dashed border-[#2b3038] text-center space-y-1">
+          <p class="text-xs text-on-surface-variant font-body-sm">Your reading stack is currently empty.</p>
+          <p class="text-[10px] text-[#76b2df] font-label-sm">Select essays above to assemble your playlist.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = stackItems.map((item, index) => `
+      <div class="flex items-center justify-between p-2.5 rounded-lg bg-[#1a1e26] border border-[#2b3038] gap-2 transition-all hover:border-[#76b2df]/40">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="material-symbols-outlined text-on-surface-variant/60 text-sm cursor-grab shrink-0">drag_indicator</span>
+          <span class="w-5 h-5 rounded bg-[#111317] border border-[#2b3038] text-[#76b2df] text-[10px] font-bold flex items-center justify-center shrink-0">${index + 1}</span>
+          <div class="min-w-0">
+            <p class="font-body-sm text-xs text-white truncate font-medium">${item.title}</p>
+            <p class="text-[10px] text-on-surface-variant truncate">${item.author}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="font-label-sm text-[11px] text-[#a8d5f2] font-medium">${item.minutes}m</span>
+          <button onclick="removeFromStack('${item.id}')" class="w-6 h-6 rounded flex items-center justify-center text-on-surface-variant hover:text-[#ffb4ab] hover:bg-[#111317] transition-colors" title="Remove from stack" type="button">
+            <span class="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function handleCheckboxToggle(id, title, author, minutes, isChecked) {
+    if (isChecked) {
+      if (!stackItems.some(item => item.id === id)) {
+        stackItems.push({ id, title, author, minutes });
+      }
+    } else {
+      stackItems = stackItems.filter(item => item.id !== id);
+    }
+    renderTray();
+  }
+
+  function removeFromStack(id) {
+    stackItems = stackItems.filter(item => item.id !== id);
+    const checkbox = document.getElementById(`chk-${id}`);
+    if (checkbox) {
+      checkbox.checked = false;
+    }
+    renderTray();
+  }
+
+  function toggleAccordion(id) {
+    const body = document.getElementById(`body-${id}`);
+    const arrow = document.getElementById(`arrow-${id}`);
+    if (body.classList.contains('hidden')) {
+      body.classList.remove('hidden');
+      if (arrow) arrow.style.transform = 'rotate(0deg)';
+    } else {
+      body.classList.add('hidden');
+      if (arrow) arrow.style.transform = 'rotate(180deg)';
+    }
+  }
+
+  function switchSavesTab(tabName) {
+    const tabs = ['queue', 'history', 'stash'];
+    tabs.forEach(t => {
+      const btn = document.getElementById(`tab-btn-${t}`);
+      const content = document.getElementById(`tab-content-${t}`);
+      if (t === tabName) {
+        btn.className = 'pb-1.5 text-xs font-label-sm font-medium text-white border-b-2 border-[#76b2df] flex items-center gap-1 shrink-0 transition-colors';
+        content.classList.remove('hidden');
+      } else {
+        btn.className = 'pb-1.5 text-xs font-label-sm font-medium text-on-surface-variant hover:text-on-surface flex items-center gap-1 shrink-0 transition-colors';
+        content.classList.add('hidden');
+      }
+    });
+  }
+
+  function toggleDropdown(menuId, event) {
+    event.stopPropagation();
+    const menu = document.getElementById(menuId);
+    const chevron = document.getElementById(`chevron-${menuId}`);
+    const isClosed = menu.classList.contains('hidden');
+
+    closeAllDropdowns();
+
+    if (isClosed) {
+      menu.classList.remove('hidden');
+      if (chevron) chevron.style.transform = 'rotate(180deg)';
+    }
+  }
+
+  function selectDropdownOption(filterKey, value) {
+    const label = document.getElementById(`label-${filterKey}`);
+    if (label) label.textContent = value;
+
+    const menu = document.getElementById(`menu-${filterKey}`);
+    if (menu) {
+      menu.querySelectorAll('button').forEach(btn => {
+        const itemText = btn.querySelector('span:first-child').textContent.trim();
+        const check = btn.querySelector('.checkmark-indicator');
+        if (check) {
+          if (itemText === value.trim()) {
+            check.classList.remove('hidden');
+          } else {
+            check.classList.add('hidden');
+          }
+        }
+      });
+    }
+    closeAllDropdowns();
+  }
+
+  function closeAllDropdowns() {
+    document.querySelectorAll('.dropdown-popover').forEach(pop => {
+      pop.classList.add('hidden');
+      const parentId = pop.id;
+      const chevron = document.getElementById(`chevron-${parentId}`);
+      if (chevron) chevron.style.transform = 'rotate(0deg)';
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown-popover') && !e.target.closest('button[onclick*="toggleDropdown"]')) {
+      closeAllDropdowns();
+    }
+  });
+
+  function toggleSelectAllCandidates() {
+    const candidates = [
+      { id: 'cand-1', title: 'The Cognitive Division of Labor in AI Labs', author: 'Pirate Wires • Solana', minutes: 14 },
+      { id: 'cand-2', title: 'Geothermal Base Loads and the Compute Crunch', author: 'Works in Progress • Nick Cowen', minutes: 12 },
+      { id: 'cand-3', title: 'The Compounding Flywheel of Sovereign Infra', author: 'Not Boring • Packy McCormick', minutes: 18 }
+    ];
+    const allChecked = candidates.every(c => {
+      const el = document.getElementById(`chk-${c.id}`);
+      return el && el.checked;
+    });
+
+    candidates.forEach(c => {
+      const el = document.getElementById(`chk-${c.id}`);
+      if (el) {
+        el.checked = !allChecked;
+        handleCheckboxToggle(c.id, c.title, c.author, c.minutes, !allChecked);
+      }
+    });
+
+    const label = document.getElementById('select-all-candidates-label');
+    if (label) {
+      label.textContent = !allChecked ? 'Deselect All (3)' : 'Select All (3)';
+    }
+  }
+
+  function openModal() {
+    document.getElementById('custom-link-modal').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    document.getElementById('custom-link-modal').classList.add('hidden');
+  }
+
+  function addCustomArticle() {
+    const urlInput = document.getElementById('custom-url-input');
+    const titleInput = document.getElementById('custom-title-input');
+    const url = urlInput.value.trim();
+    let title = titleInput.value.trim();
+
+    if (!url) {
+      alert('Please enter a valid URL');
+      return;
+    }
+    if (!title) {
+      try {
+        const parsed = new URL(url);
+        title = parsed.pathname.replace(/^\/p\//, '').replace(/-/g, ' ') || 'Custom Substack Post';
+        title = title.charAt(0).toUpperCase() + title.slice(1);
+      } catch (e) {
+        title = 'Custom Substack Entry';
+      }
+    }
+
+    const newId = 'custom-' + Date.now();
+    stackItems.push({
+      id: newId,
+      title: title,
+      author: 'Substack Import',
+      minutes: 10
+    });
+
+    urlInput.value = '';
+    titleInput.value = '';
+    closeModal();
+    renderTray();
+  }
+
+  function submitStack() {
+    const btn = document.getElementById('create-btn');
+    const btnText = document.getElementById('create-btn-text');
+    const stackName = document.getElementById('stack-name-input').value.trim() || 'Untitled Stack';
+
+    btnText.textContent = 'Compiling Stack...';
+    btn.classList.add('opacity-80');
+
+    setTimeout(() => {
+      btnText.textContent = '✓ Stack Created!';
+      const draftStatus = document.getElementById('draft-status');
+      if (draftStatus) draftStatus.textContent = 'Stack Published';
+      setTimeout(() => {
+        alert(`Stack "${stackName}" successfully compiled with ${stackItems.length} essays!`);
+        renderTray();
+        btn.classList.remove('opacity-80');
+      }, 400);
+    }, 700);
+  }
+
+  // Initialize
+  renderTray();
+</script>
+</body></html>

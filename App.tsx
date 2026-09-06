@@ -1,39 +1,32 @@
 // ============================================================
-// SubTick — Application Root
+// SubTick - Application Root
 // Initializes auth, user profile, theme, and navigation.
 // ============================================================
 
-// expo-dev-client must be imported first — enables the dev client launcher
+// expo-dev-client must be imported first - enables the dev client launcher
 // when running via `npx expo start --dev-client`
 import 'expo-dev-client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
-import { UserProvider } from './src/contexts/UserContext';
+import { UserProvider, useUser } from './src/contexts/UserContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { StartupScreen } from './src/components/StartupScreen';
-import { signInAnonymouslyIfNeeded, ensureUserProfile } from './src/services/auth';
+import { signInAnonymouslyIfNeeded } from './src/services/auth';
 import { startOfflineManager } from './src/services/offlineManager';
-import { getStartupSnapshot, saveStartupSnapshot } from './src/services/startupCache';
-import { getSeenArticleIdsLocally, getRankedFeed } from './src/services/feedService';
-import { restoreCachedDashboardFeed, setCachedDashboardFeed } from './src/services/dashboardFeedCache';
+import { getStartupSnapshot } from './src/services/startupCache';
 import { subscribeToAccountTransition } from './src/services/accountTransition';
-import { User, onAuthStateChanged } from 'firebase/auth';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { auth } from './src/services/firebase';
 import { GOOGLE_WEB_CLIENT_ID } from './src/config/googleConfig';
-
-// Unique key to remount the entire navigation tree when the auth
-// user changes mid-session (e.g. Google account recovery swaps
-// the anonymous UID for a Google-linked UID). This ensures all
-// Firestore listeners re-attach with the correct UID.
-let navKey = 0;
-let lastUserId = '';
 
 function AppContent() {
   const { colors } = useTheme();
+  // UserContext owns the ONLY persistent auth listener and the ONLY profile
+  // subscription. App derives the entry route and remount decisions from it
+  // instead of running its own Firestore reads or Cloud Function calls.
+  const { user: authUser, profile, profileError, refreshProfile } = useUser();
   const [initializing, setInitializing] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   // The initial route to navigate to after auth init completes.
@@ -47,44 +40,29 @@ function AppContent() {
   const [startupPreparationComplete, setStartupPreparationComplete] = useState(false);
   const [startupSequence, setStartupSequence] = useState(0);
   const startupStartedAtRef = useRef<number | null>(null);
+  // Route restored from the local startup snapshot. Undefined means no
+  // snapshot existed, so the cloud profile must verify the route before the
+  // startup screen may dismiss.
+  const cachedRouteRef = useRef<'Dashboard' | 'Onboarding' | undefined>(undefined);
+  // Set once the shared profile listener has verified the route for the
+  // current initialization sequence.
+  const [routeVerified, setRouteVerified] = useState(false);
+  // Last seen UID for mid-session account-change detection, plus the remount
+  // counter for the navigation key (component-scoped - no module globals).
+  const lastUserIdRef = useRef('');
+  const navKeyRef = useRef(0);
 
-  useEffect(() => {
-    const unsubscribeTransition = subscribeToAccountTransition((active) => {
-      setAccountTransitioning(active);
-      if (active) {
-        // Reset Account keeps the same UID, so it would not trigger the normal
-        // auth-change remount. Rebuild navigation for every account transition.
-        setInitialRoute('Onboarding');
-        navKey += 1;
-        setNavigationKey(navKey);
-      }
-    });
-
-    initializeApp();
-
-    // Listen for auth state changes. If the UID changes mid-session
-    // (e.g. Google account recovery), bump the navigation key to force
-    // React to destroy/recreate the entire navigation tree with fresh
-    // Firestore listeners attached to the correct UID.
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && lastUserId && user.uid !== lastUserId) {
-        if (__DEV__) console.log('[SubTick] UID changed mid-session, remounting navigation');
-        navKey += 1;
-        setNavigationKey(navKey);
-        lastUserId = user.uid;
-      }
-    });
-    return () => {
-      unsubscribeTransition();
-      unsubscribe();
-    };
-  }, []);
+  const bumpNavigationKey = () => {
+    navKeyRef.current += 1;
+    setNavigationKey(navKeyRef.current);
+  };
 
   const initializeApp = async () => {
     try {
       setInitializing(true);
       setStartupTypingComplete(false);
       setStartupPreparationComplete(false);
+      setRouteVerified(false);
       setStartupSequence((previous) => previous + 1);
       setAuthError(null);
       const startedAt = Date.now();
@@ -92,70 +70,34 @@ function AppContent() {
       if (__DEV__) console.log('[Startup Timing] initialization started');
 
       // 1. Sign in anonymously (or re-use the encrypted persisted session).
-      const user: User = await signInAnonymouslyIfNeeded();
+      const user = await signInAnonymouslyIfNeeded();
       if (__DEV__) console.log(`[Startup Timing] authentication ready in ${Date.now() - startedAt}ms`);
 
       // 2. A locally saved snapshot is only a display shortcut. It is accepted
-      // only after Firebase has restored this exact UID; Firestore verifies it below.
+      // only after Firebase has restored this exact UID; the shared profile
+      // listener in UserContext remains authoritative and verifies the route
+      // in the background (immediately for first-ever launches).
       const snapshot = await getStartupSnapshot(user.uid);
       const cachedRoute = snapshot
         ? (snapshot.isOnboarded ? 'Dashboard' : 'Onboarding')
         : undefined;
+      cachedRouteRef.current = cachedRoute;
       if (cachedRoute) {
         setInitialRoute(cachedRoute);
         if (__DEV__) console.log(`[Startup Timing] local route restored: ${cachedRoute} in ${Date.now() - startedAt}ms`);
-      }
-
-      // Restore the exact account's unread cards while the startup phrase types.
-      // A returning Dashboard user never transitions from startup into Loading|.
-      if (cachedRoute === 'Dashboard') {
-        const seenIds = await getSeenArticleIdsLocally();
-        const restoredFeed = await restoreCachedDashboardFeed(user.uid, seenIds);
-        if (restoredFeed) {
-          if (__DEV__) console.log(`[Startup Timing] cached Dashboard cards ready in ${Date.now() - startedAt}ms (${restoredFeed.articles.length} articles)`);
-        } else {
-          const result = await getRankedFeed(seenIds);
-          if (result.articles.length > 0) {
-            setCachedDashboardFeed(user.uid, result.articles, []);
-          }
-          if (__DEV__) console.log(`[Startup Timing] startup ranked feed ready in ${Date.now() - startedAt}ms (${result.articles.length} articles)`);
-        }
-      }
-
-      // First-ever accounts still need a cloud profile before a safe route exists.
-      // Returning accounts verify in the background so cached Home cards are not blocked.
-      const verifyProfile = async () => {
-        const profile = await ensureUserProfile(user);
-        if (__DEV__) console.log(`[Startup Timing] initial profile ready in ${Date.now() - startedAt}ms`);
-        await saveStartupSnapshot(profile);
-        const verifiedRoute = profile.isOnboarded ? 'Dashboard' : 'Onboarding';
-        if (!cachedRoute || cachedRoute !== verifiedRoute) {
-          setInitialRoute(verifiedRoute);
-          if (cachedRoute && cachedRoute !== verifiedRoute) {
-            navKey += 1;
-            setNavigationKey(navKey);
-          }
-        }
-        if (__DEV__) console.log(`[Startup Timing] route verified: ${verifiedRoute} in ${Date.now() - startedAt}ms`);
-        return profile;
-      };
-
-      if (cachedRoute) {
-        void verifyProfile().catch((error) => console.warn('[SubTick] Background profile verification failed:', error));
       } else {
-        await verifyProfile();
+        // First-ever accounts (or evicted snapshots) still need a cloud
+        // profile before a safe route exists. This reuses the shared profile
+        // owner - including re-creating a profile that a previous offline
+        // launch failed to create.
+        await refreshProfile();
       }
 
-      if (__DEV__) console.log('[SubTick] Auth initialized, userId:', user.uid, 'initialRoute:', cachedRoute || initialRoute);
+      // Dashboard card restoration and any ranked-feed request are owned
+      // entirely by DashboardScreen (cache-first startup, H4). App startup
+      // restores only the route; it never blocks on Cloud Functions.
 
-      // If the UID changed mid-session (e.g. Google account recovery),
-      // bump the navigation key to force a clean remount of all screens.
-      if (lastUserId && lastUserId !== user.uid) {
-        if (__DEV__) console.log('[SubTick] UID changed, remounting navigation');
-        navKey += 1;
-        setNavigationKey(navKey);
-      }
-      lastUserId = user.uid;
+      if (__DEV__) console.log('[SubTick] Auth initialized, userId:', user.uid, 'initialRoute:', cachedRoute || '(verified by profile listener)');
 
       // Non-essential setup must not compete with first-route rendering.
       setTimeout(() => {
@@ -166,7 +108,7 @@ function AppContent() {
             webClientId: GOOGLE_WEB_CLIENT_ID,
           });
         } catch {
-          if (__DEV__) console.log('[SubTick] Google Sign-In native module not available (Expo Go — use dev client to test Google Sign-In)');
+          if (__DEV__) console.log('[SubTick] Google Sign-In native module not available (Expo Go - use dev client to test Google Sign-In)');
         }
         startOfflineManager();
       }, 0);
@@ -186,12 +128,80 @@ function AppContent() {
   };
 
   useEffect(() => {
+    const unsubscribeTransition = subscribeToAccountTransition((active) => {
+      setAccountTransitioning(active);
+      if (active) {
+        // Reset Account keeps the same UID, so it would not trigger the normal
+        // auth-change remount. Rebuild navigation for every account transition.
+        setInitialRoute('Onboarding');
+        bumpNavigationKey();
+      }
+    });
+
+    initializeApp();
+
+    return () => {
+      unsubscribeTransition();
+    };
+  }, []);
+
+  // UID changes mid-session (e.g. Google account recovery) bump the navigation
+  // key to force React to destroy/recreate the entire navigation tree with
+  // fresh Firestore listeners attached to the correct UID.
+  useEffect(() => {
+    if (!authUser) return;
+    if (lastUserIdRef.current && lastUserIdRef.current !== authUser.uid) {
+      if (__DEV__) console.log('[SubTick] UID changed mid-session, remounting navigation');
+      bumpNavigationKey();
+    }
+    lastUserIdRef.current = authUser.uid;
+  }, [authUser]);
+
+  // The shared profile listener verifies the entry route. Launches with a
+  // cached route dismiss immediately and reconcile in the background; first
+  // launches reconcile here before the startup screen may dismiss.
+  useEffect(() => {
+    if (routeVerified || !startupPreparationComplete || !profile) return;
+    if (__DEV__) {
+      const startedAt = startupStartedAtRef.current ?? Date.now();
+      console.log(`[Startup Timing] initial profile ready in ${Date.now() - startedAt}ms`);
+    }
+    const verifiedRoute: 'Dashboard' | 'Onboarding' = profile.isOnboarded ? 'Dashboard' : 'Onboarding';
+    const cachedRoute = cachedRouteRef.current;
+    if (cachedRoute === undefined) {
+      // No snapshot existed: the cloud profile decides the entry screen.
+      setInitialRoute(verifiedRoute);
+    } else if (cachedRoute !== verifiedRoute) {
+      // The cached route was stale - correct it and remount so the stack
+      // starts at the right screen without a flash.
+      setInitialRoute(verifiedRoute);
+      bumpNavigationKey();
+    }
+    setRouteVerified(true);
+  }, [profile, routeVerified, startupPreparationComplete]);
+
+  // Without a cached route, a failed profile load must surface the retry
+  // error instead of waiting forever on the startup screen. With a cached
+  // route the failure stays non-fatal (cards render from the local cache).
+  useEffect(() => {
+    if (routeVerified || accountTransitioning || !startupPreparationComplete) return;
+    if (cachedRouteRef.current !== undefined) return;
+    if (profileError && !profile) {
+      setAuthError(profileError);
+      setRouteVerified(true);
+    }
+  }, [accountTransitioning, profile, profileError, routeVerified, startupPreparationComplete]);
+
+  useEffect(() => {
     if (!initializing || accountTransitioning || !startupPreparationComplete || !startupTypingComplete) return;
+    // A hard init failure dismisses as soon as the animation allows; without
+    // a cached route, first launches also wait for the verified route.
+    if (!authError && cachedRouteRef.current === undefined && !routeVerified) return;
     if (__DEV__ && startupStartedAtRef.current !== null) {
       console.log(`[Startup Timing] React startup screen dismissed in ${Date.now() - startupStartedAtRef.current}ms`);
     }
     setInitializing(false);
-  }, [accountTransitioning, initializing, startupPreparationComplete, startupTypingComplete]);
+  }, [accountTransitioning, authError, initializing, routeVerified, startupPreparationComplete, startupTypingComplete]);
 
   if (initializing || accountTransitioning) {
     return (
@@ -206,7 +216,7 @@ function AppContent() {
   if (authError) {
     return (
       <View style={[styles.splash, { backgroundColor: colors.background }]}>
-        <Text style={styles.splashEmoji}>⚠️</Text>
+        <Text style={styles.splashEmoji}>{'\u26A0\uFE0F'}</Text>
         <Text style={[styles.splashTitle, { color: colors.error }]}>Connection Error</Text>
         <Text style={[styles.errorText, { color: colors.textSecondary }]}>
           {authError}
@@ -221,7 +231,7 @@ function AppContent() {
     );
   }
 
-  // Ready — render navigation with a key that changes on UID switch,
+  // Ready - render navigation with a key that changes on UID switch,
   // forcing clean remount of all screens with fresh Firestore listeners.
   // Pass initialRoute so the stack starts at the correct screen (no flash).
   return (

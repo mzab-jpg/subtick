@@ -1,22 +1,27 @@
 // ============================================================
-// SubTick — User Context
-// Provides the current UserProfile to all screens via React
-// Context, replacing the per-screen `fetchUserProfile()` pattern.
-// It owns the authenticated profile subscription so all screens use
-// the same current profile data.
+// SubTick - User Context
+// Owns the ONLY persistent auth listener and the ONLY user-profile
+// subscription, and exposes both to every screen via React Context.
+// No other startup path reads the profile document or creates the
+// default profile - this listener is the single profile authority.
 // ============================================================
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { BehaviorEvent, ReaderSessionSummary, UserProfile } from '../types';
 import { countWeeklyQualifyingReads } from '../utils/dashboardMetrics';
 import { computeProvisionalSession } from '../utils/provisionalSession';
 import { auth, db } from '../services/firebase';
 import { saveStartupSnapshot } from '../services/startupCache';
+import { ensureUserProfile } from '../services/auth';
 
 interface UserContextValue {
+  /** The authenticated Firebase user, reported by the single auth listener. */
+  user: User | null;
   profile: UserProfile | null;
+  /** Set when the profile could not be loaded or created (e.g. offline). */
+  profileError: string | null;
   /** Actual qualifying reads in the rolling seven-day window. */
   weeklyReadCount: number;
   loading: boolean;
@@ -25,8 +30,12 @@ interface UserContextValue {
   applyProvisionalSession: (summary: ReaderSessionSummary | null) => void;
 }
 
+const PROFILE_LOAD_ERROR = 'Could not load your profile. Check your internet and try again.';
+
 const UserContext = createContext<UserContextValue>({
+  user: null,
   profile: null,
+  profileError: null,
   weeklyReadCount: 0,
   loading: true,
   refreshProfile: async () => {},
@@ -42,7 +51,9 @@ interface UserProviderProps {
 }
 
 export function UserProvider({ children }: UserProviderProps) {
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [weeklyReadCount, setWeeklyReadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [provisionalProfile, setProvisionalProfile] = useState<UserProfile | null>(null);
@@ -51,6 +62,9 @@ export function UserProvider({ children }: UserProviderProps) {
   // Audit fix: fetched events kept in memory so the rolling weekly count can
   // age entries out locally instead of re-subscribing to Firestore hourly.
   const weeklyEventsRef = React.useRef<BehaviorEvent[]>([]);
+  // The startup snapshot only stores {userId, isOnboarded}; persist it only
+  // when that payload actually changes, not on every profile mutation.
+  const savedSnapshotSignatureRef = React.useRef<string | null>(null);
 
   const applyProvisionalSession = useCallback((summary: ReaderSessionSummary | null) => {
     if (!summary || !profile) return;
@@ -61,17 +75,26 @@ export function UserProvider({ children }: UserProviderProps) {
   }, [profile, weeklyReadCount]);
 
   const refreshProfile = useCallback(async () => {
-    const user = auth.currentUser;
-    if (!user) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
       setProfile(null);
       return;
     }
 
     try {
-      const snapshot = await getDoc(doc(db, 'users', user.uid));
-      setProfile(snapshot.exists() ? snapshot.data() as UserProfile : null);
+      const snapshot = await getDoc(doc(db, 'users', currentUser.uid));
+      if (snapshot.exists()) {
+        setProfile(snapshot.data() as UserProfile);
+      } else {
+        // Missing profile (first launch, or recovery after an offline launch
+        // failed to create it) - create it so callers always end with a
+        // usable profile.
+        setProfile(await ensureUserProfile(currentUser));
+      }
+      setProfileError(null);
     } catch (error) {
       console.error('[UserContext] refreshProfile error:', error);
+      setProfileError(PROFILE_LOAD_ERROR);
     }
   }, []);
 
@@ -80,7 +103,7 @@ export function UserProvider({ children }: UserProviderProps) {
     let unsubscribeWeeklyReads: (() => void) | undefined;
     let weeklyReadRefreshTimer: ReturnType<typeof setInterval> | undefined;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (nextUser) => {
       unsubscribeProfile?.();
       unsubscribeWeeklyReads?.();
       if (weeklyReadRefreshTimer) clearInterval(weeklyReadRefreshTimer);
@@ -90,25 +113,45 @@ export function UserProvider({ children }: UserProviderProps) {
 
       // Clear the old account immediately on every auth change. This prevents
       // its stats/profile from being rendered during a sign-out/delete swap.
+      setUser(nextUser);
       setProfile(null);
+      setProfileError(null);
       setWeeklyReadCount(0);
       weeklyEventsRef.current = [];
       setProvisionalProfile(null);
       setProvisionalWeeklyReads(null);
       provisionalBaseUpdatedAtRef.current = null;
+      savedSnapshotSignatureRef.current = null;
 
-      if (!user) {
+      if (!nextUser) {
         setLoading(false);
         return;
       }
 
       setLoading(true);
       unsubscribeProfile = onSnapshot(
-        doc(db, 'users', user.uid),
+        doc(db, 'users', nextUser.uid),
         (snapshot) => {
-          const nextProfile = snapshot.exists() ? snapshot.data() as UserProfile : null;
+          if (!snapshot.exists()) {
+            // Single-owner profile bootstrap: this shared listener is the
+            // only startup path that creates the default profile. The next
+            // emission delivers the created document.
+            setProfile(null);
+            void ensureUserProfile(nextUser).catch((error) => {
+              console.error('[UserContext] profile creation error:', error);
+              setProfileError(PROFILE_LOAD_ERROR);
+              setLoading(false);
+            });
+            return;
+          }
+          const nextProfile = snapshot.data() as UserProfile;
           setProfile(nextProfile);
-          if (nextProfile) void saveStartupSnapshot(nextProfile);
+          setProfileError(null);
+          const snapshotSignature = `${nextProfile.userId}:${nextProfile.isOnboarded === true}`;
+          if (savedSnapshotSignatureRef.current !== snapshotSignature) {
+            savedSnapshotSignatureRef.current = snapshotSignature;
+            void saveStartupSnapshot(nextProfile);
+          }
           if (__DEV__) console.log(`[Startup Timing] shared profile listener ready (${nextProfile?.isOnboarded ? 'onboarded' : 'onboarding'})`);
           if (nextProfile && provisionalBaseUpdatedAtRef.current !== null && nextProfile.lastUpdated > provisionalBaseUpdatedAtRef.current) {
             setProvisionalProfile(null);
@@ -120,11 +163,11 @@ export function UserProvider({ children }: UserProviderProps) {
         (error) => {
           console.error('[UserContext] profile listener error:', error);
           setProfile(null);
+          setProfileError(PROFILE_LOAD_ERROR);
           setLoading(false);
         }
       );
 
-      weeklyEventsRef.current = [];
       const recomputeWeeklyReads = () => {
         const windowStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
         const recentEvents = weeklyEventsRef.current.filter(function (e) {
@@ -135,7 +178,7 @@ export function UserProvider({ children }: UserProviderProps) {
       const windowStartFixed = Date.now() - 7 * 24 * 60 * 60 * 1000;
       unsubscribeWeeklyReads = onSnapshot(
         query(
-          collection(db, 'users', user.uid, 'behavior_events'),
+          collection(db, 'users', nextUser.uid, 'behavior_events'),
           where('timestamp', '>=', windowStartFixed)
         ),
         (snapshot) => {
@@ -162,7 +205,9 @@ export function UserProvider({ children }: UserProviderProps) {
 
   return (
     <UserContext.Provider value={{
+      user,
       profile: provisionalProfile || profile,
+      profileError,
       weeklyReadCount: provisionalWeeklyReads ?? weeklyReadCount,
       loading,
       refreshProfile,

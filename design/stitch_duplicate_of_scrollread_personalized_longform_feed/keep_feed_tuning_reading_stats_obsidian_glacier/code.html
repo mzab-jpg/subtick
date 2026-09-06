@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>[KEEP] Feed Tuning &amp; Reading Stats</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          background: "#111317",
+          surface: "#111317",
+          "surface-dim": "#111317",
+          "surface-bright": "#37393d",
+          "surface-container-lowest": "#0c0e11",
+          "surface-container-low": "#161921",
+          "surface-container": "#1b1f28",
+          "surface-container-high": "#232834",
+          "surface-container-highest": "#2e3444",
+          "border-subtle": "#28303f",
+          primary: "#ffffff",
+          "primary-container": "#dde3ec",
+          "on-primary": "#111317",
+          secondary: "#91cdfb",
+          "secondary-container": "#1e3b56",
+          "glacier": "#91cdfb",
+          "glacier-muted": "#689bc4",
+          "glacier-bright": "#b8e2ff",
+          "glacier-deep": "#22394d",
+          "silver-metallic": "#f0f3f8",
+          "silver-light": "#d8dee8",
+          "silver-muted": "#9ba7ba",
+          tertiary: "#d0d7e5",
+          "tertiary-container": "#2c3647",
+          "on-surface": "#e2e2e6",
+          "on-surface-variant": "#9ba7ba",
+          outline: "#475263",
+          "outline-variant": "#2d3542",
+          error: "#ffb4ab"
+        },
+        fontFamily: {
+          sans: ["Manrope", "system-ui", "-apple-system", "sans-serif"],
+          serif: ["Space Grotesk", "sans-serif"],
+          mono: ["JetBrains Mono", "monospace"],
+          display: ["Space Grotesk", "sans-serif"]
+        }
+      }
+    }
+  };
+</script>
+<style>
+  html {
+    background-color: #0c0e12;
+  }
+  body {
+    background-color: #0c0e12;
+    color: #e2e2e6;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Sliders styling */
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: #232834;
+    border-radius: 9999px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 18px;
+    width: 18px;
+    border-radius: 50%;
+    background: #91cdfb;
+    border: 2px solid #0c0e12;
+    box-shadow: 0 0 10px rgba(145,205,251,0.4);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  input[type=range]::-webkit-slider-thumb:active {
+    transform: scale(1.2);
+    background: #ffffff;
+  }
+</style>
+</head>
+<body class="bg-[#0c0e12] text-[#e2e2e6] antialiased selection:bg-[#91cdfb]/30 selection:text-white">
+<!-- Mobile Single Container Viewport -->
+<div class="w-full max-w-md mx-auto min-h-screen relative pb-36 border-x border-[#1f2533]/80 bg-[#111317]">
+<!-- Sticky Top Navigation Chrome -->
+<div class="w-full bg-[#161921] border-b border-[#232834] px-3 py-1.5 flex items-center justify-between text-[11px] font-mono"><div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#91cdfb] animate-pulse"></span><span class="text-[#f0f3f8] font-semibold tracking-wide uppercase">[KEEP - PRIMARY]</span><span class="text-[#9ba7ba]">Feed Tuning &amp; Reading Stats</span></div><span class="px-1.5 py-0.5 rounded bg-[#1f2533] text-[10px] text-[#91cdfb] border border-[#91cdfb]/30 font-semibold tracking-wider">ACTIVE</span></div><header class="sticky top-0 inset-x-0 z-40 bg-[#111317]/95 backdrop-blur-xl border-b border-[#232834]/80">
+<div class="h-16 px-4 flex items-center justify-between">
+<!-- Logo / Brand & Tab Mark -->
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#f0f3f8] to-[#91cdfb] flex items-center justify-center text-[#0c0e12] font-serif font-bold text-lg shadow-sm shadow-[#91cdfb]/20 border border-white/20">
+          F
+        </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-serif font-medium text-[17px] text-[#f0f3f8] tracking-tight" id="header-brand-title">Reader Analytics</span>
+<span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[#1b1f28] text-[#91cdfb] border border-[#91cdfb]/30 font-semibold">v4.2</span>
+</div>
+<span class="text-[11px] text-[#9ba7ba] font-mono leading-none">folio.engine/spec</span>
+</div>
+</div>
+<!-- Live Model Status Chip & User Profile -->
+<div class="flex items-center gap-2.5">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1b2738]/80 border border-[#91cdfb]/30 text-[#91cdfb] text-[11px] font-mono font-medium shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-[#91cdfb] animate-pulse"></span><span class="">Engine Active</span></div>
+<a class="relative group" data-path="user-profile" href="#">
+<img alt="Profile Avatar" class="w-8 h-8 rounded-full object-cover ring-1 ring-[#91cdfb]/50 group-hover:ring-[#f0f3f8] transition-all" src="https://lh3.googleusercontent.com/aida/AEtjO1UH-TsWTmexQYP1IbWyQC2807Qrevv5URXc_-tvplzyziMVfGbWaOMqXXpUITS5X1IW8LV9YU0yD7JY7jonxHNB3aXndgpGeE5ZLCms-KbWGI3ZRcJ77GQLlAw9SWPOL2y9ItBOKe-5xOuwf_1R72gTXyfyUM9FQqeGVJIMGUEwGDccxaSrCZRyxDH5ofGfqDzyCDxcBMu5MGytmt8S0GD_yCa3XMrfAM1VosoLc8jbMht1z2nxjsWqZe4"/>
+<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#91cdfb] border-2 border-[#111317] rounded-full"></span>
+</a>
+</div>
+</div>
+<!-- Interactive Segmented Pill Tab Toggle (Taste Tuning vs Stats & Insights) -->
+<div class="px-4 pb-3 pt-1">
+<div class="grid grid-cols-2 p-1 rounded-xl bg-[#161921] border border-[#232834]">
+<button class="py-2 px-3 rounded-lg text-[12px] font-medium transition-all flex items-center justify-center gap-2 text-[#9ba7ba] hover:text-[#f0f3f8]" id="tab-tuning" type="button">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<span class="">Taste Tuning</span>
+</button>
+<button class="py-2 px-3 rounded-lg text-[12px] font-medium transition-all flex items-center justify-center gap-2 bg-[#232834] text-[#91cdfb] shadow border border-[#91cdfb]/30" id="tab-stats" type="button">
+<span class="material-symbols-outlined text-[16px]">query_stats</span>
+<span class="">Stats &amp; Insights</span>
+<span class="w-1.5 h-1.5 rounded-full bg-[#91cdfb]"></span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Container -->
+<main class="w-full px-4 pt-4">
+<!-- ============================================================ -->
+<!-- VIEW 1: TASTE TUNING (Accessible via Tab) -->
+<!-- ============================================================ -->
+<div class="space-y-5 hidden" id="view-tuning">
+<!-- Page Title & Micro Status -->
+<div class="space-y-1">
+<div class="flex items-center justify-between text-[11px] font-mono text-[#9ba7ba] tracking-wider uppercase">
+<span class="">Reader Feed Preferences</span>
+<span class="text-[#91cdfb] font-semibold">Folio Engine</span>
+</div>
+<h1 class="font-serif text-[28px] leading-tight font-normal text-white tracking-tight">Feed Tuning &amp; Algorithm</h1>
+<p class="text-[13.5px] leading-relaxed text-[#9ba7ba]">Train what appears in your feed based on your core topics, trusted publications, and discovery appetite.</p>
+</div>
+<!-- Persona & Global Vector Metrics Card -->
+<div class="p-3.5 rounded-xl bg-[#161921] border border-[#232834] flex items-center justify-between gap-3 text-[12px]">
+<div class="flex items-center gap-2 text-[#9ba7ba]">
+<span class="material-symbols-outlined text-[18px] text-[#91cdfb]">auto_mode</span>
+<span class="font-medium text-[#f0f3f8]">Feed Model:</span>
+<span class="">Custom Baseline</span>
+</div>
+<div class="flex items-center gap-2 font-mono text-[11px]">
+<span class="px-2 py-0.5 rounded bg-[#91cdfb]/15 text-[#91cdfb] border border-[#91cdfb]/30">3 Boosted</span>
+<span class="px-2 py-0.5 rounded bg-[#232834] text-[#9ba7ba] border border-[#2e3444]">1 Muted</span>
+</div>
+</div>
+<!-- Section 1: Thematic Domain Affinity Quota & Sliders -->
+<section class="p-4 rounded-2xl bg-[#161921] border border-[#232834] shadow-md space-y-4">
+<div class="flex items-center justify-between border-b border-[#232834] pb-3">
+<div>
+<h2 class="font-serif text-[18px] text-white font-medium">Topic Preferences</h2>
+<p class="text-[12px] text-[#9ba7ba]">Set standard weight, boost, or ban specific editorial themes</p>
+</div>
+<div class="flex items-center gap-1.5 text-[10.5px] font-mono">
+<span class="px-2 py-0.5 rounded bg-[#91cdfb]/15 text-[#91cdfb] border border-[#91cdfb]/30 font-semibold">8 Topics</span>
+</div>
+</div>
+<div class="space-y-2">
+<!-- 1 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#91cdfb] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-white truncate">AI &amp; Systems</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded bg-[#91cdfb] text-[#0c0e12] font-bold shadow transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-white transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400 transition-colors" type="button">Mute</button>
+</div>
+</div>
+<!-- 2 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#d8dee8] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-white truncate">Macroeconomics &amp; Finance</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded bg-[#91cdfb] text-[#0c0e12] font-bold shadow transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-white transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400 transition-colors" type="button">Mute</button>
+</div>
+</div>
+<!-- 3 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#689bc4] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-white truncate">Philosophy &amp; Epistemology</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded bg-[#91cdfb] text-[#0c0e12] font-bold shadow transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-white transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400 transition-colors" type="button">Mute</button>
+</div>
+</div>
+<!-- 4 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#9ba7ba] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-white truncate">Energy &amp; Deep Tech</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-[#91cdfb] transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded bg-[#232834] text-white font-medium shadow transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400 transition-colors" type="button">Mute</button>
+</div>
+</div>
+<!-- 5 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#475263] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-white truncate">Geopolitics &amp; Strategy</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-[#91cdfb] transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded bg-[#232834] text-white font-medium shadow transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400 transition-colors" type="button">Mute</button>
+</div>
+</div>
+<!-- 6 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#ffb4ab] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-[#9ba7ba] line-through truncate">Culture &amp; Media</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-[#91cdfb] transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-white transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded bg-red-950/30 text-red-300 border border-red-500/30 font-semibold shadow transition-colors" type="button">Mute</button>
+</div>
+</div>
+<!-- 7 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#9ba7ba] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-white truncate">Venture &amp; Startups</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-[#91cdfb] transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded bg-[#232834] text-white font-medium shadow transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400 transition-colors" type="button">Mute</button>
+</div>
+</div>
+<!-- 8 -->
+<div class="p-2.5 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2 h-2 rounded-full bg-[#9ba7ba] flex-shrink-0"></span>
+<span class="text-[13px] font-medium text-white truncate">Design &amp; Architecture</span>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-[#91cdfb] transition-colors" type="button">Boost</button>
+<button class="px-2 py-1 rounded bg-[#232834] text-white font-medium shadow transition-colors" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400 transition-colors" type="button">Mute</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Production-Grade Algorithmic Calibration Knobs -->
+<section class="p-4 rounded-2xl bg-[#161921] border border-[#232834] shadow-md space-y-4">
+<div class="flex items-center justify-between border-b border-[#232834] pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#91cdfb] text-[20px]">explore</span>
+<h2 class="font-serif text-[18px] text-white font-medium">Discovery &amp; Reading Scope</h2>
+</div>
+<span class="text-[11px] font-mono text-[#9ba7ba]">3 Controls</span>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-baseline">
+<label class="text-[13px] font-medium text-white">Exploration Radius</label>
+<span class="text-[11px] font-mono text-[#91cdfb]">Balanced</span>
+</div>
+<p class="text-[12px] text-[#9ba7ba]">How far the engine reaches beyond your core interests.</p>
+<div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#111317] border border-[#232834]">
+<button class="py-2 px-1 rounded-lg text-[11px] font-medium text-[#9ba7ba] hover:text-white transition-all text-center" type="button">Strict</button>
+<button class="py-2 px-1 rounded-lg text-[11px] font-semibold bg-[#232834] text-[#91cdfb] border border-[#91cdfb]/40 shadow transition-all text-center" type="button">Balanced</button>
+<button class="py-2 px-1 rounded-lg text-[11px] font-medium text-[#9ba7ba] hover:text-white transition-all text-center" type="button">Serendipitous</button>
+</div>
+</div>
+<div class="space-y-2 pt-3 border-t border-[#232834]">
+<div class="flex justify-between items-baseline">
+<label class="text-[13px] font-medium text-white">Article Length Appetite</label>
+<span class="text-[11px] font-mono text-[#d8dee8]">Any Length</span>
+</div>
+<div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#111317] border border-[#232834]">
+<button class="py-2 px-1 rounded-lg text-[11px] font-semibold bg-[#232834] text-[#f0f3f8] border border-[#91cdfb]/40 shadow transition-all text-center" type="button">Any Length</button>
+<button class="py-2 px-1 rounded-lg text-[11px] font-medium text-[#9ba7ba] hover:text-white transition-all text-center" type="button">Quick (5–10m)</button>
+<button class="py-2 px-1 rounded-lg text-[11px] font-medium text-[#9ba7ba] hover:text-white transition-all text-center" type="button">Deep (15m+)</button>
+</div>
+</div>
+<div class="space-y-2 pt-3 border-t border-[#232834]">
+<div class="flex justify-between items-baseline">
+<label class="text-[13px] font-medium text-white">Recency vs. Timeless Dispatches</label>
+<span class="text-[11px] font-mono text-[#91cdfb]">Balanced Mix</span>
+</div>
+<p class="text-[12px] text-[#9ba7ba]">Favor current week releases or allow timeless essay archives.</p>
+<div class="grid grid-cols-2 gap-2">
+<button class="p-2.5 rounded-xl bg-[#232834] border border-[#91cdfb]/40 text-left transition-all" type="button">
+<span class="text-[12px] font-medium text-white block">Fresh Dispatches</span>
+<span class="text-[10.5px] font-mono text-[#91cdfb]">Last 7–14 Days</span>
+</button>
+<button class="p-2.5 rounded-xl bg-[#111317] border border-[#232834] text-left hover:border-[#384357] transition-all" type="button">
+<span class="text-[12px] font-medium text-[#9ba7ba] block">Evergreen Library</span>
+<span class="text-[10.5px] font-mono text-[#9ba7ba]/70">Timeless Archives</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Section 3: Substack Whitelist & Prioritization -->
+<section class="p-4 rounded-2xl bg-[#161921] border border-[#232834] shadow-md space-y-4">
+<div class="flex items-center justify-between border-b border-[#232834] pb-3">
+<div>
+<h2 class="font-serif text-[18px] text-white font-medium">Substack Publications</h2>
+<p class="text-[12px] text-[#9ba7ba]">Control feed prioritization or block newsletters entirely</p>
+</div>
+<span class="text-[11px] font-mono text-[#91cdfb] bg-[#91cdfb]/10 px-2 py-0.5 rounded border border-[#91cdfb]/25 font-semibold">6 Active</span>
+</div>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-[#9ba7ba] text-[18px]">link</span>
+<input class="w-full bg-[#111317] text-[12.5px] pl-9 pr-20 py-2.5 rounded-xl border border-[#232834] focus:border-[#91cdfb] focus:outline-none text-white placeholder:text-[#9ba7ba]/60 font-sans" placeholder="Add Substack URL or newsletter..." type="text"/>
+<button class="absolute right-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#91cdfb] to-[#b8e2ff] text-[#0c0e12] text-[11px] font-mono font-bold tracking-wide hover:opacity-90 transition-opacity" id="import-modal-trigger" type="button">+ Add</button>
+</div>
+<div class="space-y-2">
+<!-- Item 1 -->
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-2">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-[#232834] flex items-center justify-center font-serif text-[#91cdfb] font-semibold text-[13px] flex-shrink-0 border border-[#91cdfb]/20">TD</div>
+<div class="min-w-0">
+<span class="font-medium text-[13px] text-white truncate block">The Diff</span>
+<span class="text-[11px] text-[#9ba7ba] truncate block">Byrne Hobart • Finance &amp; Tech</span>
+</div>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded bg-[#91cdfb] text-[#0c0e12] font-bold shadow" type="button">Boost</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-white" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400" type="button">Block</button>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-2">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-[#232834] flex items-center justify-center font-serif text-[#d8dee8] font-semibold text-[13px] flex-shrink-0 border border-white/10">WP</div>
+<div class="min-w-0">
+<span class="font-medium text-[13px] text-white truncate block">Works in Progress</span>
+<span class="text-[11px] text-[#9ba7ba] truncate block">Stripe Press • Human Progress</span>
+</div>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded bg-[#91cdfb] text-[#0c0e12] font-bold shadow" type="button">Boost</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-white" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400" type="button">Block</button>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-2">
+<div class="flex items-center gap-2.5 min-w-0">
+<div class="w-8 h-8 rounded-lg bg-[#232834] flex items-center justify-center font-serif text-[#9ba7ba] font-semibold text-[13px] flex-shrink-0">AC</div>
+<div class="min-w-0">
+<span class="font-medium text-[13px] text-white truncate block">Astral Codex Ten</span>
+<span class="text-[11px] text-[#9ba7ba] truncate block">Scott Alexander • Rationality</span>
+</div>
+</div>
+<div class="inline-flex p-0.5 rounded-lg bg-[#111317] border border-[#232834] text-[11px] font-mono flex-shrink-0">
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-[#91cdfb]" type="button">Boost</button>
+<button class="px-2 py-1 rounded bg-[#232834] text-white font-medium shadow" type="button">Normal</button>
+<button class="px-2 py-1 rounded text-[#9ba7ba] hover:text-red-400" type="button">Block</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- ============================================================ -->
+<!-- VIEW 2: STATS & INSIGHTS (Active by Default) -->
+<!-- ============================================================ -->
+<div class="space-y-5" id="view-stats">
+<!-- Page Title & Header -->
+<div class="space-y-1">
+<div class="flex items-center justify-between text-[11px] font-mono text-[#9ba7ba] tracking-wider uppercase">
+<span class="">Folio Digest Analytics</span>
+<span class="text-[#91cdfb] font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#91cdfb]"></span>Last 7 Days</span>
+</div>
+<h1 class="font-serif text-[28px] leading-tight font-normal text-white tracking-tight">Reading Stats &amp; Insights</h1>
+<p class="text-[13.5px] leading-relaxed text-[#9ba7ba]">Deep telemetry on your reading velocity, topic intake vs intent, and newsletter depth.</p>
+</div>
+<!-- Key Reading Velocity Metrics (4 cards in 2x2 grid) -->
+<section class="space-y-2">
+<div class="flex items-center justify-between">
+<span class="text-[11px] font-mono uppercase text-[#9ba7ba] tracking-wider">Reading Velocity</span>
+<span class="text-[11px] font-mono text-[#91cdfb] flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#91cdfb]"></span>Weekly Pace: High</span>
+</div>
+<div class="grid grid-cols-2 gap-2.5">
+<!-- Metric 1 -->
+<div class="p-3.5 rounded-2xl bg-[#161921] border border-[#232834] space-y-1 shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-16 h-16 bg-[#91cdfb]/5 rounded-full blur-xl pointer-events-none"></div>
+<div class="flex items-center justify-between text-[#9ba7ba]">
+<span class="text-[11px] font-sans">Deep Focus Time</span>
+<span class="material-symbols-outlined text-[16px] text-[#91cdfb]">schedule</span>
+</div>
+<div class="font-serif text-[24px] text-white font-medium leading-none">4h 22m</div>
+<div class="text-[11px] font-mono text-[#91cdfb] flex items-center gap-1 pt-0.5">
+<span class="material-symbols-outlined text-[13px]">arrow_upward</span> +18% vs last week
+        </div>
+</div>
+<!-- Metric 2 -->
+<div class="p-3.5 rounded-2xl bg-[#161921] border border-[#232834] space-y-1 shadow-sm relative overflow-hidden">
+<div class="flex items-center justify-between text-[#9ba7ba]">
+<span class="text-[11px] font-sans">Essays Completed</span>
+<span class="material-symbols-outlined text-[16px] text-[#d8dee8]">menu_book</span>
+</div>
+<div class="font-serif text-[24px] text-white font-medium leading-none">14 essays</div>
+<div class="text-[11px] font-mono text-[#9ba7ba] pt-0.5">
+          72% completion rate
+        </div>
+</div>
+<!-- Metric 3 -->
+<div class="p-3.5 rounded-2xl bg-[#161921] border border-[#232834] space-y-1 shadow-sm">
+<div class="flex items-center justify-between text-[#9ba7ba]">
+<span class="text-[11px] font-sans">Average Pace</span>
+<span class="material-symbols-outlined text-[16px] text-[#91cdfb]">speed</span>
+</div>
+<div class="font-serif text-[24px] text-white font-medium leading-none">245 wpm</div>
+<div class="text-[11px] font-mono text-[#9ba7ba] pt-0.5 truncate">
+          Focused essay cadence
+        </div>
+</div>
+<!-- Metric 4 -->
+<div class="p-3.5 rounded-2xl bg-[#161921] border border-[#232834] space-y-1 shadow-sm">
+<div class="flex items-center justify-between text-[#9ba7ba]">
+<span class="text-[11px] font-sans">Longest Deep Dive</span>
+<span class="material-symbols-outlined text-[16px] text-[#b8e2ff]">history_edu</span>
+</div>
+<div class="font-serif text-[24px] text-[#91cdfb] font-medium leading-none">38m</div>
+<div class="text-[11px] font-mono text-[#9ba7ba] truncate pt-0.5">
+          The Diff • Byrne Hobart
+        </div>
+</div>
+</div>
+</section>
+<!-- Reading Rhythm & Activity: Donut Chart + Category Diet -->
+<section class="p-4 rounded-2xl bg-[#161921] border border-[#232834] shadow-md space-y-4">
+<div class="flex items-center justify-between border-b border-[#232834] pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#91cdfb] text-[20px]">donut_small</span>
+<h2 class="font-serif text-[18px] text-white font-medium">Thematic Diet &amp; Categories</h2>
+</div>
+<span class="text-[11px] font-mono text-[#91cdfb]">5 Categories</span>
+</div>
+<!-- Circular Donut Chart & Overview Callout -->
+<div class="p-4 rounded-xl bg-[#111317] border border-[#232834] flex flex-col sm:flex-row items-center justify-around gap-4">
+<div class="relative w-36 h-36 flex items-center justify-center flex-shrink-0">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 120 120">
+<circle cx="60" cy="60" fill="transparent" r="48" stroke="#1b1f28" stroke-width="16"></circle>
+<!-- AI & Systems: 38% - Bright Glacier Cyan #91cdfb -->
+<circle cx="60" cy="60" fill="transparent" r="48" stroke="#91cdfb" stroke-dasharray="114.6 301.6" stroke-dashoffset="0" stroke-width="16"></circle>
+<!-- Macroeconomics & Finance: 24% - Arctic Silver #d0d7e5 -->
+<circle cx="60" cy="60" fill="transparent" r="48" stroke="#d0d7e5" stroke-dasharray="72.4 301.6" stroke-dashoffset="-114.6" stroke-width="16"></circle>
+<!-- Philosophy & Epistemology: 16% - Glacier Muted #689bc4 -->
+<circle cx="60" cy="60" fill="transparent" r="48" stroke="#689bc4" stroke-dasharray="48.2 301.6" stroke-dashoffset="-187" stroke-width="16"></circle>
+<!-- Energy & Deep Tech: 12% - Deep Cobalt Slate #3b506e -->
+<circle cx="60" cy="60" fill="transparent" r="48" stroke="#3b506e" stroke-dasharray="36.2 301.6" stroke-dashoffset="-235.2" stroke-width="16"></circle>
+<!-- Culture & Media: 10% - Obsidian Chrome #232834 -->
+<circle cx="60" cy="60" fill="transparent" r="48" stroke="#232834" stroke-dasharray="30.2 301.6" stroke-dashoffset="-271.4" stroke-width="16"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+<span class="font-serif text-[20px] font-bold text-white leading-none">38%</span>
+<span class="text-[9.5px] font-mono text-[#91cdfb] uppercase tracking-wider mt-1">AI Focus</span>
+<span class="text-[9px] font-mono text-[#9ba7ba]">4h 22m total</span>
+</div>
+</div>
+<div class="flex flex-col justify-center space-y-1.5 text-left w-full sm:w-auto">
+<div class="text-[11px] font-mono uppercase tracking-wider text-[#9ba7ba]">Primary Absorption</div>
+<div class="font-serif text-[17px] text-white font-medium">Systems &amp; Macro Dominance</div>
+<p class="text-[12px] text-[#9ba7ba] leading-snug">62% of reading velocity focused on analytical synthesis and financial models.</p>
+</div>
+</div>
+<!-- Category breakdown list -->
+<div class="space-y-2.5 pt-1">
+<div class="flex items-center justify-between text-[12.5px]">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-[#91cdfb] flex-shrink-0 shadow-[0_0_8px_rgba(145,205,251,0.4)]"></span>
+<span class="text-white font-medium truncate">AI &amp; Systems</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[11px] flex-shrink-0">
+<span class="text-[#9ba7ba]">1h 40m</span>
+<span class="text-[#91cdfb] font-semibold w-9 text-right">38%</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-[12.5px]">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-[#d0d7e5] flex-shrink-0"></span>
+<span class="text-white font-medium truncate">Macroeconomics &amp; Finance</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[11px] flex-shrink-0">
+<span class="text-[#9ba7ba]">1h 05m</span>
+<span class="text-[#d8dee8] font-semibold w-9 text-right">24%</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-[12.5px]">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-[#689bc4] flex-shrink-0"></span>
+<span class="text-white font-medium truncate">Philosophy &amp; Epistemology</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[11px] flex-shrink-0">
+<span class="text-[#9ba7ba]">42m</span>
+<span class="text-[#689bc4] font-semibold w-9 text-right">16%</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-[12.5px]">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-[#3b506e] flex-shrink-0"></span>
+<span class="text-white font-medium truncate">Energy &amp; Deep Tech</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[11px] flex-shrink-0">
+<span class="text-[#9ba7ba]">31m</span>
+<span class="text-[#9ba7ba] font-semibold w-9 text-right">12%</span>
+</div>
+</div>
+<div class="flex items-center justify-between text-[12.5px]">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-[#232834] border border-[#475263] flex-shrink-0"></span>
+<span class="text-[#9ba7ba] truncate">Culture &amp; Media</span>
+</div>
+<div class="flex items-center gap-3 font-mono text-[11px] flex-shrink-0">
+<span class="text-[#9ba7ba]">24m</span>
+<span class="text-[#9ba7ba] font-semibold w-9 text-right">10%</span>
+</div>
+</div>
+</div>
+<!-- Editorial Insight Callout -->
+<div class="p-3.5 rounded-xl bg-[#1b1f28] border border-[#91cdfb]/30 space-y-1">
+<div class="flex items-center gap-1.5 text-[#91cdfb] text-[11px] font-mono uppercase tracking-wider font-bold">
+<span class="material-symbols-outlined text-[15px]">psychology</span>
+<span class="">Intent vs. Reality Gap</span>
+</div>
+<p class="text-[12.5px] leading-relaxed text-[#f0f3f8] font-sans">
+    You boosted Philosophy, but <span class="text-[#91cdfb] font-semibold">62% of reading time</span> centered on AI &amp; Macroeconomics. Consider pinning philosophy longforms to your morning queue.
+  </p>
+</div>
+</section>
+<!-- Thematic Composite Bar Section -->
+<section class="p-4 rounded-2xl bg-[#161921] border border-[#232834] shadow-md space-y-4">
+<div class="flex items-center justify-between border-b border-[#232834] pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#91cdfb] text-[20px]">waterfall_chart</span>
+<h2 class="font-serif text-[18px] text-white font-medium">Spectrum Distribution</h2>
+</div>
+<span class="text-[11px] font-mono text-[#91cdfb]">Glacier Palette</span>
+</div>
+<!-- Composite horizontal bar with glacier/silver gradient tones -->
+<div class="h-3 w-full rounded-full bg-[#111317] overflow-hidden flex border border-[#232834]">
+<div class="bg-[#91cdfb] h-full" style="width: 38%;" title="AI &amp; Systems: 38%"></div>
+<div class="bg-[#d0d7e5] h-full" style="width: 24%;" title="Macroeconomics &amp; Finance: 24%"></div>
+<div class="bg-[#689bc4] h-full" style="width: 16%;" title="Philosophy &amp; Epistemology: 16%"></div>
+<div class="bg-[#3b506e] h-full" style="width: 12%;" title="Energy &amp; Deep Tech: 12%"></div>
+<div class="bg-[#232834] h-full" style="width: 10%;" title="Culture &amp; Media: 10%"></div>
+</div>
+<!-- Quick Legend -->
+<div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] font-mono text-[#9ba7ba]">
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#91cdfb]"></span>AI 38%</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#d0d7e5]"></span>Macro 24%</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#689bc4]"></span>Phil 16%</span>
+<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[#3b506e]"></span>Energy 12%</span>
+</div>
+</section>
+<!-- Source & Publication Loyalty -->
+<section class="p-4 rounded-2xl bg-[#161921] border border-[#232834] shadow-md space-y-4">
+<div class="flex items-center justify-between border-b border-[#232834] pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#91cdfb] text-[20px]">workspace_premium</span>
+<h2 class="font-serif text-[18px] text-white font-medium">Source Loyalty &amp; Newsletters</h2>
+</div>
+<span class="text-[11px] font-mono text-[#9ba7ba]">Top 3</span>
+</div>
+<!-- Ranked Top Substacks -->
+<div class="space-y-2">
+<!-- 1 -->
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="font-serif text-[#91cdfb] font-bold text-[15px] w-4 text-center">1</span>
+<div class="w-7 h-7 rounded-lg bg-[#232834] flex items-center justify-center font-serif text-[#91cdfb] font-semibold text-[11px] flex-shrink-0 border border-[#91cdfb]/30">TD</div>
+<div class="min-w-0">
+<span class="font-medium text-[13px] text-white truncate block">The Diff</span>
+<span class="text-[11px] text-[#9ba7ba]">5 essays read</span>
+</div>
+</div>
+<span class="text-[12px] font-mono text-[#91cdfb] font-semibold flex-shrink-0">1h 45m</span>
+</div>
+<!-- 2 -->
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="font-serif text-[#d8dee8] font-bold text-[15px] w-4 text-center">2</span>
+<div class="w-7 h-7 rounded-lg bg-[#232834] flex items-center justify-center font-serif text-[#d8dee8] font-semibold text-[11px] flex-shrink-0 border border-white/10">WP</div>
+<div class="min-w-0">
+<span class="font-medium text-[13px] text-white truncate block">Works in Progress</span>
+<span class="text-[11px] text-[#9ba7ba]">2 essays read</span>
+</div>
+</div>
+<span class="text-[12px] font-mono text-[#d8dee8] font-semibold flex-shrink-0">1h 10m</span>
+</div>
+<!-- 3 -->
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] flex items-center justify-between gap-2">
+<div class="flex items-center gap-3 min-w-0">
+<span class="font-serif text-[#689bc4] font-bold text-[15px] w-4 text-center">3</span>
+<div class="w-7 h-7 rounded-lg bg-[#232834] flex items-center justify-center font-serif text-[#689bc4] font-semibold text-[11px] flex-shrink-0 border border-[#689bc4]/20">NB</div>
+<div class="min-w-0">
+<span class="font-medium text-[13px] text-white truncate block">Not Boring</span>
+<span class="text-[11px] text-[#9ba7ba]">3 essays read</span>
+</div>
+</div>
+<span class="text-[12px] font-mono text-[#689bc4] font-semibold flex-shrink-0">52m</span>
+</div>
+</div>
+<!-- Diversity & Ratio Metrics -->
+<div class="space-y-2 pt-2 border-t border-[#232834]">
+<div class="flex items-center justify-between text-[12px]">
+<span class="text-[#9ba7ba]">Source Diversity</span>
+<span class="font-mono text-white font-medium">12 independent publications explored</span>
+</div>
+<!-- Ratio Bar -->
+<div class="space-y-1 pt-1">
+<div class="flex justify-between text-[11px] font-mono">
+<span class="text-[#91cdfb]">65% Core Subscriptions</span>
+<span class="text-[#d8dee8]">35% Algorithmic Discovery</span>
+</div>
+<div class="h-2 w-full rounded-full bg-[#111317] overflow-hidden flex border border-[#232834]">
+<div class="bg-[#91cdfb] h-full" style="width: 65%;"></div>
+<div class="bg-[#3b506e] h-full" style="width: 35%;"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Stack & Queue Health -->
+<section class="p-4 rounded-2xl bg-[#161921] border border-[#232834] shadow-md space-y-3">
+<div class="flex items-center justify-between border-b border-[#232834] pb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#91cdfb] text-[20px]">layers</span>
+<h2 class="font-serif text-[18px] text-white font-medium">Stack &amp; Queue Health</h2>
+</div>
+<span class="text-[11px] font-mono text-[#91cdfb] flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#91cdfb]"></span>Optimal</span>
+</div>
+<div class="grid grid-cols-2 gap-2.5">
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] space-y-1">
+<span class="text-[11px] text-[#9ba7ba] block">Stacks Completed</span>
+<div class="font-serif text-[19px] text-white font-medium">3 of 4 created</div>
+<div class="text-[10.5px] font-mono text-[#91cdfb]">75% clearance</div>
+</div>
+<div class="p-3 rounded-xl bg-[#1b1f28] border border-[#232834] space-y-1">
+<span class="text-[11px] text-[#9ba7ba] block">Queue Conversion</span>
+<div class="font-serif text-[19px] text-white font-medium">8 of 11 saves</div>
+<div class="text-[10.5px] font-mono text-[#d8dee8]">73% read &lt; 7 days</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Persistent Sticky Save Bar (Only relevant when Tuning tab is active) -->
+<div class="fixed bottom-[64px] inset-x-0 z-30 max-w-md mx-auto px-4 pointer-events-none transition-opacity duration-200 hidden opacity-0" id="sticky-save-bar">
+<div class="pointer-events-auto bg-[#161921]/95 backdrop-blur-md p-2.5 rounded-2xl border border-[#91cdfb]/40 shadow-[0_8px_30px_rgba(0,0,0,0.8)] flex items-center justify-between gap-3">
+<div class="flex items-center gap-2.5 pl-2">
+<span class="w-2 h-2 rounded-full bg-[#91cdfb] animate-pulse"></span>
+<div class="flex flex-col">
+<span class="text-[11px] font-mono text-white font-semibold">Preferences In Sync</span>
+<span class="text-[10px] text-[#9ba7ba] leading-none">Feed applies dynamically</span>
+</div>
+</div>
+<button class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#91cdfb] to-[#b8e2ff] hover:brightness-110 text-[#0c0e12] font-mono text-[12px] font-bold tracking-wider uppercase flex items-center gap-1.5 shadow-md transition-all active:scale-95" id="deploy-model-btn" type="button">
+<span class="material-symbols-outlined text-[16px]">save</span> Save Preferences
+    </button>
+</div>
+</div>
+<!-- Persistent Bottom Navigation Bar (Deep Obsidian with Refined Silver & Glacier Accents) -->
+<nav class="fixed bottom-0 inset-x-0 z-40 max-w-md mx-auto bg-[#0c0e12]/95 backdrop-blur-xl border-t border-[#232834] shadow-[0_-4px_24px_rgba(0,0,0,0.8)]">
+<div class="flex justify-around items-center h-16 px-3">
+<!-- Feed Tab -->
+<a class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[#9ba7ba] hover:text-[#f0f3f8] transition-colors" data-path="feed" href="#">
+<span class="material-symbols-outlined text-[22px]">article</span>
+<span class="text-[10.5px] font-sans font-medium mt-0.5">Feed</span>
+</a>
+<!-- Stacks Tab -->
+<a class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[#9ba7ba] hover:text-[#f0f3f8] transition-colors" data-path="stacks" href="#">
+<span class="material-symbols-outlined text-[22px]">bookmarks</span>
+<span class="text-[10.5px] font-sans font-medium mt-0.5">Stacks</span>
+</a>
+<!-- Tuning Tab (Active) -->
+<a aria-current="page" class="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[#f0f3f8] transition-colors relative" data-path="tuning" href="#">
+<span class="material-symbols-outlined text-[22px] text-[#91cdfb]">tune</span>
+<span class="text-[10.5px] font-sans font-bold mt-0.5 text-[#f0f3f8]">Tuning</span>
+<span class="w-1.5 h-1.5 rounded-full bg-[#91cdfb] absolute bottom-1 shadow-[0_0_6px_rgba(145,205,251,0.8)]"></span>
+</a>
+</div>
+</nav>
+<!-- Substack Import Modal -->
+<div class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-4" id="import-modal">
+<div class="bg-[#161921] border border-[#232834] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#91cdfb]">rss_feed</span>
+<h3 class="font-serif text-[18px] text-white font-medium">Add Substack Publication</h3>
+</div>
+<button class="text-[#9ba7ba] hover:text-white" id="close-modal-btn" type="button">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<p class="text-[12px] text-[#9ba7ba]">
+      Paste any Substack URL or RSS endpoint. Folio extracts clean full-text markdown without tracking pixels.
+    </p>
+<div class="space-y-1.5">
+<label class="text-[11px] font-mono text-[#9ba7ba] uppercase">Substack URL or Domain</label>
+<input class="w-full bg-[#111317] text-[12.5px] p-2.5 rounded-xl border border-[#232834] focus:border-[#91cdfb] focus:outline-none text-white" id="rss-input" placeholder="e.g. https://astralcodexten.substack.com" type="text"/>
+</div>
+<div class="flex gap-2 pt-2">
+<button class="flex-1 py-2 rounded-xl bg-[#232834] text-[12px] font-mono text-[#9ba7ba] hover:text-white" id="cancel-import-btn" type="button">
+        Cancel
+      </button>
+<button class="flex-1 py-2 rounded-xl bg-gradient-to-r from-[#91cdfb] to-[#b8e2ff] text-[#0c0e12] text-[12px] font-mono font-bold hover:brightness-105" id="confirm-import-btn" type="button">
+        Whitelist Feed
+      </button>
+</div>
+</div>
+</div>
+<!-- Client Interaction JS -->
+<script>
+  // Top Segmented Pill Tab Toggle
+  const tabTuning = document.getElementById('tab-tuning');
+  const tabStats = document.getElementById('tab-stats');
+  const viewTuning = document.getElementById('view-tuning');
+  const viewStats = document.getElementById('view-stats');
+  const stickySaveBar = document.getElementById('sticky-save-bar');
+  const headerBrandTitle = document.getElementById('header-brand-title');
+
+  function switchTab(activeTab) {
+    if (activeTab === 'tuning') {
+      viewTuning.classList.remove('hidden');
+      viewStats.classList.add('hidden');
+      if (stickySaveBar) stickySaveBar.classList.remove('hidden', 'opacity-0');
+      if (headerBrandTitle) headerBrandTitle.textContent = "Taste Matrix";
+
+      // Styles
+      tabTuning.className = "py-2 px-3 rounded-lg text-[12px] font-medium transition-all flex items-center justify-center gap-2 bg-[#232834] text-[#91cdfb] shadow border border-[#91cdfb]/40";
+      tabStats.className = "py-2 px-3 rounded-lg text-[12px] font-medium transition-all flex items-center justify-center gap-2 text-[#9ba7ba] hover:text-white";
+    } else {
+      viewTuning.classList.add('hidden');
+      viewStats.classList.remove('hidden');
+      if (stickySaveBar) stickySaveBar.classList.add('hidden', 'opacity-0');
+      if (headerBrandTitle) headerBrandTitle.textContent = "Reader Analytics";
+
+      // Styles
+      tabStats.className = "py-2 px-3 rounded-lg text-[12px] font-medium transition-all flex items-center justify-center gap-2 bg-[#232834] text-[#91cdfb] shadow border border-[#91cdfb]/40";
+      tabTuning.className = "py-2 px-3 rounded-lg text-[12px] font-medium transition-all flex items-center justify-center gap-2 text-[#9ba7ba] hover:text-white";
+    }
+  }
+
+  if (tabTuning) tabTuning.addEventListener('click', () => switchTab('tuning'));
+  if (tabStats) tabStats.addEventListener('click', () => switchTab('stats'));
+
+  // Save Preferences CTA Feedback
+  const deployBtn = document.getElementById('deploy-model-btn');
+  if (deployBtn) {
+    deployBtn.addEventListener('click', () => {
+      deployBtn.innerHTML = `<span class="material-symbols-outlined text-[16px] animate-spin">sync</span> Saving...`;
+      setTimeout(() => {
+        deployBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span> Preferences Saved`;
+        setTimeout(() => {
+          deployBtn.innerHTML = `<span class="material-symbols-outlined text-[16px]">save</span> Save Preferences`;
+        }, 2000);
+      }, 700);
+    });
+  }
+
+  // Modal interactions
+  const modalTrigger = document.getElementById('import-modal-trigger');
+  const modal = document.getElementById('import-modal');
+  const closeModalBtn = document.getElementById('close-modal-btn');
+  const cancelModalBtn = document.getElementById('cancel-import-btn');
+  const confirmModalBtn = document.getElementById('confirm-import-btn');
+
+  function toggleModal(show) {
+    if (modal) {
+      if (show) modal.classList.remove('hidden');
+      else modal.classList.add('hidden');
+    }
+  }
+
+  if (modalTrigger) modalTrigger.addEventListener('click', () => toggleModal(true));
+  if (closeModalBtn) closeModalBtn.addEventListener('click', () => toggleModal(false));
+  if (cancelModalBtn) cancelModalBtn.addEventListener('click', () => toggleModal(false));
+  if (confirmModalBtn) {
+    confirmModalBtn.addEventListener('click', () => {
+      toggleModal(false);
+    });
+  }
+</script>
+</div>
+</body></html>

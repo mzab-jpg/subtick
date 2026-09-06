@@ -8,7 +8,15 @@ const dashboardSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'scree
 const settingsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'SettingsScreen.tsx'), 'utf8');
 const toggleSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'components', 'TangentToggle.tsx'), 'utf8');
 const statsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'DashboardStatsScreen.tsx'), 'utf8');
-const feedServiceSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'feedService.ts'), 'utf8');
+// feedService.ts is now a barrel re-exporting from src/services/feed/*.
+// The regression contracts target the implementation, so gather the barrel
+// plus every feed module into one source blob.
+const feedServiceSource = [
+  fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'feedService.ts'), 'utf8'),
+  ...fs.readdirSync(path.join(__dirname, '..', 'src', 'services', 'feed'))
+    .filter((name) => name.endsWith('.ts'))
+    .map((name) => fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'feed', name), 'utf8')),
+].join('\n');
 const behaviorSyncSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'behaviorSync.ts'), 'utf8');
 const navigationQueueSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'features', 'reader', 'useNavigationQueue.ts'), 'utf8');
 const dashboardCacheSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'dashboardFeedCache.ts'), 'utf8');
@@ -73,7 +81,7 @@ const androidNativeFiveArticleBuffer = !loaderSource.includes('preparedContentRe
   && source.includes('activeQueueIds.slice(currentIndex + 1, currentIndex + 6)')
   && source.includes('prefetchArticles(upcomingIds)')
   && source.includes('cancelPrefetch();')
-  && feedServiceSource.includes("import NativeRssParser from '../../modules/tangent-rss-parser';")
+  && feedServiceSource.includes("import NativeRssParser from '../../../modules/tangent-rss-parser';")
   && feedServiceSource.includes("Platform.OS === 'android' && NativeRssParser !== null")
   && feedServiceSource.includes('NativeRssParser!.preloadFeed(feedUrl)')
   && feedServiceSource.includes('NativeRssParser!.prepareArticle(feedUrl, guid, articleUrl)')
