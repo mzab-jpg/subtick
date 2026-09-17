@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tangent - Feed</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            obsidian: {
+              100: '#1A1E24',
+              200: '#14171C',
+              300: '#0C0E12', // Base
+            },
+            glacier: {
+              100: '#E2E8F0',
+              200: '#CBD5E1',
+              300: '#94A3B8', // Muted
+            },
+            steel: {
+              100: '#7FA8C9', // Primary Accent
+              200: '#4A6B8A', // Secondary Accent
+              300: '#2A3C4D', // Borders/Interactive
+            },
+            silver: '#F0F3F8',
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'sans-serif'],
+            body: ['"Manrope"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          backgroundImage: {
+            'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+            'scrim-top': 'linear-gradient(to bottom, rgba(12, 14, 18, 0.6) 0%, rgba(12, 14, 18, 0) 100%)',
+            'scrim-bottom': 'linear-gradient(to top, rgba(12, 14, 18, 0.9) 0%, rgba(12, 14, 18, 0.4) 50%, rgba(12, 14, 18, 0) 100%)',
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-utilities">
+    body {
+      background-color: #0C0E12;
+      color: #F0F3F8;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+    }
+    
+    .glass-nav {
+      background: rgba(12, 14, 18, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(42, 60, 77, 0.4);
+    }
+    
+    .image-tint {
+      /* Replicating the desaturated/cold tint */
+      filter: saturate(0.85) brightness(0.9) contrast(1.1) sepia(0.2) hue-rotate(180deg);
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col relative overflow-hidden font-body text-silver">
+<!-- BEGIN: Hero Image & Scrims -->
+<div class="absolute inset-0 z-0 bg-obsidian-300">
+<img alt="Cinematic VTOL over mountains" class="w-full h-full object-cover object-center image-tint" src="https://lh3.googleusercontent.com/aida/AEtjO1Ut-kJCaYWO3bamqsvRsplJiMKp_dOL21-uWYIL2LacklZbmgQh_tnlmfwH8dd68IKWeePPdN7EAWB3N8oE6rd-AzFbNY2AY0NM5DgF2SNf46gBjOPbmk51AtLjxYTA31OF2RVKAshQApX-EWbuXCqWJg6Le23FUptZ3w1wmusfeGwCal0dG5JT7Q0jMHzK25pkhDUi8jtcgj-Ttp3hc8_-vYxa8x01WJ73B8WNYr-cgcOkL4-nMMIOdnc"/>
+<!-- Top Scrim -->
+<div class="absolute top-0 left-0 right-0 h-1/5 bg-scrim-top"></div>
+<!-- Bottom Wedge/Scrim -->
+<div class="absolute bottom-0 left-0 right-0 h-1/2 bg-scrim-bottom"></div>
+</div>
+<!-- END: Hero Image & Scrims -->
+<!-- BEGIN: Top Navigation Bar -->
+<header class="relative z-10 w-full pt-12 pb-4 px-6 flex justify-between items-center">
+<h1 class="font-display font-medium text-[18px] tracking-tight">Tangent</h1>
+<button aria-label="User Profile" class="text-silver hover:text-glacier-200 transition-colors">
+<i class="w-[22px] h-[22px]" data-lucide="circle-user"></i>
+</button>
+</header>
+<!-- END: Top Navigation Bar -->
+<!-- BEGIN: Main Content Area -->
+<main class="relative z-10 flex-1 flex flex-col justify-end px-6 pb-24">
+<!-- Article Metadata (Top Label) -->
+<div class="absolute top-[25%] left-6 right-6">
+<p class="font-mono text-[10px] tracking-widest text-glacier-300 uppercase">
+        Not Boring <span class="mx-2">·</span> 18 min read
+      </p>
+</div>
+<!-- Content Block -->
+<div class="space-y-6">
+<!-- Title -->
+<h2 class="font-display font-bold text-[30px] leading-tight text-silver">
+        Expanding the Radius<br/>of Daily Life
+      </h2>
+<!-- Pull Quote -->
+<div class="pl-4 border-l-[3px] border-steel-100 py-1">
+<p class="font-body italic text-[18px] leading-snug text-glacier-100">
+          "A flying car is really a vehicle that flies point-to-point with car-like convenience."
+        </p>
+</div>
+<!-- Byline -->
+<p class="font-mono text-[10px] tracking-widest text-glacier-300 uppercase mt-2">
+        Packy McCormick <span class="mx-2">·</span> Tsung Xu <span class="mx-2">·</span> Jun 8
+      </p>
+<!-- Action Row -->
+<div class="flex gap-4 pt-4">
+<!-- Bookmark Button -->
+<button aria-label="Bookmark" class="w-12 h-12 flex-shrink-0 flex items-center justify-center border border-steel-300 bg-obsidian-200/50 hover:bg-obsidian-200 transition-colors">
+<i class="w-5 h-5 text-silver" data-lucide="bookmark"></i>
+</button>
+<!-- Primary Action Button -->
+<button class="flex-1 h-12 bg-silver text-obsidian-300 font-mono text-[13px] font-bold tracking-widest uppercase flex items-center justify-center gap-2 hover:bg-white transition-colors">
+          Read Essay <i class="w-4 h-4" data-lucide="arrow-right"></i>
+</button>
+</div>
+<!-- Swipe Indicator -->
+<div class="flex flex-col items-center pt-8 pb-4 gap-3">
+<i class="w-5 h-5 text-steel-200" data-lucide="chevron-up"></i>
+<div class="flex gap-2">
+<div class="w-6 h-[2px] bg-steel-100"></div>
+<div class="w-6 h-[2px] bg-steel-300"></div>
+<div class="w-6 h-[2px] bg-steel-300"></div>
+<div class="w-6 h-[2px] bg-steel-300"></div>
+</div>
+</div>
+</div>
+</main>
+<!-- END: Main Content Area -->
+<!-- BEGIN: Bottom Navigation -->
+<nav class="absolute bottom-0 left-0 right-0 z-20 glass-nav px-6 pb-8 pt-4">
+<ul class="flex justify-between items-center max-w-sm mx-auto">
+<!-- Feed Tab (Active) -->
+<li class="flex-1 flex flex-col items-center gap-1 group cursor-pointer">
+<div class="relative">
+<i class="w-6 h-6 text-silver" data-lucide="book-open"></i>
+<!-- Active Pip -->
+<div class="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-steel-100"></div>
+</div>
+<span class="font-mono text-[10px] tracking-widest uppercase text-silver">Feed</span>
+</li>
+<!-- Stacks Tab (Inactive) -->
+<li class="flex-1 flex flex-col items-center gap-1 group cursor-pointer">
+<i class="w-6 h-6 text-steel-200 group-hover:text-glacier-200 transition-colors" data-lucide="layers"></i>
+<span class="font-mono text-[10px] tracking-widest uppercase text-steel-200 group-hover:text-glacier-200 transition-colors">Stacks</span>
+</li>
+<!-- Tuning Tab (Inactive) -->
+<li class="flex-1 flex flex-col items-center gap-1 group cursor-pointer">
+<i class="w-6 h-6 text-steel-200 group-hover:text-glacier-200 transition-colors" data-lucide="sliders-horizontal"></i>
+<span class="font-mono text-[10px] tracking-widest uppercase text-steel-200 group-hover:text-glacier-200 transition-colors">Tuning</span>
+</li>
+</ul>
+</nav>
+<!-- END: Bottom Navigation -->
+<script data-purpose="icons-init">
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
+</body></html>

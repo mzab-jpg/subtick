@@ -1,0 +1,87 @@
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const bookmarkBtn = document.getElementById('bookmark-btn');
+    const bookmarkIcon = bookmarkBtn.querySelector('.material-symbols-outlined');
+    const scrim = document.getElementById('sheet-scrim');
+    const sheet = document.getElementById('save-sheet');
+    const list = document.getElementById('stack-list');
+    const toast = document.getElementById('toast');
+    const toastText = document.getElementById('toast-text');
+    let selectedName = 'Quick Queue';
+    let toastTimer = null;
+
+    function addRow(name, hint, icon, selected) {
+      const row = document.createElement('button');
+      row.className = 'stack-row flex items-center gap-3 px-5 py-3.5 w-full text-left transition-colors border-b border-border-subtle';
+      row.setAttribute('data-name', name);
+      row.innerHTML =
+        '<span class="material-symbols-outlined text-[18px] text-on-surface-muted row-icon">' + icon + '</span>' +
+        '<span class="flex flex-col flex-1 min-w-0">' +
+          '<span class="font-body-md text-[15px] font-medium text-primary truncate">' + name + '</span>' +
+          '<span class="font-label-mono text-[10px] text-on-surface-faint mt-0.5 uppercase tracking-wider">' + hint + '</span>' +
+        '</span>' +
+        '<span class="material-symbols-outlined text-[18px] text-[#7FA8C9] row-check" style="opacity:0;">check</span>';
+      row.addEventListener('click', () => selectRow(row));
+      list.appendChild(row);
+      if (selected) selectRow(row);
+      return row;
+    }
+
+    function selectRow(row) {
+      list.querySelectorAll('.stack-row').forEach(r => {
+        const on = r === row;
+        r.style.background = on ? 'rgba(127,168,201,0.12)' : '';
+        r.querySelector('.row-check').style.opacity = on ? '1' : '0';
+        r.querySelector('.row-icon').style.color = on ? '#7FA8C9' : '';
+      });
+      selectedName = row.getAttribute('data-name');
+    }
+
+    function openSheet() {
+      scrim.style.opacity = '1';
+      scrim.style.pointerEvents = 'auto';
+      sheet.style.opacity = '1';
+      sheet.style.transform = 'translateY(0)';
+      sheet.style.pointerEvents = 'auto';
+    }
+
+    function closeSheet() {
+      scrim.style.opacity = '0';
+      scrim.style.pointerEvents = 'none';
+      sheet.style.opacity = '0';
+      sheet.style.transform = 'translateY(16px)';
+      sheet.style.pointerEvents = 'none';
+    }
+
+    addRow('Quick Queue', 'Unread catch-all', 'bolt', true);
+    addRow('Sunday Longform', 'Weekly edition', 'auto_stories', false);
+    addRow('Tech & Frontier', 'Hard science', 'science', false);
+
+    bookmarkBtn.addEventListener('click', () => {
+      if (sheet.style.pointerEvents === 'auto') { closeSheet(); } else { openSheet(); }
+    });
+    document.getElementById('close-sheet-btn').addEventListener('click', closeSheet);
+    scrim.addEventListener('click', closeSheet);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+
+    document.getElementById('new-stack-btn').addEventListener('click', () => {
+      const n = list.querySelectorAll('.stack-row').length + 1;
+      const row = addRow('New Stack ' + n, 'Untitled', 'layers', true);
+      row.scrollIntoView({ block: 'nearest' });
+    });
+
+    document.getElementById('save-stack-btn').addEventListener('click', () => {
+      closeSheet();
+      bookmarkIcon.style.fontVariationSettings = "'FILL' 1";
+      bookmarkIcon.style.color = '#7FA8C9';
+      toastText.textContent = 'Saved to ' + selectedName;
+      toast.style.opacity = '1';
+      toast.style.transform = 'translate(-50%,0)';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translate(-50%,8px)';
+      }, 2200);
+    });
+  });
+</script>

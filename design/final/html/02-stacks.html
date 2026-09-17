@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tangent - Stacks Hub v5</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "inverse-primary": "#5b5f63",
+          "on-error-container": "#ffdad6",
+          "surface-card": "#1B1F28",
+          "surface-container-high": "#2a2a2a",
+          "tertiary": "#ffffff",
+          "on-tertiary": "#00344f",
+          "surface-raised": "#161A20",
+          "secondary": "#a2cbee",
+          "surface": "#131313",
+          "error-container": "#93000a",
+          "on-surface-variant": "#c5c6ca",
+          "surface-dim": "#131313",
+          "tertiary-container": "#cbe6ff",
+          "primary-fixed-dim": "#c3c7cc",
+          "background": "#0C0E12",
+          "on-primary-fixed": "#181c20",
+          "on-tertiary-fixed": "#001e30",
+          "on-secondary": "#00344f",
+          "secondary-fixed-dim": "#a2cbee",
+          "primary": "#ffffff",
+          "surface-bright": "#3a3939",
+          "tertiary-fixed": "#cbe6ff",
+          "inverse-surface": "#e5e2e1",
+          "on-tertiary-fixed-variant": "#1f4a68",
+          "on-tertiary-container": "#406887",
+          "on-primary": "#2d3135",
+          "surface-container-lowest": "#0e0e0e",
+          "secondary-container": "#214d6a",
+          "on-surface-muted": "#9BA7BA",
+          "surface-container": "#201f20",
+          "surface-variant": "#353535",
+          "surface-container-low": "#1c1b1c",
+          "on-secondary-fixed-variant": "#1e4b67",
+          "on-secondary-container": "#94bddf",
+          "on-error": "#690005",
+          "on-background": "#e5e2e1",
+          "outline-variant": "#44474a",
+          "on-surface-faint": "#475263",
+          "error": "#FFB4AB",
+          "on-primary-container": "#616569",
+          "secondary-fixed": "#cae6ff",
+          "inverse-on-surface": "#313030",
+          "on-primary-fixed-variant": "#43474b",
+          "primary-container": "#dfe3e8",
+          "tertiary-fixed-dim": "#a3cbee",
+          "on-surface": "#e5e2e1",
+          "surface-tint": "#c3c7cc",
+          "primary-fixed": "#dfe3e8",
+          "border-subtle": "#252A32",
+          "accent-soft": "rgba(127, 168, 201, 0.12)",
+          "surface-container-highest": "#353535",
+          "on-secondary-fixed": "#001e30",
+          "border-strong": "#4B535D",
+          "outline": "#8f9194",
+          "accent-blue": "#7FA8C9",
+          "text-obsidian": "#0C0E12"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "spacing": {
+          "gutter": "16px",
+          "stack-sm": "8px",
+          "margin-page": "24px",
+          "baseline": "4px",
+          "stack-md": "16px",
+          "stack-lg": "32px"
+        },
+        "fontFamily": {
+          "headline-md": [
+            "Space Grotesk"
+          ],
+          "body-md": [
+            "Manrope"
+          ],
+          "display-lg": [
+            "Space Grotesk"
+          ],
+          "title-sm": [
+            "Space Grotesk"
+          ],
+          "label-mono": [
+            "JetBrains Mono"
+          ],
+          "metric-lg": [
+            "Space Grotesk"
+          ]
+        },
+        "fontSize": {
+          "headline-md": [
+            "22px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ],
+          "body-md": [
+            "14px",
+            {
+              "lineHeight": "22px",
+              "fontWeight": "400"
+            }
+          ],
+          "display-lg": [
+            "30px",
+            {
+              "lineHeight": "36px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "500"
+            }
+          ],
+          "title-sm": [
+            "17px",
+            {
+              "lineHeight": "24px",
+              "fontWeight": "600"
+            }
+          ],
+          "label-mono": [
+            "10px",
+            {
+              "lineHeight": "12px",
+              "letterSpacing": "0.08em",
+              "fontWeight": "500"
+            }
+          ],
+          "metric-lg": [
+            "24px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ]
+        }
+      },
+    },
+  }
+</script>
+<style>
+    /* Utility for hairlines */
+    .hairline-b { border-bottom: 1px solid theme('colors.border-subtle'); }
+    .hairline-t { border-top: 1px solid theme('colors.border-subtle'); }
+    .hairline-all { border: 1px solid theme('colors.border-subtle'); }
+    
+    /* Specific overrides for prompt hexes when needed outside theme */
+    .text-light-silver { color: #F0F3F8; }
+    .text-accent-blue { color: #7FA8C9; }
+    .border-accent-blue { border-color: #7FA8C9; }
+    .bg-accent-blue { background-color: #7FA8C9; }
+    .text-faint { color: #475263; }
+    .text-offwhite { color: #E2E5EB; }
+    .text-dark-obsidian { color: #0B0E13; }
+    
+    /* Hide scrollbar for cleaner look */
+    ::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
+    }
+</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen flex flex-col pb-24">
+<!-- Top App Bar (Shared Component Semantic) -->
+<header class="fixed top-0 w-full z-50 bg-background dark:bg-background border-b border-border-subtle flex justify-between items-center px-margin-page h-16 w-full max-w-7xl mx-auto md:hidden">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-primary dark:text-primary mr-4" data-icon="menu">menu</span>
+<h1 class="font-display-lg-mobile text-display-lg-mobile text-primary tracking-tighter">Tangent</h1>
+</div>
+<span class="material-symbols-outlined text-primary dark:text-primary" data-icon="settings">settings</span>
+</header>
+<header class="hidden md:flex fixed top-0 w-full z-50 bg-background dark:bg-background border-b border-border-subtle justify-between items-center px-margin-page h-16 w-full max-w-7xl mx-auto">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-primary dark:text-primary mr-4 cursor-pointer hover:text-secondary transition-colors duration-200" data-icon="menu">menu</span>
+<h1 class="font-display-lg text-display-lg text-primary tracking-tighter">Tangent</h1>
+</div>
+<nav class="flex gap-8">
+<a class="text-on-surface-muted font-label-mono text-label-mono uppercase hover:text-secondary transition-colors duration-200 flex flex-col items-center gap-1" href="#"><span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>Library</a>
+<a class="text-secondary font-bold font-label-mono text-label-mono uppercase flex flex-col items-center gap-1 opacity-80 scale-95 duration-150" href="#"><span class="material-symbols-outlined" data-icon="layers">layers</span>Stacks</a>
+<a class="text-on-surface-muted font-label-mono text-label-mono uppercase hover:text-secondary transition-colors duration-200 flex flex-col items-center gap-1" href="#"><span class="material-symbols-outlined" data-icon="explore">explore</span>Discover</a>
+<a class="text-on-surface-muted font-label-mono text-label-mono uppercase hover:text-secondary transition-colors duration-200 flex flex-col items-center gap-1" href="#"><span class="material-symbols-outlined" data-icon="person">person</span>Profile</a>
+</nav>
+<span class="material-symbols-outlined text-primary dark:text-primary cursor-pointer hover:text-secondary transition-colors duration-200" data-icon="settings">settings</span>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-md mx-auto px-gutter pt-24 md:pt-32 pb-8 flex flex-col gap-6">
+<!-- Header Section -->
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-end">
+<h1 class="font-headline-md text-[26px] font-medium text-light-silver leading-tight tracking-tight">My Stacks</h1>
+<button class="bg-transparent border border-accent-blue rounded px-3 py-1.5 font-label-mono text-label-mono font-bold text-accent-blue uppercase tracking-widest hover:bg-accent-soft transition-colors">+ NEW STACK</button>
+</div>
+<p class="font-label-mono text-[9px] text-faint uppercase tracking-[0.1em]">3 CURATED STACKS · 1 QUICK QUEUE · 47 SAVED</p>
+</div>
+<!-- Immediate Reading Section -->
+<div class="flex flex-col gap-4 mt-2">
+<div class="flex justify-between items-center hairline-b pb-2">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-accent-blue"></div>
+<span class="font-label-mono text-[10px] text-on-surface-muted uppercase tracking-widest">IMMEDIATE READING</span>
+</div>
+<span class="font-label-mono text-[10px] text-faint uppercase tracking-widest">UNSORTED SAVES · 12</span>
+</div>
+<!-- Quick Queue Card -->
+<div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all relative overflow-hidden group">
+<!-- Subtle gradient overlay for premium feel -->
+<div class="absolute inset-0 bg-gradient-to-br from-accent-blue/[0.03] to-transparent pointer-events-none"></div>
+<div class="flex justify-between items-start relative z-10">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-raised flex items-center justify-center border border-border-subtle">
+<span class="material-symbols-outlined text-light-silver text-[18px]">bolt</span>
+</div>
+<div class="flex items-center gap-2">
+<h2 class="font-title-sm text-[17px] text-light-silver font-semibold">Quick Queue</h2>
+<span class="bg-accent-blue text-text-obsidian font-label-mono text-[9px] font-bold px-1.5 py-0.5 rounded-sm">2</span>
+</div>
+</div>
+<span class="font-label-mono text-[10px] text-accent-blue font-semibold">15 MIN</span>
+</div>
+<p class="font-body-md text-[13px] text-on-surface-muted leading-relaxed relative z-10">The Diff &amp; Not Boring, ready to consume</p>
+<div class="flex flex-col gap-3 pt-2 relative z-10">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-1 h-1 rounded-full bg-accent-blue"></div>
+<span class="font-body-md text-[14px] text-offwhite truncate max-w-[200px]">The Economics of AI Chips</span>
+</div>
+<span class="font-label-mono text-[9px] text-faint">8 MIN</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-1 h-1 rounded-full bg-accent-blue"></div>
+<span class="font-body-md text-[14px] text-offwhite truncate max-w-[200px]">Why Apple Might Win VR</span>
+</div>
+<span class="font-label-mono text-[9px] text-faint">7 MIN</span>
+</div>
+</div>
+<button class="w-full mt-2 bg-transparent border border-accent-blue rounded-md py-3 font-label-mono text-[10px] text-accent-blue font-bold tracking-widest uppercase hover:bg-accent-blue hover:text-text-obsidian transition-colors relative z-10">READ QUEUE (15 MIN) →</button>
+</div>
+</div>
+<!-- Playlists Section -->
+<div class="flex flex-col gap-4 mt-6">
+<div class="flex justify-between items-center hairline-b pb-2">
+<span class="font-label-mono text-[10px] text-on-surface-muted uppercase tracking-widest">YOUR READING PLAYLISTS</span>
+<span class="font-label-mono text-[10px] text-faint uppercase tracking-widest">3 ACTIVE</span>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Stack Card 1 -->
+<div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all">
+<div class="flex justify-between items-start">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-accent-blue"></div>
+<h3 class="font-title-sm text-[17px] text-light-silver font-semibold">Frontier Tech &amp; Energy</h3>
+</div>
+<p class="font-body-md text-[13px] text-on-surface-muted">Works in Progress · SemiAnalysis · Pirate Wires</p>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="font-label-mono text-[10px] text-accent-blue font-semibold">48 MIN</span>
+<span class="font-label-mono text-[9px] text-faint">4 ESSAYS</span>
+</div>
+</div>
+<div class="flex gap-2 mt-1">
+<span class="bg-surface-raised border border-border-subtle text-on-surface-muted font-label-mono text-[8px] px-2 py-1 rounded-sm uppercase">Nuclear</span>
+<span class="bg-surface-raised border border-border-subtle text-on-surface-muted font-label-mono text-[8px] px-2 py-1 rounded-sm uppercase">Semiconductors</span>
+<span class="bg-surface-raised border border-border-subtle text-on-surface-muted font-label-mono text-[8px] px-2 py-1 rounded-sm uppercase">Policy</span>
+</div>
+<button class="w-full mt-2 bg-accent-blue rounded-md py-3 font-label-mono text-[10px] text-text-obsidian font-bold tracking-widest uppercase hover:opacity-90 transition-opacity">BEGIN READING (48M) →</button>
+</div>
+<!-- Stack Card 2 -->
+<div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all opacity-80 hover:opacity-100 transition-opacity">
+<div class="flex justify-between items-start">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-[#5E86A6]"></div>
+<h3 class="font-title-sm text-[17px] text-light-silver font-semibold">Capital &amp; Market Physics</h3>
+</div>
+<p class="font-body-md text-[13px] text-on-surface-muted">Net Interest · Byrne Hobart · Stratechery</p>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="font-label-mono text-[10px] text-on-surface-muted font-semibold">32 MIN</span>
+<span class="font-label-mono text-[9px] text-faint">3 ESSAYS</span>
+</div>
+</div>
+<button class="w-full mt-2 bg-transparent border border-border-strong rounded-md py-3 font-label-mono text-[10px] text-on-surface-muted font-bold tracking-widest uppercase hover:border-accent-blue hover:text-accent-blue transition-colors">BEGIN READING (32M) →</button>
+</div>
+<!-- Stack Card 3 -->
+<div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all opacity-70 hover:opacity-100 transition-opacity">
+<div class="flex justify-between items-start">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-on-surface-muted"></div>
+<h3 class="font-title-sm text-[17px] text-light-silver font-semibold">Sunday Longform</h3>
+</div>
+<p class="font-body-md text-[13px] text-on-surface-muted">Wait But Why · Ribbonfarm</p>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="font-label-mono text-[10px] text-on-surface-muted font-semibold">25 MIN</span>
+<span class="font-label-mono text-[9px] text-faint">2 ESSAYS</span>
+</div>
+</div>
+<button class="w-full mt-2 bg-transparent border border-border-strong rounded-md py-3 font-label-mono text-[10px] text-on-surface-muted font-bold tracking-widest uppercase hover:border-accent-blue hover:text-accent-blue transition-colors">BEGIN READING (25M) →</button>
+</div>
+</div>
+</div>
+<!-- Compose Card -->
+<div class="bg-transparent rounded-lg p-5 flex justify-between items-center border border-dashed border-border-strong mt-4 hover:border-accent-blue hover:bg-surface-card transition-all cursor-pointer group">
+<div class="flex flex-col gap-1 pr-4">
+<span class="font-title-sm text-[15px] text-light-silver font-medium group-hover:text-accent-blue transition-colors">Compose New Editorial Stack</span>
+<span class="font-body-md text-[12px] text-on-surface-muted">Combine your queue, history &amp; discovery filters</span>
+</div>
+<span class="font-label-mono text-[10px] text-accent-blue font-bold tracking-widest uppercase whitespace-nowrap">COMPOSE →</span>
+</div>
+</main>
+<!-- Bottom Nav Bar (Shared Component - Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 bg-[#0C0E12]/92 backdrop-blur-md flex justify-around items-center h-20 px-gutter pb-safe pt-2 border-t border-[#1E232B]">
+<!-- Feed Tab (Inactive) -->
+<a class="flex flex-col items-center justify-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-[24px]" style="color: #8E9194;">auto_stories</span>
+<span class="font-label-mono text-[10px] uppercase tracking-widest" style="color: #8E9194;">Feed</span>
+</a>
+<!-- Stacks Tab (Active) -->
+<a class="flex flex-col items-center justify-center gap-1.5 relative" href="#">
+<span class="material-symbols-outlined text-[24px]" style="color: #7FA8C9;">layers</span>
+<div class="flex flex-col items-center">
+<span class="font-label-mono text-[10px] uppercase tracking-widest text-white font-bold">Stacks</span>
+<div class="w-1 h-1 bg-[#7FA8C9] rounded-full mt-0.5"></div>
+</div>
+</a>
+<!-- Tuning Tab (Inactive) -->
+<a class="flex flex-col items-center justify-center gap-1.5" href="#">
+<span class="material-symbols-outlined text-[24px]" style="color: #8E9194;">tune</span>
+<span class="font-label-mono text-[10px] uppercase tracking-widest" style="color: #8E9194;">Tuning</span>
+</a>
+</nav>
+<script src="tangent.js"></script>
+</body></html>

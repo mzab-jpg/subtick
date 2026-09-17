@@ -1,0 +1,668 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>B2 — Stacks Hub &amp; Queue</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "surface-raised": "#161A20",
+          "on-surface": "#e5e2e1",
+          "surface-container": "#201f20",
+          "secondary-fixed-dim": "#a2cbee",
+          "inverse-on-surface": "#313030",
+          "border-subtle": "#252A32",
+          "on-primary-fixed": "#181c20",
+          "primary": "#ffffff",
+          "surface-variant": "#353535",
+          "secondary-fixed": "#cae6ff",
+          "tertiary-fixed-dim": "#a3cbee",
+          "surface-tint": "#c3c7cc",
+          "on-primary-fixed-variant": "#43474b",
+          "background": "#0C0E12",
+          "surface": "#131313",
+          "tertiary-fixed": "#cbe6ff",
+          "surface-container-lowest": "#0e0e0e",
+          "on-surface-muted": "#9BA7BA",
+          "on-tertiary-fixed": "#001e30",
+          "on-primary-container": "#616569",
+          "surface-card": "#1B1F28",
+          "surface-dim": "#131313",
+          "on-tertiary": "#00344f",
+          "on-surface-faint": "#475263",
+          "primary-fixed": "#dfe3e8",
+          "primary-container": "#dfe3e8",
+          "on-tertiary-container": "#406887",
+          "on-secondary-container": "#94bddf",
+          "surface-container-high": "#2a2a2a",
+          "on-secondary-fixed-variant": "#1e4b67",
+          "on-background": "#e5e2e1",
+          "on-secondary-fixed": "#001e30",
+          "on-error-container": "#ffdad6",
+          "inverse-surface": "#e5e2e1",
+          "inverse-primary": "#5b5f63",
+          "tertiary-container": "#cbe6ff",
+          "tertiary": "#ffffff",
+          "on-tertiary-fixed-variant": "#1f4a68",
+          "accent-soft": "rgba(127, 168, 201, 0.12)",
+          "on-secondary": "#00344f",
+          "surface-bright": "#3a3939",
+          "primary-fixed-dim": "#c3c7cc",
+          "secondary": "#a2cbee",
+          "on-surface-variant": "#c5c6ca",
+          "secondary-container": "#214d6a",
+          "outline": "#8f9194",
+          "surface-container-highest": "#353535",
+          "outline-variant": "#44474a",
+          "on-primary": "#2d3135",
+          "surface-container-low": "#1c1b1c",
+          "error": "#FFB4AB",
+          "on-error": "#690005",
+          "error-container": "#93000a",
+          "border-strong": "#4B535D",
+          "accent-blue": "#7FA8C9",
+          "text-obsidian": "#0C0E12"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "spacing": {
+          "stack-sm": "8px",
+          "stack-lg": "32px",
+          "margin-page": "24px",
+          "baseline": "4px",
+          "gutter": "16px",
+          "stack-md": "16px"
+        },
+        "fontFamily": {
+          "label-mono": [
+            "JetBrains Mono"
+          ],
+          "body-md": [
+            "Manrope"
+          ],
+          "title-sm": [
+            "Space Grotesk"
+          ],
+          "metric-lg": [
+            "Space Grotesk"
+          ],
+          "display-lg": [
+            "Space Grotesk"
+          ],
+          "headline-md": [
+            "Space Grotesk"
+          ]
+        },
+        "fontSize": {
+          "label-mono": [
+            "10px",
+            {
+              "lineHeight": "12px",
+              "letterSpacing": "0.08em",
+              "fontWeight": "500"
+            }
+          ],
+          "body-md": [
+            "14px",
+            {
+              "lineHeight": "22px",
+              "fontWeight": "400"
+            }
+          ],
+          "title-sm": [
+            "17px",
+            {
+              "lineHeight": "24px",
+              "fontWeight": "600"
+            }
+          ],
+          "metric-lg": [
+            "24px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ],
+          "display-lg": [
+            "30px",
+            {
+              "lineHeight": "36px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "500"
+            }
+          ],
+          "headline-md": [
+            "22px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ]
+        }
+      },
+    },
+  }
+</script>
+<style>
+    /* Utility for hairlines */
+    .hairline-b { border-bottom: 1px solid theme('colors.border-subtle'); }
+    .hairline-t { border-top: 1px solid theme('colors.border-subtle'); }
+    .hairline-all { border: 1px solid theme('colors.border-subtle'); }
+    
+    /* Specific overrides for prompt hexes when needed outside theme */
+    .text-light-silver { color: #F0F3F8; }
+    .text-accent-blue { color: #7FA8C9; }
+    .border-accent-blue { border-color: #7FA8C9; }
+    .bg-accent-blue { background-color: #7FA8C9; }
+    .text-faint { color: #475263; }
+    .text-offwhite { color: #E2E5EB; }
+    .text-dark-obsidian { color: #0B0E13; }
+    
+    /* Hide scrollbar for cleaner look */
+    ::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
+    }
+    
+    .view-transition {
+        transition: opacity 300ms ease-in-out;
+    }
+    .view-hidden {
+        display: none;
+        opacity: 0;
+    }
+    .view-visible {
+        display: flex;
+        opacity: 1;
+    }
+</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+    .toast-enter {
+        opacity: 0;
+        transform: translateY(10px) translateX(-50%);
+    }
+    .toast-enter-active {
+        opacity: 1;
+        transform: translateY(0) translateX(-50%);
+        transition: opacity 300ms, transform 300ms;
+    }
+    .toast-exit {
+        opacity: 1;
+        transform: translateY(0) translateX(-50%);
+    }
+    .toast-exit-active {
+        opacity: 0;
+        transform: translateY(-10px) translateX(-50%);
+        transition: opacity 300ms, transform 300ms;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen flex flex-col pb-24">
+<!-- Top App Bar (Shared Component Semantic) -->
+<header class="fixed top-0 w-full z-50 bg-[#0C0E12]/92 backdrop-blur-md border-b border-[#252A32] flex justify-between items-center px-margin-page h-16 max-w-7xl mx-auto md:hidden"><div class="flex items-center"><h1 class="font-display-lg text-[22px] font-semibold text-[#F0F3F8] tracking-widest uppercase">TANGENT</h1></div><div class="flex items-center gap-3"><div class="flex items-center gap-1.5 px-2 py-0.5 bg-surface-card border border-border-subtle rounded font-label-mono text-[9px] text-[#9BA7BA]"><span class="text-[#7FA8C9] font-bold">47</span> SAVED</div><button class="text-[#9BA7BA] hover:text-[#F0F3F8] transition-colors"><span class="material-symbols-outlined text-[20px]">account_circle</span></button><button class="text-[#9BA7BA] hover:text-[#F0F3F8] transition-colors"><span class="material-symbols-outlined text-[20px]">settings</span></button></div></header>
+<header class="hidden md:flex fixed top-0 w-full z-50 bg-[#0C0E12]/92 backdrop-blur-md border-b border-[#252A32] justify-between items-center px-margin-page h-16 max-w-7xl mx-auto"><div class="flex items-center"><h1 class="font-display-lg text-[22px] font-semibold text-[#F0F3F8] tracking-widest uppercase">TANGENT</h1></div><nav class="flex gap-8"><a class="text-[#9BA7BA] font-label-mono text-[10px] tracking-widest uppercase hover:text-[#F0F3F8] transition-colors flex items-center gap-1.5" href="#"><span class="material-symbols-outlined text-[18px]">auto_stories</span>FEED</a><a class="text-[#7FA8C9] font-bold font-label-mono text-[10px] tracking-widest uppercase flex items-center gap-1.5 border-b border-[#7FA8C9] pb-0.5" href="#"><span class="material-symbols-outlined text-[18px]">layers</span>STACKS</a><a class="text-[#9BA7BA] font-label-mono text-[10px] tracking-widest uppercase hover:text-[#F0F3F8] transition-colors flex items-center gap-1.5" href="#"><span class="material-symbols-outlined text-[18px]">tune</span>TUNING</a></nav><div class="flex items-center gap-3"><div class="hidden md:flex items-center gap-2 mr-3 px-2.5 py-1 bg-surface-card border border-border-subtle rounded text-[9px] font-label-mono text-[#9BA7BA]"><span class="text-[#7FA8C9] font-bold">47</span> SAVED <span class="text-border-strong">·</span> <span class="text-[#7FA8C9] font-bold">45M</span> QUEUE</div><button class="text-[#9BA7BA] hover:text-[#F0F3F8] transition-colors"><span class="material-symbols-outlined text-[20px]">account_circle</span></button><button class="text-[#9BA7BA] hover:text-[#F0F3F8] transition-colors"><span class="material-symbols-outlined text-[20px]">settings</span></button></div></header>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-md mx-auto px-gutter pt-24 md:pt-32 pb-8 flex flex-col gap-6">
+<!-- Header Section -->
+<div class="flex flex-col gap-4">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-end">
+<h1 class="font-headline-md text-[26px] font-medium text-light-silver leading-tight tracking-tight">Stacks Hub &amp; Queue</h1>
+<button class="bg-transparent border border-accent-blue rounded px-3 py-1.5 font-label-mono text-[10px] font-bold text-accent-blue uppercase tracking-widest hover:bg-accent-soft transition-colors open-modal-btn">+ NEW STACK</button>
+</div>
+
+</div>
+<!-- Segmented Filter -->
+<div class="flex bg-transparent border border-border-subtle rounded-md p-1 mt-2"><button class="flex-1 py-1.5 font-label-mono text-[10px] uppercase tracking-widest rounded-[4px] transition-colors segment-btn bg-transparent text-[#9BA7BA]" data-target="stacks-view">QUEUE</button><button class="flex-1 py-1.5 font-label-mono text-[10px] uppercase tracking-widest rounded-[4px] transition-colors segment-btn hover:text-white bg-[#0C0E12] text-[#F0F3F8]" data-target="history-view">history</button><button class="flex-1 py-1.5 font-label-mono text-[10px] uppercase tracking-widest rounded-[4px] transition-colors segment-btn bg-transparent text-[#9BA7BA] hover:text-white" data-target="vault-view">VAULT / ARCHIVE</button></div>
+</div>
+<!-- Stacks View -->
+<div class="view-transition flex-col gap-4 view-hidden" id="stacks-view"><div class="bg-surface-card rounded-lg p-4 hairline-all border-[#4B535D]/60 flex flex-col gap-3 relative overflow-hidden"><div class="flex items-start justify-between gap-3"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-[#7FA8C9] text-[18px]">auto_delete</span><span class="font-label-mono text-[10px] text-[#7FA8C9] font-bold uppercase tracking-widest">STALE QUEUE SWEEP</span></div><span class="font-label-mono text-[9px] text-[#475263] uppercase tracking-widest">RETENTION HEALTH</span></div><p class="font-body-md text-[13px] text-[#E2E5EB] leading-relaxed">6 saved essays untouched for &gt;21 days. Archive to Vault to keep your queue under 45m?</p><div class="flex items-center gap-2 pt-1"><button class="flex-1 py-2 px-3 bg-[#7FA8C9] text-[#0B0E13] font-label-mono text-[10px] font-bold tracking-widest uppercase rounded hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5" onclick="this.closest('.bg-surface-card').remove();"><span class="material-symbols-outlined text-[14px]">archive</span>SWEEP 6 TO VAULT</button><button class="flex-1 py-2 px-3 bg-transparent border border-[#4B535D] text-[#9BA7BA] font-label-mono text-[10px] tracking-widest uppercase rounded hover:border-[#7FA8C9] hover:text-white transition-colors" onclick="this.closest('.bg-surface-card').remove();">KEEP IN QUEUE</button></div></div><div class="flex flex-col gap-2"><div class="flex justify-between items-center"><span class="font-label-mono text-[9px] text-[#475263] uppercase tracking-widest">QUICK COMPOSE PRESETS</span></div><div class="grid grid-cols-3 gap-2"><button class="open-modal-btn p-2.5 bg-surface-card hairline-all rounded text-left hover:border-[#7FA8C9] transition-colors group flex flex-col gap-1"><span class="font-label-mono text-[9px] text-[#7FA8C9] font-bold uppercase tracking-widest group-hover:text-white">15M COMMUTE</span><span class="font-body-md text-[11px] text-[#9BA7BA] leading-tight">2 brisk tactical briefs</span></button><button class="open-modal-btn p-2.5 bg-surface-card hairline-all rounded text-left hover:border-[#7FA8C9] transition-colors group flex flex-col gap-1"><span class="font-label-mono text-[9px] text-[#7FA8C9] font-bold uppercase tracking-widest group-hover:text-white">30M DEEP FOCUS</span><span class="font-body-md text-[11px] text-[#9BA7BA] leading-tight">Semiconductors &amp; Infra</span></button><button class="open-modal-btn p-2.5 bg-surface-card hairline-all rounded text-left hover:border-[#7FA8C9] transition-colors group flex flex-col gap-1"><span class="font-label-mono text-[9px] text-[#7FA8C9] font-bold uppercase tracking-widest group-hover:text-white">WEEKEND DIVE</span><span class="font-body-md text-[11px] text-[#9BA7BA] leading-tight">Longform philosophy</span></button></div></div>
+<!-- Immediate Reading Section -->
+<div class="flex flex-col gap-4 mt-2">
+<div class="flex justify-between items-center hairline-b pb-2">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-accent-blue"></div>
+<span class="font-label-mono text-[10px] text-on-surface-muted uppercase tracking-widest">IMMEDIATE READING</span>
+</div>
+<span class="font-label-mono text-[10px] text-faint uppercase tracking-widest">UNSORTED SAVES · 12</span>
+</div>
+<!-- Quick Queue Card -->
+<div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all relative overflow-hidden group"><div class="absolute inset-0 bg-gradient-to-br from-accent-blue/[0.03] to-transparent pointer-events-none"></div><div class="flex justify-between items-start relative z-10"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded bg-surface-raised flex items-center justify-center border border-border-subtle"><span class="material-symbols-outlined text-light-silver text-[18px]">bolt</span></div><div class="flex flex-col"><div class="flex items-center gap-2"><h2 class="font-title-sm text-[17px] text-light-silver font-semibold">Quick Queue</h2><span class="bg-accent-blue text-text-obsidian font-label-mono text-[9px] font-bold px-1.5 py-0.5 rounded-sm">2 ESSAYS</span></div><span class="font-label-mono text-[9px] text-[#9BA7BA] mt-0.5">~4,200 WORDS</span></div></div><div class="flex flex-col items-end"><span class="font-label-mono text-[10px] text-accent-blue font-semibold">15 MIN TOTAL</span><span class="font-label-mono text-[8px] text-faint uppercase">READY NOW</span></div></div><p class="font-body-md text-[13px] text-on-surface-muted leading-relaxed relative z-10">The Diff &amp; Not Boring, curated for immediate sequential reading</p><div class="relative z-10 flex flex-col gap-1.5"><div class="flex justify-between items-center text-[9px] font-label-mono text-faint"><span class="">QUEUE PROGRESS</span><span class="">0 / 2 FINISHED</span></div><div class="w-full h-1 bg-surface-raised rounded-full overflow-hidden hairline-all"><div class="w-0 h-full bg-[#7FA8C9]"></div></div></div><div class="flex flex-col gap-2.5 pt-1 relative z-10"><div class="flex items-center justify-between p-2 rounded bg-surface-raised border border-border-subtle"><div class="flex items-center gap-2.5"><div class="w-1.5 h-1.5 rounded-full bg-accent-blue"></div><div class="flex flex-col"><span class="font-body-md text-[13px] text-offwhite truncate max-w-[210px]">The Economics of AI Chips</span><span class="font-label-mono text-[8px] text-faint uppercase">SemiAnalysis · 2,400 words</span></div></div><span class="font-label-mono text-[9px] text-accent-blue font-bold">8 MIN</span></div><div class="flex items-center justify-between p-2 rounded bg-surface-raised border border-border-subtle"><div class="flex items-center gap-2.5"><div class="w-1.5 h-1.5 rounded-full bg-[#5E86A6]"></div><div class="flex flex-col"><span class="font-body-md text-[13px] text-offwhite truncate max-w-[210px]">Why Apple Might Win VR</span><span class="font-label-mono text-[8px] text-faint uppercase">Not Boring · 1,800 words</span></div></div><span class="font-label-mono text-[9px] text-accent-blue font-bold">7 MIN</span></div></div><button class="read-btn w-full mt-2 bg-transparent border border-accent-blue rounded-md py-3 font-label-mono text-[10px] text-accent-blue font-bold tracking-widest uppercase hover:bg-accent-blue hover:text-text-obsidian transition-colors relative z-10" data-duration="15" data-initialized="true">READ QUEUE (15 MIN) →</button></div>
+</div>
+<!-- Playlists Section -->
+<div class="flex flex-col gap-4 mt-6">
+<div class="flex justify-between items-center hairline-b pb-2">
+<span class="font-label-mono text-[10px] text-on-surface-muted uppercase tracking-widest">YOUR READING PLAYLISTS</span>
+<span class="font-label-mono text-[10px] text-faint uppercase tracking-widest">3 ACTIVE</span>
+</div>
+<div class="flex flex-col gap-3" id="playlists-container"><div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all"><div class="flex justify-between items-start"><div class="flex flex-col gap-1"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-accent-blue"></div><h3 class="font-title-sm text-[17px] text-light-silver font-semibold">Frontier Tech &amp; Energy</h3></div><p class="font-body-md text-[13px] text-on-surface-muted">Works in Progress · SemiAnalysis · Pirate Wires</p></div><div class="flex flex-col items-end gap-0.5"><span class="font-label-mono text-[10px] text-accent-blue font-semibold">48 MIN</span><span class="font-label-mono text-[9px] text-faint">4 ESSAYS · ~12K WDS</span></div></div><div class="flex flex-col gap-1"><div class="flex justify-between items-center text-[9px] font-label-mono text-faint"><span class="">PROGRESS</span><span class="">1 / 4 COMPLETED (25%)</span></div><div class="w-full h-1 bg-surface-raised rounded-full overflow-hidden hairline-all"><div class="w-1/4 h-full bg-[#7FA8C9]"></div></div></div><div class="flex gap-2 mt-0.5"><span class="bg-surface-raised border border-border-subtle text-on-surface-muted font-label-mono text-[8px] px-2 py-1 rounded-sm uppercase">Nuclear</span><span class="bg-surface-raised border border-border-subtle text-on-surface-muted font-label-mono text-[8px] px-2 py-1 rounded-sm uppercase">Semiconductors</span><span class="bg-surface-raised border border-border-subtle text-on-surface-muted font-label-mono text-[8px] px-2 py-1 rounded-sm uppercase">Policy</span></div><button class="read-btn w-full mt-2 bg-accent-blue rounded-md py-3 font-label-mono text-[10px] text-text-obsidian font-bold tracking-widest uppercase hover:opacity-90 transition-opacity" data-duration="48" data-initialized="true">BEGIN READING (48M) →</button></div><div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all opacity-85 hover:opacity-100 transition-opacity"><div class="flex justify-between items-start"><div class="flex flex-col gap-1"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-[#5E86A6]"></div><h3 class="font-title-sm text-[17px] text-light-silver font-semibold">Capital &amp; Market Physics</h3></div><p class="font-body-md text-[13px] text-on-surface-muted">Net Interest · Byrne Hobart · Stratechery</p></div><div class="flex flex-col items-end gap-0.5"><span class="font-label-mono text-[10px] text-on-surface-muted font-semibold">32 MIN</span><span class="font-label-mono text-[9px] text-faint">3 ESSAYS · ~8.4K WDS</span></div></div><div class="flex flex-col gap-1"><div class="flex justify-between items-center text-[9px] font-label-mono text-faint"><span class="">PROGRESS</span><span class="">0 / 3 COMPLETED (0%)</span></div><div class="w-full h-1 bg-surface-raised rounded-full overflow-hidden hairline-all"><div class="w-0 h-full bg-[#5E86A6]"></div></div></div><button class="read-btn w-full mt-2 bg-transparent border border-border-strong rounded-md py-3 font-label-mono text-[10px] text-on-surface-muted font-bold tracking-widest uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" data-duration="32" data-initialized="true">BEGIN READING (32M) →</button></div><div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all opacity-75 hover:opacity-100 transition-opacity"><div class="flex justify-between items-start"><div class="flex flex-col gap-1"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-on-surface-muted"></div><h3 class="font-title-sm text-[17px] text-light-silver font-semibold">Sunday Longform</h3></div><p class="font-body-md text-[13px] text-on-surface-muted">Wait But Why · Ribbonfarm</p></div><div class="flex flex-col items-end gap-0.5"><span class="font-label-mono text-[10px] text-on-surface-muted font-semibold">25 MIN</span><span class="font-label-mono text-[9px] text-faint">2 ESSAYS · ~6.5K WDS</span></div></div><div class="flex flex-col gap-1"><div class="flex justify-between items-center text-[9px] font-label-mono text-faint"><span class="">PROGRESS</span><span class="">0 / 2 COMPLETED (0%)</span></div><div class="w-full h-1 bg-surface-raised rounded-full overflow-hidden hairline-all"><div class="w-0 h-full bg-[#475263]"></div></div></div><button class="read-btn w-full mt-2 bg-transparent border border-border-strong rounded-md py-3 font-label-mono text-[10px] text-on-surface-muted font-bold tracking-widest uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" data-duration="25" data-initialized="true">BEGIN READING (25M) →</button></div></div>
+</div>
+<!-- Compose Card -->
+<div class="bg-transparent rounded-lg p-5 flex justify-between items-center border border-dashed border-border-strong mt-4 hover:border-accent-blue hover:bg-surface-card transition-all cursor-pointer group open-modal-btn">
+<div class="flex flex-col gap-1 pr-4">
+<span class="font-title-sm text-[15px] text-light-silver font-medium group-hover:text-accent-blue transition-colors">Compose New Editorial Stack</span>
+<span class="font-body-md text-[12px] text-on-surface-muted">Combine your queue, history &amp; discovery filters</span>
+</div>
+<span class="font-label-mono text-[10px] text-accent-blue font-bold tracking-widest uppercase whitespace-nowrap">COMPOSE →</span>
+</div>
+</div>
+<!-- History View -->
+<div class="view-transition flex-col gap-4 mt-2 view-visible" id="history-view">
+<div class="flex justify-between items-center hairline-b pb-2">
+<span class="font-label-mono text-[9px] text-[#475263] uppercase tracking-widest">READING HISTORY · LAST 7 DAYS</span>
+<span class="font-label-mono text-[9px] text-accent-blue uppercase tracking-widest">134 ESSAYS</span>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Row 1 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">The Liquidity Illusion in Tech Markets</h4>
+<span class="font-label-mono text-[9px] text-accent-blue whitespace-nowrap">92% DEPTH</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest">The Diff · 2H AGO</span>
+</div>
+<!-- Row 2 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">Why Algorithmic Feeds Need Human Playlists</h4>
+<span class="font-label-mono text-[9px] text-accent-blue whitespace-nowrap">88% DEPTH</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest">Not Boring · 5H AGO</span>
+</div>
+<!-- Row 3 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">The Cognitive Division of Labor in AI Labs</h4>
+<span class="font-label-mono text-[9px] text-accent-blue whitespace-nowrap">74% DEPTH</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest">Pirate Wires · YESTERDAY</span>
+</div>
+<!-- Row 4 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">Geothermal Base Loads and the Compute Crunch</h4>
+<span class="font-label-mono text-[9px] text-[#475263] whitespace-nowrap">41% DEPTH</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest">Works in Progress · YESTERDAY</span>
+</div>
+<!-- Row 5 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">Notes on Craft: Typography in Digital Prose</h4>
+<span class="font-label-mono text-[9px] text-accent-blue whitespace-nowrap">97% DEPTH</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest">Craig Mod · 2 DAYS AGO</span>
+</div>
+<!-- Row 6 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">Network States &amp; High-Agency Cities</h4>
+<span class="font-label-mono text-[9px] text-[#475263] whitespace-nowrap">23% DEPTH</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest">1729 · 3 DAYS AGO</span>
+</div>
+</div>
+<button class="w-full mt-2 bg-transparent border border-[#4B535D] rounded-md py-3 font-label-mono text-[10px] text-[#9BA7BA] font-bold tracking-widest uppercase hover:text-white transition-colors">VIEW FULL HISTORY →</button>
+</div>
+<!-- Vault View -->
+<div class="view-transition view-hidden flex-col gap-4 mt-2" id="vault-view">
+<div class="flex justify-between items-center hairline-b pb-2">
+<span class="font-label-mono text-[9px] text-[#475263] uppercase tracking-widest">PERMANENT VAULT · PINNED SAVES</span>
+<span class="font-label-mono text-[9px] text-accent-blue uppercase tracking-widest">23 SAVED</span>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Row 1 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-3">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-accent-blue text-[14px] mt-0.5">push_pin</span>
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">The Architecture of Tomorrow</h4>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest whitespace-nowrap">KEEP FOREVER</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest pl-5">Stratechery</span>
+</div>
+<button class="add-stack-btn w-full bg-transparent border border-transparent rounded-md py-2 font-label-mono text-[9px] text-accent-blue font-bold tracking-widest uppercase hover:bg-surface-raised transition-colors text-left pl-5">ADD TO STACK →</button>
+</div>
+<!-- Row 2 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-3">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-accent-blue text-[14px] mt-0.5">push_pin</span>
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">A Theory of Relativity in Media</h4>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest whitespace-nowrap">KEEP FOREVER</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest pl-5">Ribbonfarm</span>
+</div>
+<button class="add-stack-btn w-full bg-transparent border border-transparent rounded-md py-2 font-label-mono text-[9px] text-accent-blue font-bold tracking-widest uppercase hover:bg-surface-raised transition-colors text-left pl-5">ADD TO STACK →</button>
+</div>
+<!-- Row 3 -->
+<div class="bg-[#1B1F28] p-4 rounded-md hairline-all flex flex-col gap-3">
+<div class="flex flex-col gap-1">
+<div class="flex justify-between items-start gap-2">
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-accent-blue text-[14px] mt-0.5">push_pin</span>
+<h4 class="font-body-md text-[14px] text-[#E2E5EB] font-medium leading-tight">Post-AGI Economics</h4>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest whitespace-nowrap">KEEP FOREVER</span>
+</div>
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest pl-5">SemiAnalysis</span>
+</div>
+<button class="add-stack-btn w-full bg-transparent border border-transparent rounded-md py-2 font-label-mono text-[9px] text-accent-blue font-bold tracking-widest uppercase hover:bg-surface-raised transition-colors text-left pl-5">ADD TO STACK →</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Nav Bar (Shared Component - Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 bg-[#0C0E12]/92 backdrop-blur-md flex justify-around items-center h-20 px-gutter pb-safe pt-2 border-t border-[#1E232B]"><a class="flex flex-col items-center justify-center gap-1.5 flex-1" href="#"><span class="material-symbols-outlined text-[22px] text-[#9BA7BA]" data-icon="auto_stories">auto_stories</span><span class="font-label-mono text-[9px] uppercase tracking-widest text-[#9BA7BA]">FEED</span></a><a class="flex flex-col items-center justify-center gap-1 flex-1 relative" href="#"><span class="material-symbols-outlined text-[22px] text-[#7FA8C9]" data-icon="layers">layers</span><div class="flex flex-col items-center"><span class="font-label-mono text-[9px] uppercase tracking-widest text-[#F0F3F8] font-bold">STACKS</span><div class="w-1.5 h-1.5 bg-[#7FA8C9] rounded-full mt-0.5"></div></div></a><a class="flex flex-col items-center justify-center gap-1.5 flex-1" href="#"><span class="material-symbols-outlined text-[22px] text-[#9BA7BA]" data-icon="tune">tune</span><span class="font-label-mono text-[9px] uppercase tracking-widest text-[#9BA7BA]">TUNING</span></a></nav>
+<!-- Toast Container -->
+<div class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[60] bg-[#1B1F28] border border-accent-blue rounded-[4px] px-4 py-2.5 font-label-mono text-[9px] text-[#F0F3F8] uppercase tracking-[0.08em] pointer-events-none opacity-0 hidden transition-opacity duration-300 shadow-lg bottom-24 top-auto" id="toast">
+</div>
+<!-- Modal Sheet -->
+<div class="fixed inset-0 z-[100] hidden flex items-end" id="create-stack-modal">
+<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" id="modal-backdrop"></div>
+<div class="relative w-full h-[85vh] bg-[#0C0E12]/96 backdrop-blur-md border-t border-[#252A32] rounded-t-[8px] flex flex-col transform translate-y-full transition-transform duration-300" id="modal-content">
+<!-- Header -->
+<div class="px-5 pt-5 pb-4 border-b border-border-subtle flex flex-col gap-1">
+<div class="flex justify-between items-center">
+<span class="font-label-mono text-[8px] text-[#475263] uppercase tracking-widest">LIBRARY &amp; STACKS</span>
+<button class="font-label-mono text-[16px] text-[#9BA7BA] hover:text-white" id="close-modal-btn">×</button>
+</div>
+<h2 class="font-title-sm text-[15px] text-[#F0F3F8] font-semibold">Create Reading Stack</h2>
+</div>
+<!-- Content -->
+<div class="flex-1 overflow-y-auto px-5 py-6 flex flex-col gap-8">
+<!-- Stack Name -->
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<label class="font-label-mono text-[9px] text-[#475263] uppercase tracking-widest">STACK NAME</label>
+<span class="font-label-mono text-[9px] text-accent-blue uppercase tracking-widest">REQUIRED</span>
+</div>
+<input class="h-12 bg-transparent border border-[#4B535D] rounded-[4px] px-4 font-body-md text-[14px] text-white focus:outline-none focus:border-accent-blue transition-colors" id="stack-name-input" type="text" value="New Editorial Stack">
+</div>
+<!-- Select Essays -->
+<div class="flex flex-col gap-3">
+<label class="font-label-mono text-[9px] text-[#475263] uppercase tracking-widest">SELECT ESSAYS</label>
+<div class="flex flex-col gap-1" id="essays-list">
+<!-- Essay 1 -->
+<label class="flex items-center gap-3 p-3 rounded-md hover:bg-surface-raised cursor-pointer group border border-transparent">
+<div class="w-5 h-5 rounded-[4px] border border-[#4B535D] flex items-center justify-center checkbox-box">
+<span class="material-symbols-outlined text-[14px] text-[#0B0E13] opacity-0 check-icon">check</span>
+</div>
+<input class="hidden essay-cb" data-duration="8" data-title="The Liquidity Illusion in Tech Markets" type="checkbox">
+<div class="flex-1 flex justify-between items-center">
+<span class="font-body-md text-[14px] text-[#E2E5EB] group-hover:text-white">The Liquidity Illusion in Tech Markets</span>
+<span class="font-label-mono text-[9px] text-[#9BA7BA]">8 MIN</span>
+</div>
+</label>
+<!-- Essay 2 -->
+<label class="flex items-center gap-3 p-3 rounded-md hover:bg-surface-raised cursor-pointer group border border-transparent">
+<div class="w-5 h-5 rounded-[4px] border border-[#4B535D] flex items-center justify-center checkbox-box">
+<span class="material-symbols-outlined text-[14px] text-[#0B0E13] opacity-0 check-icon">check</span>
+</div>
+<input class="hidden essay-cb" data-duration="7" data-title="Why Algorithmic Feeds Need Human Playlists" type="checkbox">
+<div class="flex-1 flex justify-between items-center">
+<span class="font-body-md text-[14px] text-[#E2E5EB] group-hover:text-white">Why Algorithmic Feeds Need Human Playlists</span>
+<span class="font-label-mono text-[9px] text-[#9BA7BA]">7 MIN</span>
+</div>
+</label>
+<!-- Essay 3 -->
+<label class="flex items-center gap-3 p-3 rounded-md hover:bg-surface-raised cursor-pointer group border border-transparent">
+<div class="w-5 h-5 rounded-[4px] border border-[#4B535D] flex items-center justify-center checkbox-box">
+<span class="material-symbols-outlined text-[14px] text-[#0B0E13] opacity-0 check-icon">check</span>
+</div>
+<input class="hidden essay-cb" data-duration="16" data-title="Network States &amp; High-Agency Cities" type="checkbox">
+<div class="flex-1 flex justify-between items-center">
+<span class="font-body-md text-[14px] text-[#E2E5EB] group-hover:text-white">Network States &amp; High-Agency Cities</span>
+<span class="font-label-mono text-[9px] text-[#9BA7BA]">16 MIN</span>
+</div>
+</label>
+<!-- Essay 4 -->
+<label class="flex items-center gap-3 p-3 rounded-md hover:bg-surface-raised cursor-pointer group border border-transparent">
+<div class="w-5 h-5 rounded-[4px] border border-[#4B535D] flex items-center justify-center checkbox-box">
+<span class="material-symbols-outlined text-[14px] text-[#0B0E13] opacity-0 check-icon">check</span>
+</div>
+<input class="hidden essay-cb" data-duration="18" data-title="The Compounding Flywheel of Sovereign Infra" type="checkbox">
+<div class="flex-1 flex justify-between items-center">
+<span class="font-body-md text-[14px] text-[#E2E5EB] group-hover:text-white">The Compounding Flywheel of Sovereign Infra</span>
+<span class="font-label-mono text-[9px] text-[#9BA7BA]">18 MIN</span>
+</div>
+</label>
+</div>
+</div>
+</div>
+<!-- Footer Action -->
+<div class="px-5 py-4 border-t border-border-subtle bg-[#0C0E12] pb-safe flex flex-col gap-3">
+<div class="flex justify-center">
+<span class="font-label-mono text-[9px] text-[#9BA7BA] uppercase tracking-widest" id="live-tally">0 ESSAYS · 0 MIN</span>
+</div>
+<button class="w-full bg-[#F0F3F8] text-[#0B0E13] font-label-mono text-[13px] font-bold uppercase tracking-widest py-3.5 rounded-[4px] opacity-40 transition-opacity" disabled="" id="create-stack-action">CREATE STACK (0 ESSAYS · 0 MIN) →</button>
+</div>
+</div>
+</div>
+<script>
+    // Toast logic
+    const toast = document.getElementById('toast');
+    let toastTimeout;
+    function showToast(message) {
+        toast.textContent = message;
+        toast.classList.remove('hidden');
+        // trigger reflow
+        void toast.offsetWidth;
+        toast.classList.add('opacity-100');
+        toast.classList.remove('opacity-0');
+        
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toast.classList.remove('opacity-100');
+            toast.classList.add('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 300);
+        }, 2200);
+    }
+
+    // Read buttons logic
+    function setupReadButtons() {
+        document.querySelectorAll('.read-btn').forEach(btn => {
+            // Avoid attaching multiple times if new cards are added
+            if(btn.dataset.initialized) return;
+            btn.dataset.initialized = "true";
+            
+            btn.addEventListener('click', (e) => {
+                const originalText = btn.textContent;
+                const duration = btn.dataset.duration || "0";
+                btn.textContent = "LOADING QUEUE...";
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    showToast(`OPENING READER · ${duration} MIN`);
+                }, 500);
+            });
+        });
+    }
+    setupReadButtons();
+    
+    // Vault add buttons
+    document.querySelectorAll('.add-stack-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            showToast("ADDED TO STACK BUILDER");
+        });
+    });
+
+    // Segmented Filter Logic
+    const segmentBtns = document.querySelectorAll('.segment-btn');
+    const views = {
+        'stacks-view': document.getElementById('stacks-view'),
+        'history-view': document.getElementById('history-view'),
+        'vault-view': document.getElementById('vault-view')
+    };
+
+    segmentBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Reset all buttons
+            segmentBtns.forEach(b => {
+                b.classList.remove('bg-[#0C0E12]', 'text-[#F0F3F8]');
+                b.classList.add('bg-transparent', 'text-[#9BA7BA]');
+            });
+            // Set active button
+            btn.classList.add('bg-[#0C0E12]', 'text-[#F0F3F8]');
+            btn.classList.remove('bg-transparent', 'text-[#9BA7BA]');
+
+            // Hide all views
+            Object.values(views).forEach(view => {
+                view.classList.remove('view-visible');
+                view.classList.add('view-hidden');
+            });
+            
+            // Show target view
+            const targetId = btn.dataset.target;
+            views[targetId].classList.remove('view-hidden');
+            // small delay for transition
+            setTimeout(() => {
+                views[targetId].classList.add('view-visible');
+            }, 10);
+        });
+    });
+
+    // Modal logic
+    const modal = document.getElementById('create-stack-modal');
+    const modalContent = document.getElementById('modal-content');
+    const openBtns = document.querySelectorAll('.open-modal-btn');
+    const closeBtn = document.getElementById('close-modal-btn');
+    const backdrop = document.getElementById('modal-backdrop');
+    
+    function openModal() {
+        modal.classList.remove('hidden');
+        // small delay for transition
+        setTimeout(() => {
+            modalContent.classList.remove('translate-y-full');
+            modalContent.classList.add('translate-y-0');
+        }, 10);
+    }
+    
+    function closeModal() {
+        modalContent.classList.add('translate-y-full');
+        modalContent.classList.remove('translate-y-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            resetModal();
+        }, 300);
+    }
+
+    openBtns.forEach(btn => btn.addEventListener('click', openModal));
+    closeBtn.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', closeModal);
+
+    // Modal Checkbox Logic
+    const essayCbs = document.querySelectorAll('.essay-cb');
+    const liveTally = document.getElementById('live-tally');
+    const createBtn = document.getElementById('create-stack-action');
+    
+    let totalEssays = 0;
+    let totalMin = 0;
+
+    function updateTally() {
+        totalEssays = 0;
+        totalMin = 0;
+        essayCbs.forEach(cb => {
+            const box = cb.previousElementSibling;
+            const icon = box.querySelector('.check-icon');
+            if (cb.checked) {
+                totalEssays++;
+                totalMin += parseInt(cb.dataset.duration);
+                box.classList.replace('bg-transparent', 'bg-accent-blue');
+                box.classList.replace('border-[#4B535D]', 'border-accent-blue');
+                icon.classList.remove('opacity-0');
+            } else {
+                box.classList.replace('bg-accent-blue', 'bg-transparent');
+                box.classList.replace('border-accent-blue', 'border-[#4B535D]');
+                icon.classList.add('opacity-0');
+            }
+        });
+        
+        const tallyText = `${totalEssays} ESSAYS · ${totalMin} MIN`;
+        liveTally.textContent = tallyText;
+        createBtn.textContent = `CREATE STACK (${totalEssays} ESSAYS · ${totalMin} MIN) →`;
+        
+        if (totalEssays > 0) {
+            createBtn.disabled = false;
+            createBtn.classList.remove('opacity-40');
+        } else {
+            createBtn.disabled = true;
+            createBtn.classList.add('opacity-40');
+        }
+    }
+
+    essayCbs.forEach(cb => cb.addEventListener('change', updateTally));
+    updateTally(); // initial state
+
+    function resetModal() {
+        document.getElementById('stack-name-input').value = "New Editorial Stack";
+        essayCbs.forEach(cb => cb.checked = false);
+        updateTally();
+    }
+
+    // Create Stack Action
+    createBtn.addEventListener('click', () => {
+        if (totalEssays === 0) return;
+        
+        const originalText = createBtn.textContent;
+        createBtn.textContent = "COMPILING...";
+        
+        setTimeout(() => {
+            const stackName = document.getElementById('stack-name-input').value || "Unnamed Stack";
+            const currentTotalMin = totalMin;
+            const currentTotalEssays = totalEssays;
+            
+            closeModal();
+            
+            // Create new stack card
+            const container = document.getElementById('playlists-container');
+            const cardHtml = `
+                <div class="bg-surface-card rounded-lg p-5 flex flex-col gap-4 hairline-all animate-pulse-once border-accent-blue">
+                    <div class="flex justify-between items-start">
+                        <div class="flex flex-col gap-1">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-1.5 rounded-full bg-accent-blue animate-pulse"></div>
+                                <h3 class="font-title-sm text-[17px] text-light-silver font-semibold">${stackName}</h3>
+                            </div>
+                            <p class="font-body-md text-[13px] text-on-surface-muted">Custom Compilation</p>
+                        </div>
+                        <div class="flex flex-col items-end gap-1">
+                            <span class="font-label-mono text-[10px] text-accent-blue font-semibold">${currentTotalMin} MIN</span>
+                            <span class="font-label-mono text-[9px] text-faint">${currentTotalEssays} ESSAYS</span>
+                        </div>
+                    </div>
+                    <button class="read-btn w-full mt-2 bg-transparent border border-border-strong rounded-md py-3 font-label-mono text-[10px] text-on-surface-muted font-bold tracking-widest uppercase hover:border-accent-blue hover:text-accent-blue transition-colors" data-duration="${currentTotalMin}">BEGIN READING (${currentTotalMin}M) →</button>
+                </div>
+            `;
+            container.insertAdjacentHTML('afterbegin', cardHtml);
+            setupReadButtons();
+            
+            setTimeout(() => {
+                showToast(`STACK COMPILED · ${currentTotalEssays} ESSAYS · ${currentTotalMin} MIN`);
+            }, 300);
+            
+        }, 800);
+    });
+
+</script>
+
+
+</body></html>

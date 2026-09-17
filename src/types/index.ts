@@ -22,6 +22,10 @@ export interface UserProfile {
   lastReadDate: number; // ms timestamp
   averageWpm: number;
   dashboardMetricIds: string[]; // up to 3 metric card IDs selected by user
+  /** Fraction of the feed reserved for discovery/surprise essays (0.1 | 0.2 | 0.33). */
+  discoveryInjectionRate?: number;
+  /** Taste Tuning length slider: preferred essay length in minutes. */
+  lengthTargetMinutes?: number;
   includeArchivedArticles?: boolean; // Whether user opts-in to reading raw Substack URIs for old articles
   totalReadTimeMs?: number; // total active reading time in ms
   weightUpdatedAt?: number; // Watermark: timestamp of the last event processed by updateWeights
@@ -166,13 +170,28 @@ export interface ThemeColors {
   background: string;
   surface: string;
   surfaceSecondary: string;
+  /** Card container: #1B1F28 (Obsidian Steel Glacier surface-card). */
+  surfaceCard: string;
+  /** Raised container: #161A20 (surface-raised). */
+  surfaceRaised: string;
   text: string;
   textSecondary: string;
   textMuted: string;
+  /** Faintest text tier: #475263 (on-surface-faint). */
+  textFaint: string;
   primary: string;
   primaryLight: string;
   accent: string;
+  /** Darker steel for pips/pressed accents: #5E86A6. */
+  accentDeep: string;
+  /** Accent at 12% over background: rgba(127,168,201,0.12) — selected/active fills. */
+  accentSoft: string;
+  /** Silver primary-button foreground on `primary`: #0B0E13. */
+  onPrimary: string;
+  /** 1px hairline border: #252A32. */
   border: string;
+  /** Stronger border for ghost buttons/inputs: #4B535D. */
+  borderStrong: string;
   error: string;
   success: string;
   warning: string;
@@ -186,6 +205,22 @@ export interface ThemeColors {
   chipSelectedText: string;
   chipNotInterestedText: string;
   chipNeutralText: string;
+}
+
+/**
+ * Font family names as loaded in App.tsx (expo-font / @expo-google-fonts keys).
+ * Space Grotesk = display/headings/metrics · Manrope = body · JetBrains Mono =
+ * ALL metadata (uppercase, 0.08em tracking).
+ */
+export interface ThemeFonts {
+  display: string;      // Space Grotesk 500
+  headline: string;     // Space Grotesk 500
+  title: string;        // Space Grotesk 600
+  body: string;         // Manrope 400
+  bodyMedium: string;   // Manrope 500
+  bodySemiBold: string; // Manrope 600
+  mono: string;         // JetBrains Mono 500 (labels)
+  monoRegular: string;  // JetBrains Mono 400
 }
 
 // --- Navigation Param Lists ---
@@ -211,4 +246,16 @@ export type RootStackParamList = {
   Feedback: undefined;
   FeedRequest: undefined;
   Account: undefined;
+  /** Stack detail (dossier view) — pushed from the Stacks tab. */
+  StackDetail: { stackId: string };
+};
+
+// --- Main Tab Param List (FEED / STACKS / TUNING) ---
+// The three permanent rooms of the new UI (design/stitch-export/new-ui-B/).
+// They live INSIDE the root stack so pushed screens (Reader, Settings, …)
+// naturally cover the tab bar.
+export type MainTabParamList = {
+  Feed: undefined;
+  Stacks: undefined;
+  Tuning: undefined;
 };

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Saved - Tangent</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#dfe3e8",
+                        "tertiary": "#ffffff",
+                        "border-subtle": "#252A32",
+                        "on-tertiary-fixed": "#001e30",
+                        "on-error-container": "#ffdad6",
+                        "surface-raised": "#161A20",
+                        "primary": "#ffffff",
+                        "surface-container": "#201f20",
+                        "error-container": "#93000a",
+                        "surface-bright": "#3a3939",
+                        "primary-fixed-dim": "#c3c7cc",
+                        "on-error": "#690005",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-surface-variant": "#c5c6ca",
+                        "surface-card": "#1B1F28",
+                        "inverse-surface": "#e5e2e1",
+                        "surface-variant": "#353535",
+                        "surface-tint": "#c3c7cc",
+                        "outline-variant": "#44474a",
+                        "outline": "#8f9194",
+                        "secondary-fixed": "#cae6ff",
+                        "tertiary-container": "#cbe6ff",
+                        "accent-soft": "rgba(127, 168, 201, 0.12)",
+                        "on-primary-fixed-variant": "#43474b",
+                        "surface-container-low": "#1c1b1c",
+                        "inverse-primary": "#5b5f63",
+                        "on-secondary": "#00344f",
+                        "on-secondary-fixed-variant": "#1e4b67",
+                        "on-surface-faint": "#475263",
+                        "on-primary-fixed": "#181c20",
+                        "on-secondary-fixed": "#001e30",
+                        "on-surface-muted": "#9BA7BA",
+                        "on-primary": "#2d3135",
+                        "secondary": "#a2cbee",
+                        "error": "#FFB4AB",
+                        "tertiary-fixed": "#cbe6ff",
+                        "secondary-fixed-dim": "#a2cbee",
+                        "on-tertiary-fixed-variant": "#1f4a68",
+                        "on-tertiary-container": "#406887",
+                        "primary-container": "#dfe3e8",
+                        "on-background": "#e5e2e1",
+                        "on-tertiary": "#00344f",
+                        "tertiary-fixed-dim": "#a3cbee",
+                        "surface": "#131313",
+                        "background": "#0C0E12",
+                        "surface-dim": "#131313",
+                        "on-primary-container": "#616569",
+                        "surface-container-highest": "#353535",
+                        "secondary-container": "#214d6a",
+                        "surface-container-high": "#2a2a2a",
+                        "on-secondary-container": "#94bddf",
+                        "border-strong": "#4B535D",
+                        "on-surface": "#e5e2e1",
+                        "inverse-on-surface": "#313030"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-sm": "8px",
+                        "stack-md": "16px",
+                        "margin-page": "24px",
+                        "stack-lg": "32px",
+                        "gutter": "16px",
+                        "baseline": "4px"
+                    },
+                    "fontFamily": {
+                        "title-sm": ["Space Grotesk"],
+                        "label-mono": ["JetBrains Mono"],
+                        "headline-md": ["Space Grotesk"],
+                        "display-lg": ["Space Grotesk"],
+                        "metric-lg": ["Space Grotesk"],
+                        "body-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "title-sm": ["17px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "label-mono": ["10px", { "lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "500" }],
+                        "headline-md": ["22px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "display-lg": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+                        "metric-lg": ["24px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "22px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface antialiased min-h-screen pb-12 flex flex-col items-center">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background text-primary dark:text-primary font-headline-md text-headline-md fixed top-0 w-full z-50 border-b border-border-subtle flex items-center h-16 px-margin-page w-full max-w-4xl">
+<button aria-label="Go back" class="text-primary hover:opacity-80 transition-opacity active:scale-95 transition-transform p-2 -ml-2">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-title-sm text-title-sm text-primary uppercase tracking-widest flex-1 text-center pr-8">Saved</h1>
+</header>
+<!-- Main Content Canvas -->
+<main class="w-full max-w-4xl px-margin-page pt-24 pb-12 flex-1">
+<!-- Article List -->
+<div class="flex flex-col">
+<!-- Row 1 -->
+<a class="group py-stack-md border-b border-border-subtle flex items-start justify-between gap-gutter hover:bg-surface-raised transition-colors -mx-margin-page px-margin-page" href="#">
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted uppercase">The Diff</span>
+<h2 class="font-title-sm text-title-sm text-primary group-hover:text-secondary transition-colors">Stablecoin Rails and the Dollar Standard</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted">11m</span>
+</div>
+</a>
+<!-- Row 2 -->
+<a class="group py-stack-md border-b border-border-subtle flex items-start justify-between gap-gutter hover:bg-surface-raised transition-colors -mx-margin-page px-margin-page" href="#">
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted uppercase">Works in Progress</span>
+<h2 class="font-title-sm text-title-sm text-primary group-hover:text-secondary transition-colors">Geothermal Base Loads and the Compute Crunch</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted">18m</span>
+</div>
+</a>
+<!-- Row 3 -->
+<a class="group py-stack-md border-b border-border-subtle flex items-start justify-between gap-gutter hover:bg-surface-raised transition-colors -mx-margin-page px-margin-page" href="#">
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted uppercase">Astral Codex Ten</span>
+<h2 class="font-title-sm text-title-sm text-primary group-hover:text-secondary transition-colors">Conversations on Epistemic Hygiene</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted">22m</span>
+</div>
+</a>
+<!-- Row 4 -->
+<a class="group py-stack-md border-b border-border-subtle flex items-start justify-between gap-gutter hover:bg-surface-raised transition-colors -mx-margin-page px-margin-page" href="#">
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted uppercase">Not Boring</span>
+<h2 class="font-title-sm text-title-sm text-primary group-hover:text-secondary transition-colors">Why Algorithmic Feeds Need Human Playlists</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted">12m</span>
+</div>
+</a>
+<!-- Row 5 -->
+<a class="group py-stack-md border-b border-border-subtle flex items-start justify-between gap-gutter hover:bg-surface-raised transition-colors -mx-margin-page px-margin-page" href="#">
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted uppercase">Stratechery</span>
+<h2 class="font-title-sm text-title-sm text-primary group-hover:text-secondary transition-colors">The App Store's Quiet Reformation</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted">10m</span>
+</div>
+</a>
+<!-- Row 6 -->
+<a class="group py-stack-md border-b border-border-subtle flex items-start justify-between gap-gutter hover:bg-surface-raised transition-colors -mx-margin-page px-margin-page" href="#">
+<div class="flex flex-col gap-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted uppercase">Craig Mod</span>
+<h2 class="font-title-sm text-title-sm text-primary group-hover:text-secondary transition-colors">Notes on Craft: Typography in Digital Prose</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-label-mono text-label-mono text-on-surface-muted">9m</span>
+</div>
+</a>
+</div>
+</main>
+<!-- BottomNavBar intentionally suppressed as per logical filtering (Destination Rule / Sub-page) -->
+</body></html>

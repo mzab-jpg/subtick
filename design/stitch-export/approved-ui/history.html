@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reading History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed-dim": "#a2cbee",
+                        "primary-fixed": "#dfe3e8",
+                        "surface-variant": "#353535",
+                        "surface-card": "#1B1F28",
+                        "outline": "#8f9194",
+                        "inverse-on-surface": "#313030",
+                        "tertiary-fixed": "#cbe6ff",
+                        "surface-container": "#201f20",
+                        "surface-bright": "#3a3939",
+                        "on-background": "#e5e2e1",
+                        "surface-container-high": "#2a2a2a",
+                        "outline-variant": "#44474a",
+                        "primary-fixed-dim": "#c3c7cc",
+                        "on-surface-muted": "#9BA7BA",
+                        "on-secondary-fixed": "#001e30",
+                        "surface": "#131313",
+                        "on-primary": "#2d3135",
+                        "inverse-primary": "#5b5f63",
+                        "inverse-surface": "#e5e2e1",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-highest": "#353535",
+                        "on-primary-fixed-variant": "#43474b",
+                        "surface-container-low": "#1c1b1c",
+                        "surface-container-lowest": "#0e0e0e",
+                        "secondary-container": "#214d6a",
+                        "on-primary-fixed": "#181c20",
+                        "on-secondary": "#00344f",
+                        "secondary": "#a2cbee",
+                        "on-surface-faint": "#475263",
+                        "on-secondary-fixed-variant": "#1e4b67",
+                        "border-strong": "#4B535D",
+                        "tertiary-fixed-dim": "#a3cbee",
+                        "accent-soft": "rgba(127, 168, 201, 0.12)",
+                        "on-surface-variant": "#c5c6ca",
+                        "surface-tint": "#c3c7cc",
+                        "error-container": "#93000a",
+                        "error": "#FFB4AB",
+                        "surface-dim": "#131313",
+                        "secondary-fixed": "#cae6ff",
+                        "border-subtle": "#252A32",
+                        "primary": "#ffffff",
+                        "on-surface": "#e5e2e1",
+                        "on-tertiary": "#00344f",
+                        "on-secondary-container": "#94bddf",
+                        "on-primary-container": "#616569",
+                        "on-tertiary-fixed-variant": "#1f4a68",
+                        "on-tertiary-fixed": "#001e30",
+                        "tertiary": "#ffffff",
+                        "on-error": "#690005",
+                        "primary-container": "#dfe3e8",
+                        "on-tertiary-container": "#406887",
+                        "surface-raised": "#161A20",
+                        "tertiary-container": "#cbe6ff",
+                        "background": "#0C0E12"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-md": "16px",
+                        "stack-sm": "8px",
+                        "margin-page": "24px",
+                        "gutter": "16px",
+                        "stack-lg": "32px",
+                        "baseline": "4px"
+                    },
+                    "fontFamily": {
+                        "title-sm": ["Space Grotesk"],
+                        "metric-lg": ["Space Grotesk"],
+                        "display-lg": ["Space Grotesk"],
+                        "headline-md": ["Space Grotesk"],
+                        "body-md": ["Manrope"],
+                        "label-mono": ["JetBrains Mono"]
+                    },
+                    "fontSize": {
+                        "title-sm": ["17px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "metric-lg": ["24px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "display-lg": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+                        "headline-md": ["22px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "22px", "fontWeight": "400" }],
+                        "label-mono": ["10px", { "lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "500" }]
+                    }
+                },
+            },
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .font-space-grotesk { font-family: 'Space Grotesk', sans-serif; }
+        .font-jetbrains-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Typography overrides based on prompt specifics */
+        .text-history-title {
+            font-size: 18px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .text-history-eyebrow {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .text-history-headline {
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 24px;
+            letter-spacing: -0.5px;
+        }
+        .text-history-meta {
+            font-size: 13px;
+            font-weight: 500;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-primary antialiased min-h-screen pb-12">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background border-b border-border-subtle flex items-center px-margin-page h-16 w-full z-50 fixed top-0 w-full flat no shadows">
+<button aria-label="Go back" class="text-primary dark:text-primary hover:opacity-80 transition-opacity active:scale-95 transition-transform p-2 -ml-2">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<div class="flex-1 flex justify-center text-center">
+<h1 class="font-space-grotesk text-history-title text-[#F0F3F8]">HISTORY</h1>
+</div>
+<div class="w-10"></div> <!-- Spacer for centering -->
+</header>
+<!-- Content -->
+<main class="pt-16 max-w-2xl mx-auto w-full">
+<!-- List Container -->
+<div class="flex flex-col">
+<!-- Article Row 1 -->
+<article class="flex justify-between items-start border-b border-border-subtle py-[24px] px-[24px]">
+<div class="flex-1 pr-6">
+<div class="font-jetbrains-mono text-history-eyebrow text-on-surface-muted mb-[8px]">The Diff</div>
+<h2 class="font-space-grotesk text-history-headline text-[#F0F3F8] line-clamp-2">The Liquidity Illusion in Tech Markets</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-jetbrains-mono text-history-meta text-on-surface-muted">8m</span>
+</div>
+</article>
+<!-- Article Row 2 -->
+<article class="flex justify-between items-start border-b border-border-subtle py-[24px] px-[24px]">
+<div class="flex-1 pr-6">
+<div class="font-jetbrains-mono text-history-eyebrow text-on-surface-muted mb-[8px]">Not Boring</div>
+<h2 class="font-space-grotesk text-history-headline text-[#F0F3F8] line-clamp-2">Why Algorithmic Feeds Need Human Playlists</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-jetbrains-mono text-history-meta text-on-surface-muted">12m</span>
+</div>
+</article>
+<!-- Article Row 3 -->
+<article class="flex justify-between items-start border-b border-border-subtle py-[24px] px-[24px]">
+<div class="flex-1 pr-6">
+<div class="font-jetbrains-mono text-history-eyebrow text-on-surface-muted mb-[8px]">Pirate Wires</div>
+<h2 class="font-space-grotesk text-history-headline text-[#F0F3F8] line-clamp-2">The Cognitive Division of Labor in AI Labs</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-jetbrains-mono text-history-meta text-on-surface-muted">14m</span>
+</div>
+</article>
+<!-- Article Row 4 -->
+<article class="flex justify-between items-start border-b border-border-subtle py-[24px] px-[24px]">
+<div class="flex-1 pr-6">
+<div class="font-jetbrains-mono text-history-eyebrow text-on-surface-muted mb-[8px]">Works in Progress</div>
+<h2 class="font-space-grotesk text-history-headline text-[#F0F3F8] line-clamp-2">Geothermal Base Loads and the Compute Crunch</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-jetbrains-mono text-history-meta text-on-surface-muted">18m</span>
+</div>
+</article>
+<!-- Article Row 5 -->
+<article class="flex justify-between items-start border-b border-border-subtle py-[24px] px-[24px]">
+<div class="flex-1 pr-6">
+<div class="font-jetbrains-mono text-history-eyebrow text-on-surface-muted mb-[8px]">Craig Mod</div>
+<h2 class="font-space-grotesk text-history-headline text-[#F0F3F8] line-clamp-2">Notes on Craft: Typography in Digital Prose</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-jetbrains-mono text-history-meta text-on-surface-muted">9m</span>
+</div>
+</article>
+<!-- Article Row 6 -->
+<article class="flex justify-between items-start border-b border-border-subtle py-[24px] px-[24px]">
+<div class="flex-1 pr-6">
+<div class="font-jetbrains-mono text-history-eyebrow text-on-surface-muted mb-[8px]">1729</div>
+<h2 class="font-space-grotesk text-history-headline text-[#F0F3F8] line-clamp-2">Network States &amp; High-Agency Cities</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-jetbrains-mono text-history-meta text-on-surface-muted">16m</span>
+</div>
+</article>
+<!-- Article Row 7 -->
+<article class="flex justify-between items-start border-b border-border-subtle py-[24px] px-[24px]">
+<div class="flex-1 pr-6">
+<div class="font-jetbrains-mono text-history-eyebrow text-on-surface-muted mb-[8px]">The Diff</div>
+<h2 class="font-space-grotesk text-history-headline text-[#F0F3F8] line-clamp-2">Stablecoin Rails and the Dollar Standard</h2>
+</div>
+<div class="flex-shrink-0 pt-1">
+<span class="font-jetbrains-mono text-history-meta text-on-surface-muted">11m</span>
+</div>
+</article>
+</div>
+</main>
+</body></html>

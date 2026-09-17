@@ -20,6 +20,53 @@ import { getStartupSnapshot } from './src/services/startupCache';
 import { subscribeToAccountTransition } from './src/services/accountTransition';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { GOOGLE_WEB_CLIENT_ID } from './src/config/googleConfig';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
+import {
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+} from '@expo-google-fonts/space-grotesk';
+import {
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+} from '@expo-google-fonts/manrope';
+import {
+  JetBrainsMono_400Regular,
+  JetBrainsMono_500Medium,
+} from '@expo-google-fonts/jetbrains-mono';
+
+// Keep the native splash visible while fonts load so the first themed frame
+// (which references the font family names below) renders complete, never with
+// a fallback system face that then swaps.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/**
+ * Loads the Obsidian Steel Glacier type system before any themed UI mounts:
+ * Space Grotesk (display/headings/metrics) · Manrope (body) · JetBrains Mono
+ * (ALL metadata — uppercase, 0.08em tracking). Family names must match the
+ * keys in ThemeContext's `fonts` exactly.
+ */
+function FontGate({ children }: { children: React.ReactNode }) {
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_500Medium,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync().catch(() => { });
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null; // native splash is still covering the screen
+  return <>{children}</>;
+}
 
 function AppContent() {
   const { colors } = useTheme();
@@ -244,11 +291,13 @@ function AppContent() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <UserProvider>
-          <AppContent />
-        </UserProvider>
-      </ThemeProvider>
+      <FontGate>
+        <ThemeProvider>
+          <UserProvider>
+            <AppContent />
+          </UserProvider>
+        </ThemeProvider>
+      </FontGate>
     </GestureHandlerRootView>
   );
 }

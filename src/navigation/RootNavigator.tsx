@@ -10,7 +10,7 @@ import { RootStackParamList } from '../types';
 
 // Screens
 import OnboardingScreen from '../screens/OnboardingScreen';
-import DashboardScreen from '../screens/DashboardScreen';
+import MainTabs from './MainTabs';
 import ReaderScreen from '../screens/ReaderScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import HistoryScreen from '../screens/HistoryScreen';
@@ -21,6 +21,7 @@ import DeveloperOptionsScreen from '../screens/DeveloperOptionsScreen';
 import FeedbackScreen from '../screens/FeedbackScreen';
 import FeedRequestScreen from '../screens/FeedRequestScreen';
 import AccountScreen from '../screens/AccountScreen';
+import StackDetailScreen from '../screens/StackDetailScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -58,7 +59,7 @@ export default function RootNavigator({ initialRoute }: RootNavigatorProps) {
       >
         <Stack.Screen
           name="Dashboard"
-          component={DashboardScreen}
+          component={MainTabs}
           options={{ gestureEnabled: false, headerLeft: () => null }}
         />
         <Stack.Screen
@@ -133,6 +134,11 @@ export default function RootNavigator({ initialRoute }: RootNavigatorProps) {
         <Stack.Screen
           name="Account"
           component={AccountScreen}
+          options={{ gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="StackDetail"
+          component={StackDetailScreen}
           options={{ gestureEnabled: true }}
         />
       </Stack.Navigator>

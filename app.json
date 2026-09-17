@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true
     },
@@ -44,15 +44,16 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F8F7F4",
+          "backgroundColor": "#0C0E12",
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
           "dark": {
-            "backgroundColor": "#121212",
+            "backgroundColor": "#0C0E12",
             "image": "./assets/splash-icon.png"
           }
         }
-      ]
+      ],
+      "expo-font"
     ],
     "owner": "tangent_mb123"
   }

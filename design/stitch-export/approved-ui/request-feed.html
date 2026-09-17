@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Request a Feed</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&amp;family=Manrope:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#43474b",
+                        "border-subtle": "#252A32",
+                        "border-strong": "#4B535D",
+                        "surface-variant": "#353535",
+                        "outline": "#8f9194",
+                        "accent-soft": "rgba(127, 168, 201, 0.12)",
+                        "on-tertiary": "#00344f",
+                        "error": "#FFB4AB",
+                        "secondary": "#a2cbee",
+                        "on-secondary": "#00344f",
+                        "inverse-primary": "#5b5f63",
+                        "surface-dim": "#131313",
+                        "secondary-container": "#214d6a",
+                        "background": "#0C0E12",
+                        "on-secondary-fixed-variant": "#1e4b67",
+                        "surface-container-highest": "#353535",
+                        "tertiary-fixed-dim": "#a3cbee",
+                        "primary-fixed": "#dfe3e8",
+                        "on-surface-variant": "#c5c6ca",
+                        "primary-container": "#dfe3e8",
+                        "surface": "#131313",
+                        "inverse-surface": "#e5e2e1",
+                        "on-tertiary-fixed": "#001e30",
+                        "inverse-on-surface": "#313030",
+                        "on-surface-faint": "#475263",
+                        "on-surface": "#e5e2e1",
+                        "primary-fixed-dim": "#c3c7cc",
+                        "surface-tint": "#c3c7cc",
+                        "on-tertiary-container": "#406887",
+                        "on-secondary-container": "#94bddf",
+                        "tertiary": "#ffffff",
+                        "on-background": "#e5e2e1",
+                        "surface-container-high": "#2a2a2a",
+                        "on-surface-muted": "#9BA7BA",
+                        "on-primary": "#2d3135",
+                        "surface-container": "#201f20",
+                        "surface-raised": "#161A20",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-primary-container": "#616569",
+                        "secondary-fixed-dim": "#a2cbee",
+                        "on-secondary-fixed": "#001e30",
+                        "surface-container-low": "#1c1b1c",
+                        "secondary-fixed": "#cae6ff",
+                        "primary": "#ffffff",
+                        "on-primary-fixed": "#181c20",
+                        "surface-card": "#1B1F28",
+                        "error-container": "#93000a",
+                        "surface-bright": "#3a3939",
+                        "outline-variant": "#44474a",
+                        "on-tertiary-fixed-variant": "#1f4a68",
+                        "tertiary-container": "#cbe6ff",
+                        "on-error": "#690005",
+                        "tertiary-fixed": "#cbe6ff",
+                        "accent-blue": "#7FA8C9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem",
+                        "input": "10px"
+                    },
+                    "spacing": {
+                        "stack-lg": "32px",
+                        "gutter": "16px",
+                        "stack-md": "16px",
+                        "margin-page": "24px",
+                        "baseline": "4px",
+                        "stack-sm": "8px",
+                        "margin-subtitle": "28px"
+                    },
+                    "fontFamily": {
+                        "title-sm": [
+                            "Space Grotesk"
+                        ],
+                        "display-lg": [
+                            "Space Grotesk"
+                        ],
+                        "headline-md": [
+                            "Space Grotesk"
+                        ],
+                        "metric-lg": [
+                            "Space Grotesk"
+                        ],
+                        "body-md": [
+                            "Manrope"
+                        ],
+                        "label-mono": [
+                            "JetBrains Mono"
+                        ]
+                    },
+                    "fontSize": {
+                        "title-sm": [
+                            "17px",
+                            {
+                                "lineHeight": "24px",
+                                "fontWeight": "600"
+                            }
+                        ],
+                        "display-lg": [
+                            "30px",
+                            {
+                                "lineHeight": "36px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "500"
+                            }
+                        ],
+                        "headline-md": [
+                            "22px",
+                            {
+                                "lineHeight": "28px",
+                                "fontWeight": "500"
+                            }
+                        ],
+                        "metric-lg": [
+                            "24px",
+                            {
+                                "lineHeight": "28px",
+                                "fontWeight": "500"
+                            }
+                        ],
+                        "body-md": [
+                            "14px",
+                            {
+                                "lineHeight": "22px",
+                                "fontWeight": "400"
+                            }
+                        ],
+                        "label-mono": [
+                            "10px",
+                            {
+                                "lineHeight": "12px",
+                                "letterSpacing": "0.08em",
+                                "fontWeight": "500"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .custom-title {
+            font-size: 18px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .custom-label {
+            font-size: 13px;
+        }
+        .custom-input {
+            height: 56px;
+        }
+        .custom-textarea {
+            min-height: 120px;
+        }
+        .custom-button-label {
+            font-size: 12px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-primary antialiased min-h-screen flex flex-col font-body-md">
+<!-- TopAppBar -->
+<header class="bg-background border-b border-border-subtle docked full-width top-0 flex items-center justify-between px-margin-page h-16 w-full z-50">
+<button aria-label="Close" class="text-on-surface-muted hover:opacity-80 transition-opacity active:scale-95 transition-transform flex items-center justify-center p-2 -ml-2">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<h1 class="font-title-sm text-primary font-bold custom-title">Request a Feed</h1>
+<div class="w-8"></div> <!-- Spacer for centering -->
+</header>
+<main class="flex-1 flex flex-col pt-stack-lg pb-margin-page">
+<!-- Subtitle -->
+<p class="text-on-surface-muted px-margin-subtitle mb-stack-lg">
+            Submit a Substack publication you'd like us to add to the feed directory.
+        </p>
+<!-- Form -->
+<form action="#" class="flex-1 flex flex-col px-margin-page" method="POST">
+<!-- Field 1: Publication URL -->
+<div class="flex flex-col mb-stack-lg">
+<label class="font-semibold text-primary custom-label mb-stack-sm" for="publication-url">Publication URL</label>
+<input class="bg-surface border border-border-subtle rounded-input px-gutter py-3 text-[16px] text-primary placeholder-on-surface-faint focus:border-accent-blue focus:ring-0 custom-input transition-colors" id="publication-url" name="publication-url" placeholder="https://example.substack.com/feed" required="" type="url"/>
+</div>
+<!-- Field 2: Why recommend -->
+<div class="flex flex-col mb-stack-lg">
+<label class="font-semibold text-primary custom-label mb-stack-sm" for="recommendation-reason">Why do you recommend this?</label>
+<textarea class="bg-surface border border-border-subtle rounded-input px-gutter py-4 text-[16px] text-primary placeholder-on-surface-faint focus:border-accent-blue focus:ring-0 custom-textarea transition-colors resize-none" id="recommendation-reason" name="recommendation-reason" placeholder="Optional — tell us why this publication would be a great addition."></textarea>
+</div>
+<div class="mt-auto pt-stack-lg">
+<!-- Submit Button -->
+<button class="w-full h-[52px] bg-transparent border border-accent-blue rounded flex items-center justify-center gap-2 hover:bg-accent-soft transition-colors active:scale-[0.98]" type="submit">
+<span class="material-symbols-outlined text-accent-blue text-[16px]" data-icon="rss_feed">rss_feed</span>
+<span class="font-label-mono font-bold custom-button-label text-accent-blue uppercase tracking-wider mt-[2px]">Submit Request</span>
+</button>
+</div>
+</form>
+</main>
+</body></html>

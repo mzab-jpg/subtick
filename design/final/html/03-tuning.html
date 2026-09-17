@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tuning Stats v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-fixed-dim": "#a2cbee",
+            "on-primary-container": "#616569",
+            "surface-variant": "#353535",
+            "surface-container-highest": "#353535",
+            "background": "#0C0E12",
+            "on-secondary": "#00344f",
+            "secondary-container": "#214d6a",
+            "on-primary-fixed-variant": "#43474b",
+            "surface-container-lowest": "#0e0e0e",
+            "on-surface": "#e5e2e1",
+            "outline-variant": "#44474a",
+            "tertiary-fixed-dim": "#a3cbee",
+            "on-surface-muted": "#9BA7BA",
+            "tertiary-fixed": "#cbe6ff",
+            "on-tertiary-fixed": "#001e30",
+            "primary-container": "#dfe3e8",
+            "on-secondary-container": "#94bddf",
+            "on-error": "#690005",
+            "on-tertiary-fixed-variant": "#1f4a68",
+            "surface-card": "#1B1F28",
+            "surface-bright": "#3a3939",
+            "surface": "#131313",
+            "on-primary": "#2d3135",
+            "surface-raised": "#161A20",
+            "on-surface-variant": "#c5c6ca",
+            "on-tertiary-container": "#406887",
+            "on-primary-fixed": "#181c20",
+            "border-subtle": "#252A32",
+            "accent-soft": "rgba(127, 168, 201, 0.12)",
+            "inverse-primary": "#5b5f63",
+            "primary": "#ffffff",
+            "secondary": "#a2cbee",
+            "on-tertiary": "#00344f",
+            "on-secondary-fixed": "#001e30",
+            "primary-fixed": "#dfe3e8",
+            "primary-fixed-dim": "#c3c7cc",
+            "tertiary": "#ffffff",
+            "secondary-fixed": "#cae6ff",
+            "tertiary-container": "#cbe6ff",
+            "surface-dim": "#131313",
+            "error": "#FFB4AB",
+            "error-container": "#93000a",
+            "surface-container-low": "#1c1b1c",
+            "on-error-container": "#ffdad6",
+            "border-strong": "#4B535D",
+            "on-secondary-fixed-variant": "#1e4b67",
+            "on-surface-faint": "#475263",
+            "surface-container-high": "#2a2a2a",
+            "inverse-surface": "#e5e2e1",
+            "on-background": "#e5e2e1",
+            "surface-tint": "#c3c7cc",
+            "inverse-on-surface": "#313030",
+            "surface-container": "#201f20",
+            "outline": "#8f9194"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "stack-sm": "8px",
+            "stack-md": "16px",
+            "stack-lg": "32px",
+            "baseline": "4px",
+            "margin-page": "24px",
+            "gutter": "16px"
+          },
+          "fontFamily": {
+            "body-md": ["Manrope"],
+            "headline-md": ["Space Grotesk"],
+            "display-lg": ["Space Grotesk"],
+            "title-sm": ["Space Grotesk"],
+            "metric-lg": ["Space Grotesk"],
+            "label-mono": ["JetBrains Mono"]
+          },
+          "fontSize": {
+            "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+            "headline-md": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+            "display-lg": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+            "title-sm": ["17px", {"lineHeight": "24px", "fontWeight": "600"}],
+            "metric-lg": ["24px", {"lineHeight": "28px", "fontWeight": "500"}],
+            "label-mono": ["10px", {"lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "500"}]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen pb-24 selection:bg-secondary-fixed-dim selection:text-on-secondary">
+<!-- TopAppBar JSON Component -->
+<header class="fixed top-0 w-full z-50 bg-background/90 dark:bg-background/90 backdrop-blur-md border-b border-border-subtle flex justify-between items-center px-margin-page h-16 transition-all duration-200">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-border-subtle bg-surface-card flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px] text-on-surface-muted" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<div class="font-display-lg text-display-lg text-primary tracking-tighter cursor-pointer hover:opacity-80 transition-opacity active:scale-95 duration-200">
+      Tangent
+    </div>
+<button class="w-8 h-8 flex items-center justify-center text-primary dark:text-primary hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</header>
+<main class="pt-24 px-margin-page flex flex-col gap-stack-lg max-w-md mx-auto">
+<!-- Page Header -->
+<section class="flex justify-between items-end">
+<h1 class="font-display-lg text-[26px] font-medium text-[#F0F3F8] leading-none">Tuning</h1>
+<div class="flex items-center gap-2 mb-1">
+<div class="w-1.5 h-1.5 rounded-full bg-[#7FA8C9] animate-pulse"></div>
+<span class="font-label-mono text-[9px] uppercase text-[#7FA8C9] tracking-wider">Engine Active</span>
+</div>
+</section>
+<!-- Segmented Control -->
+<section class="p-1 rounded-[6px] border border-border-subtle bg-surface-card flex w-full">
+<button class="flex-1 py-2 text-center font-label-mono text-[10px] uppercase text-on-surface-muted hover:text-on-surface transition-colors rounded-[4px]">Taste Tuning</button>
+<button class="flex-1 py-2 text-center font-label-mono text-[10px] uppercase font-bold text-[#F0F3F8] bg-background rounded-[4px] border border-border-subtle shadow-sm">Stats &amp; Insights</button>
+</section>
+<!-- Reading Velocity -->
+<section class="flex flex-col gap-stack-md">
+<div class="flex justify-between items-center border-b border-border-subtle pb-2">
+<h2 class="font-label-mono text-[9px] uppercase text-on-surface-faint">Reading Velocity · Last 7 Days</h2>
+<span class="font-label-mono text-[9px] uppercase text-[#7FA8C9]">Pacer: High</span>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Deep Focus Time</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">4H 22M</div>
+<span class="font-label-mono text-[9px] text-[#7FA8C9] mt-2">+18% VS LAST WEEK</span>
+</div>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Essays Completed</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">14</div>
+<span class="font-label-mono text-[9px] text-on-surface-faint mt-2">72% COMPLETION RATE</span>
+</div>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Average Pace</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">245 WPM</div>
+<span class="font-label-mono text-[9px] text-on-surface-faint mt-2">FOCUSED CADENCE</span>
+</div>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Longest Deep Dive</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">38 M</div>
+<span class="font-label-mono text-[9px] text-on-surface-faint mt-2 truncate">THE DIFF · BYRNE HOBART</span>
+</div>
+</div>
+</section>
+<!-- Thematic Diet -->
+<section class="bg-surface-card rounded-xl border border-border-subtle p-5 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="font-title-sm text-[15px] text-[#F0F3F8]">Thematic Diet</h3>
+<span class="font-label-mono text-[9px] text-on-surface-muted">5 CATEGORIES</span>
+</div>
+<div class="w-full h-2 rounded-full overflow-hidden flex">
+<div class="h-full bg-[#7FA8C9]" style="width: 38%"></div>
+<div class="h-full bg-[#5E86A6]" style="width: 24%"></div>
+<div class="h-full bg-[#9BA7BA]" style="width: 16%"></div>
+<div class="h-full bg-[#4B535D]" style="width: 12%"></div>
+<div class="h-full bg-[#2A313B]" style="width: 10%"></div>
+</div>
+<div class="flex flex-col gap-3 mt-2">
+<div class="flex items-center justify-between font-label-mono text-[10px]">
+<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#7FA8C9]"></div><span class="text-on-surface">AI &amp; Systems</span></div>
+<div class="flex gap-4 text-on-surface-muted"><span>1H 40M</span><span class="w-6 text-right">38%</span></div>
+</div>
+<div class="flex items-center justify-between font-label-mono text-[10px]">
+<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#5E86A6]"></div><span class="text-on-surface">Macroeconomics &amp; Finance</span></div>
+<div class="flex gap-4 text-on-surface-muted"><span>1H 05M</span><span class="w-6 text-right">24%</span></div>
+</div>
+</div>
+</section>
+<!-- Insight Card -->
+<section class="bg-[#1B1F28] rounded-xl border border-[#7FA8C9] p-5 relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-[#7FA8C9] opacity-5 blur-[40px] rounded-full"></div>
+<h3 class="font-label-mono text-[10px] font-bold text-[#7FA8C9] uppercase mb-3">Intent vs. Reality Gap</h3>
+<p class="font-body-md text-[13px] text-[#E2E5EB] leading-relaxed">
+        You boosted Philosophy &amp; Epistemology, but 62% of reading time centered on AI &amp; Macroeconomics. 
+        <br/><span class="text-[#7FA8C9] mt-2 block">Consider pinning philosophy longforms to your morning queue.</span>
+</p>
+</section><!-- Source Loyalty Section -->
+<section class="flex flex-col mt-stack-lg">
+<h2 class="font-label-mono text-[9px] uppercase text-on-surface-faint mb-4">Source Loyalty · TOP 3</h2>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col">
+<!-- Row 1 -->
+<div class="flex items-center justify-between py-3 border-b border-border-subtle">
+<div class="flex items-center gap-4">
+<span class="font-display-lg text-[16px] text-[#7FA8C9]">1</span>
+<div class="flex flex-col">
+<span class="font-title-sm text-[15px] text-[#F0F3F8]">The Diff</span>
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">5 ESSAYS READ</span>
+</div>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-muted">1H 45M</span>
+</div>
+<!-- Row 2 -->
+<div class="flex items-center justify-between py-3 border-b border-border-subtle">
+<div class="flex items-center gap-4">
+<span class="font-display-lg text-[16px] text-[#7FA8C9]">2</span>
+<div class="flex flex-col">
+<span class="font-title-sm text-[15px] text-[#F0F3F8]">Works in Progress</span>
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">2 ESSAYS READ</span>
+</div>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-muted">1H 10M</span>
+</div>
+<!-- Row 3 -->
+<div class="flex items-center justify-between py-3">
+<div class="flex items-center gap-4">
+<span class="font-display-lg text-[16px] text-[#7FA8C9]">3</span>
+<div class="flex flex-col">
+<span class="font-title-sm text-[15px] text-[#F0F3F8]">Not Boring</span>
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">3 ESSAYS READ</span>
+</div>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-muted">52M</span>
+</div>
+<!-- Footer Stats -->
+<div class="mt-4 pt-4 border-t border-border-subtle">
+<div class="font-label-mono text-[8px] uppercase text-on-surface-faint mb-2">SOURCE DIVERSITY · 12 PUBLICATIONS</div>
+<div class="w-full h-1.5 rounded-full overflow-hidden flex">
+<div class="h-full bg-[#7FA8C9]" style="width: 65%"></div>
+<div class="h-full bg-[#4B535D]" style="width: 35%"></div>
+</div>
+<div class="flex justify-between mt-2">
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">65% CORE SUBSCRIPTIONS</span>
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">35% DISCOVERY</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Stack & Queue Health Section -->
+<section class="bg-surface-card rounded-xl border border-border-subtle p-4 mt-stack-md">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-title-sm text-[15px] text-[#F0F3F8]">Stack &amp; Queue Health</h3>
+<span class="font-label-mono text-[9px] uppercase text-[#7FA8C9]">OPTIMAL</span>
+</div>
+<div class="grid grid-cols-2 gap-0">
+<div class="flex flex-col gap-1 pr-4 border-r border-border-subtle">
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">STACKS COMPLETED</span>
+<div class="font-display-lg text-[16px] text-[#F0F3F8]">3 OF 4</div>
+<span class="font-label-mono text-[8px] uppercase text-[#7FA8C9]">75% CLEARANCE</span>
+</div>
+<div class="flex flex-col gap-1 pl-4">
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">QUEUE CONVERSION</span>
+<div class="font-display-lg text-[16px] text-[#F0F3F8]">8 OF 11</div>
+<span class="font-label-mono text-[8px] uppercase text-[#7FA8C9]">73% READ &lt; 7 DAYS</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar JSON Component -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-background/92 dark:bg-background/92 backdrop-blur-xl border-t border-border-subtle md:hidden">
+<div class="flex justify-around items-center h-20 px-gutter w-full">
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 hover:text-primary transition-colors active:translate-y-0.5 transition-transform w-16">
+<span class="material-symbols-outlined text-[24px]">auto_stories</span>
+<span class="font-label-mono text-label-mono uppercase">Feed</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 hover:text-primary transition-colors active:translate-y-0.5 transition-transform w-16">
+<span class="material-symbols-outlined text-[24px]">layers</span>
+<span class="font-label-mono text-label-mono uppercase">Stacks</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary gap-1 hover:text-primary transition-colors active:translate-y-0.5 transition-transform w-16 relative">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">tune</span>
+<span class="font-label-mono text-label-mono uppercase">Tuning</span>
+<div class="absolute -top-1 w-1 h-1 rounded-full bg-secondary"></div>
+</button>
+</div>
+</nav>
+<script src="tangent.js"></script>
+</body></html>

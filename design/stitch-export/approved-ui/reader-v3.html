@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reader v3 — Reading Controls</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "secondary-fixed-dim": "#a2cbee",
+          "on-surface-variant": "#c5c6ca",
+          "surface-tint": "#c3c7cc",
+          "surface-container-high": "#2a2a2a",
+          "on-secondary": "#00344f",
+          "surface": "#131313",
+          "on-tertiary-fixed": "#001e30",
+          "on-surface-muted": "#9BA7BA",
+          "tertiary": "#ffffff",
+          "on-background": "#e5e2e1",
+          "primary-fixed": "#dfe3e8",
+          "accent-soft": "rgba(127, 168, 201, 0.12)",
+          "on-primary-fixed": "#181c20",
+          "on-tertiary": "#00344f",
+          "on-error-container": "#ffdad6",
+          "error-container": "#93000a",
+          "surface-variant": "#353535",
+          "on-primary": "#2d3135",
+          "secondary-fixed": "#cae6ff",
+          "surface-bright": "#3a3939",
+          "surface-container-low": "#1c1b1c",
+          "primary-fixed-dim": "#c3c7cc",
+          "surface-dim": "#131313",
+          "on-tertiary-container": "#406887",
+          "tertiary-fixed-dim": "#a3cbee",
+          "on-tertiary-fixed-variant": "#1f4a68",
+          "on-secondary-container": "#94bddf",
+          "secondary": "#a2cbee",
+          "surface-container-highest": "#353535",
+          "secondary-container": "#214d6a",
+          "tertiary-fixed": "#cbe6ff",
+          "outline": "#8f9194",
+          "on-surface": "#e5e2e1",
+          "error": "#FFB4AB",
+          "surface-raised": "#161A20",
+          "primary": "#ffffff",
+          "on-surface-faint": "#475263",
+          "inverse-primary": "#5b5f63",
+          "surface-container-lowest": "#0e0e0e",
+          "tertiary-container": "#cbe6ff",
+          "on-primary-container": "#616569",
+          "outline-variant": "#44474a",
+          "on-error": "#690005",
+          "primary-container": "#dfe3e8",
+          "on-secondary-fixed-variant": "#1e4b67",
+          "border-strong": "#4B535D",
+          "inverse-surface": "#e5e2e1",
+          "inverse-on-surface": "#313030",
+          "surface-card": "#1B1F28",
+          "surface-container": "#201f20",
+          "border-subtle": "#252A32",
+          "on-secondary-fixed": "#001e30",
+          "on-primary-fixed-variant": "#43474b",
+          "background": "#0C0E12",
+          "accent-blue": "#7FA8C9",
+          "obsidian-dark": "#0B0E13"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "spacing": {
+          "margin-page": "24px",
+          "baseline": "4px",
+          "gutter": "16px",
+          "stack-sm": "8px",
+          "stack-md": "16px",
+          "stack-lg": "32px"
+        },
+        "fontFamily": {
+          "headline-md": [
+            "Space Grotesk"
+          ],
+          "display-lg": [
+            "Space Grotesk"
+          ],
+          "body-md": [
+            "Manrope"
+          ],
+          "title-sm": [
+            "Space Grotesk"
+          ],
+          "metric-lg": [
+            "Space Grotesk"
+          ],
+          "label-mono": [
+            "JetBrains Mono"
+          ]
+        },
+        "fontSize": {
+          "headline-md": [
+            "22px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ],
+          "display-lg": [
+            "30px",
+            {
+              "lineHeight": "36px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "500"
+            }
+          ],
+          "body-md": [
+            "14px",
+            {
+              "lineHeight": "22px",
+              "fontWeight": "400"
+            }
+          ],
+          "title-sm": [
+            "17px",
+            {
+              "lineHeight": "24px",
+              "fontWeight": "600"
+            }
+          ],
+          "metric-lg": [
+            "24px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ],
+          "label-mono": [
+            "10px",
+            {
+              "lineHeight": "12px",
+              "letterSpacing": "0.08em",
+              "fontWeight": "500"
+            }
+          ]
+        }
+      },
+    },
+  }
+</script>
+<style>
+  .font-body-large {
+    font-family: 'Manrope', sans-serif;
+    font-size: 15px; /* base 15px for scaling */
+    line-height: 1.75;
+    font-weight: 400;
+    transition: font-size 0.2s ease, font-family 0.2s ease;
+  }
+  .font-title-large {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px;
+    line-height: 34px;
+    font-weight: 500;
+  }
+  .font-pullquote {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.25em; /* relative to base font-size */
+    line-height: 1.5;
+    font-weight: 400;
+    font-style: italic;
+    transition: font-size 0.2s ease, font-family 0.2s ease;
+  }
+  .font-button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body class="bg-background text-on-background antialiased pb-24 selection:bg-accent-soft selection:text-tertiary transition-colors duration-300" id="body-container">
+<!-- Fixed Top Bar -->
+<header class="fixed top-0 w-full z-50 bg-background/95 backdrop-blur-sm border-b border-border-subtle h-[56px] flex items-center justify-between px-margin-page">
+<button class="text-primary hover:opacity-80 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-size: 24px;">chevron_left</span>
+</button>
+<div class="font-label-mono text-label-mono text-on-surface-muted uppercase flex-1 text-center">
+      NOT BORING
+    </div>
+<div class="flex items-center gap-4">
+<button class="w-[32px] h-[32px] rounded-[4px] border border-border-strong font-label-mono text-[11px] text-on-surface-muted flex items-center justify-center hover:text-primary hover:border-outline-variant transition-colors" id="controls-btn">
+      Aa
+    </button>
+<button class="text-accent-blue hover:opacity-80 transition-opacity flex items-center justify-center" id="bookmark-btn">
+<span class="material-symbols-outlined" id="bookmark-icon" style="font-variation-settings: 'FILL' 0; font-size: 20px;">bookmark</span>
+</button>
+</div>
+</header>
+<!-- Reading Progress Bar -->
+<div class="fixed top-[56px] w-full z-50 h-[2px] bg-border-subtle">
+<div class="h-full bg-accent-blue w-0" id="progress-bar"></div>
+</div>
+<main class="pt-[82px]"> <!-- 56px top bar + 2px progress + 24px top padding -->
+<!-- Article Header -->
+<div class="px-margin-page mb-stack-lg">
+<div class="font-label-mono text-label-mono text-on-surface-muted uppercase mb-stack-sm">
+        NOT BORING · 18 MIN READ
+      </div>
+<h1 class="font-title-large text-primary tracking-tight mb-stack-md">
+        Expanding the Radius of Daily Life
+      </h1>
+<div class="font-label-mono text-label-mono uppercase">
+<span class="text-on-surface-muted">BY </span>
+<span class="text-primary">PACKY McCORMICK &amp; TSUNG XU</span>
+<span class="text-on-surface-muted"> · JUN 8</span>
+</div>
+</div>
+<!-- Hero Image -->
+<div class="w-full h-[210px] mb-stack-lg">
+<img alt="Placeholder image of a flying car over a valley" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1Ut-kJCaYWO3bamqsvRsplJiMKp_dOL21-uWYIL2LacklZbmgQh_tnlmfwH8dd68IKWeePPdN7EAWB3N8oE6rd-AzFbNY2AY0NM5DgF2SNf46gBjOPbmk51AtLjxYTA31OF2RVKAshQApX-EWbuXCqWJg6Le23FUptZ3w1wmusfeGwCal0dG5JT7Q0jMHzK25pkhDUi8jtcgj-Ttp3hc8_-vYxa8x01WJ73B8WNYr-cgcOkL4-nMMIOdnc"/>
+</div>
+<!-- Body Text -->
+<article class="px-margin-page" id="article-content">
+<p class="font-body-large text-[#E2E5EB] mb-stack-lg">
+        The history of human civilization is a story of expanding the radius of our daily lives. Before the wheel, our world was limited to what we could walk to in a day. The horse expanded that radius, and trains and automobiles shattered it completely, fundamentally reshaping where and how we live. The suburbs, the modern city layout, the commute—all are products of the automobile's particular speed and infrastructure requirements.
+      </p>
+<p class="font-body-large text-[#E2E5EB] mb-stack-lg">
+        Now, we are on the precipice of another fundamental shift. Electric Vertical Takeoff and Landing (eVTOL) vehicles—flying cars—promise to move us in a straight line, untethered from the rigid grid of asphalt and concrete. They aren't just a faster way to get from A to B; they are a new geometry for daily living.
+      </p>
+<!-- Pull-quote -->
+<blockquote class="my-stack-lg pl-stack-md border-l-[3px] border-accent-blue">
+<p class="font-pullquote text-primary">
+          "The car didn't just move us — it rearranged the world around us."
+        </p>
+</blockquote>
+<p class="font-body-large text-[#E2E5EB] mb-stack-lg">
+        Imagine living in a quiet mountain town but working in a bustling metropolis, the commute taking minutes instead of hours. The implications for real estate, urban planning, and economic opportunity are staggering. We are not just inventing a new vehicle; we are inventing a new kind of map. The radius of daily life is about to expand once again.
+      </p>
+</article>
+</main>
+<!-- Reading Controls Sheet -->
+<div class="fixed bottom-[64px] left-0 w-full z-40 bg-[#0C0E12]/96 border-t border-[#252A32] transform translate-y-full transition-transform duration-200 ease-in-out px-[24px] py-[16px]" id="controls-sheet">
+<div class="flex flex-col gap-6">
+<!-- Row A: Typeface -->
+<div class="flex items-center justify-between">
+<span class="font-['JetBrains_Mono'] text-[8px] uppercase text-[#475263] tracking-widest">TYPEFACE</span>
+<div class="flex gap-2">
+<button class="px-3 py-1 text-[10px] font-['JetBrains_Mono'] rounded-[4px] border border-[#4B535D] text-[#9BA7BA] transition-colors" id="btn-serif">SERIF</button>
+<button class="px-3 py-1 text-[10px] font-['JetBrains_Mono'] rounded-[4px] border border-[#7FA8C9] text-[#7FA8C9] transition-colors" id="btn-sans">SANS</button>
+</div>
+</div>
+<!-- Row B: Text Size -->
+<div class="flex items-center justify-between">
+<span class="font-['JetBrains_Mono'] text-[8px] uppercase text-[#475263] tracking-widest">TEXT SIZE</span>
+<div class="flex items-center gap-4">
+<button class="w-6 h-6 flex items-center justify-center rounded border border-[#4B535D] text-[#9BA7BA]" id="btn-size-minus">-</button>
+<span class="font-['JetBrains_Mono'] text-[10px] text-[#7FA8C9] w-10 text-center" id="text-size-label">100%</span>
+<button class="w-6 h-6 flex items-center justify-center rounded border border-[#4B535D] text-[#9BA7BA]" id="btn-size-plus">+</button>
+</div>
+</div>
+<!-- Row C: Atmosphere -->
+<div class="flex items-center justify-between">
+<span class="font-['JetBrains_Mono'] text-[8px] uppercase text-[#475263] tracking-widest">ATMOSPHERE</span>
+<div class="flex gap-4">
+<button class="w-5 h-5 rounded-full bg-[#161A20] ring-2 ring-[#7FA8C9] ring-offset-2 ring-offset-transparent" data-theme="dark" id="btn-theme-dark"></button>
+<button class="w-5 h-5 rounded-full bg-[#4A3B2A] ring-0 ring-[#7FA8C9] ring-offset-2 ring-offset-transparent" data-theme="sepia" id="btn-theme-sepia"></button>
+<button class="w-5 h-5 rounded-full bg-[#2A3440] ring-0 ring-[#7FA8C9] ring-offset-2 ring-offset-transparent" data-theme="slate" id="btn-theme-slate"></button>
+</div>
+</div>
+<!-- Row D: Audio -->
+<div class="flex justify-end">
+<button class="px-3 py-1 text-[10px] font-['JetBrains_Mono'] rounded-full border border-[#4B535D] text-[#9BA7BA]" id="btn-audio-speed">1.0x AUDIO</button>
+</div>
+</div>
+</div>
+<!-- Bottom Fixed Bar -->
+<div class="fixed bottom-0 w-full z-50 bg-background/95 backdrop-blur-sm border-t border-border-subtle h-[64px] flex items-center justify-center px-margin-page pb-safe">
+<button class="w-full bg-primary text-obsidian-dark font-button uppercase rounded hover:bg-primary-fixed-dim transition-colors h-[40px] flex items-center justify-center tracking-wide" id="save-btn">
+      SAVE TO STACK
+    </button>
+</div>
+<!-- Toast -->
+<div class="fixed bottom-[88px] left-1/2 -translate-x-1/2 bg-[#1B1F28] border border-[#7FA8C9] rounded-[4px] px-[16px] py-[10px] font-['JetBrains_Mono'] text-[9px] uppercase text-[#F0F3F8] z-50 opacity-0 pointer-events-none transition-opacity duration-180" id="toast">
+<span id="toast-message"></span>
+</div>
+<script>
+  // Toast Logic
+  const toast = document.getElementById('toast');
+  const toastMessage = document.getElementById('toast-message');
+  let toastTimeout;
+
+  function showToast(message) {
+    toastMessage.textContent = message;
+    toast.classList.remove('opacity-0');
+    toast.classList.add('opacity-100');
+    
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+      toast.classList.remove('opacity-100');
+      toast.classList.add('opacity-0');
+    }, 2200);
+  }
+
+  // Save to Stack Logic
+  const saveBtn = document.getElementById('save-btn');
+  let isSavedStack = false;
+
+  saveBtn.addEventListener('click', () => {
+    isSavedStack = !isSavedStack;
+    if (isSavedStack) {
+      saveBtn.classList.remove('bg-primary', 'text-obsidian-dark', 'hover:bg-primary-fixed-dim');
+      saveBtn.classList.add('bg-[#7FA8C9]', 'text-white', 'hover:bg-[#6a95b6]');
+      saveBtn.textContent = 'SAVED TO STACK ✓';
+      showToast('SAVED TO SUNDAY LONGFORM');
+    } else {
+      saveBtn.classList.add('bg-primary', 'text-obsidian-dark', 'hover:bg-primary-fixed-dim');
+      saveBtn.classList.remove('bg-[#7FA8C9]', 'text-white', 'hover:bg-[#6a95b6]');
+      saveBtn.textContent = 'SAVE TO STACK';
+      showToast('REMOVED FROM STACK');
+    }
+  });
+
+  // Bookmark Logic
+  const bookmarkBtn = document.getElementById('bookmark-btn');
+  const bookmarkIcon = document.getElementById('bookmark-icon');
+  let isBookmarked = false;
+
+  bookmarkBtn.addEventListener('click', () => {
+    isBookmarked = !isBookmarked;
+    if (isBookmarked) {
+      bookmarkIcon.style.fontVariationSettings = "'FILL' 1";
+      showToast('SAVED FOR LATER');
+    } else {
+      bookmarkIcon.style.fontVariationSettings = "'FILL' 0";
+      showToast('REMOVED FROM SAVED');
+    }
+  });
+
+  // Progress Bar Logic
+  const progressBar = document.getElementById('progress-bar');
+  
+  function updateProgress() {
+    const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const scrollPosition = window.scrollY;
+    
+    if (scrollHeight <= 0) {
+      progressBar.style.width = '100%';
+      return;
+    }
+    
+    const percentage = (scrollPosition / scrollHeight) * 100;
+    progressBar.style.width = `${Math.min(100, Math.max(0, percentage))}%`;
+  }
+
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  window.addEventListener('resize', updateProgress, { passive: true });
+  
+  // Initialize progress
+  updateProgress();
+
+  // Controls Sheet Logic
+  const controlsBtn = document.getElementById('controls-btn');
+  const controlsSheet = document.getElementById('controls-sheet');
+  let isSheetOpen = false;
+
+  controlsBtn.addEventListener('click', () => {
+    isSheetOpen = !isSheetOpen;
+    if (isSheetOpen) {
+      controlsSheet.classList.remove('translate-y-full');
+      controlsBtn.classList.add('border-accent-blue', 'text-accent-blue');
+    } else {
+      controlsSheet.classList.add('translate-y-full');
+      controlsBtn.classList.remove('border-accent-blue', 'text-accent-blue');
+    }
+  });
+
+  // Typography Logic
+  const btnSerif = document.getElementById('btn-serif');
+  const btnSans = document.getElementById('btn-sans');
+  const articleElements = document.querySelectorAll('.font-body-large, .font-pullquote');
+
+  function updateTypeface(isSerif) {
+    if (isSerif) {
+      btnSerif.classList.replace('border-[#4B535D]', 'border-[#7FA8C9]');
+      btnSerif.classList.replace('text-[#9BA7BA]', 'text-[#7FA8C9]');
+      btnSans.classList.replace('border-[#7FA8C9]', 'border-[#4B535D]');
+      btnSans.classList.replace('text-[#7FA8C9]', 'text-[#9BA7BA]');
+      articleElements.forEach(el => el.style.fontFamily = "'Georgia', serif");
+    } else {
+      btnSans.classList.replace('border-[#4B535D]', 'border-[#7FA8C9]');
+      btnSans.classList.replace('text-[#9BA7BA]', 'text-[#7FA8C9]');
+      btnSerif.classList.replace('border-[#7FA8C9]', 'border-[#4B535D]');
+      btnSerif.classList.replace('text-[#7FA8C9]', 'text-[#9BA7BA]');
+      articleElements.forEach(el => el.style.fontFamily = "'Manrope', sans-serif");
+    }
+  }
+
+  btnSerif.addEventListener('click', () => updateTypeface(true));
+  btnSans.addEventListener('click', () => updateTypeface(false));
+
+  // Text Size Logic
+  let currentSizePercent = 100;
+  const baseSize = 15;
+  const btnSizeMinus = document.getElementById('btn-size-minus');
+  const btnSizePlus = document.getElementById('btn-size-plus');
+  const sizeLabel = document.getElementById('text-size-label');
+
+  function updateTextSize(delta) {
+    let newSize = currentSizePercent + delta;
+    if (newSize >= 80 && newSize <= 130) {
+      currentSizePercent = newSize;
+      sizeLabel.textContent = `${currentSizePercent}%`;
+      const pxSize = baseSize * (currentSizePercent / 100);
+      articleElements.forEach(el => {
+        if(el.classList.contains('font-body-large')) {
+           el.style.fontSize = `${pxSize}px`;
+        }
+      });
+    }
+  }
+
+  btnSizeMinus.addEventListener('click', () => updateTextSize(-10));
+  btnSizePlus.addEventListener('click', () => updateTextSize(10));
+
+  // Atmosphere Logic
+  const themeBtns = document.querySelectorAll('[data-theme]');
+  const bodyContainer = document.getElementById('body-container');
+
+  themeBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      // Reset rings
+      themeBtns.forEach(b => {
+        b.classList.remove('ring-2');
+        b.classList.add('ring-0');
+      });
+      // Add ring to active
+      e.target.classList.remove('ring-0');
+      e.target.classList.add('ring-2');
+
+      const theme = e.target.dataset.theme;
+      if (theme === 'sepia') {
+        bodyContainer.style.backgroundColor = 'rgba(64,50,30,0.18)';
+      } else if (theme === 'slate') {
+        bodyContainer.style.backgroundColor = 'rgba(42,52,64,0.18)';
+      } else {
+        bodyContainer.style.backgroundColor = ''; // Reset to default class
+      }
+    });
+  });
+
+  // Audio Speed Logic
+  const audioBtn = document.getElementById('btn-audio-speed');
+  const speeds = ['1.0', '1.2', '1.5', '2.0'];
+  let currentSpeedIndex = 0;
+
+  audioBtn.addEventListener('click', () => {
+    currentSpeedIndex = (currentSpeedIndex + 1) % speeds.length;
+    const speed = speeds[currentSpeedIndex];
+    audioBtn.textContent = `${speed}x AUDIO`;
+    showToast(`PLAYBACK SPEED ${speed}x`);
+  });
+
+</script>
+</body></html>

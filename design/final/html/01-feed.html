@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tangent - Feed</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+              "on-error-container": "#ffdad6",
+              "error-container": "#93000a",
+              "on-tertiary-container": "#406887",
+              "tertiary-fixed-dim": "#a3cbee",
+              "on-secondary-container": "#94bddf",
+              "primary": "#ffffff",
+              "inverse-surface": "#e5e2e1",
+              "on-primary": "#2d3135",
+              "surface-container-low": "#1c1b1c",
+              "secondary": "#a2cbee",
+              "primary-fixed-dim": "#c3c7cc",
+              "surface-tint": "#c3c7cc",
+              "secondary-fixed-dim": "#a2cbee",
+              "primary-container": "#dfe3e8",
+              "on-tertiary-fixed": "#001e30",
+              "on-primary-fixed": "#181c20",
+              "surface-container": "#201f20",
+              "surface-card": "#1B1F28",
+              "surface-bright": "#3a3939",
+              "on-surface-muted": "#9BA7BA",
+              "border-strong": "#4B535D",
+              "on-secondary-fixed": "#001e30",
+              "inverse-on-surface": "#313030",
+              "on-secondary-fixed-variant": "#1e4b67",
+              "accent-soft": "rgba(127, 168, 201, 0.12)",
+              "tertiary-fixed": "#cbe6ff",
+              "on-primary-fixed-variant": "#43474b",
+              "border-subtle": "#252A32",
+              "on-primary-container": "#616569",
+              "error": "#FFB4AB",
+              "surface-container-high": "#2a2a2a",
+              "secondary-fixed": "#cae6ff",
+              "on-tertiary": "#00344f",
+              "inverse-primary": "#5b5f63",
+              "on-surface-faint": "#475263",
+              "surface-container-highest": "#353535",
+              "outline": "#8f9194",
+              "background": "#0C0E12",
+              "tertiary": "#ffffff",
+              "surface": "#131313",
+              "outline-variant": "#44474a",
+              "surface-container-lowest": "#0e0e0e",
+              "on-surface-variant": "#c5c6ca",
+              "surface-dim": "#131313",
+              "on-surface": "#e5e2e1",
+              "surface-variant": "#353535",
+              "secondary-container": "#214d6a",
+              "on-error": "#690005",
+              "on-tertiary-fixed-variant": "#1f4a68",
+              "on-secondary": "#00344f",
+              "tertiary-container": "#cbe6ff",
+              "surface-raised": "#161A20",
+              "on-background": "#e5e2e1",
+              "primary-fixed": "#dfe3e8"
+            },
+            "borderRadius": {
+              "DEFAULT": "0.125rem",
+              "lg": "0.25rem",
+              "xl": "0.5rem",
+              "full": "0.75rem"
+            },
+            "spacing": {
+              "stack-md": "16px",
+              "margin-page": "24px",
+              "baseline": "4px",
+              "stack-lg": "32px",
+              "stack-sm": "8px",
+              "gutter": "16px"
+            },
+            "fontFamily": {
+              "label-mono": ["JetBrains Mono"],
+              "display-lg": ["Space Grotesk"],
+              "metric-lg": ["Space Grotesk"],
+              "headline-md": ["Space Grotesk"],
+              "title-sm": ["Space Grotesk"],
+              "body-md": ["Manrope"]
+            },
+            "fontSize": {
+              "label-mono": ["10px", {"lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "500"}],
+              "display-lg": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+              "metric-lg": ["24px", {"lineHeight": "28px", "fontWeight": "500"}],
+              "headline-md": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+              "title-sm": ["17px", {"lineHeight": "24px", "fontWeight": "600"}],
+              "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .text-shadow-subtle { text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+        .text-shadow-heavy { text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased overflow-hidden selection:bg-secondary/30">
+<div class="relative h-[100dvh] w-full mx-auto max-w-[480px] sm:max-w-none md:max-w-[400px] md:h-[850px] md:my-10 md:rounded-3xl md:border md:border-border-subtle md:shadow-2xl overflow-hidden bg-background">
+<!-- Background Imagery -->
+<img class="absolute inset-0 h-full w-full object-cover saturate-[.85] brightness-90 z-0" data-alt="A breathtaking aerial view of a deep alpine valley under a dramatic, cloudy sky. A sleek, futuristic red VTOL aircraft flies low over the lush green landscape. Scattered modern, dark-wood cabins dot the rocky terrain below. The lighting is cinematic, with shafts of sunlight piercing through the moody clouds, highlighting the natural greens, warm rock tones, and deep blue skies." src="https://lh3.googleusercontent.com/aida/AEtjO1Ut-kJCaYWO3bamqsvRsplJiMKp_dOL21-uWYIL2LacklZbmgQh_tnlmfwH8dd68IKWeePPdN7EAWB3N8oE6rd-AzFbNY2AY0NM5DgF2SNf46gBjOPbmk51AtLjxYTA31OF2RVKAshQApX-EWbuXCqWJg6Le23FUptZ3w1wmusfeGwCal0dG5JT7Q0jMHzK25pkhDUi8jtcgj-Ttp3hc8_-vYxa8x01WJ73B8WNYr-cgcOkL4-nMMIOdnc"/>
+<!-- Top Scrim -->
+<div class="absolute inset-x-0 top-0 h-[20%] bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-0"></div>
+<!-- Bottom-Left Wedge Scrim -->
+<div class="absolute bottom-0 left-0 w-[65%] h-[50%] bg-gradient-to-r from-background/[0.92] via-background/[0.45] to-transparent pointer-events-none z-0"></div>
+<!-- Header -->
+<header class="fixed md:absolute top-0 w-full z-50 flex justify-between items-center px-margin-page h-16 pt-safe">
+<div class="font-display-lg text-[18px] text-primary tracking-tight text-shadow-subtle">Tangent</div>
+<button class="flex items-center justify-center p-1 rounded-full hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-[22px] text-primary text-shadow-subtle" style="font-variation-settings: 'FILL' 0;">account_circle</span>
+</button>
+</header>
+<!-- Main Content Overlay -->
+<main class="absolute bottom-[104px] left-0 w-full md:w-[90%] px-margin-page z-10 flex flex-col items-start pb-stack-sm">
+<div class="font-label-mono text-label-mono uppercase text-primary text-shadow-subtle mb-stack-sm tracking-widest">
+                NOT BORING · 18 MIN READ
+            </div>
+<h1 class="font-display-lg text-display-lg text-primary text-shadow-heavy mb-stack-md leading-tight line-clamp-2 pr-12">
+                Expanding the Radius of Daily Life
+            </h1>
+<blockquote class="font-body-md text-[17px] italic text-[#E2E5EB] border-l-[3px] border-secondary pl-3 py-0.5 mb-stack-md max-w-[85%] text-shadow-subtle">
+                "A flying car is really a vehicle that flies point-to-point with car-like convenience."
+            </blockquote>
+<div class="font-label-mono text-label-mono uppercase tracking-widest mb-stack-lg">
+<span class="text-primary text-shadow-subtle">PACKY McCORMICK · TSUNG XU</span>
+<span class="text-on-surface-muted ml-1">· JUN 8</span>
+</div>
+<!-- Action Row -->
+<div class="flex items-center gap-gutter w-full max-w-[340px]">
+<button class="h-12 w-12 flex-shrink-0 flex items-center justify-center bg-surface-raised border border-border-strong rounded-DEFAULT active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 0;">bookmark</span>
+</button>
+<button class="flex-grow h-12 flex items-center justify-center bg-primary text-background font-label-mono text-[13px] font-bold uppercase rounded-DEFAULT active:scale-95 transition-transform tracking-wider">
+                    READ ESSAY <span class="material-symbols-outlined text-[16px] ml-2">arrow_forward</span>
+</button>
+</div>
+</main>
+<!-- Swipe Indicator -->
+<div class="absolute bottom-[88px] left-0 right-0 z-20 flex flex-col items-center gap-1.5 pointer-events-none">
+<span class="material-symbols-outlined text-secondary text-[16px] drop-shadow-md">keyboard_arrow_up</span>
+<div class="flex gap-2">
+<div class="h-[2px] w-4 bg-secondary rounded-full"></div>
+<div class="h-[2px] w-4 bg-[#3A4350] rounded-full"></div>
+<div class="h-[2px] w-4 bg-[#3A4350] rounded-full"></div>
+<div class="h-[2px] w-4 bg-[#3A4350] rounded-full"></div>
+</div>
+</div>
+<!-- Bottom Navigation Shell -->
+<div class="absolute bottom-[80px] left-0 right-0 z-50 bg-[#0C0E12] border-t border-[#252A32] px-margin-page py-3 flex items-center gap-2">
+<span class="font-label-mono text-[9px] font-bold uppercase text-secondary">NEXT: </span>
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted flex-grow truncate">THE LIQUIDITY ILLUSION IN TECH MARKETS</span>
+<span class="text-on-surface-faint">→</span>
+</div><nav class="bg-background/92 dark:bg-background/92 backdrop-blur-xl absolute md:absolute bottom-0 w-full z-50 pb-safe border-t border-border-subtle flex justify-around items-center h-20 px-gutter">
+<!-- Active Tab: Feed -->
+<button class="flex flex-col items-center justify-center gap-1 w-16 group active:translate-y-0.5 transition-transform">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">view_carousel</span>
+<span class="font-label-mono text-[9px] uppercase text-primary tracking-widest">Feed</span>
+<div class="w-1 h-1 rounded-full bg-secondary mt-0.5"></div>
+</button>
+<!-- Inactive Tab: Stacks -->
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 w-16 group hover:text-primary transition-colors active:translate-y-0.5">
+<span class="material-symbols-outlined text-[#8E9194] group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">layers</span>
+<span class="font-label-mono text-[9px] uppercase text-[#8E9194] group-hover:text-primary transition-colors tracking-widest">Stacks</span>
+</button>
+<!-- Inactive Tab: Tuning -->
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 w-16 group hover:text-primary transition-colors active:translate-y-0.5">
+<span class="material-symbols-outlined text-[#8E9194] group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">tune</span>
+<span class="font-label-mono text-[9px] uppercase text-[#8E9194] group-hover:text-primary transition-colors tracking-widest">Tuning</span>
+</button>
+</nav>
+</div>
+<script src="tangent.js"></script>
+</body></html>

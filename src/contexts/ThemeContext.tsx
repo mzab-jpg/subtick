@@ -5,62 +5,57 @@
 // ============================================================
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { useColorScheme, StatusBar } from 'react-native';
+import { StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ThemeMode, ThemeColors } from '../types';
+import { ThemeMode, ThemeColors, ThemeFonts } from '../types';
 
-// --- Light Theme Palette (Editorial Minimalism) ---
-const lightColors: ThemeColors = {
-  background: '#F8F7F4',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#FFFFFF',
-  text: '#111111',
-  textSecondary: '#666666',
-  textMuted: '#999999',
-  primary: '#111111',
-  primaryLight: '#E8E5E1',
-  accent: '#B63A3A',
-  border: '#E8E5E1',
-  error: '#C0392B',
-  success: '#3A7D44',
-  warning: '#B8860B',
+// --- Obsidian Steel Glacier (dark-only UI; see design/stitch-export/new-ui-B/README.md) ---
+// Tokens are byte-identical to the approved B-series screens. The old Editorial
+// Minimalism light palette was retired with the redesign; ThemeMode storage is
+// kept for backward compatibility but no longer changes rendering.
+const obsidianColors: ThemeColors = {
+  background: '#0C0E12',
+  surface: '#1B1F28',
+  surfaceSecondary: '#161A20',
+  surfaceCard: '#1B1F28',
+  surfaceRaised: '#161A20',
+  text: '#F0F3F8',
+  textSecondary: '#9BA7BA',
+  textMuted: '#475263',
+  textFaint: '#475263',
+  primary: '#F0F3F8', // silver — primary buttons
+  primaryLight: '#252A32',
+  accent: '#7FA8C9', // muted steel — NEVER bright cyan
+  accentDeep: '#5E86A6',
+  accentSoft: 'rgba(127, 168, 201, 0.12)',
+  onPrimary: '#0B0E13',
+  border: '#252A32',
+  borderStrong: '#4B535D',
+  error: '#FFB4AB',
+  success: '#7FC9A8',
+  warning: '#E2C088',
   cardShadow: 'transparent',
-  hudBackground: 'rgba(255, 255, 255, 0.85)',
-  progressBar: '#B63A3A',
+  hudBackground: 'rgba(12, 14, 18, 0.85)',
+  progressBar: '#7FA8C9',
   progressBarBackground: 'transparent',
-  chipSelectedBg: '#111111',
-  chipNotInterestedBg: '#F8F7F4',
-  chipNeutralBg: '#FFFFFF',
-  chipSelectedText: '#FFFFFF',
-  chipNotInterestedText: '#999999',
-  chipNeutralText: '#666666',
+  chipSelectedBg: 'rgba(127, 168, 201, 0.12)',
+  chipNotInterestedBg: '#0C0E12',
+  chipNeutralBg: '#1B1F28',
+  chipSelectedText: '#7FA8C9',
+  chipNotInterestedText: '#475263',
+  chipNeutralText: '#9BA7BA',
 };
 
-// --- Dark Theme Palette (Editorial Minimalism) ---
-const darkColors: ThemeColors = {
-  background: '#121212',
-  surface: '#1B1B1B',
-  surfaceSecondary: '#1B1B1B',
-  text: '#F5F5F5',
-  textSecondary: '#B5B5B5',
-  textMuted: '#777777',
-  primary: '#F5F5F5',
-  primaryLight: '#2A2A2A',
-  accent: '#C94B4B',
-  border: '#2A2A2A',
-  error: '#FF6B6B',
-  success: '#6FCF97',
-  warning: '#E2B93B',
-  cardShadow: 'transparent',
-  hudBackground: 'rgba(27, 27, 27, 0.85)',
-  progressBar: '#C94B4B',
-  progressBarBackground: 'transparent',
-  chipSelectedBg: '#F5F5F5',
-  chipNotInterestedBg: '#121212',
-  chipNeutralBg: '#1B1B1B',
-  chipSelectedText: '#121212',
-  chipNotInterestedText: '#777777',
-  chipNeutralText: '#B5B5B5',
+// --- Typography (families as loaded in App.tsx via expo-font) ---
+const themeFonts: ThemeFonts = {
+  display: 'SpaceGrotesk_500Medium',
+  headline: 'SpaceGrotesk_500Medium',
+  title: 'SpaceGrotesk_600SemiBold',
+  body: 'Manrope_400Regular',
+  bodyMedium: 'Manrope_500Medium',
+  bodySemiBold: 'Manrope_600SemiBold',
+  mono: 'JetBrainsMono_500Medium',
+  monoRegular: 'JetBrainsMono_400Regular',
 };
 
 const THEME_STORAGE_KEY = '@subtick_theme_preference';
@@ -68,6 +63,7 @@ const THEME_STORAGE_KEY = '@subtick_theme_preference';
 interface ThemeContextValue {
   mode: ThemeMode;
   colors: ThemeColors;
+  fonts: ThemeFonts;
   isDark: boolean;
   setThemeMode: (mode: ThemeMode) => void;
   webViewCSS: string; // Pre-compiled CSS for WebView injection
@@ -76,7 +72,6 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const systemColorScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
   const [, setLoaded] = useState(false);
 
@@ -106,11 +101,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Compute resolved dark/light
-  const isDark =
-    mode === 'dark' || (mode === 'system' && systemColorScheme === 'dark');
+  // Dark-only UI (Obsidian Steel Glacier). Kept as a constant so every consumer
+  // keeps working; re-introduce light support by resolving `mode` again.
+  const isDark = true;
 
-  const colors = useMemo(() => (isDark ? darkColors : lightColors), [isDark]);
+  const colors = useMemo(() => obsidianColors, []);
 
   // Pre-compile WebView CSS to prevent dark flashing
   const webViewCSS = useMemo(() => {
@@ -191,7 +186,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           font-style: italic;
         }
         blockquote {
-          border-left: 2px solid ${c.border};
+          border-left: 2px solid ${c.accent};
           margin: 2em 0;
           padding: 4px 0 4px 20px;
           background-color: transparent !important;
@@ -228,7 +223,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [colors]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ mode, colors, isDark, setThemeMode, webViewCSS }),
+    () => ({ mode, colors, fonts: themeFonts, isDark, setThemeMode, webViewCSS }),
     [mode, colors, isDark, setThemeMode, webViewCSS]
   );
 

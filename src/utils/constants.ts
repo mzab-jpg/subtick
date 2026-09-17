@@ -7,12 +7,31 @@
 // Do not use arbitrary font sizes anywhere.
 // Hero article headline
 
-import { CategoryDefinition } from '../types';  export const TEXT_XS   = 11;  // Publisher eyebrow labels (uppercase, tight tracking)
+import { CategoryDefinition, ThemeFonts } from '../types';
+export const TEXT_XS   = 11;  // Publisher eyebrow labels (uppercase, tight tracking)
 export const TEXT_SM   = 13;  // Metadata, timestamps, captions, helper text
 export const TEXT_BASE = 16;  // Body, buttons, inputs, category names
 export const TEXT_LG   = 18;  // Screen headers, section titles, article list titles
 export const TEXT_XL   = 24;  // App name / primary screen title
 export const TEXT_2XL  = 28;
+
+// --- Mono Label (JetBrains Mini-Label) ---
+// The app's universal metadata voice: publishers, read times, percentages,
+// section labels. Always pair with `fontFamily: fonts.mono`, uppercase text,
+// and 0.08em letterSpacing. Consumes ThemeFonts so the family stays in sync.
+export const MONO_LABEL_BASE: Pick<
+  import('react-native').TextStyle,
+  'fontSize' | 'letterSpacing' | 'textTransform' | 'fontWeight'
+> = {
+  fontSize: 10,
+  letterSpacing: 0.8, // 0.08em at 10px
+  textTransform: 'uppercase',
+  fontWeight: '500',
+};
+
+export function monoLabel(fonts: ThemeFonts): import('react-native').TextStyle {
+  return { ...MONO_LABEL_BASE, fontFamily: fonts.mono };
+}
 
 // --- Category Definitions (9 categories) ---
 // CONTRACT: this list must stay in sync with the SERVER's canonical copy in

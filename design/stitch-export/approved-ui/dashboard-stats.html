@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dashboard Stats</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#214d6a",
+                        "on-primary-container": "#616569",
+                        "tertiary": "#ffffff",
+                        "on-error-container": "#ffdad6",
+                        "border-subtle": "#252A32",
+                        "error": "#FFB4AB",
+                        "surface-bright": "#3a3939",
+                        "tertiary-fixed-dim": "#a3cbee",
+                        "border-strong": "#4B535D",
+                        "surface-tint": "#c3c7cc",
+                        "primary-fixed": "#dfe3e8",
+                        "surface-container-high": "#2a2a2a",
+                        "primary-fixed-dim": "#c3c7cc",
+                        "on-surface-muted": "#9BA7BA",
+                        "surface": "#131313",
+                        "inverse-primary": "#5b5f63",
+                        "outline": "#8f9194",
+                        "on-primary-fixed": "#181c20",
+                        "surface-container-lowest": "#0e0e0e",
+                        "secondary-fixed": "#cae6ff",
+                        "background": "#0C0E12",
+                        "on-secondary-fixed": "#001e30",
+                        "inverse-on-surface": "#313030",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed-variant": "#1f4a68",
+                        "on-surface-variant": "#c5c6ca",
+                        "on-secondary-fixed-variant": "#1e4b67",
+                        "on-background": "#e5e2e1",
+                        "primary": "#ffffff",
+                        "surface-container-low": "#1c1b1c",
+                        "on-primary": "#2d3135",
+                        "on-surface-faint": "#475263",
+                        "tertiary-fixed": "#cbe6ff",
+                        "on-secondary-container": "#94bddf",
+                        "on-tertiary": "#00344f",
+                        "accent-soft": "rgba(127, 168, 201, 0.12)",
+                        "surface-container-highest": "#353535",
+                        "surface-card": "#1B1F28",
+                        "surface-container": "#201f20",
+                        "surface-raised": "#161A20",
+                        "on-tertiary-container": "#406887",
+                        "on-tertiary-fixed": "#001e30",
+                        "surface-dim": "#131313",
+                        "inverse-surface": "#e5e2e1",
+                        "secondary": "#a2cbee",
+                        "on-secondary": "#00344f",
+                        "on-surface": "#e5e2e1",
+                        "outline-variant": "#44474a",
+                        "error-container": "#93000a",
+                        "tertiary-container": "#cbe6ff",
+                        "primary-container": "#dfe3e8",
+                        "secondary-fixed-dim": "#a2cbee",
+                        "surface-variant": "#353535",
+                        "on-primary-fixed-variant": "#43474b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-lg": "32px",
+                        "margin-page": "24px",
+                        "stack-md": "16px",
+                        "stack-sm": "8px",
+                        "baseline": "4px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Manrope"],
+                        "title-sm": ["Space Grotesk"],
+                        "metric-lg": ["Space Grotesk"],
+                        "display-lg": ["Space Grotesk"],
+                        "label-mono": ["JetBrains Mono"],
+                        "headline-md": ["Space Grotesk"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen font-body-md antialiased selection:bg-secondary-container selection:text-tertiary">
+<!-- Top App Bar -->
+<header class="fixed top-0 w-full z-50 bg-background/90 backdrop-blur-md border-b border-border-subtle flex justify-between items-center px-margin-page h-16">
+<button aria-label="Back" class="text-primary hover:opacity-80 transition-opacity active:scale-95 duration-200 flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl">chevron_left</span>
+</button>
+<h1 class="font-title-sm text-[18px] leading-[24px] font-bold uppercase tracking-tight text-primary absolute left-1/2 -translate-x-1/2">
+            DASHBOARD STATS
+        </h1>
+<div class="w-6"><!-- Spacer to balance center title --></div>
+</header>
+<!-- Main Content -->
+<main class="pt-24 pb-safe px-margin-page max-w-md mx-auto">
+<!-- Helper Text -->
+<p class="font-body-md text-[13px] text-on-surface-muted mb-stack-md leading-tight mx-[4px]">
+            Choose up to 3 metrics to display on your dashboard.
+        </p>
+<!-- Stats List Card -->
+<div class="bg-surface rounded-xl border border-border-subtle overflow-hidden flex flex-col">
+<!-- Row 1: Selected -->
+<button class="h-[64px] w-full flex items-center px-gutter bg-accent-soft border-b border-border-subtle hover:bg-secondary-container/20 transition-colors text-left group">
+<span class="material-symbols-outlined text-secondary mr-gutter opacity-90 group-hover:opacity-100 transition-opacity" data-icon="local_fire_department">local_fire_department</span>
+<div class="flex-1 flex flex-col justify-center">
+<span class="font-body-md text-[16px] font-medium text-secondary leading-snug">Streak Days</span>
+<span class="font-body-md text-[13px] text-secondary/80 leading-tight">Shown on Dashboard · 12</span>
+</div>
+</button>
+<!-- Row 2: Selected -->
+<button class="h-[64px] w-full flex items-center px-gutter bg-accent-soft border-b border-border-subtle hover:bg-secondary-container/20 transition-colors text-left group">
+<span class="material-symbols-outlined text-secondary mr-gutter opacity-90 group-hover:opacity-100 transition-opacity" data-icon="timer">timer</span>
+<div class="flex-1 flex flex-col justify-center">
+<span class="font-body-md text-[16px] font-medium text-secondary leading-snug">Avg WPM</span>
+<span class="font-body-md text-[13px] text-secondary/80 leading-tight">Shown on Dashboard · 342</span>
+</div>
+</button>
+<!-- Row 3: Selected -->
+<button class="h-[64px] w-full flex items-center px-gutter bg-accent-soft border-b border-border-subtle hover:bg-secondary-container/20 transition-colors text-left group">
+<span class="material-symbols-outlined text-secondary mr-gutter opacity-90 group-hover:opacity-100 transition-opacity" data-icon="hourglass_empty">hourglass_empty</span>
+<div class="flex-1 flex flex-col justify-center">
+<span class="font-body-md text-[16px] font-medium text-secondary leading-snug">Hours Read</span>
+<span class="font-body-md text-[13px] text-secondary/80 leading-tight">Shown on Dashboard · 42</span>
+</div>
+</button>
+<!-- Row 4: Not Selected -->
+<button class="h-[64px] w-full flex items-center px-gutter bg-transparent border-b border-border-subtle hover:bg-surface-raised transition-colors text-left group">
+<span class="material-symbols-outlined text-on-surface-muted mr-gutter group-hover:text-primary transition-colors" data-icon="auto_stories">auto_stories</span>
+<div class="flex-1 flex flex-col justify-center">
+<span class="font-body-md text-[16px] font-medium text-primary leading-snug">Finished</span>
+<span class="font-body-md text-[13px] text-on-surface-muted leading-tight">Not shown · 184</span>
+</div>
+</button>
+<!-- Row 5: Not Selected -->
+<button class="h-[64px] w-full flex items-center px-gutter bg-transparent border-b border-border-subtle hover:bg-surface-raised transition-colors text-left group">
+<span class="material-symbols-outlined text-on-surface-muted mr-gutter group-hover:text-primary transition-colors" data-icon="trending_up">trending_up</span>
+<div class="flex-1 flex flex-col justify-center">
+<span class="font-body-md text-[16px] font-medium text-primary leading-snug">Top Category</span>
+<span class="font-body-md text-[13px] text-on-surface-muted leading-tight">Not shown · Technology</span>
+</div>
+</button>
+<!-- Row 6: Not Selected -->
+<button class="h-[64px] w-full flex items-center px-gutter bg-transparent hover:bg-surface-raised transition-colors text-left group">
+<span class="material-symbols-outlined text-on-surface-muted mr-gutter group-hover:text-primary transition-colors" data-icon="bar_chart">bar_chart</span>
+<div class="flex-1 flex flex-col justify-center">
+<span class="font-body-md text-[16px] font-medium text-primary leading-snug">Weekly Reads</span>
+<span class="font-body-md text-[13px] text-on-surface-muted leading-tight">Not shown · 9</span>
+</div>
+</button>
+</div>
+</main>
+</body></html>

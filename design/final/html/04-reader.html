@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reader - Tangent</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "inverse-primary": "#5b5f63",
+          "surface-container-high": "#2a2a2a",
+          "secondary-fixed": "#cae6ff",
+          "on-tertiary-fixed": "#001e30",
+          "secondary-container": "#214d6a",
+          "tertiary-fixed": "#cbe6ff",
+          "on-tertiary": "#00344f",
+          "on-secondary": "#00344f",
+          "on-primary-fixed": "#181c20",
+          "primary-fixed-dim": "#c3c7cc",
+          "on-surface-variant": "#c5c6ca",
+          "surface-container-highest": "#353535",
+          "on-surface": "#e5e2e1",
+          "surface-container-low": "#1c1b1c",
+          "on-error-container": "#ffdad6",
+          "on-surface-muted": "#9BA7BA",
+          "outline": "#8f9194",
+          "accent-soft": "rgba(127, 168, 201, 0.12)",
+          "secondary-fixed-dim": "#a2cbee",
+          "inverse-surface": "#e5e2e1",
+          "error-container": "#93000a",
+          "tertiary-container": "#cbe6ff",
+          "surface-bright": "#3a3939",
+          "primary-container": "#dfe3e8",
+          "on-primary": "#2d3135",
+          "primary-fixed": "#dfe3e8",
+          "surface-dim": "#131313",
+          "surface-raised": "#161A20",
+          "on-tertiary-fixed-variant": "#1f4a68",
+          "on-secondary-fixed-variant": "#1e4b67",
+          "surface-container": "#201f20",
+          "on-primary-container": "#616569",
+          "surface-card": "#1B1F28",
+          "surface-tint": "#c3c7cc",
+          "on-surface-faint": "#475263",
+          "error": "#FFB4AB",
+          "on-primary-fixed-variant": "#43474b",
+          "on-secondary-fixed": "#001e30",
+          "on-secondary-container": "#94bddf",
+          "border-strong": "#4B535D",
+          "secondary": "#a2cbee",
+          "on-tertiary-container": "#406887",
+          "background": "#0C0E12",
+          "inverse-on-surface": "#313030",
+          "tertiary": "#ffffff",
+          "surface-container-lowest": "#0e0e0e",
+          "outline-variant": "#44474a",
+          "on-error": "#690005",
+          "on-background": "#e5e2e1",
+          "tertiary-fixed-dim": "#a3cbee",
+          "surface": "#131313",
+          "border-subtle": "#252A32",
+          "surface-variant": "#353535",
+          "primary": "#ffffff",
+          "accent-blue": "#7FA8C9",
+          "obsidian-dark": "#0B0E13"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "spacing": {
+          "stack-sm": "8px",
+          "gutter": "16px",
+          "stack-md": "16px",
+          "baseline": "4px",
+          "stack-lg": "32px",
+          "margin-page": "24px"
+        },
+        "fontFamily": {
+          "metric-lg": [
+            "Space Grotesk", "sans-serif"
+          ],
+          "body-md": [
+            "Manrope", "sans-serif"
+          ],
+          "display-lg": [
+            "Space Grotesk", "sans-serif"
+          ],
+          "title-sm": [
+            "Space Grotesk", "sans-serif"
+          ],
+          "label-mono": [
+            "JetBrains Mono", "monospace"
+          ],
+          "headline-md": [
+            "Space Grotesk", "sans-serif"
+          ]
+        },
+        "fontSize": {
+          "metric-lg": [
+            "24px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ],
+          "body-md": [
+            "14px",
+            {
+              "lineHeight": "22px",
+              "fontWeight": "400"
+            }
+          ],
+          "display-lg": [
+            "30px",
+            {
+              "lineHeight": "36px",
+              "letterSpacing": "-0.01em",
+              "fontWeight": "500"
+            }
+          ],
+          "title-sm": [
+            "17px",
+            {
+              "lineHeight": "24px",
+              "fontWeight": "600"
+            }
+          ],
+          "label-mono": [
+            "10px",
+            {
+              "lineHeight": "12px",
+              "letterSpacing": "0.08em",
+              "fontWeight": "500"
+            }
+          ],
+          "headline-md": [
+            "22px",
+            {
+              "lineHeight": "28px",
+              "fontWeight": "500"
+            }
+          ]
+        }
+      },
+    },
+  }
+</script>
+<style>
+  .font-body-large {
+    font-family: 'Manrope', sans-serif;
+    font-size: 16px;
+    line-height: 28px;
+    font-weight: 400;
+  }
+  .font-title-large {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px;
+    line-height: 34px;
+    font-weight: 500;
+  }
+  .font-pullquote {
+    font-family: 'Manrope', sans-serif;
+    font-size: 19px;
+    line-height: 30px;
+    font-weight: 400;
+    font-style: italic;
+  }
+  .font-button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body class="bg-background text-on-background antialiased pb-24 selection:bg-accent-soft selection:text-tertiary">
+<!-- Fixed Top Bar -->
+<header class="fixed top-0 w-full z-50 bg-background/95 backdrop-blur-sm border-b border-border-subtle h-[56px] flex items-center justify-between px-margin-page">
+<button class="text-primary hover:opacity-80 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-size: 24px;">chevron_left</span>
+</button>
+<div class="font-label-mono text-label-mono text-on-surface-muted uppercase">
+      NOT BORING
+    </div>
+<button class="text-accent-blue hover:opacity-80 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0; font-size: 20px;">bookmark</span>
+</button>
+</header>
+<!-- Reading Progress Bar -->
+<div class="fixed top-[56px] w-full z-50 h-[2px] bg-border-subtle">
+<div class="h-full bg-accent-blue w-1/4"></div>
+</div>
+<main class="pt-[82px]"> <!-- 56px top bar + 2px progress + 24px top padding -->
+<!-- Article Header -->
+<div class="px-margin-page mb-stack-lg">
+<div class="font-label-mono text-label-mono text-on-surface-muted uppercase mb-stack-sm">
+        NOT BORING · 18 MIN READ
+      </div>
+<h1 class="font-title-large text-primary tracking-tight mb-stack-md">
+        Expanding the Radius of Daily Life
+      </h1>
+<div class="font-label-mono text-label-mono uppercase">
+<span class="text-on-surface-muted">BY </span>
+<span class="text-primary">PACKY McCORMICK &amp; TSUNG XU</span>
+<span class="text-on-surface-muted"> · JUN 8</span>
+</div>
+</div>
+<!-- Hero Image -->
+<div class="w-full h-[210px] mb-stack-lg">
+<img alt="Placeholder image of a flying car over a valley" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1Ut-kJCaYWO3bamqsvRsplJiMKp_dOL21-uWYIL2LacklZbmgQh_tnlmfwH8dd68IKWeePPdN7EAWB3N8oE6rd-AzFbNY2AY0NM5DgF2SNf46gBjOPbmk51AtLjxYTA31OF2RVKAshQApX-EWbuXCqWJg6Le23FUptZ3w1wmusfeGwCal0dG5JT7Q0jMHzK25pkhDUi8jtcgj-Ttp3hc8_-vYxa8x01WJ73B8WNYr-cgcOkL4-nMMIOdnc"/>
+</div>
+<!-- Body Text -->
+<article class="px-margin-page">
+<p class="font-body-large text-[#E2E5EB] mb-stack-lg">
+        The history of human civilization is a story of expanding the radius of our daily lives. Before the wheel, our world was limited to what we could walk to in a day. The horse expanded that radius, and trains and automobiles shattered it completely, fundamentally reshaping where and how we live. The suburbs, the modern city layout, the commute—all are products of the automobile's particular speed and infrastructure requirements.
+      </p>
+<p class="font-body-large text-[#E2E5EB] mb-stack-lg">
+        Now, we are on the precipice of another fundamental shift. Electric Vertical Takeoff and Landing (eVTOL) vehicles—flying cars—promise to move us in a straight line, untethered from the rigid grid of asphalt and concrete. They aren't just a faster way to get from A to B; they are a new geometry for daily living.
+      </p>
+<!-- Pull-quote -->
+<blockquote class="my-stack-lg pl-stack-md border-l-[3px] border-accent-blue">
+<p class="font-pullquote text-primary">
+          "The car didn't just move us — it rearranged the world around us."
+        </p>
+</blockquote>
+<p class="font-body-large text-[#E2E5EB] mb-stack-lg">
+        Imagine living in a quiet mountain town but working in a bustling metropolis, the commute taking minutes instead of hours. The implications for real estate, urban planning, and economic opportunity are staggering. We are not just inventing a new vehicle; we are inventing a new kind of map. The radius of daily life is about to expand once again.
+      </p>
+</article>
+</main>
+<!-- Bottom Fixed Bar -->
+<div class="fixed bottom-0 w-full z-50 bg-background/95 backdrop-blur-sm border-t border-border-subtle h-[64px] flex items-center justify-center px-margin-page pb-safe">
+<button class="w-full bg-primary text-obsidian-dark font-button uppercase rounded hover:bg-primary-fixed-dim transition-colors h-[40px] flex items-center justify-center tracking-wide">
+      SAVE TO STACK
+    </button>
+</div>
+<script src="tangent.js"></script>
+</body></html>

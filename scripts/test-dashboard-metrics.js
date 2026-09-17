@@ -160,7 +160,7 @@ check('onboarding and Dashboard share one first ranked-feed request',
     && initialDashboardFeedSource.includes('Register the shared promise before even a local-storage read begins')
     && fs.readFileSync(path.join(__dirname, '..', 'src', 'screens', 'OnboardingScreen.tsx'), 'utf8').includes('requestInitialDashboardFeed'),
   true);
-check('Dashboard uses the minimal Loading cursor only while cards themselves are unavailable',
+check('Dashboard renders the B-series hero (one essay owns the screen) with hero advance + filing sheet',
   dashboardSource.includes('if (loading) {')
     && !dashboardSource.includes('if (loading || contextLoading)')
     && dashboardSource.includes('<HomeLoadingState />')
@@ -180,16 +180,22 @@ check('Dashboard uses the minimal Loading cursor only while cards themselves are
     && startupScreenSource.includes('}, [accountTransitioning]);')
     && startupScreenSource.includes('typeFirstWord')
     && startupScreenSource.includes('typeSecondWord')
-    && dashboardSource.includes('accessibilityElementsHidden={metrics.length === 0}')
-    && dashboardSource.includes('statsPlaceholderRow')
+    // B-series invariants: the stats pill is retired (metrics moved to the
+    // Tuning tab); the hero card + save sheet + advance affordance replace it.
+    && dashboardSource.includes('<FeedHeroCard')
+    && dashboardSource.includes('<SaveToStackSheet')
+    // mock v3: thumbs-down left the feed — Tuning MUTE owns the negative signal
+    && dashboardSource.includes("advanceHero('swipe_next')")
+    && !dashboardSource.includes('statsPlaceholderRow')
     && startupScreenSource.includes('>TANGENT</Text>')
     && startupScreenSource.includes('Animated.loop'),
   true);
-check('startup hides the status bar and native splash provides Tangent light/dark backgrounds',
+check('startup hides the status bar and the native splash is dark-only obsidian (Obsidian Steel Glacier)',
   startupScreenSource.includes("import { StatusBar } from 'expo-status-bar'")
     && startupScreenSource.includes('<StatusBar hidden animated />')
-    && appConfigSource.includes('"backgroundColor": "#F8F7F4"')
-    && appConfigSource.includes('"backgroundColor": "#121212"')
+    && appConfigSource.includes('"backgroundColor": "#0C0E12"')
+    && !appConfigSource.includes('"backgroundColor": "#F8F7F4"')
+    && !appConfigSource.includes('"backgroundColor": "#121212"')
     && appConfigSource.includes('"expo-splash-screen"'),
   true);
 check('startup uses the Home-consistent system-font TANGENT/Sapere aude cursor rather than an emoji spinner',

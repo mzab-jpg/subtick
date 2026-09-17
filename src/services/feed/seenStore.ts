@@ -88,6 +88,7 @@ export async function markArticleSeen(articleId: string, article?: Article): Pro
           publicationName: article.publicationName,
           category: article.category,
           estimatedReadMinutes: article.estimatedReadMinutes,
+          seenAt: Date.now(),
         };
         await AsyncStorage.setItem(SEEN_ARTICLES_META_KEY, JSON.stringify(metas));
       }

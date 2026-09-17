@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Tangent Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+              "surface-tint": "#c3c7cc",
+              "inverse-surface": "#e5e2e1",
+              "tertiary": "#ffffff",
+              "on-primary-container": "#616569",
+              "inverse-primary": "#5b5f63",
+              "on-error": "#690005",
+              "surface-container-highest": "#353535",
+              "secondary-container": "#214d6a",
+              "primary": "#ffffff",
+              "tertiary-fixed-dim": "#a3cbee",
+              "on-primary": "#2d3135",
+              "on-surface-variant": "#c5c6ca",
+              "on-tertiary-fixed": "#001e30",
+              "on-background": "#e5e2e1",
+              "on-primary-fixed-variant": "#43474b",
+              "tertiary-container": "#cbe6ff",
+              "secondary-fixed-dim": "#a2cbee",
+              "tertiary-fixed": "#cbe6ff",
+              "surface-variant": "#353535",
+              "on-secondary-container": "#94bddf",
+              "error": "#FFB4AB",
+              "outline-variant": "#44474a",
+              "primary-fixed": "#dfe3e8",
+              "surface-bright": "#3a3939",
+              "primary-container": "#dfe3e8",
+              "surface-container-low": "#1c1b1c",
+              "surface-container-lowest": "#0e0e0e",
+              "surface-container": "#201f20",
+              "outline": "#8f9194",
+              "on-tertiary": "#00344f",
+              "on-surface-faint": "#475263",
+              "surface-card": "#1B1F28",
+              "secondary": "#a2cbee",
+              "on-primary-fixed": "#181c20",
+              "background": "#0C0E12",
+              "on-secondary-fixed": "#001e30",
+              "surface-dim": "#131313",
+              "primary-fixed-dim": "#c3c7cc",
+              "on-tertiary-fixed-variant": "#1f4a68",
+              "accent-soft": "rgba(127, 168, 201, 0.12)",
+              "inverse-on-surface": "#313030",
+              "surface-raised": "#161A20",
+              "border-subtle": "#252A32",
+              "surface": "#131313",
+              "on-surface": "#e5e2e1",
+              "error-container": "#93000a",
+              "on-secondary-fixed-variant": "#1e4b67",
+              "on-surface-muted": "#9BA7BA",
+              "surface-container-high": "#2a2a2a",
+              "border-strong": "#4B535D",
+              "on-secondary": "#00344f",
+              "on-error-container": "#ffdad6",
+              "secondary-fixed": "#cae6ff",
+              "on-tertiary-container": "#406887",
+              "accent-blue": "#7FA8C9"
+            },
+            "borderRadius": {
+              "DEFAULT": "0.125rem",
+              "lg": "0.25rem",
+              "xl": "0.5rem",
+              "full": "0.75rem",
+              "card": "8px"
+            },
+            "spacing": {
+              "gutter": "16px",
+              "stack-lg": "32px",
+              "margin-page": "24px",
+              "baseline": "4px",
+              "stack-sm": "8px",
+              "stack-md": "16px",
+              "section-gap": "28px"
+            },
+            "fontFamily": {
+              "metric-lg": ["Space Grotesk"],
+              "label-mono": ["JetBrains Mono"],
+              "body-md": ["Manrope"],
+              "headline-md": ["Space Grotesk"],
+              "title-sm": ["Space Grotesk"],
+              "display-lg": ["Space Grotesk"]
+            },
+            "fontSize": {
+              "metric-lg": ["24px", {"lineHeight": "28px", "fontWeight": "500"}],
+              "label-mono": ["10px", {"lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "500"}],
+              "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+              "headline-md": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+              "title-sm": ["17px", {"lineHeight": "24px", "fontWeight": "600"}],
+              "display-lg": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #0C0E12;
+            color: #e5e2e1;
+        }
+        /* Custom section label based on prompt */
+        .section-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #475263;
+        }
+        .text-16-manrope {
+            font-family: 'Manrope', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .text-13-manrope {
+            font-family: 'Manrope', sans-serif;
+            font-size: 13px;
+        }
+        .header-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .setting-card {
+            background-color: #1B1F28;
+            border: 1px solid #252A32;
+            border-radius: 8px;
+        }
+        /* Custom Toggle */
+        .toggle-track {
+            width: 44px;
+            height: 24px;
+            border-radius: 12px;
+            background-color: #7FA8C9;
+            position: relative;
+            cursor: pointer;
+        }
+        .toggle-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #1B1F28;
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            transition: transform 0.2s ease;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased pb-24 h-screen overflow-y-auto">
+<!-- HEADER -->
+<header class="fixed top-0 w-full z-50 bg-background/90 backdrop-blur-md border-b border-border-subtle flex items-center justify-between px-gutter h-14">
+<button class="text-on-surface hover:text-accent-blue transition-colors w-8 h-8 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<h1 class="header-title text-on-surface">SETTINGS</h1>
+<div class="w-8"></div> <!-- Spacer for centering -->
+</header>
+<main class="pt-20 px-gutter flex flex-col gap-section-gap">
+<!-- SECTION: ACCOUNT -->
+<section class="flex flex-col gap-2">
+<h2 class="section-label px-1">ACCOUNT</h2>
+<div class="setting-card">
+<button class="w-full flex items-center justify-between p-4 active:bg-surface-raised transition-colors rounded-card text-left">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="account_circle">account_circle</span>
+<span class="text-16-manrope">Account</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-muted">
+<span class="text-13-manrope">Anonymous</span>
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_right">chevron_right</span>
+</div>
+</button>
+</div>
+</section>
+<!-- SECTION: LIBRARY -->
+<section class="flex flex-col gap-2">
+<h2 class="section-label px-1">LIBRARY</h2>
+<div class="setting-card flex">
+<button class="flex-1 flex flex-col items-center justify-center gap-2 p-4 active:bg-surface-raised transition-colors rounded-l-card border-r border-border-subtle">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="history">history</span>
+<span class="text-13-manrope text-on-surface">History</span>
+</button>
+<button class="flex-1 flex flex-col items-center justify-center gap-2 p-4 active:bg-surface-raised transition-colors rounded-r-card">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="bookmark">bookmark</span>
+<span class="text-13-manrope text-on-surface">Saved Reads</span>
+</button>
+</div>
+</section>
+<!-- SECTION: PREFERENCES -->
+<section class="flex flex-col gap-2">
+<h2 class="section-label px-1">PREFERENCES</h2>
+<div class="setting-card flex flex-col">
+<!-- Row A: Theme -->
+<div class="flex items-center justify-between p-4 border-b border-border-subtle ml-4 pl-0">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="dark_mode">dark_mode</span>
+<span class="text-16-manrope">Theme</span>
+</div>
+<div class="flex items-center bg-surface-raised rounded-[6px] p-1 border border-border-subtle">
+<button class="px-3 py-1 text-[10px] font-label-mono font-bold tracking-wider text-accent-blue bg-surface-card rounded-[4px] shadow-sm">SYSTEM</button>
+<button class="px-3 py-1 text-[10px] font-label-mono font-bold tracking-wider text-on-surface-muted hover:text-on-surface">LIGHT</button>
+<button class="px-3 py-1 text-[10px] font-label-mono font-bold tracking-wider text-on-surface-muted hover:text-on-surface">DARK</button>
+</div>
+</div>
+<!-- Row B: Feed Categories -->
+<button class="w-full flex items-center justify-between p-4 border-b border-border-subtle ml-4 pl-0 active:bg-surface-raised transition-colors text-left">
+<div class="flex items-center gap-3 text-on-surface">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="sell">sell</span>
+<span class="text-16-manrope">Feed Categories</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-muted pr-4">
+<span class="text-[10px] font-label-mono font-bold tracking-wider uppercase">9 Available</span>
+<span class="material-symbols-outlined text-[20px]" data-icon="chevron_right">chevron_right</span>
+</div>
+</button>
+<!-- Row C: Archived Articles -->
+<div class="flex items-center justify-between p-4 ml-4 pl-0">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-on-surface-muted mt-0.5" data-icon="rss_feed">rss_feed</span>
+<div class="flex flex-col">
+<span class="text-16-manrope text-on-surface">Archived Articles</span>
+<span class="text-[12px] font-body-md text-on-surface-muted leading-tight mt-0.5">Load older articles from Substack directly</span>
+</div>
+</div>
+<div class="pr-4 shrink-0">
+<div class="toggle-track">
+<div class="toggle-thumb"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION: SUPPORT & FEEDBACK -->
+<section class="flex flex-col gap-2">
+<h2 class="section-label px-1">SUPPORT &amp; FEEDBACK</h2>
+<div class="setting-card flex flex-col">
+<button class="w-full flex items-center gap-3 p-4 border-b border-border-subtle ml-4 pl-0 active:bg-surface-raised transition-colors text-left">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="chat_bubble">chat_bubble</span>
+<span class="text-16-manrope text-on-surface">Send Feedback</span>
+</button>
+<button class="w-full flex items-center gap-3 p-4 ml-4 pl-0 active:bg-surface-raised transition-colors text-left rounded-b-card">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="rss_feed">rss_feed</span>
+<span class="text-16-manrope text-on-surface">Request a Feed</span>
+</button>
+</div>
+</section>
+<!-- SECTION: DEVELOPER -->
+<section class="flex flex-col gap-2">
+<h2 class="section-label px-1">DEVELOPER</h2>
+<div class="setting-card">
+<button class="w-full flex items-center gap-3 p-4 active:bg-surface-raised transition-colors rounded-card text-left">
+<span class="material-symbols-outlined text-on-surface-muted" data-icon="terminal">terminal</span>
+<span class="text-16-manrope text-on-surface">Developer Options</span>
+</button>
+</div>
+</section>
+<!-- FOOTER -->
+<div class="pt-8 pb-12 flex justify-center">
+<span class="font-label-mono text-label-mono text-on-surface-faint tracking-widest uppercase">TANGENT V1.0.0</span>
+</div>
+</main>
+<!-- Bottom Nav Shell based on prompt JSON -->
+<nav class="fixed bottom-0 w-full z-50 bg-background/92 dark:bg-background/92 backdrop-blur-md border-t border-border-subtle flex justify-around items-center h-20 pb-safe px-gutter md:hidden">
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 hover:text-primary transition-colors duration-300 w-16">
+<span class="material-symbols-outlined" data-icon="article">article</span>
+<span class="font-label-mono text-label-mono uppercase">Feed</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 hover:text-primary transition-colors duration-300 w-16">
+<span class="material-symbols-outlined" data-icon="subscriptions">subscriptions</span>
+<span class="font-label-mono text-label-mono uppercase">Stacks</span>
+</button>
+<!-- Tuning maps closest to Settings -->
+<button class="flex flex-col items-center justify-center text-secondary gap-1 transform scale-90 transition-transform w-16">
+<span class="material-symbols-outlined text-accent-blue" data-icon="tune" style="font-variation-settings: 'FILL' 1;">tune</span>
+<span class="font-label-mono text-label-mono uppercase text-primary">Tuning</span>
+<!-- Small pip indicator could go here, omitting for tight spacing as per JSON logic mostly text color driven -->
+</button>
+</nav>
+</body></html>

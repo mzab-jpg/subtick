@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Stack Builder v4 — Presets &amp; Filters</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "accent-soft": "rgba(127, 168, 201, 0.12)",
+                        "surface-container": "#201f20",
+                        "tertiary-fixed": "#cbe6ff",
+                        "on-secondary": "#00344f",
+                        "surface-container-high": "#2a2a2a",
+                        "primary-fixed-dim": "#c3c7cc",
+                        "secondary-fixed-dim": "#a2cbee",
+                        "on-secondary-container": "#94bddf",
+                        "secondary-container": "#214d6a",
+                        "surface": "#131313",
+                        "on-primary": "#2d3135",
+                        "on-surface-muted": "#9BA7BA",
+                        "on-tertiary-fixed-variant": "#1f4a68",
+                        "on-secondary-fixed-variant": "#1e4b67",
+                        "surface-container-low": "#1c1b1c",
+                        "on-tertiary-container": "#406887",
+                        "on-primary-container": "#616569",
+                        "surface-bright": "#3a3939",
+                        "on-secondary-fixed": "#001e30",
+                        "surface-variant": "#353535",
+                        "surface-raised": "#161A20",
+                        "border-strong": "#4B535D",
+                        "surface-dim": "#131313",
+                        "on-surface-variant": "#c5c6ca",
+                        "background": "#0C0E12",
+                        "secondary": "#a2cbee",
+                        "error-container": "#93000a",
+                        "on-background": "#e5e2e1",
+                        "outline": "#8f9194",
+                        "primary": "#ffffff",
+                        "surface-card": "#1B1F28",
+                        "primary-container": "#dfe3e8",
+                        "on-surface-faint": "#475263",
+                        "tertiary-fixed-dim": "#a3cbee",
+                        "inverse-surface": "#e5e2e1",
+                        "border-subtle": "#252A32",
+                        "on-tertiary-fixed": "#001e30",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary": "#00344f",
+                        "primary-fixed": "#dfe3e8",
+                        "surface-container-highest": "#353535",
+                        "tertiary": "#ffffff",
+                        "surface-container-lowest": "#0e0e0e",
+                        "inverse-on-surface": "#313030",
+                        "secondary-fixed": "#cae6ff",
+                        "on-primary-fixed-variant": "#43474b",
+                        "inverse-primary": "#5b5f63",
+                        "outline-variant": "#44474a",
+                        "surface-tint": "#c3c7cc",
+                        "on-surface": "#e5e2e1",
+                        "error": "#FFB4AB",
+                        "on-primary-fixed": "#181c20",
+                        "tertiary-container": "#cbe6ff",
+                        "on-error": "#690005",
+                        "accent-steel": "#7FA8C9",
+                        "deep-steel": "#5E86A6",
+                        "silver": "#F0F3F8"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem",
+                        "card": "8px",
+                        "control": "4px"
+                    },
+                    spacing: {
+                        "gutter": "16px",
+                        "stack-md": "16px",
+                        "margin-page": "24px",
+                        "stack-sm": "8px",
+                        "stack-lg": "32px",
+                        "baseline": "4px"
+                    },
+                    fontFamily: {
+                        "metric-lg": ["Space Grotesk"],
+                        "title-sm": ["Space Grotesk"],
+                        "label-mono": ["JetBrains Mono"],
+                        "headline-md": ["Space Grotesk"],
+                        "display-lg": ["Space Grotesk"],
+                        "body-md": ["Manrope"]
+                    },
+                    fontSize: {
+                        "metric-lg": ["24px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "title-sm": ["17px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "label-mono": ["10px", { "lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "500" }],
+                        "headline-md": ["22px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "display-lg": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "22px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .hairline-b { border-bottom: 1px solid #252A32; }
+        .hairline-t { border-top: 1px solid #252A32; }
+        .hairline-y { border-top: 1px solid #252A32; border-bottom: 1px solid #252A32; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .toast {
+            position: fixed;
+            bottom: 112px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background-color: #1B1F28;
+            border: 1px solid #7FA8C9;
+            border-radius: 4px;
+            padding: 10px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #F0F3F8;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 180ms ease, transform 180ms ease;
+            z-index: 100;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        .dropdown-popover {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            background-color: #1B1F28;
+            border: 1px solid #252A32;
+            border-radius: 4px;
+            margin-top: 4px;
+            z-index: 50;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .dropdown-popover.show {
+            display: flex;
+            flex-direction: column;
+        }
+        .dropdown-item {
+            padding: 8px 12px;
+            font-family: 'Manrope', sans-serif;
+            font-size: 12px;
+            color: #e5e2e1;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+        .dropdown-item:hover {
+            background-color: #161A20;
+        }
+        
+        .preset-chip {
+            transition: all 0.2s ease;
+        }
+        .preset-chip.active {
+            border-color: #7FA8C9;
+            color: #7FA8C9;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen pb-32">
+<!-- Fixed Top Bar -->
+<header class="fixed top-0 left-0 right-0 h-[56px] bg-background/95 backdrop-blur-md hairline-b z-50 flex items-center justify-between px-margin-page">
+<button class="font-label-mono text-[11px] text-on-surface-muted uppercase tracking-wider">CANCEL</button>
+<div class="flex flex-col items-center">
+<span class="font-label-mono text-[8px] text-on-surface-faint uppercase tracking-wider mb-0.5">LIBRARY &amp; STACKS</span>
+<span class="font-metric-lg text-[15px] text-silver leading-tight font-medium">Create Reading Stack</span>
+</div>
+<div class="flex items-center text-accent-steel gap-1 transition-colors duration-200" id="draft-status">
+<span class="material-symbols-outlined text-[12px] draft-icon">check</span>
+<span class="font-label-mono text-[9px] uppercase tracking-wider draft-text">DRAFT SAVED</span>
+</div>
+</header>
+<!-- Main Content -->
+<main class="pt-[80px] px-margin-page flex flex-col gap-8">
+<!-- Stack Name Field -->
+<section class="flex flex-col gap-2">
+<div class="flex justify-between items-end">
+<label class="font-label-mono text-[9px] text-on-surface-faint uppercase tracking-wider">STACK NAME</label>
+<span class="font-label-mono text-[8px] text-accent-steel uppercase tracking-wider">REQUIRED</span>
+</div>
+<div class="h-[48px] bg-transparent border border-border-strong rounded-control flex items-center px-4 relative">
+<input class="w-full bg-transparent text-silver font-metric-lg text-[17px] focus:outline-none focus:ring-0 border-none p-0 trigger-draft" type="text" value="Sunday Longform"/>
+<div class="absolute right-4 w-[2px] h-[20px] bg-accent-steel animate-pulse"></div>
+</div>
+</section>
+<!-- Occasion Preset -->
+<section class="flex flex-col gap-2">
+<div class="flex justify-between items-end">
+<label class="font-label-mono text-[9px] text-on-surface-faint uppercase tracking-wider">OCCASION PRESET</label>
+<span class="font-label-mono text-[8px] text-on-surface-faint uppercase tracking-wider">OPTIONAL</span>
+</div>
+<div class="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+<button class="preset-chip whitespace-nowrap bg-transparent border border-border-strong rounded-control font-label-mono text-[9px] text-on-surface-muted uppercase tracking-wider px-3 py-2 flex-shrink-0" data-msg="PRESET: WEEKEND · LONGFORMS + ESSAYS" data-preset="WEEKEND">WEEKEND</button>
+<button class="preset-chip whitespace-nowrap bg-transparent border border-border-strong rounded-control font-label-mono text-[9px] text-on-surface-muted uppercase tracking-wider px-3 py-2 flex-shrink-0" data-msg="PRESET: DEEP FOCUS · LONGFORMS ONLY" data-preset="DEEP FOCUS">DEEP FOCUS</button>
+<button class="preset-chip whitespace-nowrap bg-transparent border border-border-strong rounded-control font-label-mono text-[9px] text-on-surface-muted uppercase tracking-wider px-3 py-2 flex-shrink-0" data-msg="PRESET: COMMUTE · UNDER 25 MIN" data-preset="COMMUTE">COMMUTE</button>
+<button class="preset-chip whitespace-nowrap bg-transparent border border-border-strong rounded-control font-label-mono text-[9px] text-on-surface-muted uppercase tracking-wider px-3 py-2 flex-shrink-0" data-msg="PRESET: OFFLINE · CACHED ONLY" data-preset="OFFLINE">OFFLINE</button>
+</div>
+</section>
+<!-- Section Header -->
+<div class="font-label-mono text-[9px] text-on-surface-faint uppercase tracking-wider">SELECT SOURCE PATHWAYS</div>
+<!-- Source Card 1 (Expanded) -->
+<section class="bg-surface-card rounded-card border border-border-subtle overflow-hidden">
+<!-- Header -->
+<div class="p-4 flex items-center justify-between hairline-b bg-surface-card">
+<div class="flex items-center gap-3">
+<div class="w-[32px] h-[32px] bg-surface-raised border border-border-strong rounded-control flex items-center justify-center">
+<span class="material-symbols-outlined text-accent-steel text-[16px]">bookmark</span>
+</div>
+<span class="font-metric-lg text-[15px] text-silver font-medium">My Saves &amp; History</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="bg-accent-steel text-background font-label-mono text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-control">22 AVAILABLE</span>
+<span class="material-symbols-outlined text-on-surface-muted">expand_less</span>
+</div>
+</div>
+<!-- Content -->
+<div class="flex flex-col">
+<!-- Tabs -->
+<div class="flex px-4 pt-4 pb-2 gap-6 hairline-b">
+<div class="flex flex-col gap-2 relative">
+<span class="font-label-mono text-[10px] text-accent-steel uppercase tracking-wider font-bold">QUICK QUEUE <span class="text-accent-steel/70">2</span></span>
+<div class="absolute bottom-[-9px] left-0 right-0 h-[2px] bg-accent-steel"></div>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-muted uppercase tracking-wider">HISTORY <span class="text-on-surface-faint">14</span></span>
+<span class="font-label-mono text-[10px] text-on-surface-muted uppercase tracking-wider">STASH <span class="text-on-surface-faint">6</span></span>
+</div>
+<!-- Essay Rows -->
+<div class="flex flex-col" id="source-list-1">
+<!-- Row 1 -->
+<div class="essay-row h-[56px] px-4 flex items-center justify-between hairline-b hover:bg-surface-raised/50 cursor-pointer trigger-draft" data-checked="true" data-duration="8" data-id="essay-1" data-title="The Liquidity Illusion in Tech Markets">
+<div class="flex items-center gap-4 w-full pointer-events-none">
+<div class="checkbox w-[20px] h-[20px] rounded-[4px] border border-accent-steel bg-accent-soft flex items-center justify-center flex-shrink-0 transition-colors">
+<span class="material-symbols-outlined text-[14px] text-accent-steel check-icon">check</span>
+</div>
+<div class="flex flex-col overflow-hidden w-full">
+<span class="text-silver font-medium text-[13px] truncate">The Liquidity Illusion in Tech Markets</span>
+<span class="text-on-surface-muted text-[11px] truncate">Byrne Hobart · The Diff</span>
+</div>
+<span class="font-label-mono text-[9px] text-on-surface-muted whitespace-nowrap flex-shrink-0">8 MIN</span>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="essay-row h-[56px] px-4 flex items-center justify-between hairline-b hover:bg-surface-raised/50 cursor-pointer trigger-draft" data-checked="true" data-duration="7" data-id="essay-2" data-title="Why Algorithmic Feeds Need Human Playlists">
+<div class="flex items-center gap-4 w-full pointer-events-none">
+<div class="checkbox w-[20px] h-[20px] rounded-[4px] border border-accent-steel bg-accent-soft flex items-center justify-center flex-shrink-0 transition-colors">
+<span class="material-symbols-outlined text-[14px] text-accent-steel check-icon">check</span>
+</div>
+<div class="flex flex-col overflow-hidden w-full">
+<span class="text-silver font-medium text-[13px] truncate">Why Algorithmic Feeds Need Human Playlists</span>
+<span class="text-on-surface-muted text-[11px] truncate">Packy McCormick · Not Boring</span>
+</div>
+<span class="font-label-mono text-[9px] text-on-surface-muted whitespace-nowrap flex-shrink-0">7 MIN</span>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="essay-row h-[56px] px-4 flex items-center justify-between hover:bg-surface-raised/50 cursor-pointer trigger-draft" data-checked="false" data-duration="16" data-id="essay-3" data-title="Network States &amp; High-Agency Cities">
+<div class="flex items-center gap-4 w-full pointer-events-none">
+<div class="checkbox w-[20px] h-[20px] rounded-[4px] border border-border-strong bg-transparent flex items-center justify-center flex-shrink-0 transition-colors">
+<span class="material-symbols-outlined text-[14px] text-background check-icon opacity-0">check</span>
+</div>
+<div class="flex flex-col overflow-hidden w-full">
+<span class="text-silver font-medium text-[13px] truncate">Network States &amp; High-Agency Cities</span>
+<span class="text-on-surface-muted text-[11px] truncate">Balaji Srinivasan · 1729</span>
+</div>
+<span class="font-label-mono text-[9px] text-on-surface-muted whitespace-nowrap flex-shrink-0">16 MIN</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Source Card 2 (Expanded & Highlighted) -->
+<section class="bg-surface-card rounded-card border border-accent-steel/50 overflow-hidden relative shadow-[0_0_15px_rgba(127,168,201,0.05)]">
+<!-- Header -->
+<div class="p-4 flex items-center justify-between hairline-b bg-surface-card">
+<div class="flex items-center gap-3">
+<div class="w-[32px] h-[32px] bg-accent-soft border border-accent-steel/30 rounded-control flex items-center justify-center">
+<span class="material-symbols-outlined text-accent-steel text-[16px]">tune</span>
+</div>
+<span class="font-metric-lg text-[15px] text-silver font-medium">Custom Discovery &amp; Filters</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="bg-accent-steel text-background font-label-mono text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-control">ACTIVE</span>
+<span class="material-symbols-outlined text-accent-steel">expand_less</span>
+</div>
+</div>
+<!-- Content -->
+<div class="p-4 flex flex-col gap-5">
+<div class="font-label-mono text-[8px] text-on-surface-faint uppercase tracking-wider">REFINE CANDIDATES</div>
+<!-- Filter Grid -->
+<div class="grid grid-cols-2 gap-3">
+<div class="h-[40px] border border-border-strong rounded-control flex items-center justify-between px-3 bg-surface-raised/30 relative filter-dropdown cursor-pointer">
+<div class="flex flex-col justify-center pointer-events-none">
+<span class="text-[9px] text-on-surface-faint font-label-mono uppercase">Topic</span>
+<span class="text-[12px] text-silver truncate filter-val">AI &amp; Systems</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-muted pointer-events-none">arrow_drop_down</span>
+<div class="dropdown-popover">
+<div class="dropdown-item">AI &amp; Systems</div>
+<div class="dropdown-item">Macroeconomics</div>
+<div class="dropdown-item">Philosophy</div>
+<div class="dropdown-item">Energy &amp; Hardware</div>
+<div class="dropdown-item">Venture &amp; Tech</div>
+</div>
+</div>
+<div class="h-[40px] border border-border-strong rounded-control flex items-center justify-between px-3 bg-surface-raised/30 relative filter-dropdown cursor-pointer">
+<div class="flex flex-col justify-center pointer-events-none">
+<span class="text-[9px] text-on-surface-faint font-label-mono uppercase">Duration</span>
+<span class="text-[12px] text-silver truncate filter-val">10-25 min</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-muted pointer-events-none">arrow_drop_down</span>
+<div class="dropdown-popover">
+<div class="dropdown-item">Under 10 min</div>
+<div class="dropdown-item">10–25 min</div>
+<div class="dropdown-item">25+ min</div>
+</div>
+</div>
+<div class="h-[40px] border border-border-strong rounded-control flex items-center justify-between px-3 bg-surface-raised/30 relative filter-dropdown cursor-pointer">
+<div class="flex flex-col justify-center pointer-events-none">
+<span class="text-[9px] text-on-surface-faint font-label-mono uppercase">Quality</span>
+<span class="text-[12px] text-accent-steel truncate filter-val">Top 5% Signal</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-muted pointer-events-none">arrow_drop_down</span>
+<div class="dropdown-popover">
+<div class="dropdown-item">Top 5% Signal</div>
+<div class="dropdown-item">Curator Picks</div>
+<div class="dropdown-item">All Fresh</div>
+</div>
+</div>
+<div class="h-[40px] border border-border-strong rounded-control flex items-center justify-between px-3 bg-surface-raised/30 relative filter-dropdown cursor-pointer">
+<div class="flex flex-col justify-center pointer-events-none">
+<span class="text-[9px] text-on-surface-faint font-label-mono uppercase">Source</span>
+<span class="text-[12px] text-silver truncate filter-val">All Substacks</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-muted pointer-events-none">arrow_drop_down</span>
+<div class="dropdown-popover">
+<div class="dropdown-item">All Substack Curated</div>
+<div class="dropdown-item">Followed Only</div>
+<div class="dropdown-item">Extended Network</div>
+</div>
+</div>
+<div class="h-[40px] border border-border-strong rounded-control flex items-center justify-between px-3 bg-surface-raised/30 relative filter-dropdown cursor-pointer">
+<div class="flex flex-col justify-center pointer-events-none">
+<span class="text-[9px] text-on-surface-faint font-label-mono uppercase">Freshness</span>
+<span class="text-[12px] text-silver truncate filter-val">Top 5% Signal</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-muted pointer-events-none">arrow_drop_down</span>
+<div class="dropdown-popover">
+<div class="dropdown-item">Top 5% Signal</div>
+<div class="dropdown-item">New This Week</div>
+<div class="dropdown-item">All Time</div>
+</div>
+</div>
+<div class="h-[40px] border border-border-strong rounded-control flex items-center justify-between px-3 bg-surface-raised/30 relative filter-dropdown cursor-pointer">
+<div class="flex flex-col justify-center pointer-events-none">
+<span class="text-[9px] text-on-surface-faint font-label-mono uppercase">Sort By</span>
+<span class="text-[12px] text-silver truncate filter-val">Relevance</span>
+</div>
+<span class="material-symbols-outlined text-[14px] text-on-surface-muted pointer-events-none">arrow_drop_down</span>
+<div class="dropdown-popover">
+<div class="dropdown-item">Relevance</div>
+<div class="dropdown-item">Length (Short)</div>
+<div class="dropdown-item">Length (Long)</div>
+<div class="dropdown-item">Newest First</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Matching Candidates Header -->
+<div class="px-4 py-3 hairline-y bg-surface-raised/20 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="font-label-mono text-[9px] text-on-surface-muted uppercase tracking-wider">MATCHING CANDIDATES</span>
+<span class="bg-surface-variant text-on-surface font-label-mono text-[8px] px-1.5 py-0.5 rounded-[3px]" id="matching-pip">3 FOUND</span>
+</div>
+<button class="font-label-mono text-[9px] text-accent-steel uppercase tracking-wider font-bold trigger-draft" id="select-all-btn">SELECT ALL</button>
+</div>
+<!-- Candidate Rows -->
+<div class="flex flex-col" id="source-list-2">
+<!-- Candidate 1 -->
+<div class="essay-row p-4 flex gap-4 hairline-b hover:bg-surface-raised/50 cursor-pointer trigger-draft" data-checked="false" data-duration="14" data-id="essay-4" data-title="The Architecture of Tomorrow">
+<div class="checkbox w-[20px] h-[20px] rounded-[4px] border border-border-strong bg-transparent flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors pointer-events-none">
+<span class="material-symbols-outlined text-[14px] text-background check-icon opacity-0">check</span>
+</div>
+<div class="flex flex-col gap-1 w-full pointer-events-none">
+<div class="flex items-center gap-2">
+<span class="w-[18px] h-[18px] border border-border-strong rounded-[3px] flex items-center justify-center text-[8px] font-label-mono text-on-surface-muted">PW</span>
+<span class="text-silver font-medium text-[13px] leading-tight">The Architecture of Tomorrow</span>
+</div>
+<div class="flex items-center justify-between mt-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-accent-steel text-[10px]">star</span>
+<span class="font-label-mono text-[8px] text-accent-steel uppercase tracking-wider">TOP 5% SIGNAL</span>
+</div>
+<span class="font-label-mono text-[9px] text-on-surface-muted">14 MIN</span>
+</div>
+</div>
+</div>
+<!-- Candidate 2 -->
+<div class="essay-row p-4 flex gap-4 hover:bg-surface-raised/50 cursor-pointer trigger-draft" data-checked="false" data-duration="11" data-id="essay-5" data-title="Liquid Networks &amp; Agency">
+<div class="checkbox w-[20px] h-[20px] rounded-[4px] border border-border-strong bg-transparent flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors pointer-events-none">
+<span class="material-symbols-outlined text-[14px] text-background check-icon opacity-0">check</span>
+</div>
+<div class="flex flex-col gap-1 w-full pointer-events-none">
+<div class="flex items-center gap-2">
+<span class="w-[18px] h-[18px] border border-border-strong rounded-[3px] flex items-center justify-center text-[8px] font-label-mono text-on-surface-muted">NB</span>
+<span class="text-silver font-medium text-[13px] leading-tight">Liquid Networks &amp; Agency</span>
+</div>
+<div class="flex items-center justify-between mt-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-accent-steel text-[10px]">star</span>
+<span class="font-label-mono text-[8px] text-accent-steel uppercase tracking-wider">TOP 5% SIGNAL</span>
+</div>
+<span class="font-label-mono text-[9px] text-on-surface-muted">11 MIN</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Selected Essays Section -->
+<section class="flex flex-col gap-3">
+<div class="flex justify-between items-center px-1">
+<span class="font-label-mono text-[9px] text-on-surface-faint uppercase tracking-wider">SELECTED ESSAYS IN THIS STACK</span>
+<span class="bg-accent-steel text-background font-label-mono text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-control transition-colors" id="pip-tally">2 ESSAYS · 15 MIN</span>
+</div>
+<div class="bg-surface-card border border-border-subtle rounded-card flex flex-col" id="selected-list">
+<!-- Selected items generated by JS -->
+</div>
+</section>
+</main>
+<!-- Sticky Bottom Bar -->
+<div class="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-xl hairline-t p-4 flex flex-col gap-3 z-50">
+<div class="flex justify-between items-center px-1">
+<span class="font-label-mono text-[9px] text-on-surface-muted uppercase tracking-wider" id="bottom-tally">2 ESSAYS SELECTED · 15 MIN</span>
+<span class="font-label-mono text-[9px] text-accent-steel uppercase tracking-wider font-bold" id="bottom-status">READY TO COMPILE</span>
+</div>
+<button class="w-full h-[48px] bg-silver text-[#0B0E13] rounded-control font-label-mono text-[13px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-transform active:scale-[0.98]" id="create-btn">
+<span id="create-btn-text">CREATE STACK (2 ESSAYS · 15 MIN)</span> <span class="material-symbols-outlined text-[16px]" id="create-btn-icon">arrow_forward</span>
+</button>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+    const essayRows = document.querySelectorAll('.essay-row');
+    const selectAllBtn = document.getElementById('select-all-btn');
+    const selectedList = document.getElementById('selected-list');
+    
+    const pipTally = document.getElementById('pip-tally');
+    const bottomTally = document.getElementById('bottom-tally');
+    const bottomStatus = document.getElementById('bottom-status');
+    const createBtn = document.getElementById('create-btn');
+    const createBtnText = document.getElementById('create-btn-text');
+    const createBtnIcon = document.getElementById('create-btn-icon');
+    
+    const draftStatus = document.getElementById('draft-status');
+    const draftIcon = draftStatus.querySelector('.draft-icon');
+    const draftText = draftStatus.querySelector('.draft-text');
+    const triggerDraftEls = document.querySelectorAll('.trigger-draft');
+    
+    const toast = document.getElementById('toast');
+    
+    const presetChips = document.querySelectorAll('.preset-chip');
+    const filterDropdowns = document.querySelectorAll('.filter-dropdown');
+    const matchingPip = document.getElementById('matching-pip');
+    
+    let draftTimeout;
+    let toastTimeout;
+    
+    function updateTally() {
+        let count = 0;
+        let totalMin = 0;
+        
+        essayRows.forEach(row => {
+            if (row.dataset.checked === 'true') {
+                count++;
+                totalMin += parseInt(row.dataset.duration);
+            }
+        });
+        
+        if (count === 0) {
+            pipTally.textContent = "0 ESSAYS · 0 MIN";
+            pipTally.className = "bg-surface-variant text-on-surface font-label-mono text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-control transition-colors";
+            
+            bottomTally.textContent = "ADD ESSAYS TO COMPILE";
+            bottomTally.style.color = "#475263";
+            bottomStatus.style.opacity = "0";
+            
+            createBtn.style.opacity = "0.4";
+            createBtnText.textContent = "CREATE STACK (0 ESSAYS · 0 MIN)";
+        } else {
+            pipTally.textContent = `${count} ESSAYS · ${totalMin} MIN`;
+            pipTally.className = "bg-accent-steel text-background font-label-mono text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-control transition-colors";
+            
+            bottomTally.textContent = `${count} ESSAYS SELECTED · ${totalMin} MIN`;
+            bottomTally.style.color = "";
+            bottomStatus.style.opacity = "1";
+            
+            createBtn.style.opacity = "1";
+            createBtnText.textContent = `CREATE STACK (${count} ESSAYS · ${totalMin} MIN)`;
+        }
+        
+        renderSelectedList();
+    }
+    
+    function renderSelectedList() {
+        selectedList.innerHTML = '';
+        let index = 1;
+        
+        essayRows.forEach(row => {
+            if (row.dataset.checked === 'true') {
+                const div = document.createElement('div');
+                div.className = `p-3 flex items-center gap-3 group ${index > 1 ? 'hairline-t' : ''}`;
+                
+                div.innerHTML = `
+                    <span class="material-symbols-outlined text-on-surface-faint text-[16px] cursor-grab">drag_indicator</span>
+                    <span class="font-label-mono text-[10px] text-accent-steel w-[12px]">${index}</span>
+                    <div class="flex flex-col flex-1 overflow-hidden">
+                        <span class="text-silver text-[13px] truncate">${row.dataset.title}</span>
+                    </div>
+                    <span class="font-label-mono text-[9px] text-on-surface-muted">${row.dataset.duration} MIN</span>
+                    <button class="remove-selected material-symbols-outlined text-on-surface-faint hover:text-error text-[16px] trigger-draft" data-target-id="${row.dataset.id}">close</button>
+                `;
+                
+                selectedList.appendChild(div);
+                index++;
+            }
+        });
+        
+        document.querySelectorAll('.remove-selected').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const targetId = e.currentTarget.dataset.targetId;
+                const targetRow = document.querySelector(`.essay-row[data-id="${targetId}"]`);
+                if (targetRow) {
+                    toggleRow(targetRow, false);
+                }
+                triggerDraftState();
+            });
+        });
+    }
+    
+    function toggleRow(row, forceState = null) {
+        const isChecked = forceState !== null ? forceState : row.dataset.checked !== 'true';
+        row.dataset.checked = isChecked;
+        
+        const checkbox = row.querySelector('.checkbox');
+        const icon = row.querySelector('.check-icon');
+        
+        if (isChecked) {
+            checkbox.className = "checkbox w-[20px] h-[20px] rounded-[4px] border border-accent-steel bg-[#7FA8C9] flex items-center justify-center flex-shrink-0 transition-colors";
+            icon.className = "material-symbols-outlined text-[14px] text-background check-icon opacity-100";
+        } else {
+            checkbox.className = "checkbox w-[20px] h-[20px] rounded-[4px] border border-[#4B535D] bg-transparent flex items-center justify-center flex-shrink-0 transition-colors";
+            icon.className = "material-symbols-outlined text-[14px] text-background check-icon opacity-0";
+        }
+        
+        updateTally();
+    }
+    
+    function triggerDraftState() {
+        draftStatus.style.color = '#9BA7BA';
+        draftIcon.textContent = 'circle';
+        draftIcon.style.fontSize = '8px';
+        draftText.textContent = 'UNSAVED CHANGES';
+        
+        clearTimeout(draftTimeout);
+        draftTimeout = setTimeout(() => {
+            draftStatus.style.color = '#7FA8C9';
+            draftIcon.textContent = 'check';
+            draftIcon.style.fontSize = '12px';
+            draftText.textContent = 'DRAFT SAVED';
+        }, 1200);
+    }
+    
+    function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            toast.classList.remove('show');
+        }, 2200);
+    }
+    
+    // Initialize UI
+    essayRows.forEach(row => {
+        const isChecked = row.dataset.checked === 'true';
+        toggleRow(row, isChecked);
+        
+        row.addEventListener('click', () => {
+            toggleRow(row);
+        });
+    });
+    
+    selectAllBtn.addEventListener('click', () => {
+        essayRows.forEach(row => {
+            if (row.dataset.checked !== 'true') {
+                toggleRow(row, true);
+            }
+        });
+    });
+    
+    triggerDraftEls.forEach(el => {
+        el.addEventListener('click', triggerDraftState);
+        el.addEventListener('input', triggerDraftState);
+    });
+    
+    createBtn.addEventListener('click', () => {
+        let count = 0;
+        let totalMin = 0;
+        
+        essayRows.forEach(row => {
+            if (row.dataset.checked === 'true') {
+                count++;
+                totalMin += parseInt(row.dataset.duration);
+            }
+        });
+        
+        if (count === 0) {
+            showToast("SELECT AT LEAST ONE ESSAY");
+        } else {
+            const originalText = createBtnText.textContent;
+            createBtnText.textContent = "COMPILING...";
+            createBtnIcon.style.display = 'none';
+            
+            setTimeout(() => {
+                createBtnText.textContent = originalText;
+                createBtnIcon.style.display = 'inline-block';
+                showToast(`STACK COMPILED · ${count} ESSAYS · ${totalMin} MIN`);
+            }, 900);
+        }
+    });
+
+    // Preset chips
+    presetChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            presetChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            showToast(chip.dataset.msg);
+            triggerDraftState();
+        });
+    });
+
+    // Dropdowns
+    filterDropdowns.forEach(dropdown => {
+        dropdown.addEventListener('click', (e) => {
+            const popover = dropdown.querySelector('.dropdown-popover');
+            const isShowing = popover.classList.contains('show');
+            
+            document.querySelectorAll('.dropdown-popover').forEach(p => p.classList.remove('show'));
+            
+            if (!isShowing) {
+                popover.classList.add('show');
+            }
+        });
+        
+        const items = dropdown.querySelectorAll('.dropdown-item');
+        items.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const valSpan = dropdown.querySelector('.filter-val');
+                valSpan.textContent = item.textContent;
+                
+                // If it's the quality dropdown with accent steel color
+                if(valSpan.classList.contains('text-accent-steel')) {
+                   // Keep the accent color 
+                } else {
+                    valSpan.className = 'text-[12px] text-silver truncate filter-val';
+                }
+                
+                dropdown.querySelector('.dropdown-popover').classList.remove('show');
+                showToast(`FILTER: ${item.textContent}`);
+                triggerDraftState();
+                
+                // Random number 2-5 for matches
+                const randomMatch = Math.floor(Math.random() * 4) + 2;
+                matchingPip.textContent = `${randomMatch} FOUND`;
+            });
+        });
+    });
+    
+    // Close dropdowns on outside click
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.filter-dropdown')) {
+            document.querySelectorAll('.dropdown-popover').forEach(p => p.classList.remove('show'));
+        }
+    });
+
+</script>
+</body></html>

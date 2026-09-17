@@ -1,0 +1,656 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>B3 — Tuning &amp; Control Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-fixed-dim": "#a2cbee",
+            "on-primary-container": "#616569",
+            "surface-variant": "#353535",
+            "surface-container-highest": "#353535",
+            "background": "#0C0E12",
+            "on-secondary": "#00344f",
+            "secondary-container": "#214d6a",
+            "on-primary-fixed-variant": "#43474b",
+            "surface-container-lowest": "#0e0e0e",
+            "on-surface": "#e5e2e1",
+            "outline-variant": "#44474a",
+            "tertiary-fixed-dim": "#a3cbee",
+            "on-surface-muted": "#9BA7BA",
+            "tertiary-fixed": "#cbe6ff",
+            "on-tertiary-fixed": "#001e30",
+            "primary-container": "#dfe3e8",
+            "on-secondary-container": "#94bddf",
+            "on-error": "#690005",
+            "on-tertiary-fixed-variant": "#1f4a68",
+            "surface-card": "#1B1F28",
+            "surface-bright": "#3a3939",
+            "surface": "#131313",
+            "on-primary": "#2d3135",
+            "surface-raised": "#161A20",
+            "on-surface-variant": "#c5c6ca",
+            "on-tertiary-container": "#406887",
+            "on-primary-fixed": "#181c20",
+            "border-subtle": "#252A32",
+            "accent-soft": "rgba(127, 168, 201, 0.12)",
+            "inverse-primary": "#5b5f63",
+            "primary": "#ffffff",
+            "secondary": "#a2cbee",
+            "on-tertiary": "#00344f",
+            "on-secondary-fixed": "#001e30",
+            "primary-fixed": "#dfe3e8",
+            "primary-fixed-dim": "#c3c7cc",
+            "tertiary": "#ffffff",
+            "secondary-fixed": "#cae6ff",
+            "tertiary-container": "#cbe6ff",
+            "surface-dim": "#131313",
+            "error": "#FFB4AB",
+            "error-container": "#93000a",
+            "surface-container-low": "#1c1b1c",
+            "on-error-container": "#ffdad6",
+            "border-strong": "#4B535D",
+            "on-secondary-fixed-variant": "#1e4b67",
+            "on-surface-faint": "#475263",
+            "surface-container-high": "#2a2a2a",
+            "inverse-surface": "#e5e2e1",
+            "on-background": "#e5e2e1",
+            "surface-tint": "#c3c7cc",
+            "inverse-on-surface": "#313030",
+            "surface-container": "#201f20",
+            "outline": "#8f9194"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "stack-sm": "8px",
+            "stack-md": "16px",
+            "stack-lg": "32px",
+            "baseline": "4px",
+            "margin-page": "24px",
+            "gutter": "16px"
+          },
+          "fontFamily": {
+            "body-md": ["Manrope"],
+            "headline-md": ["Space Grotesk"],
+            "display-lg": ["Space Grotesk"],
+            "title-sm": ["Space Grotesk"],
+            "metric-lg": ["Space Grotesk"],
+            "label-mono": ["JetBrains Mono"]
+          },
+          "fontSize": {
+            "body-md": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+            "headline-md": ["22px", {"lineHeight": "28px", "fontWeight": "500"}],
+            "display-lg": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+            "title-sm": ["17px", {"lineHeight": "24px", "fontWeight": "600"}],
+            "metric-lg": ["24px", {"lineHeight": "28px", "fontWeight": "500"}],
+            "label-mono": ["10px", {"lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "500"}]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      background: #4B535D;
+      height: 4px;
+      border-radius: 2px;
+    }
+    /* Simple JS-driven fill approach works best with CSS variables, but inline works too */
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      margin-top: -6px;
+      background-color: #7FA8C9;
+      border: 2px solid #0C0E12;
+      height: 16px;
+      width: 16px;
+      border-radius: 50%;
+    }
+    
+    /* Toggle Switch */
+    .toggle-checkbox:checked {
+      right: 0;
+      border-color: #7FA8C9;
+    }
+    .toggle-checkbox:checked + .toggle-label {
+      background-color: #7FA8C9;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen pb-24 selection:bg-secondary-fixed-dim selection:text-on-secondary relative">
+<!-- TopAppBar JSON Component -->
+<header class="fixed top-0 w-full z-50 bg-background/90 dark:bg-background/90 backdrop-blur-md border-b border-border-subtle flex justify-between items-center px-margin-page h-16 transition-all duration-200"><div class="flex items-center gap-3"><span class="font-display-lg text-display-lg text-primary tracking-tighter uppercase font-semibold cursor-pointer">Tangent</span></div><div class="flex items-center gap-2"><button class="w-8 h-8 rounded-full border border-border-subtle bg-surface-card flex items-center justify-center text-on-surface-muted hover:text-primary transition-colors"></button><button class="w-8 h-8 rounded-full border border-border-subtle bg-surface-card flex items-center justify-center text-on-surface-muted hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]" style="font-variation-settings: &quot;FILL&quot; 1;">account_circle</span></button></div></header>
+<main class="pt-24 px-margin-page flex flex-col gap-stack-lg max-w-md mx-auto">
+<!-- Page Header -->
+<section class="flex justify-between items-end">
+<h1 class="font-display-lg text-[26px] font-medium text-[#F0F3F8] leading-none">Tuning &amp; Control Room</h1>
+<div class="flex items-center gap-2 mb-1" id="draft-state-container">
+<div class="w-1.5 h-1.5 rounded-full bg-[#7FA8C9] animate-pulse" id="draft-state-dot"></div>
+
+</div>
+</section>
+<!-- Segmented Control -->
+<section class="p-1 rounded-[6px] border border-border-subtle bg-surface-card flex w-full">
+<button class="flex-1 py-2 text-center font-label-mono text-[10px] uppercase rounded-[4px] transition-colors text-on-surface-muted hover:text-on-surface border-transparent" id="btn-taste">Taste Tuning</button>
+<button class="flex-1 py-2 text-center font-label-mono text-[10px] uppercase transition-colors font-bold text-[#F0F3F8] bg-background border border-border-subtle shadow-sm" id="btn-stats">Stats &amp; Insights</button>
+</section>
+<!-- Control Room / Taste Tuning Panel -->
+<section class="transition-opacity duration-300 flex-col gap-stack-lg hidden" id="taste-view" style="opacity: 0;">
+<!-- Feed Model Intro -->
+
+<!-- Master Dial -->
+<div class="flex flex-col gap-3 bg-[#1B1F28] border border-[#252A32] rounded-[8px] p-4"><div class="flex justify-between items-center"><span class="font-label-mono text-[10px] uppercase text-on-surface-faint font-bold tracking-wider">DISCOVERY INJECTION RATE</span><span class="font-label-mono text-[10px] text-[#7FA8C9] font-bold" id="slot-readout">20% (EVERY 5TH ESSAY)</span></div><div class="grid grid-cols-3 gap-2"><button class="py-2 px-2 rounded border border-[#252A32] bg-[#161A20] text-[#9BA7BA] font-label-mono text-[9px] uppercase hover:text-primary transition-colors flex flex-col items-center gap-0.5" data-slot="33%"><span class="">CONSERVATIVE</span><span class="text-[11px] text-[#F0F3F8] font-bold">EVERY 10TH (10%)</span></button><button class="py-2 px-2 rounded border border-[#7FA8C9] bg-[#7FA8C9]/10 text-[#7FA8C9] font-label-mono text-[9px] uppercase transition-colors flex flex-col items-center gap-0.5" data-slot="20%"><span class="">BALANCED DEFAULT</span><span class="text-[11px] text-[#7FA8C9] font-bold">EVERY 5TH (20%)</span></button><button class="py-2 px-2 rounded border border-[#252A32] bg-[#161A20] text-[#9BA7BA] font-label-mono text-[9px] uppercase hover:text-primary transition-colors flex flex-col items-center gap-0.5" data-slot="10%"><span class="">SERENDIPITY</span><span class="text-[11px] text-[#F0F3F8] font-bold">EVERY 3RD (33%)</span></button></div></div>
+<!-- Topic Mix -->
+<div class="flex flex-col gap-3"><div class="flex justify-between items-end mb-1"><div><h4 class="font-label-mono text-[10px] uppercase text-on-surface-faint font-bold tracking-wider">TOPIC MIX MATRIX</h4><p class="font-label-mono text-[8px] text-[#9BA7BA] mt-0.5">CATEGORY VECTOR WEIGHTS IN RETRIEVAL</p></div><span class="font-label-mono text-[8px] uppercase text-[#475263]">3-STATE TOGGLE</span></div><div class="flex flex-col gap-2"><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="BOOST" data-topic="AI &amp; Systems"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">AI &amp; Systems</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#7FA8C9] text-[#7FA8C9] font-label-mono text-[9px] uppercase transition-colors">+2.0× BOOST</button></div><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="BOOST" data-topic="Macroeconomics &amp; Finance"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">Macroeconomics &amp; Finance</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#7FA8C9] text-[#7FA8C9] font-label-mono text-[9px] uppercase transition-colors">+2.0× BOOST</button></div><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="NORMAL" data-topic="Philosophy &amp; Epistemology"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">Philosophy &amp; Epistemology</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#4B535D] text-[#9BA7BA] font-label-mono text-[9px] uppercase transition-colors">1.0× NORMAL</button></div><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="NORMAL" data-topic="Energy &amp; Deep Tech"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">Energy &amp; Deep Tech</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#4B535D] text-[#9BA7BA] font-label-mono text-[9px] uppercase transition-colors">1.0× NORMAL</button></div><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="NORMAL" data-topic="Geopolitics &amp; Strategy"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">Geopolitics &amp; Strategy</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#4B535D] text-[#9BA7BA] font-label-mono text-[9px] uppercase transition-colors">1.0× NORMAL</button></div><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="NORMAL" data-topic="Culture &amp; Media"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">Culture &amp; Media</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#4B535D] text-[#9BA7BA] font-label-mono text-[9px] uppercase transition-colors">1.0× NORMAL</button></div><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="NORMAL" data-topic="Venture &amp; Startups"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">Venture &amp; Startups</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#4B535D] text-[#9BA7BA] font-label-mono text-[9px] uppercase transition-colors">1.0× NORMAL</button></div><div class="topic-row flex justify-between items-center bg-[#1B1F28] border border-[#252A32] rounded-[6px] px-4 h-[44px] transition-opacity" data-state="NORMAL" data-topic="Design &amp; Architecture"><div class="flex items-center gap-2"><span class="font-body-md text-[14px] text-[#F0F3F8]">Design &amp; Architecture</span></div><button class="topic-chip px-3 py-1 rounded-[4px] border border-[#4B535D] text-[#9BA7BA] font-label-mono text-[9px] uppercase transition-colors">1.0× NORMAL</button></div></div></div>
+<!-- Signal Weights -->
+<!-- Source Trust -->
+<div class="flex flex-col gap-4"><h4 class="font-label-mono text-[10px] uppercase text-on-surface-faint font-bold tracking-wider mb-1">SOURCE FEDERATION</h4></div>
+<!-- Live Preview -->
+
+<!-- Footer Actions -->
+<div class="flex gap-3 mt-2">
+<button class="w-[48px] h-[48px] border border-[#4B535D] rounded-[4px] bg-transparent text-[#9BA7BA] flex items-center justify-center transition-colors hover:bg-[#4B535D]/20 flex-shrink-0" id="btn-reset" title="RESET TO LEARNED DEFAULTS">
+<span class="material-symbols-outlined text-[18px]">undo</span>
+</button>
+<button class="flex-1 h-[48px] border border-[#7FA8C9] rounded-[4px] bg-transparent text-[#7FA8C9] font-label-mono text-[12px] font-bold uppercase flex items-center justify-center gap-2 transition-colors hover:bg-[#7FA8C9]/10" id="btn-save-prefs">
+<span class="material-symbols-outlined text-[18px] icon">save</span>
+<span class="text">SAVE PREFERENCES</span>
+</button>
+</div>
+</section>
+<!-- Stats View Container (Hidden Initially) -->
+<div class="opacity-0 flex-col gap-stack-lg transition-opacity duration-300 flex" id="stats-view" style="opacity: 1;">
+<!-- READER IDENTITY HEADER -->
+
+<!-- HERO STAT TRIO -->
+<section class="grid grid-cols-3 gap-3">
+<div class="bg-[#1B1F28] border border-[#252A32] rounded-[4px] p-3 flex flex-col">
+<div class="font-display-lg text-[24px] text-[#F0F3F8]">184</div>
+<div class="font-label-mono text-[8px] uppercase text-[#475263]">ESSAYS READ</div>
+</div>
+<div class="bg-[#1B1F28] border border-[#252A32] rounded-[4px] p-3 flex flex-col">
+<div class="font-display-lg text-[24px] text-[#F0F3F8]">42H</div>
+<div class="font-label-mono text-[8px] uppercase text-[#475263]">TIME READING</div>
+</div>
+<div class="bg-[#1B1F28] border border-[#252A32] rounded-[4px] p-3 flex flex-col">
+<div class="font-display-lg text-[24px] text-[#7FA8C9]">12</div>
+<div class="font-label-mono text-[8px] uppercase text-[#475263]">DAY STREAK</div>
+<div class="font-label-mono text-[7px] text-[#475263] mt-1">PERSONAL BEST: 19</div>
+</div>
+</section>
+<!-- TASTE RADAR -->
+<section class="bg-surface-card rounded-xl border border-border-subtle p-5 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="font-title-sm text-[15px] text-[#F0F3F8]">TASTE RADAR</h3>
+
+</div>
+<div class="flex justify-center py-2">
+<svg class="overflow-visible" height="220" viewBox="0 0 260 220" width="260">
+<!-- Concentric Rings -->
+<polygon fill="none" points="130,10 225,80 188,190 72,190 35,80" stroke="#252A32" stroke-width="1"></polygon>
+<polygon fill="none" points="130,40 195,87 170,160 90,160 65,87" stroke="#252A32" stroke-width="1"></polygon>
+<polygon fill="none" points="130,70 165,95 152,130 108,130 95,95" stroke="#252A32" stroke-width="1"></polygon>
+<!-- Axes -->
+<line stroke="#252A32" stroke-width="1" x1="130" x2="130" y1="110" y2="10"></line>
+<line stroke="#252A32" stroke-width="1" x1="130" x2="225" y1="110" y2="80"></line>
+<line stroke="#252A32" stroke-width="1" x1="130" x2="188" y1="110" y2="190"></line>
+<line stroke="#252A32" stroke-width="1" x1="130" x2="72" y1="110" y2="190"></line>
+<line stroke="#252A32" stroke-width="1" x1="130" x2="35" y1="110" y2="80"></line>
+<!-- Data Polygon -->
+<polygon fill="rgba(127,168,201,0.14)" points="130,20 215,83 159,150 109,138 87,96" stroke="#7FA8C9" stroke-width="1.5"></polygon>
+<!-- Vertices -->
+<circle cx="130" cy="20" fill="#7FA8C9" r="3"></circle>
+<circle cx="215" cy="83" fill="#7FA8C9" r="3"></circle>
+<circle cx="159" cy="150" fill="#7FA8C9" r="3"></circle>
+<circle cx="109" cy="138" fill="#7FA8C9" r="3"></circle>
+<circle cx="87" cy="96" fill="#7FA8C9" r="3"></circle>
+<!-- Labels -->
+<text class="font-label-mono text-[9px]" fill="#9BA7BA" text-anchor="middle" x="130" y="0">TECHNOLOGY</text>
+<text class="font-label-mono text-[9px]" fill="#9BA7BA" text-anchor="start" x="230" y="85">CULTURE</text>
+<text class="font-label-mono text-[9px]" fill="#9BA7BA" text-anchor="middle" x="195" y="205">SCIENCE</text>
+<text class="font-label-mono text-[9px]" fill="#9BA7BA" text-anchor="middle" x="65" y="205">POLITICS</text>
+<text class="font-label-mono text-[9px]" fill="#9BA7BA" text-anchor="end" x="30" y="85">DESIGN</text>
+</svg>
+</div>
+
+</section>
+<!-- COMPLETION FUNNEL -->
+<section class="bg-surface-card rounded-xl border border-border-subtle p-5 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="font-title-sm text-[15px] text-[#F0F3F8]">COMPLETION FUNNEL</h3>
+
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex items-center gap-3">
+<span class="w-16 font-label-mono text-[9px] uppercase text-[#9BA7BA]">SAVED</span>
+<div class="flex-1 h-2.5 bg-[#7FA8C9] rounded-full" style="width: 100%"></div>
+<span class="w-8 text-right font-display-lg text-[13px] text-[#F0F3F8]">214</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-16 font-label-mono text-[9px] uppercase text-[#9BA7BA]">STARTED</span>
+<div class="flex-1 h-2.5 bg-[#7FA8C9]/80 rounded-full" style="width: 78%"></div>
+<span class="w-8 text-right font-display-lg text-[13px] text-[#F0F3F8]">168</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-16 font-label-mono text-[9px] uppercase text-[#9BA7BA]">FINISHED</span>
+<div class="flex-1 h-2.5 bg-[#7FA8C9]/50 rounded-full" style="width: 56%"></div>
+<span class="w-8 text-right font-display-lg text-[13px] text-[#F0F3F8]">121</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-16 font-label-mono text-[9px] uppercase text-[#9BA7BA]">DEEP READ</span>
+<div class="flex-1 h-2.5 bg-[#7FA8C9]/30 rounded-full" style="width: 41%"></div>
+<span class="w-8 text-right font-display-lg text-[13px] text-[#F0F3F8]">87</span>
+</div>
+</div>
+<p class="font-body-md text-[12px] text-[#9BA7BA]">Your start-to-finish rate beats 91% of readers.</p>
+</section>
+<!-- Reading Velocity -->
+<section class="flex flex-col gap-stack-md">
+<div class="flex justify-between items-center border-b border-border-subtle pb-2">
+<h2 class="font-label-mono text-[9px] uppercase text-on-surface-faint">Reading Velocity · Last 7 Days</h2>
+
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Deep Focus Time</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">4H 22M</div>
+<span class="font-label-mono text-[9px] text-[#7FA8C9] mt-2">+18% VS LAST WEEK</span>
+</div>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Essays Completed</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">14</div>
+<span class="font-label-mono text-[9px] text-on-surface-faint mt-2">72% COMPLETION RATE</span>
+</div>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Average Pace</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">245 WPM</div>
+<span class="font-label-mono text-[9px] text-on-surface-faint mt-2">FOCUSED CADENCE</span>
+</div>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col gap-1">
+<span class="font-label-mono text-[9px] uppercase text-on-surface-muted">Longest Deep Dive</span>
+<div class="font-metric-lg text-metric-lg text-[#F0F3F8]">38 M</div>
+<span class="font-label-mono text-[9px] text-on-surface-faint mt-2 truncate">THE DIFF · BYRNE HOBART</span>
+</div>
+</div>
+</section>
+<!-- Thematic Diet -->
+<section class="bg-surface-card rounded-xl border border-border-subtle p-5 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="font-title-sm text-[15px] text-[#F0F3F8]">Thematic Diet</h3>
+<span class="font-label-mono text-[9px] text-on-surface-muted">5 CATEGORIES</span>
+</div>
+<div class="w-full h-2 rounded-full overflow-hidden flex">
+<div class="h-full bg-[#7FA8C9]" style="width: 38%"></div>
+<div class="h-full bg-[#5E86A6]" style="width: 24%"></div>
+<div class="h-full bg-[#9BA7BA]" style="width: 16%"></div>
+<div class="h-full bg-[#4B535D]" style="width: 12%"></div>
+<div class="h-full bg-[#2A313B]" style="width: 10%"></div>
+</div>
+<div class="flex flex-col gap-3 mt-2">
+<div class="flex items-center justify-between font-label-mono text-[10px]">
+<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#7FA8C9]"></div><span class="text-on-surface">AI &amp; Systems</span></div>
+<div class="flex gap-4 text-on-surface-muted"><span class="">1H 40M</span><span class="w-6 text-right">38%</span></div>
+</div>
+<div class="flex items-center justify-between font-label-mono text-[10px]">
+<div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-[#5E86A6]"></div><span class="text-on-surface">Macroeconomics &amp; Finance</span></div>
+<div class="flex gap-4 text-on-surface-muted"><span class="">1H 05M</span><span class="w-6 text-right">24%</span></div>
+</div>
+</div>
+</section>
+<!-- WEEKLY PACING Card -->
+<section class="bg-surface-card rounded-xl border border-border-subtle p-5 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<h3 class="font-title-sm text-[15px] text-[#F0F3F8]">WEEKLY PACING</h3>
+<span class="font-label-mono text-[9px] uppercase text-[#7FA8C9]">AVG 48 MIN/DAY</span>
+</div>
+<div class="flex justify-between items-end h-[100px] mt-2 pb-2 border-b border-border-subtle">
+<div class="flex flex-col items-center gap-2">
+<div class="w-[6px] bg-[#4B535D] rounded-t-full" style="height: 40px"></div>
+<span class="font-label-mono text-[8px] text-[#475263]">M</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-[6px] bg-[#4B535D] rounded-t-full" style="height: 65px"></div>
+<span class="font-label-mono text-[8px] text-[#475263]">T</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-[6px] bg-[#4B535D] rounded-t-full" style="height: 30px"></div>
+<span class="font-label-mono text-[8px] text-[#475263]">W</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-[6px] bg-[#4B535D] rounded-t-full" style="height: 80px"></div>
+<span class="font-label-mono text-[8px] text-[#475263]">T</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-[6px] bg-[#4B535D] rounded-t-full" style="height: 55px"></div>
+<span class="font-label-mono text-[8px] text-[#475263]">F</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-[6px] bg-[#7FA8C9] rounded-t-full" style="height: 90px"></div>
+<span class="font-label-mono text-[8px] text-[#475263]">S</span>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="w-[6px] bg-[#4B535D] rounded-t-full" style="height: 45px"></div>
+<span class="font-label-mono text-[8px] text-[#475263]">S</span>
+</div>
+</div>
+</section>
+<!-- Insight Card -->
+<section class="bg-[#1B1F28] rounded-xl border border-[#7FA8C9] p-5 relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-[#7FA8C9] opacity-5 blur-[40px] rounded-full"></div>
+<h3 class="font-label-mono text-[10px] font-bold text-[#7FA8C9] uppercase mb-3">Intent vs. Reality Gap</h3>
+<p class="font-body-md text-[13px] text-[#E2E5EB] leading-relaxed">
+          You boosted Philosophy &amp; Epistemology, but 62% of reading time centered on AI &amp; Macroeconomics. 
+          <br><span class="text-[#7FA8C9] mt-2 block">Consider pinning philosophy longforms to your morning queue.</span>
+</p>
+</section><!-- Source Loyalty Section -->
+<section class="flex flex-col">
+<h2 class="font-label-mono text-[9px] uppercase text-on-surface-faint mb-4">Source Loyalty · TOP 3</h2>
+<div class="bg-surface-card rounded-xl border border-border-subtle p-4 flex flex-col">
+<!-- Row 1 -->
+<div class="flex items-center justify-between py-3 border-b border-border-subtle">
+<div class="flex items-center gap-4">
+<span class="font-display-lg text-[16px] text-[#7FA8C9]">1</span>
+<div class="flex flex-col">
+<span class="font-title-sm text-[15px] text-[#F0F3F8]">The Diff</span>
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">5 ESSAYS READ</span>
+</div>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-muted">1H 45M</span>
+</div>
+<!-- Row 2 -->
+<div class="flex items-center justify-between py-3 border-b border-border-subtle">
+<div class="flex items-center gap-4">
+<span class="font-display-lg text-[16px] text-[#7FA8C9]">2</span>
+<div class="flex flex-col">
+<span class="font-title-sm text-[15px] text-[#F0F3F8]">Works in Progress</span>
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">2 ESSAYS READ</span>
+</div>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-muted">1H 10M</span>
+</div>
+<!-- Row 3 -->
+<div class="flex items-center justify-between py-3">
+<div class="flex items-center gap-4">
+<span class="font-display-lg text-[16px] text-[#7FA8C9]">3</span>
+<div class="flex flex-col">
+<span class="font-title-sm text-[15px] text-[#F0F3F8]">Not Boring</span>
+<span class="font-label-mono text-[8px] uppercase text-on-surface-faint">3 ESSAYS READ</span>
+</div>
+</div>
+<span class="font-label-mono text-[10px] text-on-surface-muted">52M</span>
+</div>
+<!-- Footer Stats -->
+
+</div>
+</section>
+<!-- Stack & Queue Health Section -->
+
+</div>
+</main>
+<!-- Toast Element -->
+<div class="fixed bottom-[100px] left-1/2 -translate-x-1/2 bg-[#1B1F28] border border-[#7FA8C9] rounded-[4px] px-[16px] py-[10px] font-label-mono text-[9px] uppercase tracking-[0.08em] text-[#F0F3F8] z-50 opacity-0 pointer-events-none transition-opacity duration-300" id="toast">
+  PREFERENCES SAVED
+</div>
+<!-- BottomNavBar JSON Component -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-background/92 dark:bg-background/92 backdrop-blur-xl border-t border-border-subtle md:hidden">
+<div class="flex justify-around items-center h-20 px-gutter w-full">
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 hover:text-primary transition-colors active:translate-y-0.5 transition-transform w-16">
+<span class="material-symbols-outlined text-[24px]">auto_stories</span>
+<span class="font-label-mono text-label-mono uppercase">Feed</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-muted gap-1 hover:text-primary transition-colors active:translate-y-0.5 transition-transform w-16">
+<span class="material-symbols-outlined text-[24px]">layers</span>
+<span class="font-label-mono text-label-mono uppercase">Stacks</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary gap-1 hover:text-primary transition-colors active:translate-y-0.5 transition-transform w-16 relative">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: &quot;FILL&quot; 1;">tune</span>
+<span class="font-label-mono text-label-mono uppercase">Tuning</span>
+<div class="absolute -top-1 w-1 h-1 rounded-full bg-secondary"></div>
+</button>
+</div>
+</nav>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const btnTaste = document.getElementById('btn-taste');
+    const btnStats = document.getElementById('btn-stats');
+    const viewTaste = document.getElementById('taste-view');
+    const viewStats = document.getElementById('stats-view');
+    const toast = document.getElementById('toast');
+    const draftStateText = document.getElementById('draft-state-text');
+    const draftStateDot = document.getElementById('draft-state-dot');
+    let toastTimeout;
+
+    // Active button classes
+    const activeClasses = ['font-bold', 'text-[#F0F3F8]', 'bg-background', 'border', 'border-border-subtle', 'shadow-sm'];
+    const inactiveClasses = ['text-on-surface-muted', 'hover:text-on-surface', 'border-transparent'];
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.style.opacity = '1';
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.style.opacity = '0';
+      }, 2200);
+    }
+
+    function setActiveTab(tab) {
+      if (tab === 'taste') {
+        btnTaste.classList.add(...activeClasses);
+        btnTaste.classList.remove(...inactiveClasses);
+        btnStats.classList.remove(...activeClasses);
+        btnStats.classList.add(...inactiveClasses, 'border-transparent');
+        
+        viewStats.style.opacity = '0';
+        setTimeout(() => {
+          viewStats.classList.add('hidden');
+          viewStats.classList.remove('flex');
+          viewTaste.classList.remove('hidden');
+          viewTaste.classList.add('flex');
+          setTimeout(() => {
+            viewTaste.style.opacity = '1';
+          }, 50);
+        }, 300);
+      } else {
+        btnStats.classList.add(...activeClasses);
+        btnStats.classList.remove(...inactiveClasses, 'border-transparent');
+        btnTaste.classList.remove(...activeClasses);
+        btnTaste.classList.add(...inactiveClasses);
+        
+        viewTaste.style.opacity = '0';
+        setTimeout(() => {
+          viewTaste.classList.add('hidden');
+          viewTaste.classList.remove('flex');
+          viewStats.classList.remove('hidden');
+          viewStats.classList.add('flex');
+          setTimeout(() => {
+            viewStats.style.opacity = '1';
+          }, 50);
+        }, 300);
+      }
+    }
+
+    btnTaste.addEventListener('click', () => setActiveTab('taste'));
+    btnStats.addEventListener('click', () => setActiveTab('stats'));
+
+    // Tuning Controls Logic
+    const controls = document.querySelectorAll('.tuning-control');
+    const topicRows = document.querySelectorAll('.topic-row');
+    const btnSavePrefs = document.getElementById('btn-save-prefs');
+    const btnReset = document.getElementById('btn-reset');
+    
+    // Readouts
+    const readoutMaster = document.getElementById('readout-master');
+    const readoutFresh = document.getElementById('readout-fresh');
+    const readoutLength = document.getElementById('readout-length');
+    const readoutSource = document.getElementById('readout-source');
+    
+    // Previews
+    const p1 = document.getElementById('preview-1');
+    const p2 = document.getElementById('preview-2');
+    const p3 = document.getElementById('preview-3');
+
+    function triggerDraftState() {
+      draftStateText.textContent = 'UNSAVED CHANGES';
+      draftStateText.classList.add('text-[#FFB4AB]');
+      draftStateText.classList.remove('text-[#7FA8C9]');
+      draftStateDot.classList.add('bg-[#FFB4AB]');
+      draftStateDot.classList.remove('bg-[#7FA8C9]');
+      updatePreview();
+    }
+    
+    function resetDraftState() {
+      draftStateText.textContent = 'ENGINE ACTIVE';
+      draftStateText.classList.remove('text-[#FFB4AB]');
+      draftStateText.classList.add('text-[#7FA8C9]');
+      draftStateDot.classList.remove('bg-[#FFB4AB]');
+      draftStateDot.classList.add('bg-[#7FA8C9]');
+    }
+
+    function updatePreview() {
+      // Dummy logic to make the preview feel responsive
+      const masterVal = parseInt(document.getElementById('dial-master').value);
+      const freshVal = parseInt(document.getElementById('dial-fresh').value);
+      const lengthVal = parseInt(document.getElementById('dial-length').value);
+      
+      let topic = "AI & Systems";
+      let format = lengthVal > 65 ? "longform" : lengthVal < 35 ? "quick reads" : "deep dives";
+      
+      p1.textContent = `2× ${topic} ${format}`;
+      p2.textContent = freshVal > 65 ? `1× Fresh Macroeconomics synthesis` : `1× Macroeconomics evergreen`;
+      p3.textContent = masterVal > 65 ? `2× Discovery wildcards` : `1× Culture wildcard (discovery)`;
+    }
+
+    controls.forEach(ctrl => {
+      ctrl.addEventListener('input', (e) => {
+        triggerDraftState();
+        const val = parseInt(e.target.value);
+        const type = e.target.dataset.type;
+        
+        if (type === 'master') {
+          if(val < 34) readoutMaster.textContent = "MOSTLY TRUSTED DEPTH";
+          else if(val < 67) readoutMaster.textContent = "BALANCED CURATION";
+          else readoutMaster.textContent = "WIDE EXPLORATION";
+        } else if (type === 'fresh') {
+          if(val < 35) readoutFresh.textContent = "EVERGREEN-HEAVY";
+          else if(val <= 65) readoutFresh.textContent = "SLIGHTLY FRESH-BIASED";
+          else readoutFresh.textContent = "FRESH-FIRST";
+        } else if (type === 'length') {
+          if(val < 35) readoutLength.textContent = "QUICK-HIT MODE";
+          else if(val <= 65) readoutLength.textContent = "MIXED LENGTHS";
+          else readoutLength.textContent = "LONGFORM LEANING";
+        } else if (type === 'source') {
+          if(val < 50) readoutSource.textContent = "MOSTLY FOLLOWED";
+          else readoutSource.textContent = "EXPANDED NETWORK";
+        }
+      });
+      
+      if (ctrl.type === 'checkbox') {
+        ctrl.addEventListener('change', (e) => {
+           triggerDraftState();
+           showToast(`CURATOR PICKS: ${e.target.checked ? 'ON' : 'OFF'}`);
+        });
+      }
+    });
+
+    topicRows.forEach(row => {
+      const btn = row.querySelector('.topic-chip');
+      btn.addEventListener('click', () => {
+        triggerDraftState();
+        const currentState = row.dataset.state;
+        const topicName = row.dataset.topic;
+        let newState, newClass, newText;
+
+        if (currentState === 'BOOST') {
+          newState = 'NORMAL';
+          newClass = ['border-[#4B535D]', 'text-[#9BA7BA]'];
+          newText = 'NORMAL';
+          row.style.opacity = '1';
+        } else if (currentState === 'NORMAL') {
+          newState = 'MUTE';
+          newClass = ['border-[#FFB4AB]/30', 'text-[#FFB4AB]'];
+          newText = 'MUTE';
+          row.style.opacity = '0.45';
+        } else {
+          newState = 'BOOST';
+          newClass = ['border-[#7FA8C9]', 'text-[#7FA8C9]'];
+          newText = 'BOOST';
+          row.style.opacity = '1';
+        }
+
+        row.dataset.state = newState;
+        btn.textContent = newText;
+        btn.className = `topic-chip px-3 py-1 rounded-[4px] border font-label-mono text-[9px] uppercase transition-colors ${newClass.join(' ')}`;
+        
+        showToast(`TOPIC: ${topicName.toUpperCase()} → ${newState}`);
+      });
+    });
+
+    if(btnSavePrefs) {
+      btnSavePrefs.addEventListener('click', () => {
+        const icon = btnSavePrefs.querySelector('.icon');
+        const text = btnSavePrefs.querySelector('.text');
+        
+        icon.textContent = 'sync';
+        icon.classList.add('animate-spin');
+        text.textContent = 'SAVING…';
+        
+        setTimeout(() => {
+          icon.classList.remove('animate-spin');
+          icon.textContent = 'check';
+          text.textContent = 'PREFERENCES SAVED';
+          resetDraftState();
+          
+          setTimeout(() => {
+            icon.textContent = 'save';
+            text.textContent = 'SAVE PREFERENCES';
+            showToast('TASTE PROFILE SYNCED');
+          }, 2000);
+        }, 700);
+      });
+    }
+
+    if(btnReset) {
+      btnReset.addEventListener('click', () => {
+        document.getElementById('dial-master').value = 40;
+        document.getElementById('dial-fresh').value = 55;
+        document.getElementById('dial-length').value = 70;
+        document.getElementById('dial-source').value = 30;
+        
+        readoutMaster.textContent = "BALANCED CURATION";
+        readoutFresh.textContent = "SLIGHTLY FRESH-BIASED";
+        readoutLength.textContent = "LONGFORM LEANING";
+        readoutSource.textContent = "MOSTLY FOLLOWED";
+        
+        resetDraftState();
+        updatePreview();
+        showToast('RESET TO DEFAULTS');
+      });
+    }
+
+    // Ensure preview shows correct initial state
+    updatePreview();
+  });
+</script>
+
+
+</body></html>

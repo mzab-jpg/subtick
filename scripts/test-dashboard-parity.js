@@ -122,14 +122,16 @@ if (failed) {
 }
 
 // ============================================================
-// 5. Mockup↔server contract (design/dashboard-redesign-mockup.html).
+// 5. Mockup↔server contract (archived exploration mockup).
 // The redesign mockup must be an exact mirror of the backend config:
 // every server key present as a dial (no gaps, no dead dials), every
 // default value identical, help coverage complete, and every dial also
 // present on the production dashboard. Lives in the same gate so drift
 // fails the build the moment either side changes.
+// NOTE: the exploration mockups were archived (design/archive/explorations/);
+// the path below tracks the moved file so the gate keeps guarding drift.
 // ============================================================
-const mockPath = path.join(root, 'design', 'dashboard-redesign-mockup.html');
+const mockPath = path.join(root, 'design', 'archive', 'explorations', 'dashboard-redesign-mockup.html');
 if (fs.existsSync(mockPath)) {
   const mock = fs.readFileSync(mockPath, 'utf8');
   const mockDefSrc = extractBraced(mock, 'const DEFAULTS');

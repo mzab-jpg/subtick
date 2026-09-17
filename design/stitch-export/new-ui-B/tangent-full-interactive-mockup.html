@@ -1,0 +1,2213 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tangent — Editorial Reader & Curator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg: '#0C0E12',
+            surface: '#131313',
+            card: '#1B1F28',
+            raised: '#161A20',
+            border: '#252A32',
+            'border-strong': '#4B535D',
+            glacier: '#7FA8C9',
+            'glacier-deep': '#5E86A6',
+            'glacier-soft': 'rgba(127, 168, 201, 0.12)',
+            silver: '#F0F3F8',
+            muted: '#9BA7BA',
+            faint: '#475263',
+            error: '#FFB4AB'
+          },
+          fontFamily: {
+            display: ['Space Grotesk', 'sans-serif'],
+            body: ['Manrope', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background-color: #060709; color: #F0F3F8; font-family: 'Manrope', sans-serif; margin: 0; }
+    .mono-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .text-shadow-subtle { text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+    .text-shadow-heavy { text-shadow: 0 2px 10px rgba(0,0,0,0.85); }
+    
+    /* Top grading: perfectly fades cover into top bar */
+    .top-grading {
+      background: linear-gradient(to bottom,
+        #0C0E12 0%,
+        rgba(12,14,18,0.92) 18%,
+        rgba(12,14,18,0.55) 40%,
+        rgba(12,14,18,0.15) 70%,
+        transparent 100%);
+    }
+
+    /* Softened lower-left wedge: gentle, not suddenly dark */
+    .soft-wedge {
+      background: linear-gradient(to right, 
+        rgba(12,14,18,0.76) 0%, 
+        rgba(12,14,18,0.62) 35%, 
+        rgba(12,14,18,0.35) 65%, 
+        rgba(12,14,18,0.10) 85%, 
+        transparent 100%);
+    }
+    
+    /* Range input */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: #252A32;
+      height: 3px;
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      background: #7FA8C9;
+      cursor: pointer;
+      border: 1px solid #F0F3F8;
+    }
+    
+    /* Minimalist Toast */
+    .tg-toast {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      bottom: 88px;
+      z-index: 100;
+      background: #1B1F28;
+      border: 1px solid #7FA8C9;
+      border-radius: 4px;
+      padding: 7px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #F0F3F8;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease, transform 0.16s ease;
+      white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    }
+    .tg-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .chevron-icon {
+      transition: transform 0.2s ease;
+    }
+    .chevron-icon.rotate-180 {
+      transform: rotate(180deg);
+    }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: #0C0E12; }
+    ::-webkit-scrollbar-thumb { background: #252A32; border-radius: 2px; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-0 sm:p-4 select-none">
+
+  <!-- Mobile Frame Container -->
+  <div class="w-full max-w-[420px] h-[860px] bg-bg border border-border sm:rounded-[24px] shadow-2xl relative overflow-hidden flex flex-col">
+    
+    <!-- Top System Bar -->
+    <div class="h-8 px-6 pt-1 flex items-center justify-between text-[11px] font-mono text-muted z-50 bg-transparent">
+      <span id="current-time">13:40</span>
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-[13px]">wifi</span>
+        <span class="material-symbols-outlined text-[13px]">signal_cellular_alt</span>
+        <span class="material-symbols-outlined text-[13px]">battery_full</span>
+      </div>
+    </div>
+
+    <!-- MAIN VIEW CONTAINER -->
+    <div class="flex-1 relative overflow-hidden">
+      
+      <!-- ======================================================== -->
+      <!-- 1. FEED SCREEN (B1)                                      -->
+      <!-- ======================================================== -->
+      <section id="screen-feed" class="screen-view absolute inset-0 flex flex-col z-20 transition-opacity duration-200">
+        
+        <!-- Cover Art Layer -->
+        <div class="absolute inset-0 z-0 overflow-hidden bg-[#11141a]">
+          <img id="feed-cover-img" 
+               class="w-full h-full object-cover saturate-[0.92] brightness-[0.94] transition-opacity duration-300" 
+               src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop" 
+               alt="Cover art">
+          
+          <div class="absolute inset-x-0 top-0 h-[28%] top-grading pointer-events-none"></div>
+          <div class="absolute bottom-0 left-0 w-[85%] h-[52%] soft-wedge pointer-events-none"></div>
+          <div class="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-bg via-bg/75 to-transparent pointer-events-none"></div>
+        </div>
+
+        <!-- Header -->
+        <header class="relative z-30 flex items-center justify-between px-6 pt-1">
+          <span class="font-display text-[19px] font-semibold tracking-widest text-silver uppercase">TANGENT</span>
+          <div class="flex items-center gap-3">
+            <button class="text-muted hover:text-silver transition-colors" title="Account">
+              <span class="material-symbols-outlined text-[20px]">account_circle</span>
+            </button>
+            <button class="text-muted hover:text-silver transition-colors" title="Settings">
+              <span class="material-symbols-outlined text-[20px]">settings</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="flex-1"></div>
+
+        <!-- Monograph Info Overlay -->
+        <div class="relative z-30 px-6 pb-5 flex flex-col items-start">
+          
+          <div class="mono-label text-silver text-shadow-subtle mb-1.5 flex items-center gap-2">
+            <span id="feed-pub" class="text-glacier font-semibold">NOT BORING</span>
+            <span class="text-faint">·</span>
+            <span id="feed-time" class="text-silver">18 MIN READ</span>
+          </div>
+
+          <h1 id="feed-title" class="font-display text-[26px] leading-[32px] font-medium text-silver text-shadow-heavy mb-2.5 max-w-[95%]">
+            Expanding the Radius of Daily Life
+          </h1>
+
+          <blockquote id="feed-quote" class="font-body text-[13.5px] italic leading-relaxed text-[#E2E5EB] border-l-[3px] border-glacier pl-3 py-0.5 mb-3 max-w-[90%] text-shadow-subtle">
+            "A flying car is really a vehicle that flies point-to-point with car-like convenience."
+          </blockquote>
+
+          <div class="mono-label text-[10px] text-muted text-shadow-subtle mb-4 flex items-center gap-2">
+            <span id="feed-author" class="text-silver">PACKY McCORMICK · TSUNG XU</span>
+            <span class="text-faint">//</span>
+            <span id="feed-date" class="text-muted">JUN 8</span>
+          </div>
+
+          <!-- Clean Action Row: 48px Save Button + Read Essay CTA -->
+          <div class="w-full flex items-center gap-2.5">
+            <button id="btn-save-sheet" class="w-12 h-12 flex-shrink-0 bg-raised/90 border border-border-strong rounded flex items-center justify-center text-glacier hover:bg-card active:scale-95 transition-all shadow-lg" title="Save to Stack">
+              <span class="material-symbols-outlined text-[20px]">bookmark</span>
+            </button>
+
+            <button id="btn-open-reader" class="flex-1 h-12 bg-silver text-bg font-mono font-bold text-[12px] tracking-wider uppercase rounded flex items-center justify-center gap-2 hover:bg-white active:scale-[0.98] transition-all shadow-xl">
+              <span>READ ESSAY</span>
+              <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- 2. STACKS SCREEN (B2) - SPACIOUS, INTUITIVE LAYOUT       -->
+      <!-- ======================================================== -->
+      <section id="screen-stacks" class="screen-view absolute inset-0 flex flex-col z-10 opacity-0 pointer-events-none transition-opacity duration-200 bg-bg overflow-y-auto px-5 pt-2 pb-24">
+        
+        <!-- Header: MY STACKS, HISTORY, ARCHIVE -->
+                <!-- Header: MY STACKS, HISTORY, ARCHIVE -->
+        <header class="flex items-center justify-between py-2 mb-2 border-b border-border pb-2.5">
+          <div class="flex items-center gap-2.5">
+            <h1 class="font-display text-[20px] font-medium text-silver">Stacks</h1>
+            <span class="mono-label text-[9px] px-2 py-0.5 bg-card border border-border rounded text-muted">
+              <strong id="header-saved-count" class="text-glacier">47</strong> TOTAL
+            </span>
+          </div>
+          <button onclick="openNewStackModal()" class="px-2.5 py-1 bg-transparent border border-glacier text-glacier font-mono text-[9px] font-bold tracking-widest uppercase rounded hover:bg-glacier-soft transition-colors flex items-center gap-1">
+            <span class="material-symbols-outlined text-[13px]">add</span>
+            <span>NEW STACK</span>
+          </button>
+        </header>
+
+        <!-- Segmented Navigation: MY STACKS | HISTORY | ARCHIVE -->
+        <div class="flex bg-surface border border-border rounded p-1 mb-2.5">
+          <button id="tab-sub-mystacks" class="sub-tab-btn flex-1 py-1.5 mono-label text-[10px] rounded bg-card text-silver font-bold transition-all" onclick="switchStacksTab('mystacks')">
+            MY STACKS
+          </button>
+          <button id="tab-sub-history" class="sub-tab-btn flex-1 py-1.5 mono-label text-[10px] rounded text-muted hover:text-silver transition-all" onclick="switchStacksTab('history')">
+            HISTORY
+          </button>
+          <button id="tab-sub-archive" class="sub-tab-btn flex-1 py-1.5 mono-label text-[10px] rounded text-muted hover:text-silver transition-all" onclick="switchStacksTab('archive')">
+            ARCHIVE
+          </button>
+        </div>
+
+        <!-- Presentation Switcher (3 Modes: Dossiers, Time Map, Focus Deck) -->
+        <div class="flex justify-between items-center py-1 mb-3">
+          <span class="mono-label text-[8.5px] text-faint">PRESENTATION MODE</span>
+          <div class="flex items-center gap-1 bg-surface border border-border rounded p-0.5">
+            <button id="btn-view-dossier" onclick="switchStacksPresentation('dossier')" class="px-2.5 py-1 mono-label text-[8px] rounded bg-card text-glacier font-bold transition-colors flex items-center gap-1">
+              <span class="material-symbols-outlined text-[12px]">view_agenda</span>
+              <span>DOSSIERS</span>
+            </button>
+            <button id="btn-view-timemap" onclick="switchStacksPresentation('timemap')" class="px-2.5 py-1 mono-label text-[8px] rounded text-muted hover:text-silver transition-colors flex items-center gap-1">
+              <span class="material-symbols-outlined text-[12px]">route</span>
+              <span>TIME MAP</span>
+            </button>
+            <button id="btn-view-focus" onclick="switchStacksPresentation('focus')" class="px-2.5 py-1 mono-label text-[8px] rounded text-muted hover:text-silver transition-colors flex items-center gap-1">
+              <span class="material-symbols-outlined text-[12px]">filter_center_focus</span>
+              <span>FOCUS</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ================= TAB: MY STACKS ================= -->
+        <div id="tab-mystacks-content" class="flex flex-col gap-4">
+          
+          <!-- ================= MODE 1: EDITORIAL DOSSIERS (SPACIOUS MAGAZINE SPREADS) ================= -->
+          <div id="stacks-dossier-view" class="flex flex-col gap-4">
+            
+            <!-- 1. Quick Save Queue -->
+            <div class="p-5 bg-card border border-glacier/40 rounded-xl hover:border-glacier transition-all flex flex-col gap-3.5 shadow-md">
+              <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-glacier-soft flex items-center justify-center text-glacier flex-shrink-0">
+                    <span class="material-symbols-outlined text-[19px]">bolt</span>
+                  </div>
+                  <div>
+                    <h3 onclick="openStackDetail('quick-save')" class="font-display text-[18px] text-silver font-medium leading-tight hover:text-glacier cursor-pointer">Quick Save Queue</h3>
+                    <span class="mono-label text-[8px] text-glacier font-bold">PRIMARY INBOX CATCH-ALL</span>
+                  </div>
+                </div>
+                <span class="mono-label text-[9px] px-2.5 py-1 bg-glacier-soft border border-glacier/50 text-glacier rounded font-bold">12 ESSAYS</span>
+              </div>
+
+              <!-- Visual Session Ribbon with Segment Labels -->
+              <div class="flex flex-col gap-1.5 pt-1">
+                <div class="flex justify-between text-[10.5px] font-mono">
+                  <span class="text-muted">SESSION DURATION:</span>
+                  <strong class="text-silver font-medium">~1H 45M TOTAL</strong>
+                </div>
+                <div class="w-full h-2 bg-surface rounded-full flex overflow-hidden gap-[1px]">
+                  <div class="w-[15%] h-full bg-glacier" title="14m"></div>
+                  <div class="w-[22%] h-full bg-[#94bddf]" title="22m"></div>
+                  <div class="w-[18%] h-full bg-glacier" title="18m"></div>
+                  <div class="w-[25%] h-full bg-border-strong" title="28m"></div>
+                  <div class="w-[20%] h-full bg-border-strong" title="23m"></div>
+                </div>
+                <div class="flex justify-between text-[8px] font-mono text-faint">
+                  <span>14M</span>
+                  <span>22M</span>
+                  <span>18M</span>
+                  <span>28M</span>
+                  <span>23M</span>
+                </div>
+              </div>
+
+              <!-- Next in Queue Teaser Box -->
+              <div class="p-3 bg-surface/70 border border-border/80 rounded-lg flex flex-col gap-1">
+                <span class="mono-label text-[8px] text-glacier font-semibold">UP NEXT TO READ:</span>
+                <span class="font-display text-[14px] text-silver font-medium">The AI Value Chain Decoupling</span>
+                <span class="mono-label text-[8.5px] text-muted">STRATECHERY · BEN THOMPSON // 14 MIN READ</span>
+                <p class="text-[12px] text-muted italic line-clamp-1 mt-0.5">
+                  "Value captures at the integration point between raw compute and end workflows."
+                </p>
+              </div>
+
+              <!-- Spacious Action Row -->
+              <div class="flex items-center gap-2 pt-1">
+                <button onclick="launchReader('The AI Value Chain Decoupling', 'BEN THOMPSON', 'STRATECHERY')" class="flex-1 h-11 bg-silver text-bg font-mono font-bold text-[11px] tracking-wider uppercase rounded-lg hover:bg-white active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow">
+                  <span class="material-symbols-outlined text-[17px]">play_arrow</span>
+                  <span>RESUME QUEUE (14 MIN)</span>
+                </button>
+                <button onclick="openStackDetail('quick-save')" class="px-3.5 h-11 border border-border text-muted hover:text-silver hover:border-glacier rounded-lg font-mono text-[10px] uppercase flex items-center justify-center gap-1 transition-colors" title="Manage Queue">
+                  <span>VIEW ALL</span>
+                  <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. Sunday Longform -->
+            <div class="p-5 bg-card border border-border rounded-xl hover:border-border-strong transition-all flex flex-col gap-3.5 shadow-sm">
+              <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-surface border border-border flex items-center justify-center text-muted flex-shrink-0">
+                    <span class="material-symbols-outlined text-[19px]">auto_stories</span>
+                  </div>
+                  <div>
+                    <h3 onclick="openStackDetail('sunday')" class="font-display text-[18px] text-silver font-medium leading-tight hover:text-glacier cursor-pointer">Sunday Longform</h3>
+                    <span class="mono-label text-[8px] text-faint">CURATED WEEKEND OPUS</span>
+                  </div>
+                </div>
+                <span class="mono-label text-[9px] px-2.5 py-1 bg-surface border border-border text-muted rounded">3 ESSAYS · 54M</span>
+              </div>
+
+              <!-- Multi-Part Progress Bar -->
+              <div class="flex flex-col gap-1.5 pt-1">
+                <div class="flex justify-between text-[10px] font-mono text-faint">
+                  <span class="text-muted">PROGRESS (1 / 3 COMPLETED)</span>
+                  <span class="text-glacier font-bold">33% READ</span>
+                </div>
+                <div class="w-full h-2 bg-surface rounded-full overflow-hidden flex gap-[2px]">
+                  <div class="w-1/3 h-full bg-glacier" title="Part 1 finished"></div>
+                  <div class="w-1/3 h-full bg-border-strong" title="Part 2 unread"></div>
+                  <div class="w-1/3 h-full bg-border-strong" title="Part 3 unread"></div>
+                </div>
+              </div>
+
+              <!-- Next in Stack Teaser Box -->
+              <div class="p-3 bg-surface/70 border border-border/80 rounded-lg flex flex-col gap-1">
+                <span class="mono-label text-[8px] text-glacier font-semibold">CONTINUE WITH PART 2:</span>
+                <span class="font-display text-[14px] text-silver font-medium">How Britain Invented the Precision Tool</span>
+                <span class="mono-label text-[8.5px] text-muted">WORKS IN PROGRESS · SALONI DATTANI // 22 MIN READ</span>
+                <p class="text-[12px] text-muted italic line-clamp-1 mt-0.5">
+                  "Before Whitworth, no two screws in the British Empire shared the same thread pitch."
+                </p>
+              </div>
+
+              <!-- Action Row -->
+              <div class="flex items-center gap-2 pt-1">
+                <button onclick="launchReader('How Britain Invented the Precision Tool', 'SALONI DATTANI', 'WORKS IN PROGRESS')" class="flex-1 h-11 bg-silver text-bg font-mono font-bold text-[11px] tracking-wider uppercase rounded-lg hover:bg-white active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow">
+                  <span class="material-symbols-outlined text-[17px]">play_arrow</span>
+                  <span>CONTINUE SESSION (22 MIN)</span>
+                </button>
+                <button onclick="openStackDetail('sunday')" class="px-3.5 h-11 border border-border text-muted hover:text-silver hover:border-glacier rounded-lg font-mono text-[10px] uppercase flex items-center justify-center gap-1 transition-colors" title="Manage Stack">
+                  <span>DETAILS</span>
+                  <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 3. Semiconductors & Deep Tech -->
+            <div class="p-5 bg-card border border-border rounded-xl hover:border-border-strong transition-all flex flex-col gap-3.5 shadow-sm">
+              <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-surface border border-border flex items-center justify-center text-muted flex-shrink-0">
+                    <span class="material-symbols-outlined text-[19px]">memory</span>
+                  </div>
+                  <div>
+                    <h3 onclick="openStackDetail('tech')" class="font-display text-[18px] text-silver font-medium leading-tight hover:text-glacier cursor-pointer">Semiconductors &amp; Deep Tech</h3>
+                    <span class="mono-label text-[8px] text-faint">HARDWARE &amp; GEOPOLITICS</span>
+                  </div>
+                </div>
+                <span class="mono-label text-[9px] px-2.5 py-1 bg-surface border border-border text-muted rounded">4 ESSAYS · 68M</span>
+              </div>
+
+              <div class="flex flex-col gap-1.5 pt-1">
+                <div class="flex justify-between text-[10px] font-mono text-faint">
+                  <span class="text-muted">PROGRESS (3 / 4 COMPLETED)</span>
+                  <span class="text-glacier font-bold">75% READ</span>
+                </div>
+                <div class="w-full h-2 bg-surface rounded-full overflow-hidden flex gap-[2px]">
+                  <div class="w-1/4 h-full bg-glacier"></div>
+                  <div class="w-1/4 h-full bg-glacier"></div>
+                  <div class="w-1/4 h-full bg-glacier"></div>
+                  <div class="w-1/4 h-full bg-border-strong"></div>
+                </div>
+              </div>
+
+              <div class="p-3 bg-surface/70 border border-border/80 rounded-lg flex flex-col gap-1">
+                <span class="mono-label text-[8px] text-glacier font-semibold">FINAL ESSAY TO FINISH STACK:</span>
+                <span class="font-display text-[14px] text-silver font-medium">The Institutional Architecture of Space</span>
+                <span class="mono-label text-[8.5px] text-muted">PALLADIUM · ASH MILTON // 18 MIN READ</span>
+              </div>
+
+              <div class="flex items-center gap-2 pt-1">
+                <button onclick="launchReader('The Institutional Architecture of Space', 'ASH MILTON', 'PALLADIUM')" class="flex-1 h-11 bg-silver text-bg font-mono font-bold text-[11px] tracking-wider uppercase rounded-lg hover:bg-white active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 shadow">
+                  <span class="material-symbols-outlined text-[17px]">play_arrow</span>
+                  <span>FINISH STACK (18 MIN)</span>
+                </button>
+                <button onclick="openStackDetail('tech')" class="px-3.5 h-11 border border-border text-muted hover:text-silver hover:border-glacier rounded-lg font-mono text-[10px] uppercase flex items-center justify-center gap-1 transition-colors" title="Manage Stack">
+                  <span>DETAILS</span>
+                  <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 4. Philosophy & Systems -->
+            <div class="p-5 bg-card border border-border rounded-xl hover:border-border-strong transition-all flex flex-col gap-3.5 shadow-sm">
+              <div class="flex justify-between items-start">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg bg-surface border border-border flex items-center justify-center text-muted flex-shrink-0">
+                    <span class="material-symbols-outlined text-[19px]">psychology</span>
+                  </div>
+                  <div>
+                    <h3 onclick="openStackDetail('philosophy')" class="font-display text-[18px] text-silver font-medium leading-tight hover:text-glacier cursor-pointer">Philosophy &amp; Systems</h3>
+                    <span class="mono-label text-[8px] text-faint">THEORETICAL FRAMEWORKS</span>
+                  </div>
+                </div>
+                <span class="mono-label text-[9px] px-2.5 py-1 bg-surface border border-border text-muted rounded">2 ESSAYS · 38M</span>
+              </div>
+
+              <div class="flex flex-col gap-1.5 pt-1">
+                <div class="flex justify-between text-[10px] font-mono text-faint">
+                  <span class="text-muted">READY TO START (0 / 2 READ)</span>
+                  <span class="text-muted">0%</span>
+                </div>
+                <div class="w-full h-2 bg-surface rounded-full overflow-hidden flex gap-[2px]">
+                  <div class="w-1/2 h-full bg-border-strong"></div>
+                  <div class="w-1/2 h-full bg-border-strong"></div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 pt-1">
+                <button onclick="openStackDetail('philosophy')" class="flex-1 h-11 bg-raised border border-border-strong hover:border-glacier text-silver font-mono font-bold text-[11px] tracking-wider uppercase rounded-lg active:scale-[0.99] transition-all flex items-center justify-center gap-1.5">
+                  <span class="material-symbols-outlined text-[17px] text-glacier">play_arrow</span>
+                  <span>BEGIN STACK (38 MIN)</span>
+                </button>
+                <button onclick="openStackDetail('philosophy')" class="px-3.5 h-11 border border-border text-muted hover:text-silver hover:border-glacier rounded-lg font-mono text-[10px] uppercase flex items-center justify-center gap-1 transition-colors">
+                  <span>DETAILS</span>
+                  <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ================= MODE 2: READING TIME MAP (SEQUENTIAL JOURNEY RAIL) ================= -->
+          <div id="stacks-timemap-view" class="hidden flex flex-col gap-4">
+            
+            <!-- Stack Selection Chips for Time Map -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <button onclick="selectTimeMapStack('sunday')" id="timemap-chip-sunday" class="px-3 py-1.5 rounded-lg bg-card border border-glacier text-glacier mono-label text-[9px] font-bold whitespace-nowrap">
+                SUNDAY LONGFORM (3)
+              </button>
+              <button onclick="selectTimeMapStack('tech')" id="timemap-chip-tech" class="px-3 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap">
+                DEEP TECH (4)
+              </button>
+              <button onclick="selectTimeMapStack('philosophy')" id="timemap-chip-philosophy" class="px-3 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap">
+                PHILOSOPHY (2)
+              </button>
+              <button onclick="selectTimeMapStack('quick-save')" id="timemap-chip-quick-save" class="px-3 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap">
+                QUICK SAVE (12)
+              </button>
+            </div>
+
+            <!-- Journey Itinerary Header -->
+            <div class="p-4 bg-card border border-border rounded-xl flex flex-col gap-1.5">
+              <div class="flex justify-between items-center">
+                <span class="mono-label text-[8.5px] text-glacier font-bold" id="timemap-header-badge">JOURNEY ITINERARY</span>
+                <span class="mono-label text-[9px] text-silver font-medium" id="timemap-header-time">54 MIN COMMITTED</span>
+              </div>
+              <h2 class="font-display text-[18px] text-silver font-medium" id="timemap-header-title">Sunday Longform Route</h2>
+              <div class="flex items-center gap-3 pt-1 text-[10.5px] font-mono text-muted">
+                <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-glacier"></span> 3 STOPS</span>
+                <span>·</span>
+                <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-border-strong"></span> 14,800 WORDS</span>
+                <span>·</span>
+                <span class="text-silver font-medium">FINISH BY 14:35</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Sequential Route Rail -->
+            <div id="timemap-rail-container" class="relative pl-6 flex flex-col gap-5 border-l-2 border-glacier/30 ml-3 py-1">
+              
+              <!-- Stop 1 (Completed) -->
+              <div class="relative flex flex-col gap-1.5 group">
+                <div class="absolute -left-[31px] top-1 w-6 h-6 rounded-full bg-glacier text-bg flex items-center justify-center shadow">
+                  <span class="material-symbols-outlined text-[15px] font-bold">check</span>
+                </div>
+                <div class="p-3.5 bg-card/70 border border-border rounded-lg flex flex-col gap-1">
+                  <div class="flex justify-between items-center">
+                    <span class="mono-label text-[8px] text-muted">00:00 DEPARTURE · 14 MIN</span>
+                    <span class="mono-label text-[8.5px] px-2 py-0.5 bg-glacier-soft text-glacier rounded font-bold">COMPLETED</span>
+                  </div>
+                  <h4 class="font-display text-[14.5px] text-silver font-medium">The AI Value Chain Decoupling</h4>
+                  <span class="mono-label text-[8.5px] text-faint">STRATECHERY · BEN THOMPSON</span>
+                </div>
+              </div>
+
+              <!-- Milepost Indicator -->
+              <div class="mono-label text-[8px] text-glacier/80 -my-1 pl-1">↓ +14 MINUTE TRANSIT</div>
+
+              <!-- Stop 2 (Active Current Stop) -->
+              <div class="relative flex flex-col gap-1.5">
+                <div class="absolute -left-[31px] top-1 w-6 h-6 rounded-full bg-silver text-bg flex items-center justify-center shadow-lg ring-4 ring-glacier/20 animate-pulse">
+                  <span class="material-symbols-outlined text-[15px] font-bold">play_arrow</span>
+                </div>
+                <div class="p-4 bg-card border-2 border-glacier/60 rounded-xl flex flex-col gap-2.5 shadow-md">
+                  <div class="flex justify-between items-center">
+                    <span class="mono-label text-[8.5px] text-glacier font-bold">+14:00 CURRENT STOP · 22 MIN</span>
+                    <span class="mono-label text-[8.5px] px-2 py-0.5 bg-silver text-bg rounded font-bold">READY NOW</span>
+                  </div>
+                  <h4 class="font-display text-[15px] text-silver font-medium">How Britain Invented the Precision Tool</h4>
+                  <span class="mono-label text-[8.5px] text-muted">WORKS IN PROGRESS · SALONI DATTANI</span>
+                  <p class="text-[12px] text-muted italic leading-relaxed border-l-2 border-glacier/50 pl-2.5 my-0.5">
+                    "True flatness and micrometer threads made mechanical interchangeability possible across the industrial world."
+                  </p>
+                  <button onclick="launchReader('How Britain Invented the Precision Tool', 'SALONI DATTANI', 'WORKS IN PROGRESS')" class="w-full h-10 bg-silver text-bg font-mono font-bold text-[11px] tracking-wider uppercase rounded-lg hover:bg-white transition-all flex items-center justify-center gap-1.5 shadow">
+                    <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+                    <span>READ NOW (22 MIN)</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Milepost Indicator -->
+              <div class="mono-label text-[8px] text-faint -my-1 pl-1">↓ +36 MINUTE TRANSIT</div>
+
+              <!-- Stop 3 (Queued Stop) -->
+              <div class="relative flex flex-col gap-1.5">
+                <div class="absolute -left-[31px] top-1 w-6 h-6 rounded-full bg-surface border border-border text-muted flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[14px]">schedule</span>
+                </div>
+                <div class="p-3.5 bg-card/70 border border-border rounded-lg flex flex-col gap-1">
+                  <div class="flex justify-between items-center">
+                    <span class="mono-label text-[8px] text-muted">+36:00 FINAL LEG · 18 MIN</span>
+                    <span class="mono-label text-[8.5px] text-faint">UPCOMING</span>
+                  </div>
+                  <h4 class="font-display text-[14.5px] text-silver font-medium">The Institutional Architecture of Space</h4>
+                  <span class="mono-label text-[8.5px] text-faint">PALLADIUM · ASH MILTON</span>
+                </div>
+              </div>
+
+              <!-- Milepost Indicator -->
+              <div class="mono-label text-[8px] text-faint -my-1 pl-1">↓ +54 MINUTE TOTAL COMMITTED</div>
+
+              <!-- Destination Reached -->
+              <div class="relative flex items-center gap-2 pt-1">
+                <div class="absolute -left-[31px] top-0 w-6 h-6 rounded-full bg-card border border-glacier text-glacier flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[14px]">flag</span>
+                </div>
+                <span class="mono-label text-[9px] text-silver font-bold">SESSION DESTINATION COMPLETED</span>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ================= MODE 3: FOCUS DECK (ZERO-DENSITY SINGLE SESSION HERO) ================= -->
+          <div id="stacks-focus-view" class="hidden flex flex-col gap-4">
+            
+            <!-- Stack Selection Deck Chips -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <button onclick="selectFocusStack('sunday')" id="focus-chip-sunday" class="px-3.5 py-1.5 rounded-lg bg-card border border-glacier text-glacier mono-label text-[9px] font-bold whitespace-nowrap">
+                SUNDAY LONGFORM (33%)
+              </button>
+              <button onclick="selectFocusStack('tech')" id="focus-chip-tech" class="px-3.5 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap">
+                DEEP TECH (75%)
+              </button>
+              <button onclick="selectFocusStack('philosophy')" id="focus-chip-philosophy" class="px-3.5 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap">
+                PHILOSOPHY (0%)
+              </button>
+              <button onclick="selectFocusStack('quick-save')" id="focus-chip-quick-save" class="px-3.5 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap">
+                QUICK SAVE (12)
+              </button>
+            </div>
+
+            <!-- Hero Focus Card (Zero list density - calm and singular) -->
+            <div class="p-6 bg-card border border-glacier/50 rounded-2xl flex flex-col gap-4 shadow-xl">
+              
+              <div class="flex justify-between items-center border-b border-border pb-3">
+                <div class="flex flex-col">
+                  <span class="mono-label text-[8px] text-glacier font-bold" id="focus-stack-tag">ACTIVE FOCUS STACK</span>
+                  <h2 class="font-display text-[22px] text-silver font-medium" id="focus-stack-title">Sunday Longform</h2>
+                </div>
+                <div class="text-right font-mono">
+                  <span class="mono-label text-[8.5px] text-faint block">PROGRESS</span>
+                  <span class="text-glacier font-bold text-[12px]" id="focus-stack-pct">33% (1 / 3)</span>
+                </div>
+              </div>
+
+              <!-- Multi-Part Progress Bar -->
+              <div class="w-full h-2 bg-surface rounded-full overflow-hidden flex gap-[2px]">
+                <div class="w-1/3 h-full bg-glacier" id="focus-bar-1"></div>
+                <div class="w-1/3 h-full bg-border-strong" id="focus-bar-2"></div>
+                <div class="w-1/3 h-full bg-border-strong" id="focus-bar-3"></div>
+              </div>
+
+              <!-- Spotlight Article -->
+              <div class="flex flex-col gap-2 pt-1">
+                <div class="flex items-center gap-2">
+                  <span class="mono-label text-[8.5px] px-2 py-0.5 bg-glacier-soft text-glacier rounded font-bold" id="focus-article-pub">WORKS IN PROGRESS</span>
+                  <span class="mono-label text-[8.5px] text-muted" id="focus-article-time">22 MIN READ</span>
+                </div>
+
+                <h3 class="font-display text-[20px] leading-snug text-silver font-medium" id="focus-article-title">
+                  How Britain Invented the Precision Tool
+                </h3>
+
+                <span class="mono-label text-[9.5px] text-muted" id="focus-article-author">
+                  BY SALONI DATTANI
+                </span>
+
+                <blockquote class="font-body text-[13px] italic leading-relaxed text-[#D2D7E0] border-l-2 border-glacier pl-3 py-1 my-1 bg-surface/50 rounded-r" id="focus-article-quote">
+                  "The steam engine could not have powered the industrial revolution without cylinders bored with less than a shilling's thickness of error."
+                </blockquote>
+              </div>
+
+              <!-- Hero Primary CTA -->
+              <button onclick="launchReader('How Britain Invented the Precision Tool', 'SALONI DATTANI', 'WORKS IN PROGRESS')" id="btn-focus-cta" class="w-full h-12 bg-silver text-bg font-mono font-bold text-[12px] tracking-wider uppercase rounded-xl hover:bg-white active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg">
+                <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                <span id="focus-cta-label">CONTINUE READING (22 MIN)</span>
+              </button>
+
+              <!-- Stack Navigation Link -->
+              <div class="flex items-center justify-between pt-1 border-t border-border/80 text-[11px] font-mono text-muted">
+                <span id="focus-queue-next">Next up: <em>The Institutional Architecture of Space</em></span>
+                <button onclick="openStackDetail('sunday')" id="btn-focus-open-detail" class="text-glacier hover:text-white font-bold text-[10px] flex items-center gap-0.5">
+                  <span>EXPAND STACK</span>
+                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ================= TAB: HISTORY ================= -->
+        <div id="tab-history-content" class="hidden flex flex-col gap-2.5">
+          
+          <div class="p-3 bg-card border border-border rounded-lg flex items-center justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="mono-label text-[8.5px] text-glacier">ASTRAL CODEX TEN · 28 MIN</span>
+              <h4 class="font-display text-[14px] text-silver font-medium">Why Not More Geothermal Power?</h4>
+              <span class="mono-label text-[8px] text-faint">SCOTT ALEXANDER · COMPLETED YESTERDAY</span>
+            </div>
+            <span class="mono-label text-[9px] px-2.5 py-1 bg-glacier-soft border border-glacier text-glacier rounded font-bold">100% READ</span>
+          </div>
+
+          <div class="p-3 bg-card border border-border rounded-lg flex items-center justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="mono-label text-[8.5px] text-glacier">NOT BORING · 24 MIN</span>
+              <h4 class="font-display text-[14px] text-silver font-medium">The Great Atomic Resurgence</h4>
+              <span class="mono-label text-[8px] text-faint">PACKY McCORMICK · READ 3 DAYS AGO</span>
+            </div>
+            <span class="mono-label text-[9px] px-2.5 py-1 bg-card border border-border-strong text-muted rounded font-bold">82% READ</span>
+          </div>
+
+          <div class="p-3 bg-card border border-border rounded-lg flex items-center justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="mono-label text-[8.5px] text-glacier">NOEMA MAGAZINE · 18 MIN</span>
+              <h4 class="font-display text-[14px] text-silver font-medium">Consciousness in the Machine</h4>
+              <span class="mono-label text-[8px] text-faint">MURRAY SHANAHAN · READ 6 DAYS AGO</span>
+            </div>
+            <span class="mono-label text-[9px] px-2.5 py-1 bg-surface border border-border text-faint rounded">45% SKIM</span>
+          </div>
+
+        </div>
+
+        <!-- ================= TAB: ARCHIVE ================= -->
+        <div id="tab-archive-content" class="hidden flex flex-col gap-2.5">
+          
+          <div id="archived-stack-1" class="p-3.5 bg-card border border-border rounded-lg flex items-center justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="mono-label text-[8.5px] text-glacier">ARCHIVED STACK · 3 ESSAYS</span>
+              <h4 class="font-display text-[14px] text-silver font-medium">Origins of Classical Economics</h4>
+              <span class="mono-label text-[8px] text-faint">MOVED TO ARCHIVE</span>
+            </div>
+            <button onclick="restoreStack('archived-stack-1', 'Origins of Classical Economics')" class="px-3 py-1.5 border border-border text-muted font-mono text-[9px] uppercase rounded hover:text-glacier hover:border-glacier">
+              RESTORE
+            </button>
+          </div>
+
+          <div id="archived-stack-2" class="p-3.5 bg-card border border-border rounded-lg flex items-center justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="mono-label text-[8.5px] text-glacier">ARCHIVED STACK · 4 ESSAYS</span>
+              <h4 class="font-display text-[14px] text-silver font-medium">Space Industrialization 2026</h4>
+              <span class="mono-label text-[8px] text-faint">MOVED TO ARCHIVE</span>
+            </div>
+            <button onclick="restoreStack('archived-stack-2', 'Space Industrialization 2026')" class="px-3 py-1.5 border border-border text-muted font-mono text-[9px] uppercase rounded hover:text-glacier hover:border-glacier">
+              RESTORE
+            </button>
+          </div>
+
+        </div>
+
+      </section>
+
+            <!-- ======================================================== -->
+      <!-- 2B. STACK DETAIL VIEW (DECOMPRESSED, COMFORTABLE TO USE) -->
+      <!-- ======================================================== -->
+      <section id="screen-stack-detail" class="screen-view absolute inset-0 z-30 bg-bg opacity-0 pointer-events-none transition-opacity duration-200 flex flex-col overflow-y-auto px-5 pt-2 pb-24">
+        
+        <!-- Top Nav & Actions Bar -->
+        <header class="flex items-center justify-between py-2 border-b border-border pb-2.5 mb-2">
+          <button onclick="closeStackDetail()" class="flex items-center gap-1.5 text-muted hover:text-silver mono-label text-[10px]">
+            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+            <span>BACK</span>
+          </button>
+          
+          <div class="flex items-center gap-2">
+            <button id="btn-archive-this-stack" onclick="archiveCurrentStack()" class="px-2.5 py-1 border border-border text-muted hover:text-silver font-mono text-[9px] rounded uppercase flex items-center gap-1" title="Move to Archive">
+              <span class="material-symbols-outlined text-[15px]">archive</span>
+              <span>ARCHIVE</span>
+            </button>
+            <button id="btn-delete-this-stack" onclick="deleteCurrentStack()" class="px-2.5 py-1 border border-border text-muted hover:text-error font-mono text-[9px] rounded uppercase flex items-center gap-1" title="Delete Stack">
+              <span class="material-symbols-outlined text-[15px]">delete</span>
+              <span>DELETE</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Stack Title & Meta Dossier Banner -->
+        <div class="p-5 bg-card border border-border rounded-xl flex flex-col gap-3 mb-4 shadow-sm">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="mono-label text-[9px] text-glacier font-bold" id="detail-stack-type">CURATED DOSSIER</span>
+              <h2 class="font-display text-[22px] text-silver font-medium leading-tight mt-0.5" id="detail-stack-title">
+                Sunday Longform
+              </h2>
+            </div>
+            <span class="mono-label text-[9px] px-2.5 py-1 bg-surface border border-border text-silver rounded font-mono" id="detail-stack-stats">
+              3 ESSAYS · 54 MIN
+            </span>
+          </div>
+
+          <!-- Live Completion Projection -->
+          <div class="flex items-center justify-between text-[10px] font-mono text-faint">
+            <span>SESSION ITINERARY:</span>
+            <span class="text-silver font-medium">COMPLETION AT ~14:35</span>
+          </div>
+
+          <!-- Visual Session Ribbon inside Stack Detail -->
+          <div class="flex flex-col gap-1">
+            <div class="w-full h-2 bg-surface rounded-full flex overflow-hidden gap-[1px]">
+              <div class="w-[26%] h-full bg-glacier" title="14 min"></div>
+              <div class="w-[41%] h-full bg-[#94bddf]" title="22 min"></div>
+              <div class="w-[33%] h-full bg-border-strong" title="18 min"></div>
+            </div>
+            <div class="flex justify-between text-[8px] font-mono text-faint">
+              <span>PART 1 (14M)</span>
+              <span>PART 2 (22M)</span>
+              <span>PART 3 (18M)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Primary Top Bar: BEGIN READING (Spacious, 48px Touch Target) -->
+        <button onclick="launchReaderFromStack()" class="w-full h-12 bg-silver text-bg font-mono font-bold text-[12px] uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-white active:scale-[0.99] transition-all mb-4 shadow-xl">
+          <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+          <span>BEGIN READING STACK</span>
+        </button>
+
+        <!-- Articles Header -->
+        <div class="flex items-center justify-between pb-2 border-b border-border mb-3">
+          <span class="mono-label text-[9.5px] text-silver font-bold">ARTICLES IN THIS SESSION</span>
+          <button onclick="openAddArticleSheet()" class="text-glacier hover:text-white mono-label text-[9.5px] flex items-center gap-1 font-bold">
+            <span class="material-symbols-outlined text-[15px]">add</span>
+            <span>ADD ARTICLE</span>
+          </button>
+        </div>
+
+        <!-- Spacious, Unhurried Articles List -->
+        <div id="stack-articles-list" class="flex flex-col gap-3.5">
+          
+          <!-- Article 1 (Completed) -->
+          <div class="p-4 bg-card/70 border border-border rounded-xl flex flex-col gap-2.5 article-row hover:border-border-strong transition-all opacity-85">
+            <div class="flex justify-between items-start">
+              <span class="mono-label text-[8.5px] text-muted font-mono flex items-center gap-1">
+                <span>PART 01 OF 03</span>
+                <span>·</span>
+                <span class="text-glacier font-bold">COMPLETED ✓</span>
+              </span>
+              <span class="mono-label text-[8.5px] text-faint">14 MIN</span>
+            </div>
+
+            <h4 class="font-display text-[15px] text-silver font-medium leading-snug">The AI Value Chain Decoupling</h4>
+            <span class="mono-label text-[8.5px] text-muted">STRATECHERY · BEN THOMPSON</span>
+            <p class="text-[12px] text-muted italic line-clamp-1">
+              "Value captures at the integration point between raw compute and end workflows."
+            </p>
+
+            <div class="flex items-center justify-between pt-1 border-t border-border/60 mt-1">
+              <span class="mono-label text-[8px] text-faint">FINISHED YESTERDAY</span>
+              <div class="flex items-center gap-1">
+                <button onclick="launchReader('The AI Value Chain Decoupling', 'BEN THOMPSON', 'STRATECHERY')" class="px-2.5 py-1 rounded bg-surface border border-border text-silver hover:border-glacier mono-label text-[8.5px] flex items-center gap-1 transition-colors">
+                  <span class="material-symbols-outlined text-[14px]">replay</span>
+                  <span>RE-READ</span>
+                </button>
+                <button onclick="removeArticleFromStack(this)" class="w-8 h-8 rounded text-muted hover:text-error flex items-center justify-center transition-colors" title="Remove from stack">
+                  <span class="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Article 2 (Active Up Next) -->
+          <div class="p-4 bg-card border-2 border-glacier/70 rounded-xl flex flex-col gap-2.5 article-row hover:border-glacier transition-all shadow-md relative">
+            <div class="flex justify-between items-start">
+              <span class="mono-label text-[8.5px] text-glacier font-bold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-glacier animate-pulse"></span>
+                <span>PART 02 OF 03 · READY TO READ</span>
+              </span>
+              <span class="mono-label text-[8.5px] px-2 py-0.5 bg-glacier text-bg rounded font-bold">22 MIN</span>
+            </div>
+
+            <h4 class="font-display text-[16px] text-silver font-medium leading-snug">How Britain Invented the Precision Tool</h4>
+            <span class="mono-label text-[8.5px] text-muted">WORKS IN PROGRESS · SALONI DATTANI</span>
+            <p class="text-[12.5px] text-[#D2D7E0] italic leading-relaxed border-l-2 border-glacier pl-2.5 my-0.5">
+              "Before Whitworth, no two screws in the British Empire shared the same thread pitch."
+            </p>
+
+            <div class="flex items-center justify-between pt-1 border-t border-border/80 mt-1">
+              <span class="mono-label text-[8px] text-glacier">NEXT IN SEQUENCE</span>
+              <div class="flex items-center gap-1.5">
+                <button onclick="launchReader('How Britain Invented the Precision Tool', 'SALONI DATTANI', 'WORKS IN PROGRESS')" class="px-4 py-1.5 rounded bg-silver text-bg font-mono font-bold text-[9.5px] uppercase flex items-center gap-1 hover:bg-white transition-colors shadow">
+                  <span class="material-symbols-outlined text-[15px]">play_arrow</span>
+                  <span>READ NOW</span>
+                </button>
+                <button onclick="removeArticleFromStack(this)" class="w-8 h-8 rounded text-muted hover:text-error flex items-center justify-center transition-colors" title="Remove from stack">
+                  <span class="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Article 3 (Queued) -->
+          <div class="p-4 bg-card border border-border rounded-xl flex flex-col gap-2.5 article-row hover:border-border-strong transition-all">
+            <div class="flex justify-between items-start">
+              <span class="mono-label text-[8.5px] text-faint flex items-center gap-1">
+                <span>PART 03 OF 03</span>
+                <span>·</span>
+                <span>QUEUED</span>
+              </span>
+              <span class="mono-label text-[8.5px] text-muted">18 MIN</span>
+            </div>
+
+            <h4 class="font-display text-[15px] text-silver font-medium leading-snug">The Institutional Architecture of Space</h4>
+            <span class="mono-label text-[8.5px] text-muted">PALLADIUM · ASH MILTON</span>
+            <p class="text-[12px] text-muted italic line-clamp-1">
+              "The orbital economy requires property rights and legal structures beyond terrestrial treaties."
+            </p>
+
+            <div class="flex items-center justify-between pt-1 border-t border-border/60 mt-1">
+              <span class="mono-label text-[8px] text-faint">UPCOMING</span>
+              <div class="flex items-center gap-1">
+                <button onclick="launchReader('The Institutional Architecture of Space', 'ASH MILTON', 'PALLADIUM')" class="px-2.5 py-1 rounded bg-surface border border-border text-silver hover:border-glacier mono-label text-[8.5px] flex items-center gap-1 transition-colors">
+                  <span class="material-symbols-outlined text-[14px]">play_arrow</span>
+                  <span>READ</span>
+                </button>
+                <button onclick="removeArticleFromStack(this)" class="w-8 h-8 rounded text-muted hover:text-error flex items-center justify-center transition-colors" title="Remove from stack">
+                  <span class="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- 2C. NEW STACK CREATION MODAL                             -->
+      <!-- ======================================================== -->
+      <div id="new-stack-modal" class="screen-view absolute inset-0 z-50 bg-bg opacity-0 pointer-events-none transition-opacity duration-200 flex flex-col">
+        
+        <header class="h-12 border-b border-border bg-bg/95 px-5 flex items-center justify-between">
+          <button onclick="closeNewStackModal()" class="text-muted hover:text-silver mono-label text-[9px] flex items-center gap-1">
+            <span class="material-symbols-outlined text-[16px]">close</span>
+            <span>CANCEL</span>
+          </button>
+          <span class="font-display text-[14px] text-silver font-medium">Create New Stack</span>
+          <span class="mono-label text-[8.5px] text-glacier" id="modal-selected-tally">2 SELECTED</span>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3.5">
+          
+          <!-- Stack Name Input -->
+          <div class="flex flex-col gap-1">
+            <label class="mono-label text-[8.5px] text-faint">STACK NAME</label>
+            <input type="text" id="input-new-stack-name" value="Weekend Deep Dive" class="bg-card border border-border rounded px-3.5 py-2.5 text-silver text-[14.5px] font-display focus:border-glacier focus:outline-none">
+          </div>
+
+          <!-- DROPDOWN 1: Quick Save Queue -->
+          <div class="border border-border rounded-lg bg-card/70 overflow-hidden">
+            <button onclick="toggleStackAccordion('queue')" class="w-full p-3.5 flex items-center justify-between hover:bg-card transition-colors text-left">
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-glacier text-[18px]">bolt</span>
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[14px]">Quick Save Queue</span>
+                  <span class="mono-label text-[8px] text-faint">12 ESSAYS AVAILABLE</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="badge-count-queue" class="mono-label text-[8.5px] px-2 py-0.5 bg-glacier-soft text-glacier rounded font-bold">2 SELECTED</span>
+                <span class="material-symbols-outlined text-[18px] text-muted chevron-icon" id="chev-queue">expand_more</span>
+              </div>
+            </button>
+
+            <div id="content-acc-queue" class="border-t border-border divide-y divide-border bg-bg/50">
+              <label class="p-3 flex items-center gap-3 cursor-pointer hover:bg-card">
+                <input type="checkbox" checked onchange="updateNewStackTally()" class="new-stack-check check-queue rounded border-border bg-surface text-glacier focus:ring-0">
+                <div class="flex flex-col flex-1 min-w-0">
+                  <span class="text-silver text-[13px] truncate font-medium">The AI Value Chain Decoupling</span>
+                  <span class="mono-label text-[8.5px] text-faint">STRATECHERY · 14 MIN</span>
+                </div>
+              </label>
+              <label class="p-3 flex items-center gap-3 cursor-pointer hover:bg-card">
+                <input type="checkbox" checked onchange="updateNewStackTally()" class="new-stack-check check-queue rounded border-border bg-surface text-glacier focus:ring-0">
+                <div class="flex flex-col flex-1 min-w-0">
+                  <span class="text-silver text-[13px] truncate font-medium">How Britain Invented the Precision Tool</span>
+                  <span class="mono-label text-[8.5px] text-faint">WORKS IN PROGRESS · 22 MIN</span>
+                </div>
+              </label>
+              <label class="p-3 flex items-center gap-3 cursor-pointer hover:bg-card">
+                <input type="checkbox" onchange="updateNewStackTally()" class="new-stack-check check-queue rounded border-border bg-surface text-glacier focus:ring-0">
+                <div class="flex flex-col flex-1 min-w-0">
+                  <span class="text-silver text-[13px] truncate font-medium">Why Not More Geothermal Power?</span>
+                  <span class="mono-label text-[8.5px] text-faint">ASTRAL CODEX TEN · 28 MIN</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- DROPDOWN 2: Other Stacks -->
+          <div class="border border-border rounded-lg bg-card/70 overflow-hidden">
+            <button onclick="toggleStackAccordion('other')" class="w-full p-3.5 flex items-center justify-between hover:bg-card transition-colors text-left">
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-muted text-[18px]">layers</span>
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[14px]">Other Stacks</span>
+                  <span class="mono-label text-[8px] text-faint">3 EXISTING COLLECTIONS</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="badge-count-other" class="mono-label text-[8.5px] text-faint">0 SELECTED</span>
+                <span class="material-symbols-outlined text-[18px] text-muted chevron-icon" id="chev-other">expand_more</span>
+              </div>
+            </button>
+
+            <div id="content-acc-other" class="hidden border-t border-border divide-y divide-border bg-bg/50">
+              <label class="p-3 flex items-center gap-3 cursor-pointer hover:bg-card">
+                <input type="checkbox" onchange="updateNewStackTally()" class="new-stack-check check-other rounded border-border bg-surface text-glacier focus:ring-0">
+                <div class="flex flex-col flex-1 min-w-0">
+                  <span class="text-silver text-[13px] truncate font-medium">Consciousness in the Machine</span>
+                  <span class="mono-label text-[8.5px] text-faint">FROM 'PHILOSOPHY' · 18 MIN</span>
+                </div>
+              </label>
+              <label class="p-3 flex items-center gap-3 cursor-pointer hover:bg-card">
+                <input type="checkbox" onchange="updateNewStackTally()" class="new-stack-check check-other rounded border-border bg-surface text-glacier focus:ring-0">
+                <div class="flex flex-col flex-1 min-w-0">
+                  <span class="text-silver text-[13px] truncate font-medium">The Great Atomic Resurgence</span>
+                  <span class="mono-label text-[8.5px] text-faint">FROM 'SUNDAY LONGFORM' · 24 MIN</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- DROPDOWN 3: Custom (Query Backend) -->
+          <div class="border border-border rounded-lg bg-card/70 overflow-hidden">
+            <button onclick="toggleStackAccordion('custom')" class="w-full p-3.5 flex items-center justify-between hover:bg-card transition-colors text-left">
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-glacier text-[18px]">tune</span>
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[14px]">Custom</span>
+                  <span class="mono-label text-[8px] text-faint">QUERY BACKEND BY PARAMETERS</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="badge-count-custom" class="mono-label text-[8.5px] text-glacier font-semibold">FILTERS</span>
+                <span class="material-symbols-outlined text-[18px] text-muted chevron-icon" id="chev-custom">expand_more</span>
+              </div>
+            </button>
+
+            <div id="content-acc-custom" class="hidden border-t border-border p-3.5 flex flex-col gap-3 bg-bg/50">
+              
+              <div class="flex flex-col gap-1">
+                <label class="mono-label text-[8px] text-faint">TOPIC</label>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <button onclick="selectCustomPill(this, 'custom-topic')" class="custom-topic py-1.5 px-1 border border-glacier text-glacier bg-card rounded mono-label text-[8px] font-bold text-center">TECHNOLOGY</button>
+                  <button onclick="selectCustomPill(this, 'custom-topic')" class="custom-topic py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">SCIENCE</button>
+                  <button onclick="selectCustomPill(this, 'custom-topic')" class="custom-topic py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">HISTORY</button>
+                  <button onclick="selectCustomPill(this, 'custom-topic')" class="custom-topic py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">BUSINESS</button>
+                  <button onclick="selectCustomPill(this, 'custom-topic')" class="custom-topic py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">CULTURE</button>
+                  <button onclick="selectCustomPill(this, 'custom-topic')" class="custom-topic py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">POLITICS</button>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <label class="mono-label text-[8px] text-faint">LENGTH</label>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <button onclick="selectCustomPill(this, 'custom-len')" class="custom-len py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">&lt;15 MIN</button>
+                  <button onclick="selectCustomPill(this, 'custom-len')" class="custom-len py-1.5 px-1 border border-glacier text-glacier bg-card rounded mono-label text-[8px] font-bold text-center">15-30 MIN</button>
+                  <button onclick="selectCustomPill(this, 'custom-len')" class="custom-len py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">45+ MIN</button>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <label class="mono-label text-[8px] text-faint">COMPLEXITY</label>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <button onclick="selectCustomPill(this, 'custom-comp')" class="custom-comp py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">TACTICAL</button>
+                  <button onclick="selectCustomPill(this, 'custom-comp')" class="custom-comp py-1.5 px-1 border border-glacier text-glacier bg-card rounded mono-label text-[8px] font-bold text-center">ANALYTICAL</button>
+                  <button onclick="selectCustomPill(this, 'custom-comp')" class="custom-comp py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center">ACADEMIC</button>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <label class="mono-label text-[8px] text-faint">PUBLISHER</label>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button onclick="togglePubSelect(this)" class="custom-pub py-1.5 px-2 border border-glacier text-glacier bg-card rounded mono-label text-[8px] font-bold text-left truncate">NOT BORING</button>
+                  <button onclick="togglePubSelect(this)" class="custom-pub py-1.5 px-2 border border-glacier text-glacier bg-card rounded mono-label text-[8px] font-bold text-left truncate">STRATECHERY</button>
+                  <button onclick="togglePubSelect(this)" class="custom-pub py-1.5 px-2 border border-border text-silver bg-card rounded mono-label text-[8px] text-left truncate">ASTRAL CODEX</button>
+                  <button onclick="togglePubSelect(this)" class="custom-pub py-1.5 px-2 border border-border text-silver bg-card rounded mono-label text-[8px] text-left truncate">PALLADIUM</button>
+                </div>
+              </div>
+
+              <div class="pt-1.5 flex items-center justify-between gap-2 border-t border-border mt-1">
+                <span class="mono-label text-[8px] text-muted" id="custom-match-indicator">2 MATCHING ESSAYS</span>
+                <button onclick="addCustomMatchesToStack()" class="px-3 py-1.5 bg-glacier text-bg font-mono text-[9px] font-bold uppercase rounded hover:bg-white transition-colors">
+                  + ADD TO STACK (32M)
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <div class="p-4 border-t border-border bg-bg">
+          <button onclick="saveCreatedStack()" id="btn-save-created-stack" class="w-full h-12 bg-silver text-bg font-mono font-bold text-[11px] uppercase tracking-wider rounded hover:bg-white transition-colors">
+            CREATE STACK (2 ESSAYS · 36 MIN)
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- 3. TUNING SCREEN (B3)                                    -->
+      <!-- ======================================================== -->
+      <section id="screen-tuning" class="screen-view absolute inset-0 flex flex-col z-10 opacity-0 pointer-events-none transition-opacity duration-200 bg-bg overflow-y-auto px-5 pt-2 pb-24">
+        
+        <!-- Header -->
+        <header class="flex items-center justify-between py-2 mb-2 border-b border-border pb-2.5">
+          <div class="flex items-center gap-2">
+            <h1 class="font-display text-[20px] font-medium text-silver">Tuning</h1>
+            <div id="autosave-pill" class="mono-label text-[8px] px-1.5 py-0.5 bg-card border border-border rounded text-muted transition-colors">
+              <span class="text-glacier">●</span> SAVED
+            </div>
+          </div>
+          <button id="btn-reset-tuning" class="text-muted hover:text-silver flex items-center gap-1 mono-label text-[9px]" title="Reset to Defaults">
+            <span class="material-symbols-outlined text-[15px]">restart_alt</span>
+            <span>RESET</span>
+          </button>
+        </header>
+
+        <!-- Segmented Toggle: FEED PREFERENCES vs STATS -->
+        <div class="flex bg-surface border border-border rounded p-1 mb-3">
+          <button id="tab-tuning-mode" class="flex-1 py-1.5 mono-label text-[10px] rounded bg-card text-silver font-bold transition-all" onclick="switchTuningMode('tuning')">
+            FEED PREFERENCES
+          </button>
+          <button id="tab-stats-mode" class="flex-1 py-1.5 mono-label text-[10px] rounded text-muted hover:text-silver transition-all" onclick="switchTuningMode('stats')">
+            READING STATS
+          </button>
+        </div>
+
+        <!-- ================= MODE 1: FEED PREFERENCES ================= -->
+        <div id="tuning-controls-view" class="flex flex-col gap-3.5">
+          
+          <!-- Preferred Essay Length Target -->
+          <div class="bg-card border border-border rounded-lg p-3.5 flex flex-col gap-1.5">
+            <div class="flex justify-between items-center text-[10px] font-mono">
+              <span class="text-silver font-semibold uppercase">PREFERRED ESSAY LENGTH</span>
+              <span id="length-val" class="text-glacier font-bold">18-25 MIN</span>
+            </div>
+            <input type="range" id="slider-length" min="5" max="60" value="22" class="w-full mt-1.5" oninput="onLengthChange()">
+            <div class="flex justify-between text-[8px] font-mono text-faint mt-1">
+              <span>QUICK BRIEF (5-10M)</span>
+              <span>STANDARD (15-25M)</span>
+              <span>LONG OPUS (45M+)</span>
+            </div>
+          </div>
+
+          <!-- Real App Categories (Stacked Vertically, No Numbers) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex justify-between items-center mono-label text-[9px] text-faint">
+              <span>CATEGORIES</span>
+              <span class="text-muted">TAP TO CYCLE: BOOST · NORMAL · MUTE</span>
+            </div>
+            
+            <div class="flex flex-col divide-y divide-border border border-border rounded-lg bg-card/60" id="categories-list">
+              
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="boost">
+                <span class="text-[13.5px] text-silver font-medium">Technology</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 bg-glacier-soft border border-glacier text-glacier rounded font-bold">BOOSTED</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="boost">
+                <span class="text-[13.5px] text-silver font-medium">Science</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 bg-glacier-soft border border-glacier text-glacier rounded font-bold">BOOSTED</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="normal">
+                <span class="text-[13.5px] text-silver font-medium">History</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 border border-border text-muted rounded">NORMAL</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="normal">
+                <span class="text-[13.5px] text-silver font-medium">Business</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 border border-border text-muted rounded">NORMAL</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="normal">
+                <span class="text-[13.5px] text-silver font-medium">Finance</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 border border-border text-muted rounded">NORMAL</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="normal">
+                <span class="text-[13.5px] text-silver font-medium">Culture</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 border border-border text-muted rounded">NORMAL</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="mute">
+                <span class="text-[13.5px] text-silver font-medium">Politics</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 bg-bg border border-error/50 text-error rounded font-bold">MUTED</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="mute">
+                <span class="text-[13.5px] text-silver font-medium">Lifestyle</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 bg-bg border border-error/50 text-error rounded font-bold">MUTED</span>
+              </div>
+
+              <div onclick="cycleCategory(this)" class="cat-row p-3 flex items-center justify-between cursor-pointer hover:bg-card transition-colors" data-state="mute">
+                <span class="text-[13.5px] text-silver font-medium">Entertainment</span>
+                <span class="cat-status mono-label text-[9px] px-2 py-0.5 bg-bg border border-error/50 text-error rounded font-bold">MUTED</span>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Top 3 Publishers (Boost / Block) -->
+          <div class="flex flex-col gap-1.5">
+            <span class="mono-label text-[9px] text-faint">YOUR TOP 3 PUBLISHERS</span>
+            <div class="border border-border rounded-lg divide-y divide-border bg-card/60">
+              
+              <div class="p-3 flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[13.5px]">Not Boring</span>
+                  <span class="mono-label text-[8px] text-glacier">MOST FREQUENTLY READ</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="setPubState(this, 'boost')" class="px-2.5 py-1 bg-glacier text-bg font-mono text-[8.5px] font-bold uppercase rounded">BOOSTED</button>
+                  <button onclick="setPubState(this, 'block')" class="px-2.5 py-1 border border-border text-muted font-mono text-[8.5px] uppercase rounded hover:text-error hover:border-error">BLOCK</button>
+                </div>
+              </div>
+
+              <div class="p-3 flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[13.5px]">Stratechery</span>
+                  <span class="mono-label text-[8px] text-glacier">HIGH RETENTION</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="setPubState(this, 'boost')" class="px-2.5 py-1 bg-glacier text-bg font-mono text-[8.5px] font-bold uppercase rounded">BOOSTED</button>
+                  <button onclick="setPubState(this, 'block')" class="px-2.5 py-1 border border-border text-muted font-mono text-[8.5px] uppercase rounded hover:text-error hover:border-error">BLOCK</button>
+                </div>
+              </div>
+
+              <div class="p-3 flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[13.5px]">Astral Codex Ten</span>
+                  <span class="mono-label text-[8px] text-glacier">HIGH COMPLETION RATE</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="setPubState(this, 'boost')" class="px-2.5 py-1 bg-glacier text-bg font-mono text-[8.5px] font-bold uppercase rounded">BOOSTED</button>
+                  <button onclick="setPubState(this, 'block')" class="px-2.5 py-1 border border-border text-muted font-mono text-[8.5px] uppercase rounded hover:text-error hover:border-error">BLOCK</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Bottom 3 Publishers (Boost / Block) -->
+          <div class="flex flex-col gap-1.5">
+            <span class="mono-label text-[9px] text-faint">YOUR BOTTOM 3 PUBLISHERS (LEAST ENGAGED)</span>
+            <div class="border border-border rounded-lg divide-y divide-border bg-card/60">
+              
+              <div class="p-3 flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[13.5px]">Substack Morning Wire</span>
+                  <span class="mono-label text-[8px] text-faint">FREQUENTLY SKIPPED</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="setPubState(this, 'boost')" class="px-2.5 py-1 border border-border text-muted font-mono text-[8.5px] uppercase rounded hover:text-glacier">BOOST</button>
+                  <button onclick="setPubState(this, 'block')" class="px-2.5 py-1 bg-bg border border-error/50 text-error font-mono text-[8.5px] font-bold uppercase rounded">BLOCKED</button>
+                </div>
+              </div>
+
+              <div class="p-3 flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[13.5px]">Daily Political Memo</span>
+                  <span class="mono-label text-[8px] text-faint">ZERO READ TIME</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="setPubState(this, 'boost')" class="px-2.5 py-1 border border-border text-muted font-mono text-[8.5px] uppercase rounded hover:text-glacier">BOOST</button>
+                  <button onclick="setPubState(this, 'block')" class="px-2.5 py-1 bg-bg border border-error/50 text-error font-mono text-[8.5px] font-bold uppercase rounded">BLOCKED</button>
+                </div>
+              </div>
+
+              <div class="p-3 flex items-center justify-between">
+                <div class="flex flex-col">
+                  <span class="text-silver font-medium text-[13.5px]">Tech Market Wire</span>
+                  <span class="mono-label text-[8px] text-faint">FREQUENTLY DISMISSED</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="setPubState(this, 'boost')" class="px-2.5 py-1 border border-border text-muted font-mono text-[8.5px] uppercase rounded hover:text-glacier">BOOST</button>
+                  <button onclick="setPubState(this, 'block')" class="px-2.5 py-1 bg-bg border border-error/50 text-error font-mono text-[8.5px] font-bold uppercase rounded">BLOCKED</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================= MODE 2: READING STATS (ENGAGING DATA VISUALIZATION) ================= -->
+        <div id="stats-controls-view" class="hidden flex flex-col gap-3.5">
+          
+          <!-- Hero Metric Tiles -->
+          <div class="grid grid-cols-3 gap-2.5">
+            <div class="bg-card border border-border rounded-lg p-3 flex flex-col">
+              <span class="font-display text-[22px] text-silver font-semibold">42.6H</span>
+              <span class="mono-label text-[7.5px] text-faint">TIME IN FLOW</span>
+            </div>
+            <div class="bg-card border border-border rounded-lg p-3 flex flex-col">
+              <span class="font-display text-[22px] text-silver font-semibold">584K</span>
+              <span class="mono-label text-[7.5px] text-faint">WORDS CONSUMED</span>
+            </div>
+            <div class="bg-card border border-border rounded-lg p-3 flex flex-col">
+              <span class="font-display text-[22px] text-glacier font-semibold">12D</span>
+              <span class="mono-label text-[7.5px] text-faint">STREAK (RECORD: 19)</span>
+            </div>
+          </div>
+
+          <!-- Weekly Reading Cadence (7-Day Visual Activity Punch Card) -->
+          <div class="bg-card border border-border rounded-lg p-3.5 flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+              <span class="mono-label text-[8.5px] text-faint">THIS WEEK'S READING CADENCE</span>
+              <span class="mono-label text-[8.5px] text-glacier font-bold">14 READS (140% OF GOAL)</span>
+            </div>
+            <div class="grid grid-cols-7 gap-1.5 pt-1 text-center font-mono">
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-full h-8 bg-glacier/30 border border-glacier/60 rounded flex items-center justify-center text-[11px] text-silver font-bold">2</div>
+                <span class="text-[8px] text-muted">MON</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-full h-8 bg-glacier/30 border border-glacier/60 rounded flex items-center justify-center text-[11px] text-silver font-bold">3</div>
+                <span class="text-[8px] text-muted">TUE</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-full h-8 bg-glacier/20 border border-border rounded flex items-center justify-center text-[11px] text-silver">1</div>
+                <span class="text-[8px] text-muted">WED</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-full h-8 bg-glacier/50 border border-glacier rounded flex items-center justify-center text-[11px] text-silver font-bold">4</div>
+                <span class="text-[8px] text-muted">THU</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-full h-8 bg-glacier/40 border border-glacier/80 rounded flex items-center justify-center text-[11px] text-silver font-bold">2</div>
+                <span class="text-[8px] text-muted">FRI</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-full h-8 bg-glacier/30 border border-glacier/60 rounded flex items-center justify-center text-[11px] text-silver font-bold">2</div>
+                <span class="text-[8px] text-glacier font-bold">SAT</span>
+              </div>
+              <div class="flex flex-col items-center gap-1">
+                <div class="w-full h-8 bg-surface border border-border/50 rounded flex items-center justify-center text-[11px] text-faint">-</div>
+                <span class="text-[8px] text-faint">SUN</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Visual Reading Pace Gauge (285 WPM) -->
+          <div class="bg-card border border-border rounded-lg p-3.5 flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+              <span class="mono-label text-[8.5px] text-faint">READING SPEED / VELOCITY GAUGE</span>
+              <span class="mono-label text-[9px] text-glacier font-bold">285 WPM (DEEP IMMERSION)</span>
+            </div>
+            
+            <!-- Spectrum Gauge -->
+            <div class="relative pt-2 pb-1">
+              <div class="w-full h-2 bg-surface rounded-full flex overflow-hidden">
+                <div class="w-[30%] h-full bg-border-strong" title="Casual 180-220"></div>
+                <div class="w-[40%] h-full bg-glacier" title="Focus 220-320"></div>
+                <div class="w-[30%] h-full bg-[#406887]" title="Skim 320+"></div>
+              </div>
+              <!-- Gauge needle indicator -->
+              <div class="absolute top-1 left-[62%] -translate-x-1/2 flex flex-col items-center">
+                <div class="w-2 h-2 rounded-full bg-silver shadow"></div>
+              </div>
+            </div>
+
+            <div class="flex justify-between text-[8px] font-mono text-faint">
+              <span>CASUAL (200 WPM)</span>
+              <span class="text-silver font-medium">YOU: 285 WPM (~3.5M / 1K WDS)</span>
+              <span>RAPID SKIM (400 WPM)</span>
+            </div>
+          </div>
+
+          <!-- Interactive Category Proportion Strip -->
+          <div class="bg-card border border-border rounded-lg p-3.5 flex flex-col gap-2">
+            <span class="mono-label text-[8.5px] text-faint">CATEGORY READING SPECTRUM</span>
+            
+            <!-- Segmented Color Ribbon -->
+            <div class="w-full h-3 rounded flex overflow-hidden gap-[1px]">
+              <div class="w-[42%] h-full bg-glacier" title="Tech 42%"></div>
+              <div class="w-[22%] h-full bg-[#94bddf]" title="History 22%"></div>
+              <div class="w-[18%] h-full bg-[#406887]" title="Science 18%"></div>
+              <div class="w-[12%] h-full bg-[#5E86A6]" title="Culture 12%"></div>
+              <div class="w-[6%] h-full bg-[#252A32]" title="Business 6%"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-x-3 gap-y-1 pt-1 text-[10px] font-mono">
+              <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-glacier"></div>
+                <span class="text-silver">Technology: 42% (78 reads)</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-[#94bddf]"></div>
+                <span class="text-silver">History: 22% (41 reads)</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-[#406887]"></div>
+                <span class="text-silver">Science: 18% (33 reads)</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-[#5E86A6]"></div>
+                <span class="text-silver">Culture: 12% (22 reads)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Time of Day Arc -->
+          <div class="bg-card border border-border rounded-lg p-3.5 flex flex-col gap-2">
+            <span class="mono-label text-[8.5px] text-faint">DIURNAL READING RHYTHM</span>
+            <div class="grid grid-cols-3 gap-2 text-center font-mono text-[10px]">
+              <div class="p-2 bg-surface rounded border border-border flex flex-col">
+                <span class="text-glacier text-[14px] font-bold">44%</span>
+                <span class="text-silver mt-0.5">MORNING</span>
+                <span class="text-faint text-[8px]">6AM–11AM</span>
+              </div>
+              <div class="p-2 bg-surface rounded border border-border flex flex-col">
+                <span class="text-silver text-[14px] font-bold">41%</span>
+                <span class="text-silver mt-0.5">NIGHT</span>
+                <span class="text-faint text-[8px]">7PM–11PM</span>
+              </div>
+              <div class="p-2 bg-surface rounded border border-border flex flex-col">
+                <span class="text-muted text-[14px] font-bold">15%</span>
+                <span class="text-silver mt-0.5">MIDDAY</span>
+                <span class="text-faint text-[8px]">12PM–4PM</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 40% Depth Qualification Funnel -->
+          <div class="bg-card border border-border rounded-lg p-3.5 flex flex-col gap-2">
+            <span class="mono-label text-[8.5px] text-faint">RETENTION HEALTH &amp; ENGAGEMENT DEPTH</span>
+            <div class="flex flex-col gap-1.5 font-mono text-[10px]">
+              <div>
+                <div class="flex justify-between mb-0.5">
+                  <span class="text-silver">ARTICLES OPENED</span>
+                  <span class="text-muted">210 (100%)</span>
+                </div>
+                <div class="w-full h-1.5 bg-surface rounded"><div class="w-full h-full bg-border-strong rounded"></div></div>
+              </div>
+              <div>
+                <div class="flex justify-between mb-0.5">
+                  <span class="text-silver">QUALIFIED READ (&gt;40% SCROLL DEPTH)</span>
+                  <span class="text-glacier">184 (87.6%)</span>
+                </div>
+                <div class="w-full h-1.5 bg-surface rounded"><div class="w-[87.6%] h-full bg-glacier rounded"></div></div>
+              </div>
+              <div>
+                <div class="flex justify-between mb-0.5">
+                  <span class="text-silver">COMPLETED TO THE END</span>
+                  <span class="text-silver">142 (67.6%)</span>
+                </div>
+                <div class="w-full h-1.5 bg-surface rounded"><div class="w-[67.6%] h-full bg-silver rounded"></div></div>
+              </div>
+            </div>
+            <div class="pt-1.5 text-[9px] font-mono text-faint flex justify-between border-t border-border mt-1">
+              <span>AVG QUEUE RETENTION: 4.8 DAYS</span>
+              <span class="text-glacier font-bold">STALE BACKLOG: 11% (HEALTHY)</span>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- 4. DISTRACTION-FREE READER OVERLAY                       -->
+      <!-- ======================================================== -->
+      <section id="screen-reader" class="screen-view absolute inset-0 z-40 bg-bg opacity-0 pointer-events-none transition-opacity duration-200 flex flex-col">
+        
+        <header class="h-12 border-b border-border bg-bg/95 px-5 flex items-center justify-between z-50 sticky top-0">
+          <button onclick="closeReader()" class="flex items-center gap-1 text-muted hover:text-silver mono-label text-[9px]">
+            <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+            <span>BACK</span>
+          </button>
+          
+          <div class="flex items-center gap-2.5">
+            <span id="reader-depth-badge" class="mono-label text-[9px] text-glacier">0% READ</span>
+            <button onclick="toast('Saved to Quick Save Queue')" class="text-glacier"><span class="material-symbols-outlined text-[17px]">bookmark</span></button>
+          </div>
+        </header>
+
+        <div class="w-full h-[2px] bg-border sticky top-12 z-50">
+          <div id="reader-progress-fill" class="h-full bg-glacier w-0 transition-all duration-75"></div>
+        </div>
+
+        <div id="reader-scroll-area" class="flex-1 overflow-y-auto px-6 py-6 flex flex-col items-center" onscroll="onReaderScroll()">
+          <article class="w-full max-w-[360px] flex flex-col gap-4 text-[#D2D7E0] leading-[1.75] font-body text-[14.5px]">
+            
+            <div class="mono-label text-[9.5px] text-glacier" id="reader-meta-pub">NOT BORING · ESSAY MONOGRAPH</div>
+            
+            <h1 id="reader-meta-title" class="font-display text-[24px] leading-[30px] font-medium text-silver">
+              Expanding the Radius of Daily Life
+            </h1>
+
+            <div class="mono-label text-[9px] text-muted pb-3 border-b border-border" id="reader-meta-byline">
+              BY PACKY McCORMICK · TSUNG XU // 18 MIN READ
+            </div>
+
+            <p class="font-body text-[15px] italic text-[#E2E5EB] border-l-2 border-glacier pl-3 my-1">
+              The speed of transportation has historically governed the size of our cities, the depth of our human connections, and the geographic reach of opportunity.
+            </p>
+
+            <p>
+              Throughout history, the effective diameter of a human community has hovered stubbornly around what Marchetti termed the one-hour travel budget: thirty minutes out, thirty minutes back. When walking was our only velocity, cities spanned four miles. When horses and trains arrived, they stretched to twenty.
+            </p>
+
+            <p>
+              Automobiles decentralized the world, but in doing so, they also clogged it. Today, the fundamental physics of congestion imposes a tax on our ambition. We spend precious cognitive bandwidth navigating bumper-to-bumper inertia.
+            </p>
+
+            <p>
+              Point-to-point electric vertical takeoff and landing (eVTOL) does not simply make wealthy commuters faster; it rewrites the geometric topology of human civilization. When a 60-minute highway grind compresses into an eight-minute whisper through the lower sky, the boundary of daily life expands by an order of magnitude.
+            </p>
+
+            <div class="p-3 bg-card border border-border rounded my-2">
+              <span class="mono-label text-[8.5px] text-glacier font-bold block mb-1">CORE THESIS</span>
+              <p class="text-[12.5px] text-silver leading-relaxed">
+                Physical distance is static; human access is a dynamic function of velocity and friction.
+              </p>
+            </div>
+
+            <p>
+              As battery densities cross the 400 Wh/kg threshold and autonomous flight corridors mature, the economics of daily flight pivot from private aviation luxury into mass transit utility.
+            </p>
+
+            <div class="py-10 flex flex-col items-center gap-2 border-t border-border mt-6">
+              <span class="material-symbols-outlined text-glacier text-[24px]">check_circle</span>
+              <span class="mono-label text-[9px] text-silver font-bold">MONOGRAPH COMPLETED</span>
+              <button onclick="closeReader()" class="mt-2 px-3 py-1.5 bg-glacier text-bg font-mono text-[9px] font-bold uppercase rounded hover:bg-white">
+                RETURN
+              </button>
+            </div>
+
+          </article>
+        </div>
+
+      </section>
+
+      <!-- ======================================================== -->
+      <!-- 5. ONE-CLICK SAVE-TO-STACK DRAWER                        -->
+      <!-- ======================================================== -->
+      <div id="save-sheet-scrim" class="absolute inset-0 bg-bg/75 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-200" onclick="closeSaveSheet()"></div>
+      <div id="save-sheet" class="absolute inset-x-0 bottom-0 z-50 bg-card border-t border-border rounded-t-xl transition-all duration-200 transform translate-y-full opacity-0 flex flex-col overflow-hidden pb-4">
+        
+        <div class="flex items-center justify-between px-5 pt-3 pb-2 border-b border-border">
+          <span class="mono-label text-[9px] text-muted">SAVE TO STACK</span>
+          <button onclick="closeSaveSheet()" class="text-muted hover:text-silver"><span class="material-symbols-outlined text-[17px]">close</span></button>
+        </div>
+
+        <div class="px-2 py-1 divide-y divide-border/50">
+          
+          <button onclick="oneTapSave('Quick Save Queue')" class="w-full py-2.5 px-3 flex items-center gap-3 text-left hover:bg-raised rounded transition-colors group">
+            <span class="material-symbols-outlined text-[18px] text-glacier">bolt</span>
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-silver font-medium text-[13px] group-hover:text-glacier truncate">Quick Save Queue</span>
+              <span class="mono-label text-[8px] text-faint">12 ESSAYS</span>
+            </div>
+          </button>
+
+          <button onclick="oneTapSave('Sunday Longform')" class="w-full py-2.5 px-3 flex items-center gap-3 text-left hover:bg-raised rounded transition-colors group">
+            <span class="material-symbols-outlined text-[18px] text-muted group-hover:text-glacier">auto_stories</span>
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-silver font-medium text-[13px] group-hover:text-glacier truncate">Sunday Longform</span>
+              <span class="mono-label text-[8px] text-faint">3 ESSAYS</span>
+            </div>
+          </button>
+
+          <button onclick="oneTapSave('Semiconductors & Deep Tech')" class="w-full py-2.5 px-3 flex items-center gap-3 text-left hover:bg-raised rounded transition-colors group">
+            <span class="material-symbols-outlined text-[18px] text-muted group-hover:text-glacier">memory</span>
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-silver font-medium text-[13px] group-hover:text-glacier truncate">Semiconductors &amp; Deep Tech</span>
+              <span class="mono-label text-[8px] text-faint">4 ESSAYS</span>
+            </div>
+          </button>
+
+          <button onclick="oneTapSave('Philosophy & Systems')" class="w-full py-2.5 px-3 flex items-center gap-3 text-left hover:bg-raised rounded transition-colors group">
+            <span class="material-symbols-outlined text-[18px] text-muted group-hover:text-glacier">psychology</span>
+            <div class="flex flex-col flex-1 min-w-0">
+              <span class="text-silver font-medium text-[13px] group-hover:text-glacier truncate">Philosophy &amp; Systems</span>
+              <span class="mono-label text-[8px] text-faint">2 ESSAYS</span>
+            </div>
+          </button>
+
+        </div>
+
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- 6. ADD ARTICLE TO CURRENT STACK MODAL                     -->
+      <!-- ======================================================== -->
+      <div id="add-article-sheet" class="screen-view absolute inset-0 z-50 bg-bg opacity-0 pointer-events-none transition-opacity duration-200 flex flex-col">
+        <header class="h-12 border-b border-border bg-bg/95 px-5 flex items-center justify-between">
+          <button onclick="closeAddArticleSheet()" class="text-muted hover:text-silver mono-label text-[9px] flex items-center gap-1">
+            <span class="material-symbols-outlined text-[16px]">close</span>
+            <span>CANCEL</span>
+          </button>
+          <span class="font-display text-[14px] text-silver font-medium">Add to This Stack</span>
+          <div class="w-8"></div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2.5">
+          <span class="mono-label text-[8.5px] text-faint">SELECT ESSAY FROM SAVES:</span>
+          
+          <div class="border border-border rounded-lg divide-y divide-border bg-card/60">
+            <div onclick="addArticleToCurrent('Why Decentralization Matters', 'Chris Dixon', 'CDIXON.ORG', '11 MIN')" class="p-3 flex items-center justify-between hover:bg-card cursor-pointer">
+              <div class="flex flex-col">
+                <span class="mono-label text-[8px] text-glacier">CDIXON.ORG · 11 MIN</span>
+                <span class="text-[13.5px] text-silver font-medium">Why Decentralization Matters</span>
+              </div>
+              <span class="material-symbols-outlined text-glacier text-[18px]">add</span>
+            </div>
+
+            <div onclick="addArticleToCurrent('The Precision Tool Revolution', 'Saloni Dattani', 'WORKS IN PROGRESS', '24 MIN')" class="p-3 flex items-center justify-between hover:bg-card cursor-pointer">
+              <div class="flex flex-col">
+                <span class="mono-label text-[8px] text-glacier">WORKS IN PROGRESS · 24 MIN</span>
+                <span class="text-[13.5px] text-silver font-medium">The Precision Tool Revolution</span>
+              </div>
+              <span class="material-symbols-outlined text-glacier text-[18px]">add</span>
+            </div>
+
+            <div onclick="addArticleToCurrent('The Architecture of Memory', 'Venkatesh Rao', 'RIBBONFARM', '14 MIN')" class="p-3 flex items-center justify-between hover:bg-card cursor-pointer">
+              <div class="flex flex-col">
+                <span class="mono-label text-[8px] text-glacier">RIBBONFARM · 14 MIN</span>
+                <span class="text-[13.5px] text-silver font-medium">The Architecture of Memory</span>
+              </div>
+              <span class="material-symbols-outlined text-glacier text-[18px]">add</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================================== -->
+    <!-- BOTTOM TAB NAVIGATION (SHARED APP SHELL)                   -->
+    <!-- ========================================================== -->
+    <nav class="h-16 bg-bg/95 backdrop-blur-xl border-t border-border px-6 flex justify-around items-center z-40">
+      
+      <!-- Tab 1: Feed -->
+      <button id="nav-btn-feed" onclick="navigateToScreen('feed')" class="flex flex-col items-center gap-0.5 group">
+        <span class="material-symbols-outlined text-[20px] text-glacier transition-colors">view_carousel</span>
+        <span class="mono-label text-[8.5px] text-silver font-bold tracking-widest">FEED</span>
+        <div id="nav-dot-feed" class="w-1 h-1 rounded-full bg-glacier"></div>
+      </button>
+
+      <!-- Tab 2: Stacks -->
+      <button id="nav-btn-stacks" onclick="navigateToScreen('stacks')" class="flex flex-col items-center gap-0.5 group">
+        <span class="material-symbols-outlined text-[20px] text-muted group-hover:text-silver transition-colors">layers</span>
+        <span class="mono-label text-[8.5px] text-muted group-hover:text-silver tracking-widest">STACKS</span>
+        <div id="nav-dot-stacks" class="w-1 h-1 rounded-full bg-transparent"></div>
+      </button>
+
+      <!-- Tab 3: Tuning -->
+      <button id="nav-btn-tuning" onclick="navigateToScreen('tuning')" class="flex flex-col items-center gap-0.5 group">
+        <span class="material-symbols-outlined text-[20px] text-muted group-hover:text-silver transition-colors">tune</span>
+        <span class="mono-label text-[8.5px] text-muted group-hover:text-silver tracking-widest">TUNING</span>
+        <div id="nav-dot-tuning" class="w-1 h-1 rounded-full bg-transparent"></div>
+      </button>
+
+    </nav>
+
+    <!-- Global Minimalist Toast -->
+    <div id="toast" class="tg-toast">
+      <span class="w-1.5 h-1.5 rounded-full bg-glacier inline-block mr-1.5 align-middle"></span>
+      <span id="toast-text">SAVED TO STACK</span>
+    </div>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- JAVASCRIPT APP STATE ENGINE                                  -->
+  <!-- ============================================================ -->
+  <script>
+    let autoSaveTimer = null;
+    let toastTimer = null;
+    let currentStackId = null;
+    let customMatchedCount = 0;
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      const txt = document.getElementById('toast-text');
+      txt.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+    }
+
+    function navigateToScreen(target) {
+      document.querySelectorAll('.screen-view').forEach(s => {
+        if (s.id !== 'new-stack-modal' && s.id !== 'screen-reader' && s.id !== 'screen-stack-detail' && s.id !== 'add-article-sheet') {
+          s.classList.add('opacity-0', 'pointer-events-none');
+          s.classList.remove('z-20');
+        }
+      });
+
+      document.getElementById('screen-stack-detail').classList.add('opacity-0', 'pointer-events-none');
+
+      const activeScreen = document.getElementById('screen-' + target);
+      if (activeScreen) {
+        activeScreen.classList.remove('opacity-0', 'pointer-events-none');
+        activeScreen.classList.add('z-20');
+      }
+
+      ['feed', 'stacks', 'tuning'].forEach(tab => {
+        const btn = document.getElementById('nav-btn-' + tab);
+        const icon = btn.querySelector('.material-symbols-outlined');
+        const label = btn.querySelector('.mono-label');
+        const dot = document.getElementById('nav-dot-' + tab);
+        if (tab === target) {
+          icon.classList.remove('text-muted');
+          icon.classList.add('text-glacier');
+          label.classList.remove('text-muted');
+          label.classList.add('text-silver');
+          dot.classList.remove('bg-transparent');
+          dot.classList.add('bg-glacier');
+        } else {
+          icon.classList.remove('text-glacier');
+          icon.classList.add('text-muted');
+          label.classList.remove('text-silver');
+          label.classList.add('text-muted');
+          dot.classList.remove('bg-glacier');
+          dot.classList.add('bg-transparent');
+        }
+      });
+    }
+
+    // Save Drawer
+    document.getElementById('btn-save-sheet').addEventListener('click', () => {
+      document.getElementById('save-sheet-scrim').classList.remove('opacity-0', 'pointer-events-none');
+      const sheet = document.getElementById('save-sheet');
+      sheet.classList.remove('translate-y-full', 'opacity-0');
+    });
+
+    function closeSaveSheet() {
+      document.getElementById('save-sheet-scrim').classList.add('opacity-0', 'pointer-events-none');
+      const sheet = document.getElementById('save-sheet');
+      sheet.classList.add('translate-y-full', 'opacity-0');
+    }
+
+    function oneTapSave(stackName) {
+      closeSaveSheet();
+      toast('SAVED TO ' + stackName.toUpperCase());
+    }
+
+    // Reader Mode
+    document.getElementById('btn-open-reader').addEventListener('click', () => {
+      launchReader('Expanding the Radius of Daily Life', 'PACKY McCORMICK · TSUNG XU', 'NOT BORING');
+    });
+
+    function launchReaderFromStack() {
+      const firstRow = document.querySelector('#stack-articles-list .article-row');
+      if (firstRow) {
+        const title = firstRow.querySelector('h4').textContent;
+        const pub = firstRow.querySelector('.mono-label').textContent.split('·')[0].trim();
+        const author = firstRow.querySelector('.mono-label:last-child').textContent;
+        launchReader(title, author, pub);
+      } else {
+        launchReader('Expanding the Radius of Daily Life', 'PACKY McCORMICK', 'NOT BORING');
+      }
+    }
+
+    function launchReader(title, author, pub) {
+      document.getElementById('reader-meta-title').textContent = title;
+      document.getElementById('reader-meta-byline').textContent = 'BY ' + author;
+      document.getElementById('reader-meta-pub').textContent = pub + ' · ESSAY MONOGRAPH';
+      
+      const reader = document.getElementById('screen-reader');
+      reader.classList.remove('opacity-0', 'pointer-events-none');
+      document.getElementById('reader-scroll-area').scrollTop = 0;
+      updateReaderProgress(0);
+    }
+
+    function closeReader() {
+      const reader = document.getElementById('screen-reader');
+      reader.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function onReaderScroll() {
+      const area = document.getElementById('reader-scroll-area');
+      const total = area.scrollHeight - area.clientHeight;
+      const progress = total > 0 ? (area.scrollTop / total) : 0;
+      updateReaderProgress(progress);
+    }
+
+    function updateReaderProgress(pct) {
+      const percent = Math.min(100, Math.round(pct * 100));
+      document.getElementById('reader-progress-fill').style.width = percent + '%';
+      document.getElementById('reader-depth-badge').textContent = percent + '% READ';
+    }
+
+        // Stacks Top Tabs (MY STACKS | HISTORY | ARCHIVE)
+    function switchStacksTab(tab) {
+      ['mystacks', 'history', 'archive'].forEach(t => {
+        const btn = document.getElementById('tab-sub-' + t);
+        const content = document.getElementById('tab-' + t + '-content');
+        if (t === tab) {
+          btn.classList.add('bg-card', 'text-silver', 'font-bold');
+          btn.classList.remove('text-muted');
+          content.classList.remove('hidden');
+        } else {
+          btn.classList.remove('bg-card', 'text-silver', 'font-bold');
+          btn.classList.add('text-muted');
+          content.classList.add('hidden');
+        }
+      });
+    }
+
+    // Stacks Presentation Switcher (Dossier vs Time Map vs Focus Deck)
+    function switchStacksPresentation(mode) {
+      const btnDos = document.getElementById('btn-view-dossier');
+      const btnTime = document.getElementById('btn-view-timemap');
+      const btnFoc = document.getElementById('btn-view-focus');
+      const viewDos = document.getElementById('stacks-dossier-view');
+      const viewTime = document.getElementById('stacks-timemap-view');
+      const viewFoc = document.getElementById('stacks-focus-view');
+
+      const tabs = [
+        { id: 'dossier', btn: btnDos, view: viewDos },
+        { id: 'timemap', btn: btnTime, view: viewTime },
+        { id: 'focus', btn: btnFoc, view: viewFoc }
+      ];
+
+      tabs.forEach(t => {
+        if (t.id === mode) {
+          t.btn.className = 'px-2.5 py-1 mono-label text-[8px] rounded bg-card text-glacier font-bold transition-colors flex items-center gap-1';
+          t.view.classList.remove('hidden');
+        } else {
+          t.btn.className = 'px-2.5 py-1 mono-label text-[8px] rounded text-muted hover:text-silver transition-colors flex items-center gap-1';
+          t.view.classList.add('hidden');
+        }
+      });
+      toast('PRESENTATION: ' + mode.toUpperCase());
+    }
+
+    // Time Map Stack Switcher
+    function selectTimeMapStack(stackId) {
+      ['sunday', 'tech', 'philosophy', 'quick-save'].forEach(s => {
+        const chip = document.getElementById('timemap-chip-' + s);
+        if (chip) {
+          if (s === stackId) {
+            chip.className = 'px-3 py-1.5 rounded-lg bg-card border border-glacier text-glacier mono-label text-[9px] font-bold whitespace-nowrap';
+          } else {
+            chip.className = 'px-3 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap';
+          }
+        }
+      });
+
+      const headerTitle = document.getElementById('timemap-header-title');
+      const headerTime = document.getElementById('timemap-header-time');
+
+      if (stackId === 'tech') {
+        headerTitle.textContent = 'Semiconductors & Deep Tech Route';
+        headerTime.textContent = '68 MIN COMMITTED (75% READ)';
+      } else if (stackId === 'philosophy') {
+        headerTitle.textContent = 'Philosophy & Systems Route';
+        headerTime.textContent = '38 MIN COMMITTED (READY)';
+      } else if (stackId === 'quick-save') {
+        headerTitle.textContent = 'Quick Save Queue Route';
+        headerTime.textContent = '~105 MIN COMMITTED (12 ESSAYS)';
+      } else {
+        headerTitle.textContent = 'Sunday Longform Route';
+        headerTime.textContent = '54 MIN COMMITTED (33% READ)';
+      }
+      toast('TIME MAP: ' + stackId.toUpperCase());
+    }
+
+    // Focus Deck Stack Switcher
+    function selectFocusStack(stackId) {
+      ['sunday', 'tech', 'philosophy', 'quick-save'].forEach(s => {
+        const chip = document.getElementById('focus-chip-' + s);
+        if (chip) {
+          if (s === stackId) {
+            chip.className = 'px-3.5 py-1.5 rounded-lg bg-card border border-glacier text-glacier mono-label text-[9px] font-bold whitespace-nowrap';
+          } else {
+            chip.className = 'px-3.5 py-1.5 rounded-lg bg-card border border-border text-muted hover:text-silver mono-label text-[9px] whitespace-nowrap';
+          }
+        }
+      });
+
+      const title = document.getElementById('focus-stack-title');
+      const pct = document.getElementById('focus-stack-pct');
+      const artPub = document.getElementById('focus-article-pub');
+      const artTime = document.getElementById('focus-article-time');
+      const artTitle = document.getElementById('focus-article-title');
+      const artAuthor = document.getElementById('focus-article-author');
+      const artQuote = document.getElementById('focus-article-quote');
+      const ctaLabel = document.getElementById('focus-cta-label');
+      const ctaBtn = document.getElementById('btn-focus-cta');
+      const openDetailBtn = document.getElementById('btn-focus-open-detail');
+      const queueNext = document.getElementById('focus-queue-next');
+
+      if (stackId === 'tech') {
+        title.textContent = 'Semiconductors & Deep Tech';
+        pct.textContent = '75% (3 / 4)';
+        artPub.textContent = 'PALLADIUM';
+        artTime.textContent = '18 MIN READ';
+        artTitle.textContent = 'The Institutional Architecture of Space';
+        artAuthor.textContent = 'BY ASH MILTON';
+        artQuote.textContent = '"The orbital economy requires property rights and legal structures beyond terrestrial treaties."';
+        ctaLabel.textContent = 'FINISH STACK (18 MIN)';
+        ctaBtn.onclick = () => launchReader('The Institutional Architecture of Space', 'ASH MILTON', 'PALLADIUM');
+        openDetailBtn.onclick = () => openStackDetail('tech');
+        queueNext.innerHTML = 'Status: <em>Final monograph to complete stack</em>';
+      } else if (stackId === 'philosophy') {
+        title.textContent = 'Philosophy & Systems';
+        pct.textContent = '0% (0 / 2)';
+        artPub.textContent = 'RIBBONFARM';
+        artTime.textContent = '14 MIN READ';
+        artTitle.textContent = 'The Architecture of Memory';
+        artAuthor.textContent = 'BY VENKATESH RAO';
+        artQuote.textContent = '"Memory is not an archival storage medium; it is a generative predictive simulator."';
+        ctaLabel.textContent = 'BEGIN STACK (14 MIN)';
+        ctaBtn.onclick = () => launchReader('The Architecture of Memory', 'VENKATESH RAO', 'RIBBONFARM');
+        openDetailBtn.onclick = () => openStackDetail('philosophy');
+        queueNext.innerHTML = 'Next: <em>Consciousness in the Machine (18m)</em>';
+      } else if (stackId === 'quick-save') {
+        title.textContent = 'Quick Save Queue';
+        pct.textContent = 'INBOX (12 ESSAYS)';
+        artPub.textContent = 'STRATECHERY';
+        artTime.textContent = '14 MIN READ';
+        artTitle.textContent = 'The AI Value Chain Decoupling';
+        artAuthor.textContent = 'BY BEN THOMPSON';
+        artQuote.textContent = '"Value captures at the integration point between raw compute and end workflows."';
+        ctaLabel.textContent = 'START INBOX (14 MIN)';
+        ctaBtn.onclick = () => launchReader('The AI Value Chain Decoupling', 'BEN THOMPSON', 'STRATECHERY');
+        openDetailBtn.onclick = () => openStackDetail('quick-save');
+        queueNext.innerHTML = '11 more essays in queue';
+      } else {
+        title.textContent = 'Sunday Longform';
+        pct.textContent = '33% (1 / 3)';
+        artPub.textContent = 'WORKS IN PROGRESS';
+        artTime.textContent = '22 MIN READ';
+        artTitle.textContent = 'How Britain Invented the Precision Tool';
+        artAuthor.textContent = 'BY SALONI DATTANI';
+        artQuote.textContent = '"The steam engine could not have powered the industrial revolution without cylinders bored with less than a shilling\'s thickness of error."';
+        ctaLabel.textContent = 'CONTINUE READING (22 MIN)';
+        ctaBtn.onclick = () => launchReader('How Britain Invented the Precision Tool', 'SALONI DATTANI', 'WORKS IN PROGRESS');
+        openDetailBtn.onclick = () => openStackDetail('sunday');
+        queueNext.innerHTML = 'Next: <em>The Institutional Architecture of Space</em>';
+      }
+      toast('FOCUS: ' + stackId.toUpperCase());
+    } else {
+        btnTime.className = 'px-2 py-0.5 mono-label text-[8px] rounded bg-surface text-glacier font-bold transition-colors';
+        btnDos.className = 'px-2 py-0.5 mono-label text-[8px] rounded text-muted hover:text-silver transition-colors';
+        viewTime.classList.remove('hidden');
+        viewDos.classList.add('hidden');
+      }
+    }
+
+    // Stack Detail View
+    function openStackDetail(id) {
+      currentStackId = id;
+      const detail = document.getElementById('screen-stack-detail');
+      
+      if (id === 'quick-save') {
+        document.getElementById('detail-stack-type').textContent = 'PRIMARY QUEUE';
+        document.getElementById('detail-stack-title').textContent = 'Quick Save Queue';
+        document.getElementById('detail-stack-stats').textContent = '12 ESSAYS · ~1H 45M TOTAL';
+        document.getElementById('btn-archive-this-stack').style.display = 'none';
+        document.getElementById('btn-delete-this-stack').style.display = 'none';
+      } else if (id === 'sunday') {
+        document.getElementById('detail-stack-type').textContent = 'CURATED DOSSIER';
+        document.getElementById('detail-stack-title').textContent = 'Sunday Longform';
+        document.getElementById('detail-stack-stats').textContent = '3 ESSAYS · 54 MIN ESTIMATED';
+        document.getElementById('btn-archive-this-stack').style.display = 'flex';
+        document.getElementById('btn-delete-this-stack').style.display = 'flex';
+      } else if (id === 'tech') {
+        document.getElementById('detail-stack-type').textContent = 'CURATED DOSSIER';
+        document.getElementById('detail-stack-title').textContent = 'Semiconductors & Deep Tech';
+        document.getElementById('detail-stack-stats').textContent = '4 ESSAYS · 68 MIN ESTIMATED';
+        document.getElementById('btn-archive-this-stack').style.display = 'flex';
+        document.getElementById('btn-delete-this-stack').style.display = 'flex';
+      } else {
+        document.getElementById('detail-stack-type').textContent = 'CURATED DOSSIER';
+        document.getElementById('detail-stack-title').textContent = 'Philosophy & Systems';
+        document.getElementById('detail-stack-stats').textContent = '2 ESSAYS · 38 MIN ESTIMATED';
+        document.getElementById('btn-archive-this-stack').style.display = 'flex';
+        document.getElementById('btn-delete-this-stack').style.display = 'flex';
+      }
+
+      detail.classList.remove('opacity-0', 'pointer-events-none');
+    }
+
+    function closeStackDetail() {
+      document.getElementById('screen-stack-detail').classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function archiveCurrentStack() {
+      closeStackDetail();
+      toast('MOVED STACK TO ARCHIVE');
+      const archiveContainer = document.getElementById('tab-archive-content');
+      const title = document.getElementById('detail-stack-title').textContent;
+      const newArchived = document.createElement('div');
+      newArchived.className = 'p-3.5 bg-card border border-border rounded-lg flex items-center justify-between';
+      newArchived.innerHTML = `
+        <div class="flex flex-col gap-0.5">
+          <span class="mono-label text-[8.5px] text-glacier">ARCHIVED STACK</span>
+          <h4 class="font-display text-[14px] text-silver font-medium">${title}</h4>
+          <span class="mono-label text-[8px] text-faint">JUST ARCHIVED</span>
+        </div>
+        <button onclick="this.closest('.bg-card').remove(); toast('RESTORED TO MY STACKS');" class="px-3 py-1.5 border border-border text-muted font-mono text-[9px] uppercase rounded hover:text-glacier hover:border-glacier">RESTORE</button>
+      `;
+      archiveContainer.prepend(newArchived);
+    }
+
+    function deleteCurrentStack() {
+      closeStackDetail();
+      toast('STACK DELETED');
+    }
+
+    function removeArticleFromStack(btn) {
+      const row = btn.closest('.article-row');
+      row.style.opacity = '0.3';
+      setTimeout(() => {
+        row.remove();
+        toast('ARTICLE REMOVED FROM STACK');
+        const remaining = document.querySelectorAll('#stack-articles-list .article-row').length;
+        document.getElementById('detail-stack-stats').textContent = `${remaining} ESSAYS REMAINING`;
+      }, 150);
+    }
+
+    function openAddArticleSheet() {
+      document.getElementById('add-article-sheet').classList.remove('opacity-0', 'pointer-events-none');
+    }
+
+    function closeAddArticleSheet() {
+      document.getElementById('add-article-sheet').classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function addArticleToCurrent(title, author, pub, time) {
+      closeAddArticleSheet();
+      const list = document.getElementById('stack-articles-list');
+      const row = document.createElement('div');
+      row.className = 'p-3.5 bg-card border border-border rounded-lg flex items-center justify-between gap-3 article-row hover:border-border-strong transition-all';
+      row.innerHTML = `
+        <div class="flex flex-col flex-1 min-w-0">
+          <span class="mono-label text-[9px] text-glacier mb-0.5">${pub} · ${time}</span>
+          <h4 class="font-display text-[14.5px] text-silver font-medium truncate">${title}</h4>
+          <span class="mono-label text-[8.5px] text-faint mt-0.5">${author}</span>
+        </div>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <button onclick="launchReader('${title}', '${author}', '${pub}')" class="w-9 h-9 rounded bg-surface border border-border text-silver hover:border-glacier flex items-center justify-center transition-colors">
+            <span class="material-symbols-outlined text-[17px]">play_arrow</span>
+          </button>
+          <button onclick="removeArticleFromStack(this)" class="w-9 h-9 rounded text-muted hover:text-error flex items-center justify-center transition-colors" title="Remove from stack">
+            <span class="material-symbols-outlined text-[17px]">close</span>
+          </button>
+        </div>
+      `;
+      list.prepend(row);
+      toast('ADDED TO STACK: ' + title.toUpperCase());
+    }
+
+    function restoreStack(id, name) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+      toast('RESTORED TO MY STACKS: ' + name.toUpperCase());
+    }
+
+    // ACCORDION DROPDOWNS FOR NEW STACK MODAL
+    function openNewStackModal() {
+      document.getElementById('new-stack-modal').classList.remove('opacity-0', 'pointer-events-none');
+      updateNewStackTally();
+    }
+
+    function closeNewStackModal() {
+      document.getElementById('new-stack-modal').classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function toggleStackAccordion(section) {
+      const content = document.getElementById('content-acc-' + section);
+      const chev = document.getElementById('chev-' + section);
+      
+      const isClosed = content.classList.contains('hidden');
+      if (isClosed) {
+        content.classList.remove('hidden');
+        chev.classList.add('rotate-180');
+      } else {
+        content.classList.add('hidden');
+        chev.classList.remove('rotate-180');
+      }
+    }
+
+    function selectCustomPill(btn, groupClass) {
+      document.querySelectorAll('.' + groupClass).forEach(b => {
+        b.className = groupClass + ' py-1.5 px-1 border border-border text-silver bg-card rounded mono-label text-[8px] text-center';
+      });
+      btn.className = groupClass + ' py-1.5 px-1 border border-glacier text-glacier bg-card rounded mono-label text-[8px] font-bold text-center';
+      toast('FILTER APPLIED');
+    }
+
+    function togglePubSelect(btn) {
+      const isSelected = btn.classList.contains('border-glacier');
+      if (isSelected) {
+        btn.className = 'custom-pub py-1.5 px-2 border border-border text-silver bg-card rounded mono-label text-[8px] text-left truncate';
+      } else {
+        btn.className = 'custom-pub py-1.5 px-2 border border-glacier text-glacier bg-card rounded mono-label text-[8px] font-bold text-left truncate';
+      }
+    }
+
+    function addCustomMatchesToStack() {
+      customMatchedCount = 2;
+      document.getElementById('badge-count-custom').textContent = '+2 MATCHED';
+      document.getElementById('badge-count-custom').className = 'mono-label text-[8.5px] px-2 py-0.5 bg-glacier-soft text-glacier rounded font-bold';
+      updateNewStackTally();
+      toast('2 CUSTOM MATCHES ADDED TO STACK');
+    }
+
+    function updateNewStackTally() {
+      const queueChecks = document.querySelectorAll('.check-queue:checked').length;
+      const otherChecks = document.querySelectorAll('.check-other:checked').length;
+      
+      document.getElementById('badge-count-queue').textContent = queueChecks + ' SELECTED';
+      document.getElementById('badge-count-other').textContent = otherChecks + ' SELECTED';
+      document.getElementById('badge-count-other').className = otherChecks > 0 
+        ? 'mono-label text-[8.5px] px-2 py-0.5 bg-glacier-soft text-glacier rounded font-bold'
+        : 'mono-label text-[8.5px] text-faint';
+
+      const total = queueChecks + otherChecks + customMatchedCount;
+      document.getElementById('modal-selected-tally').textContent = total + ' SELECTED';
+      document.getElementById('btn-save-created-stack').textContent = `CREATE STACK (${total} ESSAYS · ~${total * 18} MIN)`;
+    }
+
+    function saveCreatedStack() {
+      const name = document.getElementById('input-new-stack-name').value || 'New Custom Stack';
+      closeNewStackModal();
+      toast('CREATED STACK: ' + name.toUpperCase());
+      
+      const container = document.getElementById('stacks-dossier-view');
+      const newCard = document.createElement('div');
+      newCard.className = 'p-4 bg-card border border-border rounded-lg hover:border-border-strong cursor-pointer transition-all flex flex-col gap-2.5';
+      newCard.onclick = () => openStackDetail('custom');
+      newCard.innerHTML = `
+        <div class="flex justify-between items-start">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded bg-glacier-soft flex items-center justify-center text-glacier">
+              <span class="material-symbols-outlined text-[17px]">layers</span>
+            </div>
+            <div>
+              <h3 class="font-display text-[16px] text-silver font-medium leading-tight">${name}</h3>
+              <span class="mono-label text-[8px] text-glacier font-bold">CUSTOM SESSION</span>
+            </div>
+          </div>
+          <span class="mono-label text-[9px] text-silver">2 ESSAYS · 36M</span>
+        </div>
+        <div class="flex items-center justify-between pt-1 text-[10px] font-mono">
+          <span class="text-faint">READY TO READ</span>
+          <span class="text-glacier font-medium flex items-center gap-1">BEGIN READING <span class="material-symbols-outlined text-[13px]">play_arrow</span></span>
+        </div>
+      `;
+      container.prepend(newCard);
+    }
+
+    // Tuning Screen Handlers
+    function switchTuningMode(mode) {
+      const btnTuning = document.getElementById('tab-tuning-mode');
+      const btnStats = document.getElementById('tab-stats-mode');
+      const viewTuning = document.getElementById('tuning-controls-view');
+      const viewStats = document.getElementById('stats-controls-view');
+
+      if (mode === 'tuning') {
+        btnTuning.classList.add('bg-card', 'text-silver', 'font-bold');
+        btnTuning.classList.remove('text-muted');
+        btnStats.classList.remove('bg-card', 'text-silver', 'font-bold');
+        btnStats.classList.add('text-muted');
+        viewTuning.classList.remove('hidden');
+        viewStats.classList.add('hidden');
+      } else {
+        btnStats.classList.add('bg-card', 'text-silver', 'font-bold');
+        btnStats.classList.remove('text-muted');
+        btnTuning.classList.remove('bg-card', 'text-silver', 'font-bold');
+        btnTuning.classList.add('text-muted');
+        viewStats.classList.remove('hidden');
+        viewTuning.classList.add('hidden');
+      }
+    }
+
+    function onLengthChange() {
+      const val = document.getElementById('slider-length').value;
+      document.getElementById('length-val').textContent = val < 15 ? `${val} MIN (BRIEF)` : (val > 35 ? `${val} MIN (LONG OPUS)` : `${val} MIN TARGET`);
+      triggerAutoSave();
+    }
+
+    function cycleCategory(el) {
+      const state = el.getAttribute('data-state');
+      const badge = el.querySelector('.cat-status');
+
+      if (state === 'boost') {
+        el.setAttribute('data-state', 'mute');
+        badge.className = 'cat-status mono-label text-[9px] px-2 py-0.5 bg-bg border border-error/50 text-error rounded font-bold';
+        badge.textContent = 'MUTED';
+      } else if (state === 'mute') {
+        el.setAttribute('data-state', 'normal');
+        badge.className = 'cat-status mono-label text-[9px] px-2 py-0.5 border border-border text-muted rounded';
+        badge.textContent = 'NORMAL';
+      } else {
+        el.setAttribute('data-state', 'boost');
+        badge.className = 'cat-status mono-label text-[9px] px-2 py-0.5 bg-glacier-soft border border-glacier text-glacier rounded font-bold';
+        badge.textContent = 'BOOSTED';
+      }
+      triggerAutoSave();
+    }
+
+    function setPubState(btn, state) {
+      const container = btn.parentElement;
+      container.querySelectorAll('button').forEach(b => {
+        b.className = 'px-2.5 py-1 border border-border text-muted font-mono text-[8.5px] uppercase rounded';
+      });
+
+      if (state === 'boost') {
+        btn.className = 'px-2.5 py-1 bg-glacier text-bg font-mono text-[8.5px] font-bold uppercase rounded';
+        toast('PUBLISHER PRIORITY BOOSTED');
+      } else {
+        btn.className = 'px-2.5 py-1 bg-bg border border-error/50 text-error font-mono text-[8.5px] font-bold uppercase rounded';
+        toast('PUBLISHER BLOCKED FROM FEED');
+      }
+      triggerAutoSave();
+    }
+
+    function triggerAutoSave() {
+      const pill = document.getElementById('autosave-pill');
+      pill.innerHTML = '<span class="text-error">●</span> SAVING';
+
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        pill.innerHTML = '<span class="text-glacier">●</span> SAVED';
+        toast('PREFERENCES PERSISTED');
+      }, 600);
+    }
+
+    document.getElementById('btn-reset-tuning').addEventListener('click', () => {
+      document.getElementById('slider-length').value = 22;
+      document.getElementById('length-val').textContent = '18-25 MIN';
+      triggerAutoSave();
+      toast('RESET TO LEARNED DEFAULTS');
+    });
+
+    function updateClock() {
+      const now = new Date();
+      const hrs = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('current-time').textContent = hrs + ':' + mins;
+    }
+    updateClock();
+    setInterval(updateClock, 30000);
+  </script>
+</body>
+</html>

@@ -10,27 +10,27 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
-  RefreshControl,
+  Animated,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUser } from '../contexts/UserContext';
 import { topInset } from '../utils/safeArea';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { Article, UserProfile, DashboardMetric, RootStackParamList } from '../types';
-import { User, Inbox, Shuffle, AlertTriangle } from 'lucide-react-native';
-import { DASHBOARD_METRIC_DEFS, DEFAULT_DASHBOARD_METRIC_IDS, SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES, TEXT_XS, TEXT_SM, TEXT_BASE, TEXT_LG, TEXT_XL, TEXT_2XL } from '../utils/constants';
+import { Article, UserProfile, RootStackParamList } from '../types';
+import { User, Settings, Inbox, AlertTriangle } from 'lucide-react-native';
+import { SURPRISE_ME_MIN_INDEX, MAX_FEED_ARTICLES, monoLabel } from '../utils/constants';
 import { auth } from '../services/firebase';
-import { getRankedFeed, getSeenArticleIdsLocally } from '../services/feedService';
+import { getRankedFeed, getSeenArticleIdsLocally, markArticleSaved, getSavedArticleIds } from '../services/feedService';
 import {
   getInitialDashboardFeedRequest,
   takeInitialDashboardFeedResult,
 } from '../services/initialDashboardFeed';
-import { flushBehaviorQueue } from '../services/behaviorSync';
+import { flushBehaviorQueue, queueBehaviorEvent } from '../services/behaviorSync';
 import { HomeLoadingState } from '../components/HomeLoadingState';
 import { ScreenEntrance } from '../components/ScreenEntrance';
-import { getMetricIcon, getTopCategory, normalizeDashboardMetricIds } from '../utils/dashboardMetrics';
+import { FeedHeroCard } from '../components/feed/FeedHeroCard';
+import { SaveToStackSheet } from '../components/feed/SaveToStackSheet';
 import {
   getCachedDashboardFeed,
   restoreCachedDashboardFeed,
@@ -41,7 +41,7 @@ import {
 const PRELOAD_THRESHOLD = 5;
 
 export default function DashboardScreen() {
-  const { colors } = useTheme();
+  const { colors, fonts } = useTheme();
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { profile: contextProfile, weeklyReadCount, loading: contextLoading } = useUser();
 
@@ -52,7 +52,6 @@ export default function DashboardScreen() {
   const [feedArticles, setFeedArticles] = useState<Article[]>(() => initialCachedFeedRef.current?.articles ?? []);
   const [loading, setLoading] = useState(() => !initialCachedFeedRef.current?.articles.length);
   const [feedError, setFeedError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   // Accumulates every article ID shown this session (fetched OR shuffled away).
   // Passed to getRankedFeed as exclusions so we never recycle cards within a session.
   // In-memory only — resets on Dashboard unmount; articles reappear freely in future sessions.
@@ -150,42 +149,6 @@ export default function DashboardScreen() {
     }
   };
 
-  const onRefresh = async () => {
-    // M6 Fix: pull-to-refresh now performs a REAL fetch, matching universal
-    // pull-to-refresh expectations — same exclusions as the Try Again path
-    // (everything already seen plus everything currently on screen). The old
-    // behaviour secretly shuffled cards and held the spinner for a fabricated
-    // 350ms; both are gone.
-    if (refreshing) return;
-    setRefreshing(true);
-    try {
-      const user = auth.currentUser;
-      const profile = contextProfile;
-      if (!user || !profile || !profile.isOnboarded) return;
-
-      const serverSeenIds = profile.seenArticleIds;
-      const seenIds = await getSeenArticleIdsLocally(serverSeenIds);
-      const excludedIds = Array.from(new Set([
-        ...seenIds,
-        ...sessionShownIds.current,
-        ...feedArticles.map((article) => article.id),
-      ]));
-
-      const result = await getRankedFeed(excludedIds);
-      const articles = result.articles.slice(0, MAX_FEED_ARTICLES);
-      // A failed or empty refresh must never wipe visible cards.
-      if (articles.length > 0) {
-        setFeedArticles(articles);
-        setCachedDashboardFeed(user.uid, articles, sessionShownIds.current);
-        setFeedError(null);
-      }
-    } catch (error) {
-      console.warn('[Dashboard] Pull-to-refresh failed — keeping current cards:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   const loadFeedArticles = async (profile: UserProfile | null, opts?: { forceFresh?: boolean }) => {
     try {
       // Use the shared live profile's server-side seen IDs to avoid the
@@ -252,36 +215,82 @@ export default function DashboardScreen() {
     }
   };
 
-  const getMetrics = (): DashboardMetric[] => {
-    const profile = effectiveProfile;
-    if (!profile) return [];
-    const metricIds = normalizeDashboardMetricIds(profile.dashboardMetricIds || DEFAULT_DASHBOARD_METRIC_IDS);
-    const values: Record<string, string | number> = {
-      streak: profile.currentStreakDays || 0,
-      weeklyReads: weeklyReadCount,
-      topCategory: getTopCategory(profile),
-      totalRead: profile.totalArticlesRead || 0,
-      avgWpm: profile.averageWpm || 200,
-      totalReadTime: profile.totalReadTimeMs
-        ? Math.max(0.1, parseFloat((profile.totalReadTimeMs / 3_600_000).toFixed(1)))
-        : 0,
-    };
-    return metricIds.map(id => {
-      const def = DASHBOARD_METRIC_DEFS.find(d => d.id === id);
-      return { id, label: def?.label || id, emoji: def?.emoji || '📊', value: values[id] || 0 };
-    });
+  // ── Hero advance (B1) ──────────────────────────────────────────
+  // Removes the current hero card (swipe-up / NEXT teaser / not-interested),
+  // marks it shown, queues the matching behavior event and replenishes behind
+  // the remaining cards. `swipe_not_interested` carries the algorithm's
+  // strongest negative signal; `swipe_next` is neutral.
+  const advanceHero = (eventType: 'swipe_next' | 'swipe_not_interested') => {
+    if (feedArticles.length === 0) return;
+    const [current, ...rest] = feedArticles;
+    sessionShownIds.current.add(current.id);
+    setFeedArticles(rest);
+    if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, rest, sessionShownIds.current);
+    void queueBehaviorEvent(
+      current.id,
+      eventType,
+      current.category,
+      current.lengthStyle,
+      current.publicationName,
+      0,
+      0,
+      undefined,
+      current.recommendationContext
+    );
+    if (rest.length <= PRELOAD_THRESHOLD) {
+      // Replenish behind the remaining cards; never replace them.
+      void appendFeedArticles(effectiveProfile, rest.map((article) => article.id));
+    }
   };
 
+  // ── Save-to-stack (v1: single Saved vault destination) ─────────
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [saveSheetOpen, setSaveSheetOpen] = useState(false);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTextRef = useRef('');
 
-  const handleShuffle = () => {
-    const shown = feedArticles.slice(0, 3);
-    const next = feedArticles.slice(3);
-    shown.forEach((article) => sessionShownIds.current.add(article.id));
-    setFeedArticles(next);
-    if (auth.currentUser) setCachedDashboardFeed(auth.currentUser.uid, next, sessionShownIds.current);
-    if (next.length <= PRELOAD_THRESHOLD) {
-      // Replenish behind the remaining cards; never replace them.
-      void appendFeedArticles(effectiveProfile, next.map((article) => article.id));
+  const refreshSavedIds = async () => {
+    try {
+      setSavedIds(new Set(await getSavedArticleIds()));
+    } catch {
+      // Saved-state decoration only — never block the hero.
+    }
+  };
+
+  useEffect(() => {
+    void refreshSavedIds();
+  }, []);
+
+  const showToast = (text: string) => {
+    toastTextRef.current = text;
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(1900),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 260, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const handleSaveConfirmed = async () => {
+    const hero = feedArticles[0];
+    if (!hero) return;
+    try {
+      await markArticleSaved(hero.id, '', hero);
+      void queueBehaviorEvent(
+        hero.id,
+        'save',
+        hero.category,
+        hero.lengthStyle,
+        hero.publicationName,
+        0,
+        0,
+        undefined,
+        hero.recommendationContext
+      );
+      setSavedIds((prev) => new Set(prev).add(hero.id));
+      showToast(`SAVED TO VAULT · ${hero.publicationName.toUpperCase()}`);
+    } catch (error) {
+      console.warn('[Dashboard] save failed:', error);
+      showToast('SAVE FAILED — TRY AGAIN');
     }
   };
 
@@ -335,209 +344,179 @@ export default function DashboardScreen() {
     );
   }
 
-  const metrics = getMetrics();
   const heroArticle = feedArticles.length > 0 ? feedArticles[0] : null;
-  const rowArticles = feedArticles.length > 1 ? feedArticles.slice(1, 3) : [];
+  const nextArticle = feedArticles.length > 1 ? feedArticles[1] : null;
   const showEmptyState = !feedError && feedArticles.length === 0;
 
   return (
     <ScreenEntrance style={[styles.screen, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.inner}
-        contentContainerStyle={[styles.innerContent, { paddingTop: topInset + 28 }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.accent}
-            colors={[colors.accent]}
-            progressBackgroundColor={colors.background}
-            progressViewOffset={topInset}
-          />
-        }
-      >
-
-        {/* ── Header ── */}
-        <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>TANGENT</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.iconButton}>
-            <User size={24} color={colors.text} />
+      {/* ── Header: wordmark + account + gear (shared pattern) ── */}
+      <View style={[styles.headerRow, { paddingTop: topInset + 10 }]}>
+        <Text style={[styles.headerTitle, { color: colors.text, fontFamily: fonts.title }]}>
+          TANGENT
+        </Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Account')}
+            style={styles.iconButton}
+            accessibilityLabel="Account"
+          >
+            <User size={22} color={colors.textSecondary} strokeWidth={1.8} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            style={styles.iconButton}
+            accessibilityLabel="Settings"
+          >
+            <Settings size={22} color={colors.textSecondary} strokeWidth={1.8} />
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* ── Stats Pill ── */}
-        <View
-          style={[styles.statsPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
-          accessibilityElementsHidden={metrics.length === 0}
-        >
-          {metrics.length > 0 ? metrics.map((metric, i) => (
-            <React.Fragment key={metric.id}>
-              <View style={styles.statItem}>
-                {getMetricIcon(metric.id, colors.textMuted)}
-                <Text style={[styles.statValue, { color: colors.text }]}>{metric.value}</Text>
-              </View>
-              {i < metrics.length - 1 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
-            </React.Fragment>
-          )) : (
-            <View style={styles.statsPlaceholderRow}>
-              {[0, 1, 2].map((item) => (
-                <React.Fragment key={item}>
-                  <View style={[styles.statPlaceholder, { backgroundColor: colors.border }]} />
-                  {item < 2 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
-                </React.Fragment>
-              ))}
-            </View>
-          )}
+      {/* ── One essay owns the screen ── */}
+      {feedError && feedArticles.length === 0 ? (
+        <View style={styles.centerState}>
+          <AlertTriangle size={48} color={colors.error} style={{ marginBottom: 16 }} />
+          <Text style={[styles.stateTitle, { color: colors.text, fontFamily: fonts.headline }]}>
+            Something went wrong
+          </Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary, fontFamily: fonts.body }]}>
+            {feedError}
+          </Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { borderColor: colors.borderStrong }]}
+            onPress={() => loadData(false, true)}
+            activeOpacity={0.8}
+          >
+            <Text style={[monoLabel(fonts), { color: colors.text, letterSpacing: 1.2 }]}>
+              TRY AGAIN
+            </Text>
+          </TouchableOpacity>
         </View>
-
-        {/* ── Articles (flex:1 — fills all space between stats and button) ── */}
-        <View style={styles.articles}>
-          {feedError ? (
-            <View style={styles.emptyState}>
-              <AlertTriangle size={48} color={colors.error} style={{ marginBottom: 16 }} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Something went wrong</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                {feedError}
-              </Text>
-              <TouchableOpacity
-                style={[styles.retryButton, { borderColor: colors.primary }]}
-                onPress={() => loadData(false, true)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.retryText, { color: colors.primary }]}>Try Again</Text>
-              </TouchableOpacity>
-            </View>
-          ) : feedArticles.length > 0 ? (
-            <>
-              {/* Hero */}
-              {heroArticle && (
-                <TouchableOpacity
-                  style={styles.heroCard}
-                  onPress={() => navigateToReader(heroArticle.id, 0)}
-                  activeOpacity={0.9}
-                >
-                  <Text style={[styles.heroPublisher, { color: colors.accent }]}>
-                    {heroArticle.publicationName.toUpperCase()}
-                  </Text>
-                  <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={3}>
-                    {heroArticle.title}
-                  </Text>
-                  {heroArticle.description ? (
-                    <Text style={[styles.heroDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {heroArticle.description}
-                    </Text>
-                  ) : null}
-                  <View style={styles.cardMeta}>
-                    <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
-                      {heroArticle.category.charAt(0).toUpperCase() + heroArticle.category.slice(1)}
-                    </Text>
-                    <Text style={[styles.cardMetaText, { color: colors.textMuted }]}>
-                      {Math.max(1, Math.ceil((heroArticle.wordCount || 0) / (effectiveProfile?.averageWpm || 200)))} min read
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-
-              {/* Two row articles */}
-              {rowArticles.map((article, index) => (
-                <TouchableOpacity
-                  key={article.id}
-                  style={[styles.rowCard, { borderTopColor: colors.border }]}
-                  onPress={() => navigateToReader(article.id, index + 1)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.rowCardContent}>
-                    <Text style={[styles.rowPublisher, { color: colors.textSecondary }]}>
-                      {article.publicationName}
-                    </Text>
-                    <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={2}>
-                      {article.title}
-                    </Text>
-                  </View>
-                  <Text style={[styles.rowTime, { color: colors.textMuted }]}>
-                    {Math.max(1, Math.ceil((article.wordCount || 0) / (effectiveProfile?.averageWpm || 200)))}m
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </>
-          ) : showEmptyState ? (
-            <View style={styles.emptyState}>
-              <Inbox size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>No articles yet</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Articles from your favorite Substacks will appear here once they&apos;re fetched.
-              </Text>
-            </View>
-          ) : null}
+      ) : heroArticle ? (
+        <View style={styles.heroWrap}>
+          <FeedHeroCard
+            article={heroArticle}
+            userWpm={effectiveProfile?.averageWpm || 200}
+            nextTitle={nextArticle?.title || null}
+            onRead={() => navigateToReader(heroArticle.id, 0)}
+            onBookmark={() => setSaveSheetOpen(true)}
+            onAdvance={() => advanceHero('swipe_next')}
+            onSurprise={handleSurpriseMe}
+          />
         </View>
+      ) : showEmptyState ? (
+        <View style={styles.centerState}>
+          <Inbox size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
+          <Text style={[styles.stateTitle, { color: colors.text, fontFamily: fonts.headline }]}>
+            No articles yet
+          </Text>
+          <Text style={[styles.stateSubtitle, { color: colors.textSecondary, fontFamily: fonts.body }]}>
+            Articles from your favorite Substacks will appear here once they&apos;re fetched.
+          </Text>
+        </View>
+      ) : null}
 
-        {/* ── Discover / Shuffle pill (always at bottom) ── */}
-        {feedArticles.length > 0 && !feedError && (
-          <View style={[styles.pillRow, { backgroundColor: colors.text }]}>
-            <View style={styles.pillSpacer} />
-            <TouchableOpacity style={styles.pillDiscover} onPress={handleSurpriseMe} activeOpacity={0.85}>
-              <Text style={[styles.pillDiscoverText, { color: colors.background }]}>Discover</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pillShuffle, { backgroundColor: colors.background, borderColor: colors.text }]}
-              onPress={handleShuffle}
-              activeOpacity={0.85}
-            >
-              <View style={{ transform: [{ rotate: '-90deg' }] }}>
-                <Shuffle size={18} color={colors.accent} />
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-
-      </ScrollView>
+      {/* ── Save sheet + toast ── */}
+      <SaveToStackSheet
+        visible={saveSheetOpen}
+        alreadySaved={!!heroArticle && savedIds.has(heroArticle.id)}
+        article={
+          heroArticle
+            ? {
+                id: heroArticle.id,
+                title: heroArticle.title,
+                publicationName: heroArticle.publicationName,
+                minutes:
+                  heroArticle.estimatedReadMinutes ||
+                  Math.ceil((heroArticle.wordCount || 0) / Math.max(120, effectiveProfile?.averageWpm || 200)),
+              }
+            : null
+        }
+        onClose={() => setSaveSheetOpen(false)}
+        onFiled={(label) => showToast(label)}
+        onSaveVault={handleSaveConfirmed}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.toast,
+          {
+            backgroundColor: colors.surfaceRaised,
+            borderColor: colors.border,
+            opacity: toastOpacity,
+          },
+        ]}
+      >
+        <Text style={[monoLabel(fonts), { color: colors.text }]} numberOfLines={1}>
+          {toastTextRef.current}
+        </Text>
+      </Animated.View>
     </ScreenEntrance>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  inner: { flex: 1, paddingHorizontal: 28 },
-  innerContent: { flexGrow: 1, paddingBottom: 120 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
-  headerTitle: { fontSize: TEXT_XL, fontWeight: '800', letterSpacing: -1 },
-  iconButton: { padding: 4 },
-  statsPill: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 24, paddingVertical: 16, borderRadius: 16,
-    marginBottom: 42, borderWidth: 1,
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 10,
   },
-  statItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  statValue: { fontSize: TEXT_BASE, fontWeight: '600', letterSpacing: -0.5 },
-  statsPlaceholderRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statPlaceholder: { width: 42, height: 14, borderRadius: 7 },
-  statDivider: { width: 1, height: 16 },
-  articles: { flex: 1, justifyContent: 'flex-start' },
-  heroCard: { marginBottom: 24 },
-  heroPublisher: { fontSize: TEXT_XS, fontWeight: '800', letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' },
-  heroTitle: { fontSize: TEXT_2XL, fontWeight: '800', lineHeight: 34, letterSpacing: -0.8, marginBottom: 12, fontFamily: 'Georgia' },
-  heroDesc: { fontSize: TEXT_BASE, lineHeight: 22, marginBottom: 12 },
-  cardMeta: { flexDirection: 'row', justifyContent: 'space-between' },
-  cardMetaText: { fontSize: TEXT_SM, fontWeight: '500' },
-  rowCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 20, borderTopWidth: 1 },
-  rowCardContent: { flex: 1, paddingRight: 12 },
-  rowPublisher: { fontSize: TEXT_XS, fontWeight: '600', marginBottom: 6, textTransform: 'uppercase' },
-  rowTitle: { fontSize: TEXT_LG, fontWeight: '700', lineHeight: 22, letterSpacing: -0.4 },
-  rowTime: { fontSize: TEXT_SM, fontWeight: '500' },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyTitle: { fontSize: TEXT_LG, fontWeight: '700', marginBottom: 8 },
-  emptySubtitle: { fontSize: TEXT_SM, textAlign: 'center', lineHeight: 20 },
-  retryButton: { marginTop: 24, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5 },
-  retryText: { fontSize: TEXT_BASE, fontWeight: '700' },
-  pillRow: { flexDirection: 'row', alignItems: 'stretch', borderRadius: 16, marginTop: 32 },
-  pillSpacer: { width: 72 },
-  pillDiscover: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
-  pillDiscoverText: { fontSize: 18, fontWeight: '700' },
-  pillShuffle: {
-    width: 72, paddingVertical: 16, alignItems: 'center', justifyContent: 'center',
-    borderTopRightRadius: 16, borderBottomRightRadius: 16,
-    borderTopLeftRadius: 0, borderBottomLeftRadius: 0,
-    borderWidth: 2, borderLeftWidth: 0,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: 2.4,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroWrap: {
+    flex: 1,
+    paddingBottom: 10,
+  },
+  centerState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingBottom: 80,
+  },
+  stateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  stateSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 24,
+    alignSelf: 'center',
+    borderRadius: 4,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    maxWidth: '88%',
   },
 });
